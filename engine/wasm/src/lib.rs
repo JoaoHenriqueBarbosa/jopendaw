@@ -134,6 +134,55 @@ pub extern "C" fn clip_add(track: usize, sample: u32, start: f64, offset: f64, l
     engine().add_clip(Clip { track, sample, start, offset, length, gain, fade_in, fade_out });
 }
 
+/// Tipo da faixa `i` (0 áudio, 1 sintetizador, 2 bateria, 3 sampler). Mandar o mesmo tipo de
+/// novo não mexe em nada; trocar recria o instrumento nos padrões, então vem antes dos `param`.
+#[unsafe(no_mangle)]
+pub extern "C" fn track_kind(i: usize, kind: u32) {
+    engine().set_track_kind(i, kind);
+}
+
+/// Parâmetro `id` do instrumento da faixa `i`, na unidade da tabela (Hz, s, semitons...).
+#[unsafe(no_mangle)]
+pub extern "C" fn param(i: usize, id: u32, value: f32) {
+    engine().set_param(i, id, value);
+}
+
+/// Áudio (id de `sample_load`, 0 = nenhum) que o sampler da faixa `i` toca; pode vir antes do
+/// áudio chegar.
+#[unsafe(no_mangle)]
+pub extern "C" fn instrument_sample(i: usize, sample_id: u32) {
+    engine().set_instrument_sample(i, sample_id);
+}
+
+/// Apaga as notas do sequenciador de todas as faixas (antes de reenviá-las com `note_add`).
+#[unsafe(no_mangle)]
+pub extern "C" fn notes_clear() {
+    engine().clear_notes();
+}
+
+/// Nota do sequenciador: início e duração em batidas absolutas, altura MIDI, velocidade 0..1.
+#[unsafe(no_mangle)]
+pub extern "C" fn note_add(track: usize, start: f64, length: f64, pitch: u32, velocity: f32) {
+    engine().add_note(track, start, length, pitch, velocity);
+}
+
+/// Nota ao vivo (teclado, MIDI, prévia), fora do transporte. Velocidade 0 solta.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_on(track: usize, pitch: u32, velocity: f32) {
+    engine().live_on(track, pitch, velocity);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn live_off(track: usize, pitch: u32) {
+    engine().live_off(track, pitch);
+}
+
+/// Corta na hora todo som de instrumento.
+#[unsafe(no_mangle)]
+pub extern "C" fn panic() {
+    engine().panic();
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn beat() -> f64 {
     engine().beat()
