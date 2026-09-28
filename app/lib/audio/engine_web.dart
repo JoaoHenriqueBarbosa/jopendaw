@@ -129,6 +129,41 @@ class AudioEngine {
     final double d => d.toJS,
     _ => throw ArgumentError('argumento do motor: $v'),
   };
+
+  // gravação e render fora de tempo real (contrato da fase 4)
+
+  /// Abre a entrada de áudio ([deviceId] null = padrão) e liga a captura no worklet; devolve a
+  /// latência de entrada que o navegador informa (s).
+  Future<double> startInput(String? deviceId) => throw UnimplementedError();
+  Future<void> stopInput() => throw UnimplementedError();
+
+  /// Entradas de áudio (id, nome); pedir o microfone antes revela os nomes.
+  Future<List<(String, String)>> inputDevices() => throw UnimplementedError();
+
+  /// Liga/desliga a captura do que entra (blocos chegam em [onRecord]) e das notas ao vivo no
+  /// motor.
+  void setCapture(bool on) => throw UnimplementedError();
+
+  /// Blocos capturados da entrada (esq, dir) e o pico dela, enquanto a captura está ligada.
+  void Function(Float32List left, Float32List right)? onRecord;
+  void Function(double peak)? onInputLevel;
+
+  /// Renderiza fora de tempo real num motor separado (Worker): [calls] são as chamadas do
+  /// documento (como o _sync manda), [samples] os áudios por id do motor; devolve os canais de
+  /// cada saída pedida em [outputs] (−1 = master, i = só a faixa i, pós-fader).
+  Future<List<List<Float32List>>> renderOffline({
+    required List<List<Object>> calls,
+    required Map<int, DecodedAudio> samples,
+    required double fromBeat,
+    required double toBeat,
+    required double tailSeconds,
+    required List<int> outputs,
+    required double rate,
+    void Function(double progress)? onProgress,
+  }) => throw UnimplementedError();
+
+  /// Oferece os bytes para salvar como arquivo (download no navegador).
+  Future<void> saveFile(String name, Uint8List bytes, String mime) => throw UnimplementedError();
 }
 
 /// Guardado local do DAW no IndexedDB: textos (o documento) e bytes (os áudios importados).

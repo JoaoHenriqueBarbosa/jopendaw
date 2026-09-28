@@ -19,6 +19,7 @@ import '../models/project.dart';
 import '../widgets/theme.dart';
 import 'automation_math.dart';
 import 'effects.dart';
+import 'export_options.dart';
 import 'instruments.dart';
 import 'model.dart';
 
@@ -2072,6 +2073,41 @@ class DawController extends ChangeNotifier {
   /// Taxa de amostragem do motor (a do contexto de áudio do aparelho: 44,1 ou 48 kHz, em geral):
   /// o espectro vai de 0 à metade dela.
   double engineRate = 48000;
+
+  // ------------------------------------------------------------------ gravação, exportação, bounce
+  // (contrato da fase 4: corpos preenchidos na implementação)
+
+  /// Gravando agora (inclusive durante a contagem) e em que fase.
+  bool recording = false;
+  bool countingIn = false;
+
+  /// Nível de pico da entrada (0..1), ao vivo, para o medidor das faixas armadas.
+  final inputLevel = ValueNotifier<double>(0);
+
+  /// Entradas de áudio disponíveis (id, nome) e a escolhida (null = a padrão do sistema).
+  List<(String, String)> inputDevices = const [];
+  String? inputDevice;
+
+  /// Liga/desliga a gravação: com faixas armadas, conta um compasso (se [DawDoc.countIn]) e grava
+  /// a partir do cursor; parar gera os clipes (áudio nas de áudio, notas nas de instrumento).
+  Future<void> toggleRecord() => throw UnimplementedError();
+
+  void setArmed(int track, bool on) => throw UnimplementedError();
+  void setMonitor(int track, bool on) => throw UnimplementedError();
+
+  /// Pede acesso ao microfone (se ainda não tem) e lista as entradas.
+  Future<void> refreshInputDevices() => throw UnimplementedError();
+  Future<void> setInputDevice(String? id) => throw UnimplementedError();
+
+  /// Troca a tomada ativa de um clipe gravado em loop.
+  void switchTake(String clipId, String sampleHash) => throw UnimplementedError();
+
+  /// Renderiza fora de tempo real (mais rápido que tocando) e salva os arquivos.
+  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress}) => throw UnimplementedError();
+
+  /// Congela a faixa em áudio: renderiza ela (com instrumento e efeitos) numa faixa de áudio nova
+  /// logo abaixo e muda a original.
+  Future<void> bounceTrack(int track, {void Function(double progress)? onProgress}) => throw UnimplementedError();
 
   // ------------------------------------------------------------------ visão
 

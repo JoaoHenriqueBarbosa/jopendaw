@@ -17,6 +17,10 @@ class AudioClip {
   String sample;
   double start, offset, length, gain, fadeIn, fadeOut;
 
+  /// Tomadas de uma gravação em loop (sha-256 de cada passada, na ordem); a ativa é [sample].
+  /// Vazia para clipe importado ou gravado sem loop.
+  List<String> takes;
+
   AudioClip({
     required this.id,
     required this.sample,
@@ -26,7 +30,8 @@ class AudioClip {
     this.gain = 1,
     this.fadeIn = 0,
     this.fadeOut = 0,
-  });
+    List<String>? takes,
+  }) : takes = takes ?? [];
 
   AudioClip.fromJson(Map<String, dynamic> j)
     : id = j['id'],
@@ -36,11 +41,13 @@ class AudioClip {
       length = (j['length'] as num).toDouble(),
       gain = (j['gain'] as num? ?? 1).toDouble(),
       fadeIn = (j['fade_in'] as num? ?? 0).toDouble(),
-      fadeOut = (j['fade_out'] as num? ?? 0).toDouble();
+      fadeOut = (j['fade_out'] as num? ?? 0).toDouble(),
+      takes = [for (final t in (j['takes'] as List?) ?? const []) t as String];
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'sample': sample,
+    if (takes.isNotEmpty) 'takes': takes,
     'start': start,
     'offset': offset,
     'length': length,
@@ -241,6 +248,10 @@ class DawTrack {
   /// Áudio do sampler (sha-256), quando o tipo é sampler.
   String? sample;
 
+  /// Armada para gravar (áudio da entrada nas de áudio, notas nas de instrumento) e monitorando a
+  /// entrada (o som do microfone passa pela cadeia da faixa ao vivo).
+  bool armed, monitor;
+
   /// Clipes de áudio (faixas de áudio) e de notas (faixas de instrumento).
   List<AudioClip> clips;
   List<MidiClip> midi;
@@ -264,6 +275,8 @@ class DawTrack {
     this.kind = TrackKind.audio,
     Map<int, double>? params,
     this.sample,
+    this.armed = false,
+    this.monitor = false,
     List<AudioClip>? clips,
     List<MidiClip>? midi,
     List<EffectSlot>? effects,
@@ -288,6 +301,8 @@ class DawTrack {
       kind = TrackKind.parse(j['kind']),
       params = {for (final e in ((j['params'] as Map<String, dynamic>?) ?? {}).entries) int.parse(e.key): (e.value as num).toDouble()},
       sample = j['sample'],
+      armed = j['armed'] ?? false,
+      monitor = j['monitor'] ?? false,
       clips = [for (final c in j['clips'] as List) AudioClip.fromJson(c)],
       midi = [for (final c in (j['midi'] as List?) ?? []) MidiClip.fromJson(c)],
       effects = _effects(j['effects']),
@@ -306,6 +321,8 @@ class DawTrack {
     'kind': kind.name,
     'params': {for (final e in params.entries) '${e.key}': e.value},
     'sample': sample,
+    'armed': armed,
+    'monitor': monitor,
     'clips': [for (final c in clips) c.toJson()],
     'midi': [for (final c in midi) c.toJson()],
     'effects': [for (final e in effects) e.toJson()],
@@ -345,6 +362,13 @@ class DawDoc {
   bool loopOn, metronome;
   double loopStart, loopEnd, masterGain, masterPan;
 
+  /// Contagem de um compasso de metrônomo antes de gravar.
+  bool countIn;
+
+  /// Compensação da latência de gravação em milissegundos (o que o áudio gravado chega atrasado
+  /// em relação ao que tocava), somada à que o navegador informa. Ajustável nas configurações.
+  double recLatencyMs;
+
   /// Cadeia do master (antes do volume e do limitador de segurança) e a automação dele (alvos
   /// volume, pan e parâmetros desses efeitos).
   List<EffectSlot> masterEffects;
@@ -361,6 +385,8 @@ class DawDoc {
     this.metronome = false,
     this.masterGain = 1,
     this.masterPan = 0,
+    this.countIn = true,
+    this.recLatencyMs = 0,
     List<EffectSlot>? masterEffects,
     List<AutoLane>? masterLanes,
   }) : tracks = tracks ?? [],
@@ -379,6 +405,8 @@ class DawDoc {
       metronome = j['metronome'],
       masterGain = (j['master_gain'] as num).toDouble(),
       masterPan = (j['master_pan'] as num).toDouble(),
+      countIn = j['count_in'] ?? true,
+      recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
       masterEffects = _effects(j['master_effects']),
       masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)];
 
@@ -394,6 +422,8 @@ class DawDoc {
     'metronome': metronome,
     'master_gain': masterGain,
     'master_pan': masterPan,
+    'count_in': countIn,
+    'rec_latency_ms': recLatencyMs,
     'master_effects': [for (final e in masterEffects) e.toJson()],
     'master_lanes': [for (final l in masterLanes) l.toJson()],
   };
