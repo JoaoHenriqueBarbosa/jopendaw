@@ -22,6 +22,7 @@
 pub mod drums;
 pub mod dsp;
 pub mod instrument;
+mod limiter;
 mod metronome;
 mod mixer;
 pub mod sampler;
@@ -279,6 +280,8 @@ pub struct Engine {
     /// Paralelo a `tracks`.
     lanes: Vec<Lane>,
     master: Track,
+    limiter: limiter::Limiter,
+    limiter_on: bool,
     metronome: Metronome,
     buf_l: Vec<f32>,
     buf_r: Vec<f32>,
@@ -309,6 +312,8 @@ impl Engine {
             tracks: Vec::new(),
             lanes: Vec::new(),
             master: Track::new(rate),
+            limiter: limiter::Limiter::new(rate),
+            limiter_on: true,
             metronome: Metronome::default(),
             buf_l: vec![0.0; MAX_BLOCK],
             buf_r: vec![0.0; MAX_BLOCK],
@@ -441,6 +446,17 @@ impl Engine {
 
     pub fn tracks(&self) -> &[Track] {
         &self.tracks
+    }
+
+    /// Liga o limitador de segurança do master (ligado por padrão; os testes que medem amostras em
+    /// quadros exatos desligam, por causa do atraso do lookahead).
+    pub fn set_limiter(&mut self, on: bool) {
+        self.limiter_on = on;
+    }
+
+    /// Menor ganho do limitador desde a última leitura (1 = não reduziu).
+    pub fn take_limiter_gain(&mut self) -> f32 {
+        self.limiter.take_min_gain()
     }
 
     pub fn master_mut(&mut self) -> &mut Track {
@@ -673,12 +689,22 @@ impl Engine {
             self.tail_pos += n as f64;
         }
 
+        let before = self.master.peaks();
         self.master.apply_master(out_l, out_r);
-        // sem limiter ainda: pelo menos nada passa de 0 dBFS no conversor, e um NaN que escape de
-        // algum instrumento vira silêncio em vez de chegar ao dispositivo
+        // NaN que escape de algum instrumento vira silêncio antes do limitador (senão contaminaria
+        // o estado dele); depois do limitador a trava só pega o que ele não pegou (nada, em tese)
         for s in out_l.iter_mut().chain(out_r.iter_mut()) {
-            *s = if s.is_nan() { 0.0 } else { s.clamp(-1.0, 1.0) };
+            if !s.is_finite() {
+                *s = 0.0;
+            }
         }
+        if self.limiter_on {
+            self.limiter.process(out_l, out_r);
+        }
+        for s in out_l.iter_mut().chain(out_r.iter_mut()) {
+            *s = s.clamp(-1.0, 1.0);
+        }
+        self.master.meter(before, out_l, out_r);
     }
 }
 
@@ -732,10 +758,17 @@ fn fade(t: f64, length: f64, fade_in: f64, fade_out: f64) -> f32 {
 mod tests {
     use super::*;
 
+    /// Motor sem o limitador do master (o lookahead atrasaria as amostras que os testes medem).
+    fn engine() -> Engine {
+        let mut e = Engine::new(RATE);
+        e.set_limiter(false);
+        e
+    }
+
     const RATE: f64 = 48_000.0;
 
     fn engine_with_dc_clip(start: f64, length: f64) -> Engine {
-        let mut e = Engine::new(RATE);
+        let mut e = engine();
         e.set_tempo(120.0, 4); // 1 batida = 0,5 s = 24000 quadros
         e.set_track_count(1);
         e.track_mut(0).unwrap().pan = 0.0;
@@ -837,7 +870,7 @@ mod tests {
 
     #[test]
     fn taxa_diferente_e_reamostrada() {
-        let mut e = Engine::new(RATE);
+        let mut e = engine();
         e.set_track_count(1);
         // rampa a 24 kHz: no motor a 48 kHz cada amostra do sample vira duas
         let ramp: Vec<f32> = (0..1000).map(|i| i as f32 / 1000.0).collect();
@@ -852,7 +885,7 @@ mod tests {
 
     #[test]
     fn metronomo_clica_na_batida() {
-        let mut e = Engine::new(RATE);
+        let mut e = engine();
         e.set_metronome(true, 1.0);
         e.play();
         let (l, _) = run(&mut e, 24_100);
@@ -923,7 +956,7 @@ mod tests {
 
     /// Motor a 120 bpm (24000 quadros por batida) com uma faixa de instrumento de teste.
     fn probe_engine() -> (Engine, Log) {
-        let mut e = Engine::new(RATE);
+        let mut e = engine();
         e.set_tempo(120.0, 4);
         e.set_track_count(1);
         e.set_track_kind(0, instrument::kind::SYNTH);
@@ -1138,7 +1171,7 @@ mod tests {
 
     #[test]
     fn faixa_de_audio_nao_toca_notas() {
-        let mut e = Engine::new(RATE);
+        let mut e = engine();
         e.set_track_count(1);
         e.add_note(0, 0.0, 1.0, 60, 0.9);
         e.live_on(0, 60, 1.0);
@@ -1175,7 +1208,7 @@ mod tests {
     // ------------------------------------------------------------ sampler pelo motor
 
     fn sampler_engine() -> Engine {
-        let mut e = Engine::new(RATE);
+        let mut e = engine();
         e.set_tempo(120.0, 4);
         e.set_track_count(1);
         e.set_track_kind(0, instrument::kind::SAMPLER);

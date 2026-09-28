@@ -152,8 +152,12 @@ class _PianoRollState extends State<PianoRoll> {
     final rel = c.beat.value - clip.start;
     if (rel < 0 || rel > clip.length) return;
     final visible = _gridSize.width / v.ppb;
+    // o clipe inteiro já está na tela: não há o que acompanhar (antes a janela pulava para depois
+    // do fim do clipe e as notas sumiam de vista)
+    if (v.scrollX <= 0 && clip.length <= visible) return;
     if (rel > v.scrollX + visible * .95 || rel < v.scrollX) {
-      v.scrollX = rel - visible * .05;
+      // sem passar do fim do clipe: a última tela mostra o fim dele na borda direita
+      v.scrollX = math.min(rel - visible * .05, math.max(0.0, clip.length - visible * .95));
       _clampView();
       _refresh();
     }
@@ -320,11 +324,6 @@ class _PianoRollState extends State<PianoRoll> {
               ],
             ),
           ),
-        ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: IconButton(tooltip: 'Fechar o editor', onPressed: () => c.setDock(Dock.none), icon: const Icon(Icons.close)),
         ),
       ],
     );
@@ -582,7 +581,6 @@ class _PianoRollState extends State<PianoRoll> {
               ),
             ),
           ),
-          IconButton(tooltip: 'Fechar o editor', onPressed: () => c.setDock(Dock.none), icon: const Icon(Icons.close)),
         ],
       ),
     );

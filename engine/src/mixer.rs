@@ -95,6 +95,17 @@ impl Track {
     }
 
     /// Pico desde a última leitura; zera para a próxima.
+    /// O master mede o que sai depois do limitador, não o que entra nele: guarda os picos antes
+    /// do volume (que os mede de novo) e depois mede o bloco final com [`Track::meter`].
+    pub fn peaks(&self) -> (f32, f32) {
+        (self.peak_l, self.peak_r)
+    }
+
+    pub fn meter(&mut self, (pl, pr): (f32, f32), l: &[f32], r: &[f32]) {
+        self.peak_l = l.iter().fold(pl, |m, s| m.max(s.abs()));
+        self.peak_r = r.iter().fold(pr, |m, s| m.max(s.abs()));
+    }
+
     pub fn take_peaks(&mut self) -> (f32, f32) {
         let p = (self.peak_l, self.peak_r);
         self.peak_l = 0.0;

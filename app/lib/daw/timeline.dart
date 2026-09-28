@@ -1092,6 +1092,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
                           pxPerSec: pxPerSec,
                           gain: clip.gain,
                           color: color,
+                          visible: _visibleRange(c, clip.start),
                         ),
                       ),
               ),
@@ -1264,7 +1265,13 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
                 top: 16,
                 bottom: 3,
                 child: CustomPaint(
-                  painter: _NotesPainter(notes: clip.notes, length: clip.length, ppb: c.pxPerBeat, color: Color.lerp(color, Colors.white, 0.45)!),
+                  painter: _NotesPainter(
+                    notes: clip.notes,
+                    length: clip.length,
+                    ppb: c.pxPerBeat,
+                    color: Color.lerp(color, Colors.white, 0.45)!,
+                    visible: _visibleRange(c, clip.start),
+                  ),
                 ),
               ),
               Positioned(
@@ -1293,6 +1300,14 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
   }
 }
 
+/// Faixa horizontal (em pixels do próprio clipe) que está dentro da janela das raias. Os painters
+/// desenham só ela, mas não podem descobri-la pelo `canvas.getLocalClipBounds()`: no Flutter web
+/// esses limites vêm deslocados e o começo do clipe sumia do desenho.
+(double, double) _visibleRange(DawController c, double clipStart) {
+  final left = (clipStart - c.scrollBeat) * c.pxPerBeat;
+  return (math.max(0.0, -left), c.viewWidth - left);
+}
+
 /// Miniatura das notas: a altura do desenho cobre só a faixa de notas que o clipe usa (com teto
 /// na espessura de cada linha, para poucas notas não virarem blocos); o que passa do fim do clipe
 /// ou fica antes do começo não aparece.
@@ -1300,7 +1315,8 @@ class _NotesPainter extends CustomPainter {
   final List<MidiNote> notes;
   final double length, ppb;
   final Color color;
-  _NotesPainter({required this.notes, required this.length, required this.ppb, required this.color});
+  final (double, double) visible;
+  _NotesPainter({required this.notes, required this.length, required this.ppb, required this.color, required this.visible});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1317,12 +1333,12 @@ class _NotesPainter extends CustomPainter {
     final top = (size.height - rowH * rows) / 2;
     final barH = math.max(1.0, rowH > 3 ? rowH - 1 : rowH);
     final endX = length * ppb;
-    final view = canvas.getLocalClipBounds();
+    final (viewLeft, viewRight) = visible;
     final paint = Paint();
     for (final n in notes) {
       final x0 = math.max(0.0, n.start) * ppb;
       final x1 = math.min(n.end, length) * ppb;
-      if (x1 <= x0 || x0 >= endX || x1 < view.left || x0 > view.right) continue;
+      if (x1 <= x0 || x0 >= endX || x1 < viewLeft || x0 > viewRight) continue;
       final w = math.max(1.5, x1 - x0 - (x1 - x0 > 4 ? 1 : 0));
       paint.color = color.withValues(alpha: 0.45 + 0.55 * n.velocity.clamp(0.0, 1.0));
       canvas.drawRect(Rect.fromLTWH(x0, top + (hi - n.pitch) * rowH, w, barH), paint);
@@ -1339,7 +1355,16 @@ class _WavePainter extends CustomPainter {
   final Waveform? wave;
   final double offset, length, pxPerSec, gain;
   final Color color;
-  _WavePainter({required this.wave, required this.offset, required this.length, required this.pxPerSec, required this.gain, required this.color});
+  final (double, double) visible;
+  _WavePainter({
+    required this.wave,
+    required this.offset,
+    required this.length,
+    required this.pxPerSec,
+    required this.gain,
+    required this.color,
+    required this.visible,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1353,10 +1378,9 @@ class _WavePainter extends CustomPainter {
     final bucketsPerPx = w.perSecond / pxPerSec;
     final first = offset * w.perSecond;
     final n = w.mins.length;
-    // só as colunas visíveis dentro do recorte do clipe
-    final clip = canvas.getLocalClipBounds();
-    final x0 = math.max(0, clip.left.floor());
-    final x1 = math.min(size.width, clip.right.ceil().toDouble()).toInt();
+    // só as colunas dentro da janela das raias
+    final x0 = math.max(0, visible.$1.floor());
+    final x1 = math.min(size.width, visible.$2.ceil().toDouble()).toInt();
     for (var x = x0; x < x1; x++) {
       final a = (first + x * bucketsPerPx).floor();
       final b = math.max(a + 1, (first + (x + 1) * bucketsPerPx).floor());
@@ -1372,7 +1396,7 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter o) =>
-      o.wave != wave || o.offset != offset || o.length != length || o.pxPerSec != pxPerSec || o.gain != gain || o.color != color;
+      o.wave != wave || o.offset != offset || o.length != length || o.pxPerSec != pxPerSec || o.gain != gain || o.color != color || o.visible != visible;
 }
 
 class _FadePainter extends CustomPainter {

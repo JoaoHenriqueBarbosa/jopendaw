@@ -95,7 +95,9 @@ class TransportBar extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: SizedBox(width: 1, height: 28, child: ColoredBox(color: Palette.hairline)),
         );
+        // largura toda: dentro da coluna da tela a barra encolhia até o conteúdo e ficava centralizada
         return Container(
+          width: double.infinity,
           decoration: const BoxDecoration(
             color: Palette.bar,
             border: Border.symmetric(horizontal: BorderSide(color: Palette.hairline)),

@@ -65,7 +65,11 @@ class _DockPanelState extends State<DockPanel> {
   /// No celular, a fração do espaço que o painel ocupa.
   static const _compactShare = 0.6;
 
-  double _height = 320;
+  /// Altura escolhida arrastando a borda; vale para a sessão inteira (reabrir o painel não volta
+  /// ao padrão). Null: o padrão, metade do espaço (o piano roll precisa de altura para ser útil).
+  static double? _chosen;
+  double get _height => _chosen ?? math.max(320.0, widget.available * 0.5);
+  set _height(double h) => _chosen = h;
 
   /// Altura de antes de maximizar (null: não está maximizado).
   double? _restore;

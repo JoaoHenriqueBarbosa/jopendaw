@@ -134,8 +134,11 @@ extension _Input on _PianoRollState {
     v.scrollX = s0;
     if (r0 == null || r1 == null) {
       if (rows.drums) {
-        r0 = 0;
-        r1 = rows.length - 1;
+        // clipe de bateria vazio abre embaixo: bumbo, caixa e chimbais (as notas graves) à vista
+        if (!open) v.rowH = (s.height / (rows.length + 1)).clamp(_dims.rowMin, _dims.rowMax);
+        v.scrollY = rows.length * v.rowH - s.height;
+        _clampView();
+        return;
       } else {
         r0 = r1 = rows.rowOf(60) ?? rows.length ~/ 2;
       }
@@ -1220,8 +1223,15 @@ extension _Input on _PianoRollState {
     // colar de novo no mesmo ponto põe a cópia logo depois da anterior
     var at = base;
     if (_pasteBase == base && _pasteNext != null) at = _pasteNext!;
+    // cópia exatamente em cima de notas iguais seria invisível (colar logo depois de copiar, com o
+    // cursor fora do clipe): anda um trecho por vez até achar lugar livre
+    final step = _spanStep(board);
+    bool stacked(double at) => board.any((b) => clip.notes.any((n) => n.pitch == b.pitch && (n.start - (b.start + at)).abs() < 1e-6));
+    for (var i = 0; i < 64 && stacked(at); i++) {
+      at += step;
+    }
     _pasteBase = base;
-    _pasteNext = at + _spanStep(board);
+    _pasteNext = at + step;
     _addNotes([for (final n in board) n.copy()..start = _tidy(n.start + at)]);
   }
 

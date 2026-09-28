@@ -543,7 +543,11 @@ class DawController extends ChangeNotifier {
   void _travel(List<String> from, List<String> to) {
     if (from.isEmpty) return;
     to.add(jsonEncode(doc.toJson()));
-    doc = DawDoc.fromJson(jsonDecode(from.removeLast()));
+    // ligar o metrônomo e o loop não entra no histórico: desfazer uma nota não pode mexer neles.
+    // Só quando o passo desfeito foi desenhar a região do loop (que liga o loop) ele volta junto.
+    final before = doc;
+    doc = DawDoc.fromJson(jsonDecode(from.removeLast()))..metronome = before.metronome;
+    if (doc.loopStart == before.loopStart && doc.loopEnd == before.loopEnd) doc.loopOn = before.loopOn;
     if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
     _prune();
     _sync();

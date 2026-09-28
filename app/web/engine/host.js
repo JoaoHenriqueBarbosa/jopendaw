@@ -6,6 +6,16 @@
   let starting = null;
   let onState = null;
 
+  // Último estado do motor e o maior pico de cada canal desde a última leitura: para conferir de
+  // fora (console, testes automatizados) que o áudio está saindo mesmo, sem precisar ouvir.
+  const probe = { beat: 0, playing: false, peaks: [] };
+  function track(beat, playing, peaks) {
+    probe.beat = beat;
+    probe.playing = playing;
+    for (let i = 0; i < peaks.length; i++) probe.peaks[i] = Math.max(probe.peaks[i] || 0, peaks[i]);
+    probe.peaks.length = peaks.length;
+  }
+
   async function start() {
     if (starting) return starting;
     starting = (async () => {
@@ -24,7 +34,10 @@
             console.error('motor de áudio:', m.message);
             reject(new Error(m.message));
           }
-          else if (m.t === 'state' && onState) onState(m.beat, m.playing, m.peaks);
+          else if (m.t === 'state') {
+            track(m.beat, m.playing, m.peaks);
+            if (onState) onState(m.beat, m.playing, m.peaks);
+          }
         };
       });
       node.port.postMessage({ t: 'init', bytes }, [bytes]);
@@ -145,5 +158,12 @@
     enableMidi,
     setOnMidi: (cb) => { onMidi = cb; },
     setOnMidiInputs: (cb) => { onMidiInputs = cb; },
+    // posição, tocando, estado do contexto e os picos (esq, dir por faixa; o master por último)
+    // desde a leitura anterior, que zera os picos
+    probe: () => {
+      const r = { beat: probe.beat, playing: probe.playing, context: ctx ? ctx.state : 'none', peaks: probe.peaks.map((v) => Math.round(v * 1000) / 1000) };
+      probe.peaks = probe.peaks.map(() => 0);
+      return r;
+    },
   };
 })();
