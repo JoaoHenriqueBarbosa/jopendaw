@@ -27,61 +27,10 @@ final _project = Project.fromJson({
   'updated_at': '2026-01-01T00:00:00Z',
 });
 
+/// O controlador de verdade: a linha do tempo usa as APIs dele (automatable, addLane, removeLane,
+/// targetRange, addBusTrack, showEffects) como no app.
 class TestDaw extends DawController {
   TestDaw() : super(_project);
-
-  List<AutoLane> _lanes(int track) => track < 0 ? doc.masterLanes : doc.tracks[track].lanes;
-
-  @override
-  List<(AutoTarget, String)> automatable(int track) => [
-    (const AutoTarget(AutoKind.volume), 'Volume'),
-    (const AutoTarget(AutoKind.pan), 'Pan'),
-    if (track >= 0)
-      for (final p in doc.tracks[track].kind.params) (AutoTarget(AutoKind.instrument, param: p.id), '${p.group}: ${p.name}'),
-  ];
-
-  @override
-  AutoLane addLane(int track, AutoTarget target) {
-    final old = _lanes(track).where((l) => l.target == target).firstOrNull;
-    if (old != null) {
-      edit((_) => old.open = true);
-      return old;
-    }
-    final lane = AutoLane(id: newId(), target: target);
-    edit((_) => _lanes(track).add(lane));
-    return lane;
-  }
-
-  @override
-  void removeLane(int track, String laneId) => edit((_) => _lanes(track).removeWhere((l) => l.id == laneId));
-
-  @override
-  (double, double, double) targetRange(int track, AutoTarget target) {
-    final t = track < 0 ? null : doc.tracks[track];
-    switch (target.kind) {
-      case AutoKind.volume:
-        return (0, 2, t?.gain ?? doc.masterGain);
-      case AutoKind.pan:
-        return (-1, 1, t?.pan ?? doc.masterPan);
-      case AutoKind.instrument:
-        final p = t!.kind.params.firstWhere((p) => p.id == target.param);
-        return (p.min, p.max, t.param(p.id));
-      case AutoKind.effect || AutoKind.send:
-        return (0, 1, 0);
-    }
-  }
-
-  @override
-  void addBusTrack() => edit((d) {
-    d.tracks.add(DawTrack(id: newId(), name: 'Barramento 1', color: d.tracks.length, kind: TrackKind.bus));
-    selectedTrack = d.tracks.length - 1;
-  });
-
-  @override
-  void showEffects(int track) {
-    effectsTrack = track;
-    setDock(Dock.effects);
-  }
 }
 
 TestDaw studio() {

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/audio/engine.dart';
 import 'package:jopendaw_app/daw/controller.dart';
+import 'package:jopendaw_app/daw/effects.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
 import 'package:jopendaw_app/daw/model.dart';
 import 'package:jopendaw_app/models/project.dart';
@@ -180,7 +181,7 @@ void main() {
   test('toda chamada que o controlador manda existe no motor wasm, com o número certo de argumentos', () async {
     final src = File('../engine/wasm/src/lib.rs').readAsStringSync();
     final exports = <String, int>{
-      for (final m in RegExp(r'pub extern "C" fn (\w+)\(([^)]*)\)').allMatches(src))
+      for (final m in RegExp(r'pub (?:unsafe )?extern "C" fn (\w+)\(([^)]*)\)').allMatches(src))
         m.group(1)!: m.group(2)!.trim().isEmpty ? 0 : m.group(2)!.split(',').length,
     };
     expect(exports, contains('note_add'));
@@ -192,6 +193,30 @@ void main() {
     c.applyPreset(2, const {48: 1.0});
     c.noteOn(60, track: 1);
     c.noteOff(60, track: 1);
+    // fase 3: efeitos (faixa e master), barramento, envio, saída, automação e observação
+    final bus = c.addBusTrack();
+    final comp = c.addEffect(1, EffectKind.compressor);
+    c.setEffectParam(1, comp.id, 0, -24);
+    c.setEffectParam(1, comp.id, 10, 2);
+    final rev = c.addEffect(4, EffectKind.reverb);
+    c.setEffectBypass(4, rev.id, true);
+    c.addEffect(-1, EffectKind.limiter);
+    expect(c.setSend(1, bus.id), isTrue);
+    expect(c.setSend(1, bus.id, level: 0.3), isTrue);
+    expect(c.setOutput(2, bus.id), isTrue);
+    final lanes = [
+      c.addLane(1, AutoTarget(AutoKind.effect, ref: comp.id, param: 0)),
+      c.addLane(1, AutoTarget(AutoKind.send, ref: bus.id)),
+      c.addLane(-1, const AutoTarget(AutoKind.volume)),
+    ];
+    c.mutate((_) {
+      for (final l in lanes) {
+        l.points.addAll([AutoPoint(beat: 0, value: 0.2), AutoPoint(beat: 4, value: 0.8, curve: 0.5)]);
+      }
+    });
+    c.watchEffect(1, comp.id);
+    c.watchAnalyzer(-1);
+    c.watchAnalyzer(null);
     c.seek(2);
     await c.togglePlay();
     await c.stop();
@@ -206,5 +231,24 @@ void main() {
     }
     final names = {for (final call in engine.log!) call.first};
     expect(names, containsAll(['track_kind', 'param', 'instrument_sample', 'notes_clear', 'note_add', 'live_on', 'live_off', 'panic']));
+    expect(
+      names,
+      containsAll([
+        'fx_count',
+        'fx_set',
+        'fx_param',
+        'fx_bypass',
+        'sends_count',
+        'send_set',
+        'track_output',
+        'auto_clear',
+        'auto_lane',
+        'auto_point',
+        'watch_fx',
+        'watch_analyzer',
+      ]),
+    );
+    // o motor também exporta o que o worklet lê a cada estado
+    expect(exports.keys, containsAll(['fx_meter', 'analyzer', 'peaks', 'beat', 'playing']));
   });
 }
