@@ -24,7 +24,8 @@ const MAX_LOOKAHEAD: f64 = 0.010;
 const FADE_SECS: f32 = 0.004;
 /// Constante de tempo de cada polo da suavização de ganho, teto e ligação.
 const SMOOTH_SECS: f32 = 0.005;
-/// Teto interno, um fio abaixo de 1: absorve o arredondamento de 1/pico e da média da caixa.
+/// Fração do teto que o ganho mira, um fio abaixo de 1: absorve o arredondamento de teto/pico e
+/// da média da caixa.
 const LIMIT: f32 = 0.999_99;
 
 /// Uma cadeia de ganho (uma por canal; com ligação total as duas recebem a mesma necessidade).
@@ -271,8 +272,11 @@ impl Effect for Limiter {
             let gi = self.gain_in.step(a) * s_curve(self.fade_in);
             let (xl, xr) = (sane(*l * gi), sane(*r * gi));
             let (pl, pr) = (xl.abs(), xr.abs());
-            let nl = if pl > LIMIT { LIMIT / pl } else { 1.0 };
-            let nr = if pr > LIMIT { LIMIT / pr } else { 1.0 };
+            // o teto é o limiar: abaixo dele o som passa intacto (a interface desenha
+            // saída = mín(entrada + ganho, teto))
+            let top = self.ceiling.step(a) * LIMIT;
+            let nl = if pl > top { top / pl } else { 1.0 };
+            let nr = if pr > top { top / pr } else { 1.0 };
             let link = self.link.step(a);
             let both = nl.min(nr);
             let window = self.len + 1;
@@ -289,7 +293,7 @@ impl Effect for Limiter {
             if self.dpos == dcap {
                 self.dpos = 0;
             }
-            let out = self.ceiling.step(a) * s_curve(self.fade_out);
+            let out = s_curve(self.fade_out);
             let (gl, gr) = (gl.min(1.0), gr.min(1.0));
             *l = dl * gl * out;
             *r = dr * gr * out;
@@ -395,8 +399,8 @@ mod tests {
             lm.process(&mut l, &mut r);
             let at = l.iter().position(|&v| v != 0.0).unwrap();
             assert_eq!(at, 10 + frames);
-            assert!((l[at] - 0.5 * lm.ceiling.value()).abs() < 1e-6);
-            assert!((r[at] + 0.25 * lm.ceiling.value()).abs() < 1e-6);
+            assert!((l[at] - 0.5).abs() < 1e-6);
+            assert!((r[at] + 0.25).abs() < 1e-6);
         }
         assert_eq!(Limiter::new(44_100.0).latency(), 132);
     }
@@ -417,6 +421,30 @@ mod tests {
     }
 
     #[test]
+    fn teto_baixo_so_segura_o_que_passa_dele() {
+        // teto em −12 dB: o que fica abaixo sai igual (o teto não é um volume de saída), o que
+        // passa é segurado nele
+        let mut lm = lim(0.002, -12.0, 1.0);
+        let d = lm.latency();
+        let quiet: Vec<f32> = (0..9600).map(|i| (i as f32 * 0.013).sin() * 0.2).collect();
+        let (mut l, mut r) = (quiet.clone(), quiet.clone());
+        for (cl, cr) in l.chunks_mut(128).zip(r.chunks_mut(128)) {
+            lm.process(cl, cr);
+        }
+        for i in d..quiet.len() {
+            assert!((l[i] - quiet[i - d]).abs() < 1e-6, "{i}");
+        }
+        let loud: Vec<f32> = (0..9600).map(|i| (i as f32 * 0.013).sin() * 0.9).collect();
+        let (mut l, mut r) = (loud.clone(), loud);
+        for (cl, cr) in l.chunks_mut(128).zip(r.chunks_mut(128)) {
+            lm.process(cl, cr);
+        }
+        let top = db_to_amp(-12.0);
+        assert!(peak(&l[4800..]) <= top * (1.0 + 1e-6) && peak(&l[4800..]) > top * 0.95);
+        assert!((lm.meter() - 20.0 * (0.9 / top).log10()).abs() < 0.5, "{}", lm.meter());
+    }
+
+    #[test]
     fn reduz_e_solta() {
         let mut lm = lim(0.003, -1.0, 1.0);
         lm.set_param(p::GAIN, 12.0);
@@ -426,8 +454,8 @@ mod tests {
         for (cl, cr) in l.chunks_mut(128).zip(r.chunks_mut(128)) {
             lm.process(cl, cr);
         }
-        // 0,5 com +12 dB = +6 dBFS, teto em 1: reduz ~6 dB e enche até perto do teto
-        assert!((lm.meter() - 6.0).abs() < 0.5, "{}", lm.meter());
+        // 0,5 com +12 dB = +6 dBFS, teto em −1 dB: reduz ~7 dB e enche até perto do teto
+        assert!((lm.meter() - 7.0).abs() < 0.5, "{}", lm.meter());
         assert!(peak(&l[20_000..]) > db_to_amp(-1.0) * 0.9);
         // silêncio: o ganho volta (o medidor é o do último bloco)
         for _ in 0..200 {

@@ -240,13 +240,21 @@ void main() {
       final high = eqBiquad(3, 5000, 4, 0.71);
       expect(high.db(20000), closeTo(4, 0.3));
       expect(high.db(50), closeTo(0, 0.01));
-      // Butterworth: −3 dB no corte com um estágio, −6 com dois
+      // Butterworth (como o motor): −3 dB no corte em 12, 24 e 48 dB/oit com Q 0,71, e a
+      // inclinação de verdade longe dele
       final hp = eqBiquad(0, 100, 0, 1 / math.sqrt2);
       expect(hp.db(100), closeTo(-3.01, 0.02));
       double band(Map<int, double> m, double f) => EqBand.of((id) => m[id] ?? 0, 0).db(f);
       final m = {0: 1.0, 1: 0.0, 2: 100.0, 3: 0.0, 4: 1 / math.sqrt2, 5: 1.0};
-      expect(band(m, 100), closeTo(-6.02, 0.03));
-      expect(band({...m, 5: 2}, 100), closeTo(-12.04, 0.05));
+      expect(band(m, 100), closeTo(-3.01, 0.03));
+      expect(band({...m, 5: 2}, 100), closeTo(-3.01, 0.05));
+      expect(band(m, 12.5) - band(m, 25), closeTo(-24, 0.5));
+      expect(band({...m, 5: 2}, 12.5) - band({...m, 5: 2}, 25), closeTo(-48, 1));
+      // o Q da banda põe ressonância no corte em qualquer inclinação: |H(f0)| = Q, a altura do nó
+      final res = {...m, 4: 4.0};
+      expect(band(res, 100), closeTo(20 * math.log(4) / math.ln10, 0.05));
+      expect(band({...res, 5: 2}, 100), closeTo(20 * math.log(4) / math.ln10, 0.05));
+      expect(EqBand.of((id) => res[id] ?? 0, 0).nodeDb, closeTo(20 * math.log(4) / math.ln10, 1e-9));
       // uma oitava abaixo: 12 dB/oit de fato na inclinação de 12 (longe do corte)
       expect(eqBiquad(4, 1000, 0, 0.71).db(8000) - eqBiquad(4, 1000, 0, 0.71).db(4000), closeTo(-12, 1.5));
       // passa-alta e passa-baixa: |H(f0)| = Q, a altura do nó
@@ -419,7 +427,7 @@ void main() {
     await t.pump(const Duration(seconds: 1));
 
     // passa-alta (banda 1, desligada): duplo clique no nó liga
-    final hp = eqPoint(t, 30, 20 * math.log(0.71) / math.ln10 * 2);
+    final hp = eqPoint(t, 30, 20 * math.log(0.71) / math.ln10);
     await click(t, hp);
     await click(t, hp, gapMs: 120);
     expect(eq.param(0), 1);

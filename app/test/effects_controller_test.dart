@@ -615,6 +615,23 @@ void main() {
       expect(c.effectsTrack, 0);
     });
 
+    test('com o rack aberto, faixa nova (e clipe novo) leva o rack junto, como a seleção', () {
+      final c = newController();
+      c.showEffects(0);
+      c.addTrack();
+      expect(c.effectsTrack, c.doc.tracks.length - 1);
+      c.addInstrumentTrack(TrackKind.synth);
+      expect(c.effectsTrack, c.doc.tracks.length - 1);
+      final bus = c.addBusTrack();
+      expect(c.effectsTrack, c.doc.tracks.indexOf(bus));
+      c.createMidiClip(1, 0);
+      expect(c.effectsTrack, 1);
+      // com outro painel aberto, o rack guarda a faixa dele
+      c.setDock(Dock.mixer);
+      c.addTrack();
+      expect(c.effectsTrack, 1);
+    });
+
     test('parâmetro de um efeito que o motor ainda não tem vai pelo sync inteiro, não solto', () {
       final c = newController();
       final slot = EffectSlot(id: 'x', kind: EffectKind.chorus);

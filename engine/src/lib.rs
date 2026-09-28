@@ -27,7 +27,7 @@
 //! são processadas primeiro (quem serve de chave de sidechain antes de quem a usa), depois os
 //! barramentos em ordem de índice: o app garante que barramento só sai ou envia para barramento
 //! de índice maior; um destino que quebre isso é ignorado (a saída vira o master). O master soma
-//! tudo, aplica o volume, a cadeia dele e, por último, o limitador de segurança.
+//! tudo, passa pela cadeia dele, aplica o volume e, por último, o limitador de segurança.
 //!
 //! Os efeitos rodam mesmo sem nada tocando enquanto houver cauda; quando a entrada está calada e
 //! a saída da cadeia fica em silêncio por mais tempo que o maior atraso que ela pode devolver, a
@@ -1344,8 +1344,8 @@ impl Engine {
             to_master |= self.render_track(t, n, fpb, out_l, out_r) && self.strips[t].out_dst < 0;
         }
 
-        // master: volume, cadeia dele, limitador
-        self.master.apply_master(out_l, out_r);
+        // master: cadeia dele, volume, limitador (inserts antes do fader, como nas faixas: um
+        // fade do master não é desfeito por um compressor ou limitador da cadeia)
         if self.master_fx.live() && (to_master || !self.master_idle) {
             self.master_fx.process(out_l, out_r, &self.keys, usize::MAX, &mut self.scratch);
             let (peak, finite) = scan(out_l, out_r);
@@ -1366,6 +1366,7 @@ impl Engine {
             self.master_idle = false;
             self.master_quiet = 0;
         }
+        self.master.apply_master(out_l, out_r);
         // NaN que escape de algum instrumento ou efeito vira silêncio antes do limitador (senão
         // contaminaria o estado dele); depois do limitador a trava só pega o que ele não pegou
         for s in out_l.iter_mut().chain(out_r.iter_mut()) {
@@ -2529,7 +2530,7 @@ mod tests {
     }
 
     #[test]
-    fn efeito_no_master_roda_antes_do_limitador() {
+    fn efeito_no_master_roda_antes_do_volume_e_do_limitador() {
         let mut e = Engine::new(RATE);
         e.set_track_count(1);
         e.load_sample(1, Sample::new(vec![vec![0.5; 96_000]], RATE));
@@ -2539,9 +2540,9 @@ mod tests {
         put(&mut e, -1, 0, fx_kind::UTILITY, fx);
         e.play();
         let (l, _) = run(&mut e, 4800);
-        // o efeito vê o master depois do volume
-        assert!((seen(&s).input[10] - 0.5 * c() * 0.5).abs() < 1e-6);
-        // 0,18 × 8 = 1,4 antes do limitador: ele segura no teto (depois dele, a trava daria 1)
+        // o efeito vê a soma antes do volume do master (inserts antes do fader)
+        assert!((seen(&s).input[10] - 0.5 * c()).abs() < 1e-6);
+        // 0,35 × 8 × 0,5 = 1,4 antes do limitador: ele segura no teto (depois dele, a trava daria 1)
         let max = l.iter().fold(0.0f32, |m, v| m.max(v.abs()));
         assert!(max <= 0.967 && l[4000] > 0.9, "{max} {}", l[4000]);
         assert!(e.take_limiter_gain() < 0.8);

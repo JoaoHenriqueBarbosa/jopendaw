@@ -46,8 +46,12 @@ async function ws(tabId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// `buttons` coerente com o evento (apertado no press, solto no release): sem ele o Chrome entrega
+// pointerdown sem botão e o Flutter perde cliques em alvos que também aceitam arrastar.
 async function mouse(c, type, x, y, extra = {}) {
-  await c.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1, ...extra });
+  const bit = { left: 1, right: 2, middle: 4 }[extra.button ?? 'left'] ?? 0;
+  const buttons = type === 'mousePressed' ? bit : 0;
+  await c.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1, buttons, ...extra });
 }
 
 const KEYS = {

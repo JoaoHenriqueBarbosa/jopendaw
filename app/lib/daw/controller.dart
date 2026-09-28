@@ -337,7 +337,7 @@ class DawController extends ChangeNotifier {
   Future<void> open() async {
     try {
       if (!_engine.supported) throw UnsupportedError('O motor de áudio ainda não roda neste aparelho: use o jopendaw no navegador por enquanto.');
-      await _engine.start();
+      engineRate = await _engine.start();
       _engine.onState = _onEngineState;
       final saved = await _store.get(_docKey);
       doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : _fresh();
@@ -880,7 +880,7 @@ class DawController extends ChangeNotifier {
   void addTrack() => edit((d) {
     final n = d.tracks.length;
     d.tracks.add(DawTrack(id: newId(), name: 'Áudio ${n + 1}', color: n % Palette.tracks.length));
-    selectedTrack = n;
+    _select(n);
   });
 
   /// Apaga a faixa. Se era um barramento, o que mandava para ele (envios, saídas e a automação
@@ -1315,7 +1315,7 @@ class DawController extends ChangeNotifier {
         k++;
       }
       d.tracks.add(DawTrack(id: newId(), name: '${kind.label} $k', color: n % Palette.tracks.length, kind: kind));
-      selectedTrack = n;
+      _select(n);
     });
   }
 
@@ -1330,7 +1330,7 @@ class DawController extends ChangeNotifier {
     edit((_) {
       t.midi.add(clip);
       selectedClip = clip.id;
-      selectedTrack = track;
+      _select(track);
     });
     return clip;
   }
@@ -1798,7 +1798,7 @@ class DawController extends ChangeNotifier {
       }
       bus = DawTrack(id: newId(), name: '${TrackKind.bus.label} $k', color: n % Palette.tracks.length, kind: TrackKind.bus);
       d.tracks.add(bus);
-      selectedTrack = n;
+      _select(n);
     });
     return bus;
   }
@@ -1988,6 +1988,10 @@ class DawController extends ChangeNotifier {
   /// (dB por faixa linear de frequência, de 0 à metade da taxa), ao vivo.
   final fxMeter = ValueNotifier<double>(0);
   final spectrum = ValueNotifier<Float32List?>(null);
+
+  /// Taxa de amostragem do motor (a do contexto de áudio do aparelho: 44,1 ou 48 kHz, em geral):
+  /// o espectro vai de 0 à metade dela.
+  double engineRate = 48000;
 
   // ------------------------------------------------------------------ visão
 

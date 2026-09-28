@@ -101,9 +101,26 @@ Biquad eqBiquad(int type, double freq, double gainDb, double q, {double rate = f
   };
 }
 
-/// Quantos biquads iguais em cascata a banda usa: a inclinação só vale nos passa-alta/baixa
+/// Q das seções de um Butterworth de ordem 2, 4 e 8 por inclinação (espelho de
+/// `eq::BUTTERWORTH` do motor), em ordem crescente.
+const eqButterworth = [
+  [0.7071068],
+  [0.5411961, 1.306563],
+  [0.5097956, 0.6013449, 0.8999762, 2.5629154],
+];
+
+/// Quantas seções de 2ª ordem em cascata a banda usa: a inclinação só vale nos passa-alta/baixa
 /// (12 dB/oit = 1, 24 = 2, 48 = 4).
 int eqStages(int type, int slope) => type == 0 || type == 4 ? const [1, 2, 4][slope.clamp(0, 2)] : 1;
+
+/// As seções de uma banda, como o motor as monta: nos passa-alta/baixa de 24 e 48 dB/oit, os Q de
+/// um Butterworth de ordem 4 e 8, com o Q da banda escalando só a última (a de Q mais alto) por
+/// Q/√½ (Q 0,71 é o Butterworth exato, −3 dB no corte); no resto, uma seção com o Q da banda.
+List<Biquad> eqSections(int type, double freq, double gainDb, double q, int slope, {double rate = fxDisplayRate}) {
+  if (eqStages(type, slope) == 1) return [eqBiquad(type, freq, gainDb, q, rate: rate)];
+  final qs = eqButterworth[slope.clamp(0, 2)];
+  return [for (var k = 0; k < qs.length; k++) eqBiquad(type, freq, gainDb, k == qs.length - 1 ? qs[k] * q / 0.7071068 : qs[k], rate: rate)];
+}
 
 /// Uma banda do EQ lida dos parâmetros (`b * 6 + k`).
 class EqBand {
@@ -111,9 +128,9 @@ class EqBand {
   final bool on;
   final int type, slope;
   final double freq, gain, q;
-  final Biquad biquad;
+  final List<Biquad> sections;
 
-  EqBand._(this.index, this.on, this.type, this.freq, this.gain, this.q, this.slope) : biquad = eqBiquad(type, freq, gain, q);
+  EqBand._(this.index, this.on, this.type, this.freq, this.gain, this.q, this.slope) : sections = eqSections(type, freq, gain, q, slope);
 
   factory EqBand.of(double Function(int id) v, int b) =>
       EqBand._(b, v(b * 6) >= 0.5, v(b * 6 + 1).round().clamp(0, 5), v(b * 6 + 2), v(b * 6 + 3), v(b * 6 + 4), v(b * 6 + 5).round().clamp(0, 2));
@@ -123,12 +140,12 @@ class EqBand {
   int get stages => eqStages(type, slope);
 
   /// Resposta só desta banda, em dB.
-  double db(double f, {double rate = fxDisplayRate}) => stages * biquad.db(f, rate: rate);
+  double db(double f, {double rate = fxDisplayRate}) => sections.fold(0.0, (sum, s) => sum + s.db(f, rate: rate));
 
   /// Altura do nó no gráfico: o ganho nas que têm ganho; nos passa-alta/baixa, a resposta na
-  /// própria frequência (|H(f0)| = Q no RBJ, vezes os estágios), que é onde a curva passa; no
-  /// rejeita-faixa, 0 dB.
-  double get nodeDb => hasGain ? gain : (isCut ? stages * 20 * math.log(math.max(q, 1e-3)) / math.ln10 : 0);
+  /// própria frequência, que é onde a curva passa (|H(f0)| = Q por seção no RBJ, e o produto dos Q
+  /// de um Butterworth é √½: dá o Q da banda em qualquer inclinação); no rejeita-faixa, 0 dB.
+  double get nodeDb => hasGain ? gain : (isCut ? 20 * math.log(math.max(q, 1e-3)) / math.ln10 : 0);
 }
 
 /// As 8 bandas de um EQ.
@@ -140,7 +157,10 @@ double eqResponseDb(List<EqBand> bands, double f, {double rate = fxDisplayRate})
   final c1 = math.cos(w), s1 = math.sin(w), c2 = math.cos(2 * w), s2 = math.sin(2 * w);
   var db = 0.0;
   for (final b in bands) {
-    if (b.on) db += b.stages * _toDb(b.biquad._mag2(c1, s1, c2, s2));
+    if (!b.on) continue;
+    for (final s in b.sections) {
+      db += _toDb(s._mag2(c1, s1, c2, s2));
+    }
   }
   return db;
 }
@@ -1094,10 +1114,10 @@ class _EqEditorState extends State<_EqEditor> {
     if (band.hasGain) {
       _step(b * 6 + 3, g.dbOf(p.dy));
     } else if (band.isCut) {
-      // a altura do nó é a ressonância (|H(f0)| = Q por estágio); relativa ao começo, porque o
-      // nó de um Q alto fica preso no topo do gráfico e o absoluto daria um salto
+      // a altura do nó é a ressonância (|H(f0)| = Q em qualquer inclinação); relativa ao começo,
+      // porque o nó de um Q alto fica preso no topo do gráfico e o absoluto daria um salto
       final db = g.dbOf(p.dy) - g.dbOf(_nodeFrom.dy);
-      _step(b * 6 + 4, _pinchQ * math.pow(10, db / (20 * band.stages)).toDouble());
+      _step(b * 6 + 4, _pinchQ * math.pow(10, db / 20).toDouble());
     }
   }
 
@@ -1218,7 +1238,7 @@ class _EqEditorState extends State<_EqEditor> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      RepaintBoundary(child: CustomPaint(painter: _SpectrumPainter(x.c.spectrum, _smoother))),
+                      RepaintBoundary(child: CustomPaint(painter: _SpectrumPainter(x.c.spectrum, _smoother, x.c.engineRate))),
                       CustomPaint(
                         painter: _EqPainter(
                           values: Float64List.fromList([for (var id = 0; id <= 48; id++) x.v(id)]),
@@ -1292,7 +1312,10 @@ class _SpectrumSmoother {
 class _SpectrumPainter extends CustomPainter {
   final ValueNotifier<Float32List?> spectrum;
   final _SpectrumSmoother smoother;
-  _SpectrumPainter(this.spectrum, this.smoother) : super(repaint: spectrum);
+
+  /// Taxa do motor: as faixas do espectro vão de 0 à metade dela.
+  final double rate;
+  _SpectrumPainter(this.spectrum, this.smoother, this.rate) : super(repaint: spectrum);
 
   /// Faixa desenhada (dB, depois da inclinação) e a inclinação de 3 dB por oitava em volta de
   /// 1 kHz: música tem menos energia por faixa linear nos agudos, e sem isso a metade de cima do
@@ -1304,7 +1327,7 @@ class _SpectrumPainter extends CustomPainter {
     final data = smoother.update(spectrum.value);
     if (data == null || data.isEmpty || size.width < 4) return;
     final g = _EqGeom(size);
-    final binHz = fxDisplayRate / 2 / data.length;
+    final binHz = rate / 2 / data.length;
     double at(double pos) {
       final i = pos.floor().clamp(0, data.length - 1);
       final j = math.min(i + 1, data.length - 1);
@@ -1355,7 +1378,7 @@ class _SpectrumPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SpectrumPainter o) => o.spectrum != spectrum || o.smoother != smoother;
+  bool shouldRepaint(_SpectrumPainter o) => o.spectrum != spectrum || o.smoother != smoother || o.rate != rate;
 }
 
 final _labelCache = <String, TextPainter>{};
