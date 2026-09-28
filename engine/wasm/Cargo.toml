@@ -1,0 +1,12 @@
+[package]
+name = "jopendaw-engine-wasm"
+description = "O motor exposto em funções C para o AudioWorklet do navegador (sem wasm-bindgen: o worklet não tem TextDecoder e cia)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+jopendaw-engine = { path = ".." }

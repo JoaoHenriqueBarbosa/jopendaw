@@ -1,0 +1,8 @@
+[package]
+name = "jopendaw-engine"
+description = "Motor de áudio do jopendaw: transporte, clipes, mixer e metrônomo, sem nada de plataforma."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

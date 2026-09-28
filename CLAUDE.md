@@ -30,10 +30,29 @@ cd server && cargo run                                    # API em :8080 (serve 
 cd app && flutter build web --release                     # web
 cd app && flutter build apk --release -PdiscordClientId=<id>   # Android
 docker-compose up --build                                 # tudo: API :8080, web :8081
+./engine/build-web.sh                                     # motor → app/web/engine/engine.wasm (commitado)
+cargo test -p jopendaw-engine                             # testes do motor
 ```
 
 O compose não monta o `schema.sql` no initdb porque o colima não enxerga `/Volumes`.
 `python3 app/tool/icones.py` regenera os ícones a partir de `app/web/favicon.svg`.
+
+## Motor de áudio (local primeiro)
+
+Tudo o que dá para processar no aparelho é processado lá; o backend fica com sincronização e
+tarefas pesadas. O motor é o crate `engine/` (Rust puro, sem plataforma: transporte, clipes,
+mixer, metrônomo; testes em `engine/src/lib.rs`). Na web ele roda compilado em WASM
+(`engine/wasm/`, funções C sem wasm-bindgen) dentro de um AudioWorklet: `app/web/engine/worklet.js`
+hospeda o módulo, `host.js` é a ponte com o Dart (`lib/audio/engine_web.dart`) e guarda documento
+e áudios no IndexedDB. O host manda os *bytes* do wasm, não o `WebAssembly.Module`: o Chrome não
+entrega módulo compilado ao escopo do worklet. No Android o mesmo crate entra como lib nativa com
+Oboe (a fazer). Mudou o motor: `./engine/build-web.sh` e commite o `engine.wasm` junto.
+
+Lado Flutter em `lib/daw/`: `model.dart` (documento: faixas, clipes em batidas/segundos),
+`controller.dart` (edição, desfazer, sync com o motor a cada mudança, importação com sha-256),
+`timeline.dart`, `transport_bar.dart`, `mixer_panel.dart`, `meter.dart`. Plugins próprios (sem
+VST/CLAP, que não rodam em web nem Android). Roteiro: MIDI + instrumentos → efeitos e automação →
+gravação e exportação → Android nativo → sincronização e jobs no backend.
 
 ## Hot-patch do backend
 

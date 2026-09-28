@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-# O servidor hoje; o motor de áudio e o que mais vier entram como crates irmãos.
-members = ["server"]
+# O servidor, o motor de áudio (puro, sem plataforma) e o motor compilado para WASM (a web).
+members = ["server", "engine", "engine/wasm"]
 
 [workspace.package]
 version = "0.1.0"
@@ -32,3 +32,8 @@ strip = "symbols"
 [profile.server]
 inherits = "release"
 panic = "unwind"
+
+# O motor no navegador: pequeno e rápido. `panic = "abort"` porque no worklet não há quem pegue.
+[profile.wasm]
+inherits = "release"
+opt-level = 3

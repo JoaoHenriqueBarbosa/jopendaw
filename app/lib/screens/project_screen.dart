@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/client.dart';
+import '../daw/controller.dart';
+import '../daw/mixer_panel.dart';
+import '../daw/timeline.dart';
+import '../daw/transport_bar.dart';
 import '../models/project.dart';
 import '../widgets/api_state.dart';
 import '../widgets/feedback.dart';
 import '../widgets/page.dart';
 import '../widgets/responsive_scaffold.dart';
-import '../widgets/theme.dart';
 
-/// Um projeto aberto. Por enquanto só o esqueleto do arranjo: a barra de transporte, a coluna das
-/// faixas e a régua; o motor de áudio e a edição entram depois.
+/// Um projeto aberto no DAW: transporte, arranjo e mixer. O áudio roda no aparelho; do servidor
+/// vêm só o nome, o andamento e a fórmula de compasso.
 class ProjectScreen extends StatefulWidget {
   final String projectId;
   const ProjectScreen({super.key, required this.projectId});
@@ -19,6 +23,7 @@ class ProjectScreen extends StatefulWidget {
 
 class _ProjectScreenState extends State<ProjectScreen> with ApiState {
   Project? _project;
+  DawController? _daw;
 
   @override
   void initState() {
@@ -27,101 +32,119 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
   }
 
   @override
-  Future<void> reload() => fetch(ApiClient.instance.project(widget.projectId), (v) => _project = v);
+  Future<void> reload() => fetch(ApiClient.instance.project(widget.projectId), (v) {
+    _project = v;
+    _daw ??= DawController(v)..open();
+  });
+
+  @override
+  void dispose() {
+    _daw?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = _project;
+    final daw = _daw;
     return PageScaffold(
       icon: Icons.graphic_eq,
       title: p?.name ?? 'Projeto',
       subtitle: p == null ? null : '${p.bpm} BPM · ${p.meter}',
       showBack: true,
-      body: p == null ? (error != null ? ErrorState(error: error!, onRetry: reload) : const LoadingState()) : _Arrangement(project: p),
+      body: daw == null
+          ? (error != null ? ErrorState(error: error!, onRetry: reload) : const LoadingState())
+          : ListenableBuilder(
+              listenable: daw,
+              builder: (context, _) {
+                if (!daw.ready) {
+                  return daw.error != null ? InlineNotice(daw.error!) : const LoadingState();
+                }
+                return _Studio(c: daw);
+              },
+            ),
     );
   }
 }
 
-/// Transporte em cima, faixas à esquerda e a área do arranjo. No celular a coluna das faixas
-/// estreita e o transporte fica embaixo, perto do polegar.
-class _Arrangement extends StatelessWidget {
-  final Project project;
-  const _Arrangement({required this.project});
+/// Transporte, arranjo e o mixer embaixo quando aberto. No celular o transporte fica embaixo,
+/// perto do polegar.
+class _Studio extends StatelessWidget {
+  final DawController c;
+  const _Studio({required this.c});
+
+  bool _typing() {
+    final f = FocusManager.instance.primaryFocus?.context?.widget;
+    return f is EditableText;
+  }
+
+  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent || _typing()) return KeyEventResult.ignored;
+    final keys = HardwareKeyboard.instance;
+    final mod = keys.isControlPressed || keys.isMetaPressed;
+    final k = e.logicalKey;
+    void Function()? action;
+    if (k == LogicalKeyboardKey.space) {
+      action = c.togglePlay;
+    } else if (k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.home) {
+      action = c.stop;
+    } else if (k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) {
+      action = c.deleteSelected;
+    } else if (mod && k == LogicalKeyboardKey.keyZ) {
+      action = keys.isShiftPressed ? c.redo : c.undo;
+    } else if (mod && k == LogicalKeyboardKey.keyY) {
+      action = c.redo;
+    } else if (mod && k == LogicalKeyboardKey.keyD) {
+      action = c.duplicateSelected;
+    } else if (mod && k == LogicalKeyboardKey.keyI) {
+      action = c.importAudio;
+    } else if (!mod && k == LogicalKeyboardKey.keyS) {
+      action = c.splitAtPlayhead;
+    } else if (!mod && k == LogicalKeyboardKey.keyL) {
+      action = c.toggleLoop;
+    } else if (!mod && k == LogicalKeyboardKey.keyC) {
+      action = c.toggleMetronome;
+    } else if (!mod && k == LogicalKeyboardKey.keyX) {
+      action = c.toggleMixer;
+    } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.numpadAdd) {
+      action = () => c.zoom(1.25);
+    } else if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract) {
+      action = () => c.zoom(0.8);
+    }
+    if (action == null) return KeyEventResult.ignored;
+    action();
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
     final desktop = isDesktop(context);
-    final transport = const _Transport();
-    final tracks = Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          width: desktop ? 220 : 120,
-          decoration: const BoxDecoration(
-            color: Palette.bar,
-            border: Border(right: BorderSide(color: Palette.hairline)),
-          ),
-          child: ListView(
+    final transport = TransportBar(c: c, compact: !desktop);
+    // os botões e controles não pegam o foco: senão o espaço aciona o botão clicado por último em
+    // vez de tocar/pausar
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: ExcludeFocus(
+        child: ListenableBuilder(
+          listenable: c,
+          builder: (context, _) => Column(
             children: [
-              for (var i = 0; i < 4; i++)
-                Container(
-                  height: 64,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: const Border(bottom: BorderSide(color: Palette.hairline)),
-                    gradient: LinearGradient(colors: [trackColorAt(i).withValues(alpha: 0.18), Colors.transparent], stops: const [0, 0.04]),
-                  ),
-                  alignment: Alignment.centerLeft,
-                  child: Text('Faixa ${i + 1}', maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (desktop) transport,
+              if (c.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: InlineNotice(c.error!, onClose: c.clearError),
                 ),
+              Expanded(
+                child: Timeline(c: c, compact: !desktop),
+              ),
+              if (c.mixerOpen) MixerPanel(c: c),
+              if (!desktop) transport,
             ],
           ),
         ),
-        Expanded(
-          child: Container(
-            color: Palette.ink,
-            alignment: Alignment.center,
-            child: const EmptyState(icon: Icons.multitrack_audio, title: 'Arranjo', message: 'Aqui entram os clipes de áudio e MIDI.'),
-          ),
-        ),
-      ],
-    );
-    return Column(
-      children: desktop ? [transport, Expanded(child: tracks)] : [Expanded(child: tracks), transport],
+      ),
     );
   }
-}
-
-class _Transport extends StatelessWidget {
-  const _Transport();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 56,
-    decoration: const BoxDecoration(
-      color: Palette.bar,
-      border: Border.symmetric(horizontal: BorderSide(color: Palette.hairline)),
-    ),
-    child: SafeArea(
-      top: false,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(tooltip: 'Voltar ao início', onPressed: null, icon: const Icon(Icons.skip_previous)),
-          IconButton(tooltip: 'Tocar', onPressed: null, icon: const Icon(Icons.play_arrow)),
-          IconButton(tooltip: 'Parar', onPressed: null, icon: const Icon(Icons.stop)),
-          IconButton(
-            tooltip: 'Gravar',
-            onPressed: null,
-            icon: Icon(Icons.fiber_manual_record, color: Palette.danger.withValues(alpha: 0.5)),
-          ),
-          const SizedBox(width: 16),
-          Text(
-            '1.1.1',
-            style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()], color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    ),
-  );
 }

@@ -1098,6 +1098,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jopendaw-engine"
+version = "0.1.0"
+
+[[package]]
+name = "jopendaw-engine-wasm"
+version = "0.1.0"
+dependencies = [
+ "jopendaw-engine",
+]
+
+[[package]]
 name = "jopendaw-server"
 version = "0.1.0"
 dependencies = [
