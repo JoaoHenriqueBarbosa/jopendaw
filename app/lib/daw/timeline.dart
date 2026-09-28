@@ -1,24 +1,39 @@
 /// O arranjo: régua, cabeçalhos das faixas e as raias com os clipes (de áudio nas faixas de áudio,
-/// de notas nas de instrumento), mais o cursor de reprodução.
+/// de notas nas de instrumento), as sub-raias de automação abertas embaixo de cada faixa, a linha
+/// do master no fim e o cursor de reprodução.
 ///
 /// A rolagem horizontal e o zoom são do controlador (a janela começa em `scrollBeat` e cada batida
-/// ocupa `pxPerBeat`); a vertical é um scroll comum que leva cabeçalhos e raias juntos.
+/// ocupa `pxPerBeat`); a vertical é um scroll comum que leva cabeçalhos e raias juntos, com as
+/// alturas de uma conta só ([_Layout]).
 library;
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/dialogs.dart';
 import '../widgets/theme.dart';
+import 'automation_lane.dart';
 import 'controller.dart';
 import 'instruments.dart';
 import 'meter.dart';
 import 'model.dart';
 
 const _rulerHeight = 30.0;
+
+/// Altura da linha de "+ Faixa", entre as faixas e o master.
+const _addRowHeight = 44.0;
+
+/// Cor do master (e das automações dele) e dos botões A e FX dos cabeçalhos.
+const _masterColor = Color(0xFFC9D1D9);
+const _automationColor = Palette.accent;
+const _effectsColor = Color(0xFF6BA8F0);
+
+/// Cor da faixa, ou a do master (−1).
+Color _trackColor(DawController c, int track) => track < 0 || track >= c.doc.tracks.length ? _masterColor : trackColorAt(c.doc.tracks[track].color);
 
 // ---------------------------------------------------------------------- ações sobre a seleção
 // Delete, Ctrl+D, S e os botões da barra valem para clipes de áudio e de notas: o controlador
@@ -59,6 +74,21 @@ class Timeline extends StatelessWidget {
   double get headerWidth => compact ? 132 : 232;
   double get laneHeight => compact ? 64 : 76;
 
+  Widget _header(_Row r) => switch (r.kind) {
+    _RowKind.track => _TrackHeader(key: ValueKey('t:${c.doc.tracks[r.track].id}'), c: c, index: r.track, height: r.height, compact: compact),
+    _RowKind.lane => AutomationLaneHeader(
+      key: ValueKey('a:${r.lane!.id}'),
+      c: c,
+      track: r.track,
+      lane: r.lane!,
+      color: _trackColor(c, r.track),
+      height: r.height,
+      compact: compact,
+    ),
+    _RowKind.add => _AddTrackRow(key: const ValueKey('add'), c: c, height: r.height),
+    _RowKind.master => _MasterHeader(key: const ValueKey('master'), c: c, height: r.height, compact: compact),
+  };
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -67,6 +97,7 @@ class Timeline extends StatelessWidget {
         builder: (context, box) {
           final laneWidth = math.max(0.0, box.maxWidth - headerWidth);
           c.viewWidth = laneWidth;
+          final layout = _Layout.of(c, laneHeight);
           return Stack(
             children: [
               Column(
@@ -101,17 +132,12 @@ class Timeline extends StatelessWidget {
                           children: [
                             SizedBox(
                               width: headerWidth,
-                              child: Column(
-                                children: [
-                                  for (var i = 0; i < c.doc.tracks.length; i++) _TrackHeader(c: c, index: i, height: laneHeight, compact: compact),
-                                  _AddTrackRow(c: c, height: laneHeight),
-                                ],
-                              ),
+                              child: Column(children: [for (final r in layout.rows) _header(r)]),
                             ),
                             SizedBox(
                               width: laneWidth,
-                              height: (c.doc.tracks.length + 1) * laneHeight,
-                              child: _Lanes(c: c, laneHeight: laneHeight, width: laneWidth, touch: compact),
+                              height: layout.height,
+                              child: _Lanes(c: c, layout: layout, laneHeight: laneHeight, width: laneWidth, touch: compact),
                             ),
                           ],
                         ),
@@ -133,6 +159,81 @@ class Timeline extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------- disposição vertical
+
+enum _RowKind { track, lane, add, master }
+
+/// Uma linha da lista vertical: faixa, sub-raia de automação, "+ Faixa" ou master.
+class _Row {
+  final _RowKind kind;
+
+  /// Faixa da linha; −1 no master, nas automações dele e na linha de adicionar.
+  final int track;
+  final AutoLane? lane;
+  final double top, height;
+  const _Row(this.kind, this.track, this.top, this.height, [this.lane]);
+}
+
+/// Onde cada linha fica. Cabeçalhos e raias saem da mesma conta, então andam alinhados; cada
+/// faixa ocupa um bloco (ela e as automações abertas embaixo), e é por bloco que um clipe
+/// arrastado na vertical troca de faixa.
+class _Layout {
+  final List<_Row> rows;
+  final List<double> trackTop, blockEnd;
+  final double height;
+  const _Layout._(this.rows, this.trackTop, this.blockEnd, this.height);
+
+  factory _Layout.of(DawController c, double laneHeight) {
+    final rows = <_Row>[];
+    final tops = <double>[], ends = <double>[];
+    var y = 0.0;
+    void lanes(int track, List<AutoLane> list) {
+      for (final l in list) {
+        if (!l.open) continue;
+        rows.add(_Row(_RowKind.lane, track, y, automationLaneHeight, l));
+        y += automationLaneHeight;
+      }
+    }
+
+    for (var i = 0; i < c.doc.tracks.length; i++) {
+      tops.add(y);
+      rows.add(_Row(_RowKind.track, i, y, laneHeight));
+      y += laneHeight;
+      lanes(i, c.doc.tracks[i].lanes);
+      ends.add(y);
+    }
+    rows.add(_Row(_RowKind.add, -1, y, _addRowHeight));
+    y += _addRowHeight;
+    rows.add(_Row(_RowKind.master, -1, y, laneHeight));
+    y += laneHeight;
+    lanes(-1, c.doc.masterLanes);
+    return _Layout._(rows, tops, ends, y);
+  }
+
+  /// A linha na altura y (null fora da lista).
+  _Row? rowAt(double y) {
+    if (rows.isEmpty || y < 0 || y >= height) return null;
+    var lo = 0, hi = rows.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (rows[mid].top <= y) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return rows[lo];
+  }
+
+  /// A faixa cujo bloco contém y; acima da primeira vale a primeira, abaixo da última, a última.
+  int trackAt(double y) {
+    for (var i = 0; i < blockEnd.length; i++) {
+      if (y < blockEnd[i]) return i;
+    }
+    return blockEnd.length - 1;
   }
 }
 
@@ -298,7 +399,7 @@ class _TrackHeader extends StatefulWidget {
   final int index;
   final double height;
   final bool compact;
-  const _TrackHeader({required this.c, required this.index, required this.height, required this.compact});
+  const _TrackHeader({super.key, required this.c, required this.index, required this.height, required this.compact});
 
   @override
   State<_TrackHeader> createState() => _TrackHeaderState();
@@ -359,16 +460,22 @@ class _TrackHeaderState extends State<_TrackHeader> {
                         _TrackMenu(c: c, index: index, onRename: () => _rename(context, t)),
                       ],
                     ),
+                    // no celular a linha é ícone, M, S e A, com 2 px entre eles: cabe nos 104 px
+                    // que o cabeçalho de 132 deixa; efeitos ficam no menu e no ícone do barramento
                     Row(
                       children: [
                         if (compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 2)],
                         ToggleChip(label: 'M', on: t.mute, color: Palette.danger, tooltip: 'Mudo', onTap: () => c.edit((_) => t.mute = !t.mute)),
-                        const SizedBox(width: 4),
+                        SizedBox(width: compact ? 2 : 4),
                         ToggleChip(label: 'S', on: t.solo, color: const Color(0xFFE3B341), tooltip: 'Solo', onTap: () => c.edit((_) => t.solo = !t.solo)),
+                        SizedBox(width: compact ? 2 : 4),
+                        _AutomationButton(c: c, track: index),
                         if (!compact) ...[
                           const SizedBox(width: 4),
+                          _EffectsChip(c: c, track: index),
+                          const SizedBox(width: 4),
                           Expanded(
-                            child: _MiniFader(c: c, track: t),
+                            child: _MiniFader(gain: t.gain, onStart: c.checkpoint, onGain: (g) => c.mutate((_) => t.gain = g)),
                           ),
                         ],
                       ],
@@ -399,7 +506,18 @@ void _toggleInstrument(DawController c, int index) {
   c.setDock(Dock.instrument);
 }
 
-/// O ícone do tipo da faixa. Nas de instrumento é um botão que abre o painel do instrumento.
+/// Abre (ou fecha) o rack de efeitos da faixa ou do master (−1).
+void _toggleEffects(DawController c, int track) {
+  if (c.dock == Dock.effects && c.effectsTrack == track) {
+    c.setDock(Dock.none);
+    return;
+  }
+  if (track >= 0) c.selectTrack(track);
+  c.showEffects(track);
+}
+
+/// O ícone do tipo da faixa. Nas de instrumento é um botão que abre o painel do instrumento; no
+/// barramento, que não tem instrumento nem clipes, abre os efeitos (é para isso que ele existe).
 class _KindButton extends StatelessWidget {
   final DawController c;
   final int index;
@@ -409,25 +527,29 @@ class _KindButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = c.doc.tracks[index];
-    if (!t.kind.isInstrument) {
+    final bus = t.kind == TrackKind.bus;
+    if (!t.kind.isInstrument && !bus) {
       return Tooltip(
         message: 'Faixa de áudio',
         child: SizedBox(width: 24, height: 24, child: Icon(t.kind.icon, size: 16, color: color)),
       );
     }
-    final open = c.dock == Dock.instrument && c.selectedTrack == index;
+    final open = bus ? c.dock == Dock.effects && c.effectsTrack == index : c.dock == Dock.instrument && c.selectedTrack == index;
+    final tooltip = bus
+        ? (open ? 'Fechar os efeitos' : 'Barramento: abrir os efeitos')
+        : (open ? 'Fechar o instrumento (I)' : '${t.kind.label}: abrir o instrumento (I)');
     return SizedBox(
       width: 24,
       height: 24,
       child: IconButton(
         padding: EdgeInsets.zero,
         iconSize: 16,
-        tooltip: open ? 'Fechar o instrumento (I)' : '${t.kind.label}: abrir o instrumento (I)',
+        tooltip: tooltip,
         style: IconButton.styleFrom(
           backgroundColor: open ? color.withValues(alpha: 0.22) : null,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
-        onPressed: () => _toggleInstrument(c, index),
+        onPressed: () => bus ? _toggleEffects(c, index) : _toggleInstrument(c, index),
         icon: Icon(t.kind.icon, color: color),
       ),
     );
@@ -453,6 +575,8 @@ class _TrackMenu extends StatelessWidget {
         switch (v) {
           case 'instrument':
             _toggleInstrument(c, index);
+          case 'effects':
+            _toggleEffects(c, index);
           case 'rename':
             onRename();
           case 'color':
@@ -460,11 +584,12 @@ class _TrackMenu extends StatelessWidget {
             c.edit((_) => t.color = (t.color + 1) % Palette.tracks.length);
           case 'delete':
             final t = c.doc.tracks[index];
-            if ((t.clips.isNotEmpty || t.midi.isNotEmpty) &&
+            final filled = t.clips.isNotEmpty || t.midi.isNotEmpty || t.effects.isNotEmpty || t.lanes.any((l) => l.points.isNotEmpty);
+            if (filled &&
                 !await confirmAction(
                   context,
                   title: 'Apagar "${t.name}"?',
-                  message: 'A faixa e os clipes dela saem do projeto (dá para desfazer).',
+                  message: 'A faixa e o que há nela (clipes, efeitos, automação) saem do projeto (dá para desfazer).',
                   action: 'Apagar',
                   destructive: true,
                 )) {
@@ -475,6 +600,7 @@ class _TrackMenu extends StatelessWidget {
       },
       itemBuilder: (_) => [
         if (c.doc.tracks[index].kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
+        const PopupMenuItem(value: 'effects', child: Text('Efeitos')),
         const PopupMenuItem(value: 'rename', child: Text('Renomear')),
         const PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
         const PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
@@ -483,14 +609,17 @@ class _TrackMenu extends StatelessWidget {
   );
 }
 
+/// Fader pequeno dos cabeçalhos (faixa e master): [onStart] marca o desfazer, [onGain] muda sem
+/// histórico a cada passo.
 class _MiniFader extends StatelessWidget {
-  final DawController c;
-  final DawTrack track;
-  const _MiniFader({required this.c, required this.track});
+  final double gain;
+  final VoidCallback onStart;
+  final ValueChanged<double> onGain;
+  const _MiniFader({required this.gain, required this.onStart, required this.onGain});
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: '${formatDb(track.gain)} dB',
+    message: '${formatDb(gain)} dB',
     child: SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: 2,
@@ -499,23 +628,20 @@ class _MiniFader extends StatelessWidget {
       ),
       child: SizedBox(
         height: 22,
-        child: Slider(
-          value: gainToFader(track.gain).clamp(0, 1),
-          onChangeStart: (_) => c.checkpoint(),
-          onChanged: (v) => c.mutate((_) => track.gain = faderToGain(v)),
-        ),
+        child: Slider(value: gainToFader(gain).clamp(0, 1), onChangeStart: (_) => onStart(), onChanged: (v) => onGain(faderToGain(v))),
       ),
     ),
   );
 }
 
-/// Botão M/S dos canais.
+/// Botão M/S dos canais (e A/FX dos cabeçalhos). [lit] contorna na cor quando desligado: há algo
+/// ali (automação oculta, efeitos) mesmo com o painel fechado.
 class ToggleChip extends StatelessWidget {
   final String label, tooltip;
-  final bool on;
+  final bool on, lit;
   final Color color;
   final VoidCallback onTap;
-  const ToggleChip({super.key, required this.label, required this.on, required this.color, required this.tooltip, required this.onTap});
+  const ToggleChip({super.key, required this.label, required this.on, required this.color, required this.tooltip, required this.onTap, this.lit = false});
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -530,11 +656,12 @@ class ToggleChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: on ? color : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: on ? color : Palette.hairlineStrong),
+          border: Border.all(color: on || lit ? color : Palette.hairlineStrong),
         ),
         child: Text(
           label,
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: on ? Colors.black : Colors.white70),
+          maxLines: 1,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: on ? Colors.black : (lit ? color : Colors.white70)),
         ),
       ),
     ),
@@ -544,7 +671,12 @@ class ToggleChip extends StatelessWidget {
 class _AddTrackRow extends StatelessWidget {
   final DawController c;
   final double height;
-  const _AddTrackRow({required this.c, required this.height});
+  const _AddTrackRow({super.key, required this.c, required this.height});
+
+  PopupMenuItem<TrackKind> _item(TrackKind k) => PopupMenuItem(
+    value: k,
+    child: Row(children: [Icon(k.icon, size: 18), const SizedBox(width: 12), Text(k.label)]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -559,13 +691,21 @@ class _AddTrackRow extends StatelessWidget {
       child: PopupMenuButton<TrackKind>(
         tooltip: 'Nova faixa',
         position: PopupMenuPosition.under,
-        onSelected: (k) => k == TrackKind.audio ? c.addTrack() : c.addInstrumentTrack(k),
+        onSelected: (k) {
+          switch (k) {
+            case TrackKind.audio:
+              c.addTrack();
+            case TrackKind.bus:
+              c.addBusTrack();
+            case TrackKind.synth || TrackKind.drums || TrackKind.sampler:
+              c.addInstrumentTrack(k);
+          }
+        },
         itemBuilder: (_) => [
           for (final k in TrackKind.values)
-            PopupMenuItem(
-              value: k,
-              child: Row(children: [Icon(k.icon, size: 18), const SizedBox(width: 12), Text(k.label)]),
-            ),
+            if (k != TrackKind.bus) _item(k),
+          const PopupMenuDivider(),
+          _item(TrackKind.bus),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -591,15 +731,257 @@ class _AddTrackRow extends StatelessWidget {
   }
 }
 
+/// A linha do master, fixa no fim da lista: volume, medidor, automação e efeitos do master.
+class _MasterHeader extends StatelessWidget {
+  final DawController c;
+  final double height;
+  final bool compact;
+  const _MasterHeader({super.key, required this.c, required this.height, required this.compact});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: height,
+    decoration: const BoxDecoration(
+      color: Palette.bar,
+      border: Border(
+        top: BorderSide(color: Palette.hairlineStrong),
+        right: BorderSide(color: Palette.hairline),
+        bottom: BorderSide(color: Palette.hairline),
+      ),
+    ),
+    child: Row(
+      children: [
+        Container(width: 4, color: _masterColor),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.speaker, size: 16, color: _masterColor),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text('Master', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    _AutomationButton(c: c, track: -1),
+                    SizedBox(width: compact ? 2 : 4),
+                    _EffectsChip(c: c, track: -1),
+                    if (!compact) ...[
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _MiniFader(gain: c.doc.masterGain, onStart: c.checkpoint, onGain: (g) => c.mutate((d) => d.masterGain = g)),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Meter(peaks: c.peaks, index: -1, width: 6),
+        ),
+        const SizedBox(width: 6),
+      ],
+    ),
+  );
+}
+
+/// FX: abre o rack de efeitos da faixa ou do master (−1); contornado quando a cadeia tem efeitos.
+class _EffectsChip extends StatelessWidget {
+  final DawController c;
+  final int track;
+  const _EffectsChip({required this.c, required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final n = effectChainOf(c, track).length;
+    final open = c.dock == Dock.effects && c.effectsTrack == track;
+    return ToggleChip(
+      label: 'FX',
+      on: open,
+      lit: n > 0,
+      color: _effectsColor,
+      tooltip: open ? 'Fechar os efeitos' : (n == 0 ? 'Efeitos' : 'Efeitos ($n)'),
+      onTap: () => _toggleEffects(c, track),
+    );
+  }
+}
+
+/// A: menu dos alvos automatizáveis da faixa ou do master (−1). Aceso com alguma automação
+/// aberta; contornado quando só há automação oculta.
+class _AutomationButton extends StatelessWidget {
+  final DawController c;
+  final int track;
+  const _AutomationButton({required this.c, required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final lanes = automationLanesOf(c, track);
+    return ToggleChip(
+      label: 'A',
+      on: lanes.any((l) => l.open),
+      lit: lanes.isNotEmpty,
+      color: _automationColor,
+      tooltip: lanes.isEmpty ? 'Automação' : 'Automação (${lanes.length})',
+      onTap: () => _automationMenu(context, c, track),
+    );
+  }
+}
+
+const _showAllLanes = 'show-all', _hideAllLanes = 'hide-all';
+
+/// Grupo de um alvo no menu (os parâmetros do instrumento e os de cada efeito vão num segundo
+/// menu, senão seriam centenas de linhas); null para os do primeiro nível.
+String? _autoGroup(AutoTarget t) => switch (t.kind) {
+  AutoKind.instrument => 'instrument',
+  AutoKind.effect => 'fx:${t.ref}',
+  AutoKind.volume || AutoKind.pan || AutoKind.send => null,
+};
+
+/// Nome e ícone do grupo: o instrumento da faixa, ou o efeito com a posição dele na cadeia (dois
+/// reverbs ficam distinguíveis).
+(String, IconData) _autoGroupLabel(DawController c, int track, AutoTarget t) {
+  if (t.kind == AutoKind.instrument) {
+    final k = track >= 0 ? c.doc.tracks[track].kind : TrackKind.synth;
+    return (k.label, k.icon);
+  }
+  final fx = effectChainOf(c, track);
+  final i = fx.indexWhere((s) => s.id == t.ref);
+  return i < 0 ? ('Efeito', Icons.tune) : ('${i + 1}. ${fx[i].kind.label}', fx[i].kind.icon);
+}
+
+PopupMenuItem<Object> _autoTargetItem(AutoTarget t, String name, AutoLane? lane) => PopupMenuItem<Object>(
+  value: t,
+  height: 36,
+  child: Row(
+    children: [
+      SizedBox(
+        width: 20,
+        child: lane == null
+            ? null
+            : Icon(lane.open ? Icons.check : Icons.visibility_off_outlined, size: 16, color: lane.open ? _automationColor : Colors.white38),
+      ),
+      const SizedBox(width: 10),
+      Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+      if (lane != null && lane.points.isNotEmpty) ...[
+        const SizedBox(width: 12),
+        Text('${lane.points.length} ${lane.points.length == 1 ? 'ponto' : 'pontos'}', style: const TextStyle(fontSize: 11, color: Colors.white38)),
+      ],
+    ],
+  ),
+);
+
+/// Abre o menu de automação debaixo do botão. Escolher um alvo abre a sub-raia dele (criando se
+/// preciso); escolher um que já está aberto oculta. Mostrar/ocultar não entra no desfazer.
+Future<void> _automationMenu(BuildContext context, DawController c, int track) async {
+  final box = context.findRenderObject();
+  final overlay = Overlay.of(context).context.findRenderObject();
+  if (box is! RenderBox || overlay is! RenderBox) return;
+  final at = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
+  final position = RelativeRect.fromRect(Rect.fromLTWH(at.left, at.bottom + 2, at.width, 0), Offset.zero & overlay.size);
+  final targets = c.automatable(track);
+  AutoLane? laneOf(AutoTarget t) => automationLanesOf(c, track).where((l) => l.target == t).firstOrNull;
+  final top = <(AutoTarget, String)>[];
+  final groups = <String, List<(AutoTarget, String)>>{};
+  for (final e in targets) {
+    final g = _autoGroup(e.$1);
+    if (g == null) {
+      top.add(e);
+    } else {
+      (groups[g] ??= []).add(e);
+    }
+  }
+  final lanes = automationLanesOf(c, track);
+  final hidden = lanes.where((l) => !l.open).length;
+  final shown = lanes.length - hidden;
+  final small = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white38, letterSpacing: 0.6);
+  var pick = await showMenu<Object>(
+    context: context,
+    position: position,
+    items: [
+      if (targets.isEmpty) const PopupMenuItem<Object>(enabled: false, child: Text('Nada para automatizar aqui')),
+      for (final (t, name) in top) _autoTargetItem(t, name, laneOf(t)),
+      if (top.isNotEmpty && groups.isNotEmpty) const PopupMenuDivider(),
+      for (final MapEntry(key: g, value: items) in groups.entries)
+        PopupMenuItem<Object>(
+          value: g,
+          height: 40,
+          child: Builder(
+            builder: (context) {
+              final (label, icon) = _autoGroupLabel(c, track, items.first.$1);
+              final open = items.where((e) => laneOf(e.$1) != null).length;
+              return Row(
+                children: [
+                  SizedBox(width: 20, child: Icon(icon, size: 16, color: Colors.white60)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  if (open > 0) Text('$open', style: small),
+                  const Icon(Icons.chevron_right, size: 18),
+                ],
+              );
+            },
+          ),
+        ),
+      if (lanes.isNotEmpty) const PopupMenuDivider(),
+      if (hidden > 0) PopupMenuItem<Object>(value: _showAllLanes, height: 40, child: Text('Mostrar as ocultas ($hidden)')),
+      if (shown > 0) const PopupMenuItem<Object>(value: _hideAllLanes, height: 40, child: Text('Ocultar todas')),
+    ],
+  );
+  if (pick is String && groups.containsKey(pick)) {
+    if (!context.mounted) return;
+    // segundo nível: os parâmetros do grupo, com um título a cada seção da tabela
+    final entries = <PopupMenuEntry<Object>>[];
+    String? section;
+    for (final (t, name) in groups[pick]!) {
+      final spec = autoParamSpec(c, track, t);
+      if (spec != null && spec.group != section) {
+        section = spec.group;
+        entries.add(PopupMenuItem<Object>(enabled: false, height: 26, child: Text(spec.group.toUpperCase(), style: small)));
+      }
+      entries.add(_autoTargetItem(t, spec?.name ?? name, laneOf(t)));
+    }
+    pick = await showMenu<Object>(context: context, position: position, items: entries);
+  }
+  // a faixa pode ter saído enquanto o menu estava aberto
+  if (pick == null || track >= c.doc.tracks.length) return;
+  final now = automationLanesOf(c, track);
+  switch (pick) {
+    case _showAllLanes || _hideAllLanes:
+      final open = pick == _showAllLanes;
+      c.edit((_) {
+        for (final l in now) {
+          l.open = open;
+        }
+      }, undoable: false);
+    case AutoTarget t:
+      final lane = laneOf(t);
+      if (lane != null && lane.open) {
+        c.edit((_) => lane.open = false, undoable: false);
+      } else {
+        c.addLane(track, t);
+      }
+  }
+}
+
 // ---------------------------------------------------------------------- raias
 
 class _Lanes extends StatefulWidget {
   final DawController c;
+  final _Layout layout;
   final double laneHeight, width;
 
   /// Aparelho de toque (muda só o texto da dica das faixas vazias).
   final bool touch;
-  const _Lanes({required this.c, required this.laneHeight, required this.width, required this.touch});
+  const _Lanes({required this.c, required this.layout, required this.laneHeight, required this.width, required this.touch});
 
   @override
   State<_Lanes> createState() => _LanesState();
@@ -630,11 +1012,13 @@ class _LanesState extends State<_Lanes> {
 
   void _onTapUp(TapUpDetails d) {
     c.selectClip(null);
-    final lane = (d.localPosition.dy / widget.laneHeight).floor();
+    // as sub-raias de automação tratam os próprios toques; aqui chegam faixas, master e o resto
+    final row = widget.layout.rowAt(d.localPosition.dy);
+    final lane = row != null && row.kind == _RowKind.track ? row.track : -1;
     final at = _beatAt(d.localPosition.dx);
-    if (lane < c.doc.tracks.length) c.selectTrack(lane);
+    if (lane >= 0) c.selectTrack(lane);
     c.seek(c.snapBeat(at));
-    if (_taps(d.globalPosition) && lane < c.doc.tracks.length && c.doc.tracks[lane].kind.isInstrument) _createClip(lane, at);
+    if (_taps(d.globalPosition) && lane >= 0 && c.doc.tracks[lane].kind.isInstrument) _createClip(lane, at);
   }
 
   /// Duplo toque no vazio de uma faixa de instrumento: clipe novo no compasso tocado, sem montar
@@ -657,6 +1041,7 @@ class _LanesState extends State<_Lanes> {
   @override
   Widget build(BuildContext context) {
     final laneHeight = widget.laneHeight;
+    final layout = widget.layout;
     final visibleEnd = c.scrollBeat + widget.width / c.pxPerBeat;
     final bpm = c.doc.bpm;
     final tracks = c.doc.tracks;
@@ -679,24 +1064,26 @@ class _LanesState extends State<_Lanes> {
                     scroll: c.scrollBeat,
                     ppb: c.pxPerBeat,
                     beatsPerBar: c.doc.beatsPerBar,
+                    bands: [for (final r in layout.rows) (r.top, r.height, _bandOf(r, tracks))],
+                    selected: c.selectedTrack < tracks.length ? layout.trackTop[c.selectedTrack] : null,
                     laneHeight: laneHeight,
-                    lanes: tracks.length,
-                    selected: c.selectedTrack,
                   ),
                 ),
               ),
               for (var ti = 0; ti < tracks.length; ti++)
-                if (tracks[ti].kind.isInstrument && tracks[ti].midi.isEmpty)
+                if ((tracks[ti].kind.isInstrument && tracks[ti].midi.isEmpty) || tracks[ti].kind == TrackKind.bus)
                   Positioned(
                     left: 12,
                     right: 12,
-                    top: ti * laneHeight,
+                    top: layout.trackTop[ti],
                     height: laneHeight,
                     child: IgnorePointer(
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          widget.touch ? 'Toque duas vezes para criar um clipe de notas' : 'Clique duas vezes para criar um clipe de notas',
+                          tracks[ti].kind == TrackKind.bus
+                              ? 'Barramento: recebe o som das faixas que enviam ou saem para ele'
+                              : (widget.touch ? 'Toque duas vezes para criar um clipe de notas' : 'Clique duas vezes para criar um clipe de notas'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: hint,
@@ -710,22 +1097,32 @@ class _LanesState extends State<_Lanes> {
                     Positioned(
                       key: ValueKey(clip.id),
                       left: (clip.start - c.scrollBeat) * c.pxPerBeat,
-                      top: ti * laneHeight + 2,
+                      top: layout.trackTop[ti] + 2,
                       width: math.max(4, clip.beats(bpm) * c.pxPerBeat),
                       height: laneHeight - 4,
-                      child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight),
+                      child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
                     ),
                 for (final clip in tracks[ti].midi)
                   if (shown(clip.id, clip.start, clip.end))
                     Positioned(
                       key: ValueKey('midi:${clip.id}'),
                       left: (clip.start - c.scrollBeat) * c.pxPerBeat,
-                      top: ti * laneHeight + 2,
+                      top: layout.trackTop[ti] + 2,
                       width: math.max(4, clip.length * c.pxPerBeat),
                       height: laneHeight - 4,
-                      child: _MidiClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight),
+                      child: _MidiClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
                     ),
               ],
+              for (final r in layout.rows)
+                if (r.lane != null)
+                  Positioned(
+                    key: ValueKey('auto:${r.lane!.id}'),
+                    left: 0,
+                    right: 0,
+                    top: r.top,
+                    height: r.height,
+                    child: AutomationLaneView(c: c, track: r.track, lane: r.lane!, color: _trackColor(c, r.track), touch: widget.touch),
+                  ),
             ],
           ),
         ),
@@ -734,19 +1131,46 @@ class _LanesState extends State<_Lanes> {
   }
 }
 
+/// Fundo de cada linha no desenho da grade.
+enum _Band { track, bus, lane, add, master }
+
+_Band _bandOf(_Row r, List<DawTrack> tracks) => switch (r.kind) {
+  _RowKind.track => tracks[r.track].kind == TrackKind.bus ? _Band.bus : _Band.track,
+  _RowKind.lane => _Band.lane,
+  _RowKind.add => _Band.add,
+  _RowKind.master => _Band.master,
+};
+
 class _GridPainter extends CustomPainter {
   final double scroll, ppb, laneHeight;
-  final int beatsPerBar, lanes, selected;
-  _GridPainter({required this.scroll, required this.ppb, required this.beatsPerBar, required this.laneHeight, required this.lanes, required this.selected});
+  final int beatsPerBar;
+
+  /// Topo, altura e tipo de cada linha.
+  final List<(double, double, _Band)> bands;
+
+  /// Topo da faixa selecionada.
+  final double? selected;
+  _GridPainter({required this.scroll, required this.ppb, required this.beatsPerBar, required this.bands, required this.selected, required this.laneHeight});
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (selected < lanes) {
-      canvas.drawRect(Rect.fromLTWH(0, selected * laneHeight, size.width, laneHeight), Paint()..color = Colors.white.withValues(alpha: 0.025));
+    for (final (top, h, band) in bands) {
+      final fill = switch (band) {
+        _Band.lane => 0.022,
+        _Band.bus => 0.012,
+        _Band.master => 0.016,
+        _Band.track || _Band.add => 0.0,
+      };
+      if (fill > 0) canvas.drawRect(Rect.fromLTWH(0, top, size.width, h), Paint()..color = Colors.white.withValues(alpha: fill));
+    }
+    final sel = selected;
+    if (sel != null) {
+      canvas.drawRect(Rect.fromLTWH(0, sel, size.width, laneHeight), Paint()..color = Colors.white.withValues(alpha: 0.025));
     }
     final line = Paint()..color = Palette.hairline;
-    for (var i = 1; i <= lanes; i++) {
-      canvas.drawRect(Rect.fromLTWH(0, i * laneHeight - 1, size.width, 1), line);
+    for (final (top, h, band) in bands) {
+      if (band == _Band.master) canvas.drawRect(Rect.fromLTWH(0, top, size.width, 1), Paint()..color = Palette.hairlineStrong);
+      if (band != _Band.add) canvas.drawRect(Rect.fromLTWH(0, top + h - 1, size.width, 1), line);
     }
     final bar = Paint()..color = Colors.white.withValues(alpha: 0.09);
     final beat = Paint()..color = Colors.white.withValues(alpha: 0.035);
@@ -765,7 +1189,7 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GridPainter o) =>
-      o.scroll != scroll || o.ppb != ppb || o.beatsPerBar != beatsPerBar || o.lanes != lanes || o.selected != selected || o.laneHeight != laneHeight;
+      o.scroll != scroll || o.ppb != ppb || o.beatsPerBar != beatsPerBar || o.selected != selected || o.laneHeight != laneHeight || !listEquals(o.bands, bands);
 }
 
 // ---------------------------------------------------------------------- clipes
@@ -954,6 +1378,13 @@ mixin _DragEdit<T extends StatefulWidget> on State<T> {
   }
 }
 
+/// Faixa sob um clipe arrastado [dy] pixels na vertical desde a faixa [from]: a do bloco onde o
+/// meio dele caiu (as automações abertas de uma faixa contam como dela).
+int _trackUnder(_Layout layout, int from, double laneHeight, double dy) {
+  if (from < 0 || from >= layout.trackTop.length) return from;
+  return layout.trackAt(layout.trackTop[from] + laneHeight / 2 + dy);
+}
+
 PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {String? shortcut}) => PopupMenuItem(
   value: value,
   child: Row(
@@ -979,7 +1410,8 @@ class _ClipView extends StatefulWidget {
   final AudioClip clip;
   final int track;
   final double laneHeight;
-  const _ClipView({required this.c, required this.clip, required this.track, required this.laneHeight});
+  final _Layout layout;
+  const _ClipView({required this.c, required this.clip, required this.track, required this.laneHeight, required this.layout});
   @override
   State<_ClipView> createState() => _ClipViewState();
 }
@@ -1021,7 +1453,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         final start = math.max(0.0, _snapDrag(c, _orig.start + dBeats));
         if (start != clip.start) change(() => clip.start = start);
         // áudio só troca para outra faixa de áudio
-        final lane = (_origTrack + (total.dy / widget.laneHeight).round()).clamp(0, c.doc.tracks.length - 1);
+        final lane = _trackUnder(widget.layout, _origTrack, widget.laneHeight, total.dy);
         final current = c.doc.tracks.indexWhere((t) => t.clips.contains(clip));
         if (current >= 0 && lane != current && c.doc.tracks[lane].kind == TrackKind.audio) {
           ensureCheckpoint();
@@ -1149,7 +1581,8 @@ class _MidiClipView extends StatefulWidget {
   final MidiClip clip;
   final int track;
   final double laneHeight;
-  const _MidiClipView({required this.c, required this.clip, required this.track, required this.laneHeight});
+  final _Layout layout;
+  const _MidiClipView({required this.c, required this.clip, required this.track, required this.laneHeight, required this.layout});
   @override
   State<_MidiClipView> createState() => _MidiClipViewState();
 }
@@ -1191,7 +1624,7 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
         final start = math.max(0.0, _snapDrag(c, _orig.start + dBeats));
         if (start != clip.start) change(() => clip.start = start);
         // notas só trocam para outra faixa de instrumento
-        final lane = (_origTrack + (total.dy / widget.laneHeight).round()).clamp(0, c.doc.tracks.length - 1);
+        final lane = _trackUnder(widget.layout, _origTrack, widget.laneHeight, total.dy);
         final current = c.doc.tracks.indexWhere((t) => t.midi.contains(clip));
         if (current >= 0 && lane != current && c.doc.tracks[lane].kind.isInstrument) {
           ensureCheckpoint();
