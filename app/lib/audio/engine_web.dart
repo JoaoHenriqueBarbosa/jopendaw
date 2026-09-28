@@ -8,6 +8,7 @@ external _Host get _host;
 
 extension type _Host._(JSObject _) implements JSObject {
   external JSPromise<JSNumber> start();
+  external JSPromise<JSString> sha256(JSUint8Array bytes);
   external JSPromise<JSAny?> resume();
   external JSPromise<_Decoded> decode(JSUint8Array bytes);
   external void loadSample(int id, JSArray<JSFloat32Array> channels, double rate);
@@ -398,6 +399,9 @@ class AudioEngine {
 
   /// Oferece os bytes para salvar como arquivo (download no navegador).
   Future<void> saveFile(String name, Uint8List bytes, String mime) => _host.saveFile(name, bytes.toJS, mime).toDart;
+
+  /// sha-256 em hexa (a chave dos áudios no guardado local), pelo WebCrypto do navegador.
+  Future<String> sha256Hex(Uint8List bytes) async => (await _host.sha256(bytes.toJS).toDart).toDart;
 }
 
 /// Guardado local do DAW no IndexedDB: textos (o documento) e bytes (os áudios importados).

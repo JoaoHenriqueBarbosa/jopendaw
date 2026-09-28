@@ -3,6 +3,8 @@
 /// blocos da entrada, as notas e o resultado do render.
 library;
 
+import 'package:crypto/crypto.dart';
+
 import 'dart:typed_data';
 
 import 'package:jopendaw_app/audio/engine.dart';
@@ -22,6 +24,9 @@ typedef RenderCall = ({
 });
 
 class FakeEngine implements AudioEngine {
+  @override
+  Future<String> sha256Hex(Uint8List bytes) async => sha256.convert(bytes).toString();
+
   @override
   bool get supported => true;
 

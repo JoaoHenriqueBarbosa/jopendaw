@@ -394,6 +394,20 @@ void main() {
   });
 
   group('tomadas em loop', () {
+    test('gravando com o transporte andando, o clipe começa na batida do primeiro quadro capturado', () async {
+      final c = fakeController(e);
+      c.doc.countIn = true; // tocando não conta, mesmo ligada
+      c.playing.value = true;
+      c.beat.value = 3.0; // a tela estava um bloco atrás
+      c.setArmed(0, true);
+      await settle();
+      await c.toggleRecord();
+      e.recordBeat = 3.125;
+      e.feed(0, 200, (i) => 0.5);
+      await c.toggleRecord();
+      expect(c.doc.tracks[0].clips.single.start, 3.125);
+    });
+
     Future<DawController> loopRecording(double start, double loopStart, double loopEnd, int frames) async {
       final c = fakeController(e);
       c.doc
@@ -407,13 +421,14 @@ void main() {
       return c;
     }
 
-    test('cada passada vira uma tomada do clipe que cobre o loop; a ativa é a última', () async {
+    test('cada passada vira uma tomada do clipe que cobre o loop; a ativa é a última completa', () async {
       final c = await loopRecording(0, 0, 4, 500);
       final clip = c.doc.tracks[0].clips.single;
       expect(clip.start, 0);
       expect(clip.length, closeTo(2.0, 1e-9));
       expect(clip.takes, hasLength(3));
-      expect(clip.sample, clip.takes.last);
+      // a terceira passada parou no meio: fica guardada, mas toca a segunda
+      expect(clip.sample, clip.takes[1]);
       expect(c.doc.samples[clip.takes[1]]!.name, 'Gravação 1 - tomada 2.wav');
       final firsts = [for (final h in clip.takes) loadedFor(e, c, h).channels[0]];
       expect(firsts.map((a) => (a.first, a.length)), [(0.0, 200), (200.0, 200), (400.0, 100)]);
@@ -455,7 +470,15 @@ void main() {
       c.switchTake(clip.id, 'outro');
       expect(c.doc.tracks[0].clips.single.sample, clip.takes.first);
       c.undo();
-      expect(c.doc.tracks[0].clips.single.sample, clip.takes.last);
+      expect(c.doc.tracks[0].clips.single.sample, clip.takes[1]);
+    });
+
+    test('começando no meio do loop, toca a primeira passada completa', () async {
+      final c = await loopRecording(2, 0, 4, 350);
+      final clip = c.doc.tracks[0].clips.single;
+      // a primeira começou no meio (com silêncio antes) e a terceira parou no meio: a segunda é a
+      // única completa
+      expect(clip.sample, clip.takes[1]);
     });
 
     test('passadas: divisão no quadro exato da volta do motor, sem deriva', () {

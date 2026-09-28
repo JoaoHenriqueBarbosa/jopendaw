@@ -7,7 +7,6 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -311,10 +310,15 @@ class _Recording {
     required this.latency,
     required this.skip,
     required this.metronomeTemp,
+    this.startFromCapture = false,
   }) : stopBeat = start;
 
   /// Batida onde a gravação vale (o cursor quando ela começou).
-  final double start;
+  double start;
+
+  /// Começou com o transporte andando: [start] é só uma estimativa (a posição que a tela tinha)
+  /// até o primeiro bloco da captura chegar com a batida exata do primeiro quadro dele.
+  bool startFromCapture;
   final double bpm, rate;
 
   /// O loop no começo: a volta dele divide as passadas.
@@ -376,8 +380,8 @@ class _Recording {
 typedef _Piece = ({int from, int to, int pad});
 
 /// Um clipe da gravação: começa em [start] (batidas) e dura [seconds]; uma peça é um clipe comum,
-/// várias são as tomadas dele (a ativa é a última).
-typedef _ClipPlan = ({double start, double seconds, List<_Piece> pieces});
+/// várias são as tomadas dele, e [active] é a que toca (a última passada completa).
+typedef _ClipPlan = ({double start, double seconds, List<_Piece> pieces, int active});
 
 /// Uma nota gravada, em batidas absolutas.
 typedef _RecNote = ({int pitch, double start, double end, double velocity});
@@ -1196,9 +1200,20 @@ class DawController extends ChangeNotifier {
 
   void addTrack() => edit((d) {
     final n = d.tracks.length;
-    d.tracks.add(DawTrack(id: newId(), name: 'Áudio ${n + 1}', color: n % Palette.tracks.length));
+    d.tracks.add(DawTrack(id: newId(), name: _nextTrackName(d, TrackKind.audio), color: n % Palette.tracks.length));
     _select(n);
   });
+
+  /// `<Tipo> N` com o próximo N livre entre as faixas do mesmo tipo (Áudio 2 depois de Áudio 1,
+  /// não Áudio 6 só porque há outras cinco faixas de outros tipos).
+  static String _nextTrackName(DawDoc d, TrackKind kind) {
+    final names = {for (final t in d.tracks) t.name};
+    var k = d.tracks.where((t) => t.kind == kind).length + 1;
+    while (names.contains('${kind.label} $k')) {
+      k++;
+    }
+    return '${kind.label} $k';
+  }
 
   /// Apaga a faixa. Se era um barramento, o que mandava para ele (envios, saídas e a automação
   /// desses envios) sai junto; os sidechains que apontavam para faixas depois dela acompanham a
@@ -1597,7 +1612,7 @@ class DawController extends ChangeNotifier {
   /// Decodifica, guarda no aparelho e registra no motor e no documento (se ainda não estiver);
   /// devolve o sha-256.
   Future<String> _ingest(String name, Uint8List bytes) async {
-    final hash = sha256.convert(bytes).toString();
+    final hash = await _engine.sha256Hex(bytes);
     if (!waveforms.containsKey(hash)) {
       final audio = await _engine.decode(bytes);
       await _store.put('sample:$hash', bytes);
@@ -1673,12 +1688,7 @@ class DawController extends ChangeNotifier {
     }
     edit((d) {
       final n = d.tracks.length;
-      final names = {for (final t in d.tracks) t.name};
-      var k = d.tracks.where((t) => t.kind == kind).length + 1;
-      while (names.contains('${kind.label} $k')) {
-        k++;
-      }
-      d.tracks.add(DawTrack(id: newId(), name: '${kind.label} $k', color: n % Palette.tracks.length, kind: kind));
+      d.tracks.add(DawTrack(id: newId(), name: _nextTrackName(d, kind), color: n % Palette.tracks.length, kind: kind));
       _select(n);
     });
   }
@@ -2717,6 +2727,7 @@ class DawController extends ChangeNotifier {
       // compensação manual, acrescenta silêncio)
       skip: (count ? (bar * fpb).round() : 0) + (latency.isFinite ? (latency * rate).round() : 0),
       metronomeTemp: count && !d.metronome,
+      startFromCapture: wasPlaying,
     );
     _rec = r;
     recording = true;
@@ -2923,6 +2934,13 @@ class DawController extends ChangeNotifier {
     final rr = right.isEmpty ? left : right;
     final n = math.min(left.length, rr.length);
     if (n == 0) return;
+    if (r.frames == 0 && r.startFromCapture) {
+      // gravando com o transporte andando: o primeiro quadro capturado diz onde a gravação começou
+      // de verdade (a posição da tela no clique chegava até um bloco de áudio atrasada)
+      final b = _engine.recordBeat;
+      if (b.isFinite && (b - r.start).abs() < 1) r.start = r.stopBeat = b;
+      r.startFromCapture = false;
+    }
     r.left.add(n == left.length ? left : Float32List.sublistView(left, 0, n));
     r.right.add(n == rr.length ? rr : Float32List.sublistView(rr, 0, n));
     r.frames += n;
@@ -2951,7 +2969,7 @@ class DawController extends ChangeNotifier {
         gatherFrames(r.right, piece.from + r.skip, piece.to + r.skip, rr, piece.pad);
         final channels = _inputChannels(l, rr);
         final bytes = encodeWav(channels, r.rate.round(), ExportFormat.wav32f);
-        final hash = sha256.convert(bytes).toString();
+        final hash = await _engine.sha256Hex(bytes);
         if (!waveforms.containsKey(hash)) {
           await _store.put('sample:$hash', bytes);
           if (_disposed) return;
@@ -2983,7 +3001,7 @@ class DawController extends ChangeNotifier {
           final takes = hashes[p];
           final clip = AudioClip(
             id: newId(),
-            sample: takes.last,
+            sample: takes[plans[p].active],
             start: plans[p].start,
             length: plans[p].seconds,
             takes: takes.length > 1 ? List.of(takes) : null,
@@ -3017,23 +3035,29 @@ class DawController extends ChangeNotifier {
     if (kept == 1) {
       final end = endOf(0);
       return [
-        (start: r.start, seconds: end / r.rate, pieces: [(from: 0, to: end, pad: 0)]),
+        (start: r.start, seconds: end / r.rate, pieces: [(from: 0, to: end, pad: 0)], active: 0),
       ];
     }
     final plans = <_ClipPlan>[];
     final _Piece first;
     if (r.start < r.loopStart) {
       final head = ((r.loopStart - r.start) * fpb).round();
-      plans.add((start: r.start, seconds: head / r.rate, pieces: [(from: 0, to: head, pad: 0)]));
+      plans.add((start: r.start, seconds: head / r.rate, pieces: [(from: 0, to: head, pad: 0)], active: 0));
       first = (from: head, to: endOf(0), pad: 0);
     } else {
       first = (from: 0, to: endOf(0), pad: ((r.start - r.loopStart) * fpb).round());
     }
-    plans.add((
-      start: r.loopStart,
-      seconds: (r.loopEnd - r.loopStart) * 60 / r.bpm,
-      pieces: [first, for (var p = 1; p < kept; p++) (from: passes[p].frame, to: endOf(p), pad: 0)],
-    ));
+    final pieces = [first, for (var p = 1; p < kept; p++) (from: passes[p].frame, to: endOf(p), pad: 0)];
+    // toca a última passada completa: a de quem parou no meio (ou a primeira, que começou no meio
+    // do loop) fica guardada como tomada, mas não é a que se quer ouvir de primeira
+    final loopFrames = (r.loopEnd - r.loopStart) * fpb;
+    bool complete(_Piece x) => x.pad == 0 && x.to - x.from >= loopFrames * 0.98;
+    var active = pieces.length - 1;
+    while (active > 0 && !complete(pieces[active])) {
+      active--;
+    }
+    if (!complete(pieces[active])) active = pieces.length - 1;
+    plans.add((start: r.loopStart, seconds: (r.loopEnd - r.loopStart) * 60 / r.bpm, pieces: pieces, active: active));
     return plans;
   }
 
@@ -3360,7 +3384,7 @@ class DawController extends ChangeNotifier {
       channels = _trimTail(channels, ((to - from) * 60 / doc.bpm * rate).ceil());
       if (channels.length == 2 && _same(channels[0], channels[1])) channels = [channels[0]];
       final bytes = encodeWav(channels, rate.round(), ExportFormat.wav32f);
-      final hash = sha256.convert(bytes).toString();
+      final hash = await _engine.sha256Hex(bytes);
       if (!waveforms.containsKey(hash)) {
         await _store.put('sample:$hash', bytes);
         if (_disposed) return;

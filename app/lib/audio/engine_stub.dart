@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'engine_types.dart';
@@ -86,6 +88,9 @@ class AudioEngine {
   void cancelRender() {}
 
   /// Oferece os bytes para salvar como arquivo. Aqui: [UnsupportedError].
+  /// sha-256 em hexa (a chave dos áudios no guardado local).
+  Future<String> sha256Hex(Uint8List bytes) async => sha256.convert(bytes).toString();
+
   Future<void> saveFile(String name, Uint8List bytes, String mime) =>
       Future.error(UnsupportedError('Salvar arquivos ainda não funciona fora do navegador: use o jopendaw no navegador por enquanto.'));
 }

@@ -404,6 +404,15 @@
 
   // Oferece os bytes como download. O link temporário vive um minuto: revogar logo depois do
   // clique cancela o download em alguns navegadores.
+  // sha-256 em hexa pelo WebCrypto: nativo e assíncrono, não trava a tela com gravações longas
+  // (o sha-256 em Dart levava segundos com centenas de MB na thread da interface)
+  async function sha256(bytes) {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    let hex = '';
+    for (const b of digest) hex += b.toString(16).padStart(2, '0');
+    return hex;
+  }
+
   async function saveFile(name, bytes, mime) {
     const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -445,6 +454,7 @@
     renderOffline,
     cancelRender,
     saveFile,
+    sha256,
     // posição, tocando, estado do contexto, os picos (esq, dir por faixa; o master por último) e
     // o maior indicador do efeito observado desde a leitura anterior, que zera os dois; com o
     // analisador ligado, a faixa mais forte do espectro (índice e dB) e quantas faixas ele tem; com

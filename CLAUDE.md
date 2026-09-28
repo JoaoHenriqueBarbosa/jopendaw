@@ -66,8 +66,10 @@ cada patch. Mudou struct, enum ou assinatura: `r` no terminal do dx (rebuild com
 
 ## Teste de uso (obrigatório antes de dar uma fase por pronta)
 
-O teste é usar o app no Chrome, não revisar código: `node tool/cdp.mjs` fala CDP com o Chrome de
-depuração da 9222 (o MCP chrome-devtools fica desligado neste projeto). Suba o `./hot.sh`, faça o
+O teste é usar o app no Chrome, não revisar código. O Flutter desenha em canvas: o MCP
+chrome-devtools serve para screenshot, console, JS e emulação de aparelho (`emulate`), mas não
+clica em coordenadas; cliques, arrastes, teclas e `probe` vão pelo `node tool/cdp.mjs`, que fala
+CDP com o mesmo Chrome de depuração da 9222. Suba o `./hot.sh`, faça o
 `flutter build web --release` e rode passos com `run` (clicar, arrastar, teclas com modificadores
 reais, screenshots em pixels CSS, `probe` para ler os picos do motor e provar que o som sai).
 Arquivos de teste (ex.: um WAV) vão em `app/build/web/` e entram no seletor com `file`. O login
