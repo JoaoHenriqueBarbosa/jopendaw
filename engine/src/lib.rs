@@ -21,6 +21,8 @@
 
 pub mod drums;
 pub mod dsp;
+pub mod effect;
+pub mod fx;
 pub mod instrument;
 mod limiter;
 mod metronome;

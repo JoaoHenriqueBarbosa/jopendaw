@@ -16,6 +16,7 @@ import '../api/client.dart';
 import '../audio/engine.dart';
 import '../models/project.dart';
 import '../widgets/theme.dart';
+import 'effects.dart';
 import 'instruments.dart';
 import 'model.dart';
 
@@ -51,7 +52,7 @@ class Waveform {
 }
 
 /// O que ocupa o painel de baixo.
-enum Dock { none, mixer, editor, instrument }
+enum Dock { none, mixer, editor, instrument, effects }
 
 /// Grade de encaixe, em batidas (0 = livre).
 enum Snap {
@@ -1269,6 +1270,62 @@ class DawController extends ChangeNotifier {
     _midiNotes.clear();
     _sustained.clear();
   }
+
+  // ------------------------------------------------------------------ efeitos, roteamento, automação
+  // (contrato da fase 3: corpos preenchidos na implementação). Faixa −1 é o master.
+
+  /// Faixa cujo rack de efeitos o painel mostra (−1 = master).
+  int effectsTrack = -1;
+
+  /// Mostra os efeitos de uma faixa (ou do master) no painel de baixo.
+  void showEffects(int track) => throw UnimplementedError();
+
+  /// A cadeia de efeitos de uma faixa ou do master.
+  List<EffectSlot> effectsOf(int track) => throw UnimplementedError();
+
+  /// Adiciona um efeito no fim da cadeia (ou na posição [at]); desfazível.
+  EffectSlot addEffect(int track, EffectKind kind, {int? at}) => throw UnimplementedError();
+  void removeEffect(int track, String slotId) => throw UnimplementedError();
+  void moveEffect(int track, String slotId, int to) => throw UnimplementedError();
+
+  /// Muda um parâmetro de efeito pelo caminho rápido (só a chamada `fx_param`). Para arrastes:
+  /// [checkpoint] no começo e `undoable: false`.
+  void setEffectParam(int track, String slotId, int id, double value, {bool undoable = false}) => throw UnimplementedError();
+  void setEffectBypass(int track, String slotId, bool bypass) => throw UnimplementedError();
+  void applyEffectPreset(int track, String slotId, Map<int, double> values) => throw UnimplementedError();
+
+  /// Nova faixa barramento ("Barramento N"), selecionada.
+  void addBusTrack() => throw UnimplementedError();
+
+  /// Cria ou muda o envio da faixa para o barramento [busId].
+  void setSend(int track, String busId, {double? level, bool? pre, bool undoable = false}) => throw UnimplementedError();
+  void removeSend(int track, String busId) => throw UnimplementedError();
+
+  /// Barramentos para onde a faixa pode enviar ou sair sem criar ciclo.
+  List<DawTrack> busTargets(int track) => throw UnimplementedError();
+
+  /// Saída da faixa: um barramento (id) ou null para o master. Recusa ciclo.
+  void setOutput(int track, String? busId) => throw UnimplementedError();
+
+  /// Alvos automatizáveis da faixa (ou do master), com o nome para o menu.
+  List<(AutoTarget, String)> automatable(int track) => throw UnimplementedError();
+
+  /// Nova faixa de automação para o alvo (ou abre a que já existe); desfazível.
+  AutoLane addLane(int track, AutoTarget target) => throw UnimplementedError();
+  void removeLane(int track, String laneId) => throw UnimplementedError();
+
+  /// Faixa de, mínimo, máximo e valor atual (sem automação) de um alvo, para desenhar e editar.
+  (double, double, double) targetRange(int track, AutoTarget target) => throw UnimplementedError();
+
+  /// Efeito cujo indicador (redução de ganho) o motor manda; null desliga.
+  void watchEffect(int track, String? slotId) => throw UnimplementedError();
+
+  /// Faixa cujo espectro o motor manda (−1 master); null desliga.
+  void watchAnalyzer(int? track) => throw UnimplementedError();
+
+  /// Indicador do efeito observado e espectro da faixa observada, ao vivo.
+  final fxMeter = ValueNotifier<double>(0);
+  final spectrum = ValueNotifier<Float32List?>(null);
 
   // ------------------------------------------------------------------ visão
 

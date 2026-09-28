@@ -731,7 +731,7 @@ const samplerPresets = <Preset>[
 const _samplerKeeps = {SamplerId.root, SamplerId.tune};
 
 List<Preset> presetsFor(TrackKind kind) => switch (kind) {
-  TrackKind.audio => const [],
+  TrackKind.audio || TrackKind.bus => const [],
   TrackKind.synth => synthPresets,
   TrackKind.drums => drumKits,
   TrackKind.sampler => samplerPresets,

@@ -358,11 +358,17 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   // ---------------------------------------------------------------------- corpo
 
   Widget _body(_Ctx x, double width) => switch (x.t.kind) {
+    TrackKind.bus => _Empty(
+      icon: Icons.call_split,
+      title: 'Barramento',
+      message: 'Barramentos recebem o áudio de outras faixas (envios e saídas) e não têm instrumento. Os efeitos dele ficam na aba Efeitos.',
+      actions: _createButtons(),
+    ),
     TrackKind.audio => _Empty(
       icon: Icons.graphic_eq,
       title: 'Faixa de áudio',
       message:
-          'Faixas de áudio tocam os clipes gravados e importados e não têm instrumento; os efeitos de áudio chegam na próxima fase. '
+          'Faixas de áudio tocam os clipes gravados e importados e não têm instrumento; os efeitos dela ficam na aba Efeitos. '
           'Para tocar notas, crie uma faixa de instrumento.',
       actions: _createButtons(),
     ),

@@ -14,13 +14,19 @@ enum TrackKind {
   audio('Áudio', Icons.graphic_eq),
   synth('Sintetizador', Icons.piano),
   drums('Bateria', Icons.grid_view),
-  sampler('Sampler', Icons.music_note);
+  sampler('Sampler', Icons.music_note),
+
+  /// Barramento: retorno de envios ou grupo. Sem clipes; só recebe áudio de outras faixas.
+  bus('Barramento', Icons.call_split);
 
   final String label;
   final IconData icon;
   const TrackKind(this.label, this.icon);
 
-  bool get isInstrument => this != audio;
+  bool get isInstrument => this == synth || this == drums || this == sampler;
+
+  /// Pode ter clipes (de áudio ou de notas).
+  bool get hasClips => this != bus;
 
   static TrackKind parse(String? s) => values.firstWhere((k) => k.name == s, orElse: () => audio);
 
@@ -29,6 +35,7 @@ enum TrackKind {
     synth => synthParams,
     drums => drumParams,
     sampler => samplerParams,
+    bus => const [],
   };
 }
 
@@ -103,6 +110,10 @@ class ParamSpec {
         return '${v >= 0 ? '+' : ''}${v.round()} ct';
       case 'x':
         return '×${v.toStringAsFixed(2)}';
+      case 'dB':
+        return '${v > 0.05 ? '+' : ''}${v.toStringAsFixed(1)} dB';
+      case ':1':
+        return '${v.toStringAsFixed(v < 10 ? 1 : 0)}:1';
       case 'oct':
         return '${v.toStringAsFixed(1)} oit';
       default:

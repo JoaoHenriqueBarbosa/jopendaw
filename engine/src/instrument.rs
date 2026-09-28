@@ -38,6 +38,9 @@ pub mod kind {
     pub const SYNTH: u32 = 1;
     pub const DRUMS: u32 = 2;
     pub const SAMPLER: u32 = 3;
+    /// Barramento (retorno de envios, grupo): sem instrumento nem clipes, só recebe áudio de
+    /// outras faixas (envios e saídas roteadas para ele).
+    pub const BUS: u32 = 4;
 }
 
 /// Cria o instrumento de um tipo; `None` para faixa de áudio ou tipo desconhecido.

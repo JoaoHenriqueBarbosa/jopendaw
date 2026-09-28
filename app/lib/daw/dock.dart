@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'effects_panel.dart';
 import 'instrument_panel.dart';
 import 'mixer_panel.dart';
 import 'piano_roll.dart';
@@ -127,6 +128,7 @@ class _DockPanelState extends State<DockPanel> {
                     Dock.mixer => MixerPanel(c: c),
                     Dock.editor => PianoRoll(c: c),
                     Dock.instrument => InstrumentPanel(c: c),
+                    Dock.effects => EffectsPanel(c: c),
                     Dock.none => const SizedBox.shrink(),
                   },
                 ),
@@ -307,6 +309,14 @@ class _Subject extends StatelessWidget {
           final (t, clip) = e;
           text = clip.name.isEmpty ? t.name : '${clip.name} · ${t.name}';
           dot = trackColorAt(t.color);
+        }
+      case Dock.effects:
+        final i = c.effectsTrack;
+        if (i < 0 || i >= c.doc.tracks.length) {
+          text = 'Master';
+        } else {
+          text = '${c.doc.tracks[i].name} · efeitos';
+          dot = trackColorAt(c.doc.tracks[i].color);
         }
       case Dock.instrument:
         if (c.selectedTrack < c.doc.tracks.length) {
