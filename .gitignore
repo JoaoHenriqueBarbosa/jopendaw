@@ -17,3 +17,6 @@ __pycache__/
 
 # Backups tirados de produção
 dumps/
+
+# worktrees dos agentes
+/.claude/worktrees/
