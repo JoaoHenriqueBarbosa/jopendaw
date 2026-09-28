@@ -122,7 +122,7 @@ packages:
     source: hosted
     version: "1.3.3"
   ffi:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: ffi
       sha256: "6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45"
@@ -185,6 +185,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  fixnum:
+    dependency: transitive
+    description:
+      name: fixnum
+      sha256: b6dc7065e46c974bc7c5f143080a6764ec7a4be6da1285ececdc37be96de53be
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -203,6 +211,62 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_midi_command:
+    dependency: "direct main"
+    description:
+      name: flutter_midi_command
+      sha256: a8169d433be1b43acdc223a9d5b3781d1b3171b319d0d6217dfdf2bd7461a45a
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  flutter_midi_command_android:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_android
+      sha256: "80259c63ceda4455a8e07654b7b5618c1209452a04a72e3054c2426f240d584a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  flutter_midi_command_darwin:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_darwin
+      sha256: "291fdfe3f456abdecfdb1aeeff4e511180309f93854beb5a7f9ea3ce57129e0c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  flutter_midi_command_linux:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_linux
+      sha256: "6b09e7c147ea86b3d4f9a721446a925cb9d974a12705fb0e0d982f4c27e6b4c8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  flutter_midi_command_platform_interface:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_platform_interface
+      sha256: "8cd464da29ae2af194c099bdb62d70826a01a9eed72d40e64cd9ace5a1f218c8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  flutter_midi_command_web:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_web
+      sha256: "12ab12de10487e443447ca105bba433c1d2eee070f886a68309f8d6e46311c13"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  flutter_midi_command_windows:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_windows
+      sha256: "743c4eb7493d750728e0670ae73d213060ec2b92856edf94c7ed01c9f5135964"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
   flutter_secure_storage:
     dependency: "direct main"
     description:
@@ -421,6 +485,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.18.3"
+  mime:
+    dependency: transitive
+    description:
+      name: mime
+      sha256: bd47de35f07e27267e69c8c8b22edf9473bfee170a60d60fcc93730c5144b7f6
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
   objective_c:
     dependency: transitive
     description:
@@ -454,7 +526,7 @@ packages:
     source: hosted
     version: "1.1.0"
   path_provider:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path_provider
       sha256: a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825
@@ -501,6 +573,54 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
+  permission_handler:
+    dependency: "direct main"
+    description:
+      name: permission_handler
+      sha256: fe54465bcc62a4564c6e4db337bbaded6c0c0fa6e10487414436d163114784f6
+      url: "https://pub.dev"
+    source: hosted
+    version: "12.0.3"
+  permission_handler_android:
+    dependency: transitive
+    description:
+      name: permission_handler_android
+      sha256: "1e3bc410ca1bf84662104b100eb126e066cb55791b7451307f9708d4007350e6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "13.0.1"
+  permission_handler_apple:
+    dependency: transitive
+    description:
+      name: permission_handler_apple
+      sha256: "066bbbc60031b63b916a3871e7bb4b6a8c5e7cec8146dafec53d1da304eff0a5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.6.2"
+  permission_handler_html:
+    dependency: transitive
+    description:
+      name: permission_handler_html
+      sha256: "6ea98b3f17f60d3b527f2647ed2ab4dc0f6bfe25b22cb1c363f5d8f62252f6ac"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.4+1"
+  permission_handler_platform_interface:
+    dependency: transitive
+    description:
+      name: permission_handler_platform_interface
+      sha256: ed86a61c190258fdd65de395ea0632822e3415c1faec38eae0c31b479c28a531
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.4.1"
+  permission_handler_windows:
+    dependency: transitive
+    description:
+      name: permission_handler_windows
+      sha256: caeae01858a0a7d2df67a445ac98e1ad95e55a0e77c73044f4e9b1c8c2289cbd
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
   petitparser:
     dependency: transitive
     description:
@@ -541,6 +661,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.0"
+  share_plus:
+    dependency: "direct main"
+    description:
+      name: share_plus
+      sha256: "34f00f9becd2743c1fb05363d624f9f70d37f7ccdcdda47450bc0b8c9d327b8c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "13.3.0"
+  share_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: share_plus_platform_interface
+      sha256: "365ef7379fc22507256adda3385152942ffce08935452bc972c2e52a0bebae41"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.2.0"
   shared_preferences:
     dependency: "direct main"
     description:
@@ -722,6 +858,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.6"
+  uuid:
+    dependency: transitive
+    description:
+      name: uuid
+      sha256: "9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.6.0"
   vector_graphics:
     dependency: transitive
     description:
