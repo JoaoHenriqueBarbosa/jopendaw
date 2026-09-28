@@ -14,6 +14,7 @@ import 'dock.dart';
 import 'export.dart';
 import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
+import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
@@ -230,6 +231,7 @@ class TransportBar extends StatelessWidget {
                       onPressed: () => showSettingsDialog(context, c),
                       icon: const Icon(Icons.settings_outlined),
                     ),
+                    IconButton(tooltip: 'Atalhos do teclado (?)', onPressed: () => showShortcuts(context), icon: const Icon(Icons.keyboard_command_key)),
                     if (c.status != null) ...[
                       const SizedBox(width: 12),
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),

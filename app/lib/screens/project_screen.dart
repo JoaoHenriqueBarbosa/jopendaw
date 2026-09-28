@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../api/client.dart';
 import '../daw/controller.dart';
+import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/timeline.dart';
 import '../daw/transport_bar.dart';
@@ -105,7 +106,7 @@ class _DawStudioState extends State<DawStudio> {
 
   /// Teclas da tela, em camadas: primeiro o teclado musical (quando ligado, as letras dele ganham
   /// dos atalhos), depois o editor aberto, depois os atalhos gerais.
-  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (_typing()) return KeyEventResult.ignored;
     final keys = HardwareKeyboard.instance;
     final mod = keys.isControlPressed || keys.isMetaPressed;
@@ -154,6 +155,9 @@ class _DawStudioState extends State<DawStudio> {
       action = () => toggleDock(c, Dock.instrument);
     } else if (!mod && k == LogicalKeyboardKey.keyF) {
       action = () => toggleDock(c, Dock.effects);
+    } else if (e.character == '?' || (keys.isShiftPressed && k == LogicalKeyboardKey.slash)) {
+      final ctx = node.context;
+      if (ctx != null) action = () => showShortcuts(ctx);
     } else if (k == LogicalKeyboardKey.escape && c.dock != Dock.none) {
       action = () => c.setDock(Dock.none);
     } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.numpadAdd) {
