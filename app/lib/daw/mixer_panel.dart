@@ -1,10 +1,12 @@
-/// O mixer: um canal por faixa (fader, pan, mudo, solo, medidor) e o master no fim.
+/// O mixer: um canal por faixa (fader, pan, mudo, solo, medidor, tipo) e o master no fim. Ocupa a
+/// altura que o painel de baixo der.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'instruments.dart';
 import 'meter.dart';
 import 'model.dart';
 import 'timeline.dart' show ToggleChip;
@@ -13,59 +15,74 @@ class MixerPanel extends StatelessWidget {
   final DawController c;
   const MixerPanel({super.key, required this.c});
 
+  /// Abaixo disto os canais não cabem (pan, rótulos, M/S e um fader usável): o mixer rola na
+  /// vertical em vez de espremer.
+  static const _minHeight = 190.0;
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: c,
-    builder: (context, _) => Container(
-      height: 300,
-      decoration: const BoxDecoration(
-        color: Palette.bar,
-        border: Border(top: BorderSide(color: Palette.hairlineStrong)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.all(8),
-              children: [
-                for (var i = 0; i < c.doc.tracks.length; i++)
-                  _Strip(
-                    c: c,
-                    name: c.doc.tracks[i].name,
-                    color: trackColorAt(c.doc.tracks[i].color),
-                    meterIndex: i,
-                    gain: c.doc.tracks[i].gain,
-                    pan: c.doc.tracks[i].pan,
-                    selected: c.selectedTrack == i,
-                    onSelect: () => c.selectTrack(i),
-                    onGain: (g) => c.mutate((_) => c.doc.tracks[i].gain = g),
-                    onPan: (p) => c.mutate((_) => c.doc.tracks[i].pan = p),
-                    mute: c.doc.tracks[i].mute,
-                    solo: c.doc.tracks[i].solo,
-                    onMute: () => c.edit((d) => d.tracks[i].mute = !d.tracks[i].mute),
-                    onSolo: () => c.edit((d) => d.tracks[i].solo = !d.tracks[i].solo),
-                  ),
-              ],
-            ),
-          ),
-          Container(width: 1, color: Palette.hairlineStrong),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: _Strip(
-              c: c,
-              name: 'Master',
-              color: Colors.white,
-              meterIndex: -1,
-              gain: c.doc.masterGain,
-              pan: c.doc.masterPan,
-              onGain: (g) => c.mutate((d) => d.masterGain = g),
-              onPan: (p) => c.mutate((d) => d.masterPan = p),
-            ),
-          ),
-        ],
-      ),
+    builder: (context, _) => LayoutBuilder(
+      builder: (context, box) {
+        final strips = ColoredBox(color: Palette.bar, child: _strips());
+        if (!box.hasBoundedHeight) return SizedBox(height: 300, child: strips);
+        if (box.maxHeight >= _minHeight) return strips;
+        return SingleChildScrollView(
+          child: SizedBox(height: _minHeight, child: strips),
+        );
+      },
     ),
+  );
+
+  Widget _strips() => Row(
+    children: [
+      Expanded(
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.all(8),
+          children: [
+            for (var i = 0; i < c.doc.tracks.length; i++)
+              _Strip(
+                c: c,
+                name: c.doc.tracks[i].name,
+                color: trackColorAt(c.doc.tracks[i].color),
+                kind: c.doc.tracks[i].kind,
+                onKind: c.doc.tracks[i].kind.isInstrument
+                    ? () {
+                        c.selectTrack(i);
+                        c.setDock(Dock.instrument);
+                      }
+                    : null,
+                meterIndex: i,
+                gain: c.doc.tracks[i].gain,
+                pan: c.doc.tracks[i].pan,
+                selected: c.selectedTrack == i,
+                onSelect: () => c.selectTrack(i),
+                onGain: (g) => c.mutate((_) => c.doc.tracks[i].gain = g),
+                onPan: (p) => c.mutate((_) => c.doc.tracks[i].pan = p),
+                mute: c.doc.tracks[i].mute,
+                solo: c.doc.tracks[i].solo,
+                onMute: () => c.edit((d) => d.tracks[i].mute = !d.tracks[i].mute),
+                onSolo: () => c.edit((d) => d.tracks[i].solo = !d.tracks[i].solo),
+              ),
+          ],
+        ),
+      ),
+      Container(width: 1, color: Palette.hairlineStrong),
+      Padding(
+        padding: const EdgeInsets.all(8),
+        child: _Strip(
+          c: c,
+          name: 'Master',
+          color: Colors.white,
+          meterIndex: -1,
+          gain: c.doc.masterGain,
+          pan: c.doc.masterPan,
+          onGain: (g) => c.mutate((d) => d.masterGain = g),
+          onPan: (p) => c.mutate((d) => d.masterPan = p),
+        ),
+      ),
+    ],
   );
 }
 
@@ -73,6 +90,10 @@ class _Strip extends StatelessWidget {
   final DawController c;
   final String name;
   final Color color;
+
+  /// Tipo da faixa (null no master); nas de instrumento, tocar no ícone abre o instrumento.
+  final TrackKind? kind;
+  final VoidCallback? onKind;
   final int meterIndex;
   final double gain, pan;
   final bool selected;
@@ -89,6 +110,8 @@ class _Strip extends StatelessWidget {
     required this.pan,
     required this.onGain,
     required this.onPan,
+    this.kind,
+    this.onKind,
     this.selected = false,
     this.mute,
     this.solo,
@@ -163,11 +186,29 @@ class _Strip extends StatelessWidget {
             const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: small.copyWith(color: Colors.white),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (kind != null) ...[
+                    Tooltip(
+                      message: onKind == null ? kind!.label : '${kind!.label}: abrir o instrumento',
+                      child: InkWell(
+                        onTap: onKind,
+                        borderRadius: BorderRadius.circular(4),
+                        child: Icon(kind!.icon, size: 13, color: color),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Flexible(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: small.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

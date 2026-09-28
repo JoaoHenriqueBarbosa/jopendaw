@@ -1,4 +1,5 @@
-/// O arranjo: régua, cabeçalhos das faixas e as raias com os clipes, mais o cursor de reprodução.
+/// O arranjo: régua, cabeçalhos das faixas e as raias com os clipes (de áudio nas faixas de áudio,
+/// de notas nas de instrumento), mais o cursor de reprodução.
 ///
 /// A rolagem horizontal e o zoom são do controlador (a janela começa em `scrollBeat` e cada batida
 /// ocupa `pxPerBeat`); a vertical é um scroll comum que leva cabeçalhos e raias juntos.
@@ -13,10 +14,102 @@ import 'package:flutter/services.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'instruments.dart';
 import 'meter.dart';
 import 'model.dart';
 
 const _rulerHeight = 30.0;
+
+// ---------------------------------------------------------------------- ações sobre a seleção
+// O controlador cuida dos clipes de áudio; estas cobrem também os de notas, para que Delete,
+// Ctrl+D, S e os botões da barra valham para os dois tipos.
+
+/// Apaga o clipe selecionado, de áudio ou de notas.
+void deleteSelectedClip(DawController c) {
+  final id = c.selectedClip;
+  final midi = id == null ? null : c.findMidiClip(id);
+  if (midi == null) {
+    c.deleteSelected();
+    return;
+  }
+  final (t, clip) = midi;
+  c.edit((_) {
+    t.midi.remove(clip);
+    c.selectedClip = null;
+  });
+}
+
+/// Duplica o clipe selecionado logo depois dele.
+void duplicateSelectedClip(DawController c) {
+  final id = c.selectedClip;
+  final midi = id == null ? null : c.findMidiClip(id);
+  if (midi == null) {
+    c.duplicateSelected();
+    return;
+  }
+  final (t, clip) = midi;
+  final copy = MidiClip.fromJson(clip.toJson())
+    ..id = newId()
+    ..start = clip.end;
+  c.edit((_) => t.midi.add(copy));
+  _selectMidi(c, copy.id, c.doc.tracks.indexOf(t));
+}
+
+/// Corta no cursor de reprodução. Com um clipe de notas selecionado (ou, sem seleção, os clipes de
+/// notas da faixa atual que o cursor cruza), as notas se dividem entre as duas metades e as que
+/// cruzam o corte terminam nele; sem clipe de notas envolvido, o corte é o de áudio do controlador.
+void splitClipsAtPlayhead(DawController c) {
+  final at = c.beat.value;
+  final targets = <(DawTrack, MidiClip)>[];
+  final id = c.selectedClip;
+  if (id != null) {
+    final f = c.findMidiClip(id);
+    if (f != null) targets.add(f);
+  } else if (c.selectedTrack < c.doc.tracks.length) {
+    final t = c.doc.tracks[c.selectedTrack];
+    targets.addAll(t.midi.map((m) => (t, m)));
+  }
+  final cuts = targets.where((f) => f.$2.start < at && f.$2.end > at).toList();
+  if (cuts.isEmpty) {
+    c.splitAtPlayhead();
+    return;
+  }
+  c.edit((_) {
+    for (final (t, clip) in cuts) {
+      final rel = at - clip.start;
+      final right = MidiClip(
+        id: newId(),
+        name: clip.name,
+        start: at,
+        length: clip.length - rel,
+        notes: [
+          for (final n in clip.notes)
+            if (n.start >= rel) n.copy()..start = n.start - rel,
+        ],
+      );
+      clip.notes.removeWhere((n) => n.start >= rel);
+      for (final n in clip.notes) {
+        if (n.end > rel) n.length = rel - n.start;
+      }
+      clip.length = rel;
+      t.midi.add(right);
+    }
+  });
+}
+
+/// Seleciona um clipe de notas; com o editor aberto, ele passa a mostrar esse clipe.
+void _selectMidi(DawController c, String id, int track) {
+  // a faixa antes: o `selectClip` do controlador só acha a faixa dos clipes de áudio
+  c.selectedTrack = track;
+  c.selectClip(id);
+  if (c.dock == Dock.editor && c.editingClip != id) c.openPianoRoll(id);
+}
+
+/// Encaixe dos arrastes; com Alt apertado, livre (ajuste fino sem mexer na grade).
+double _snapDrag(DawController c, double b) => HardwareKeyboard.instance.isAltPressed ? b : c.snapBeat(b);
+
+/// Passo da grade em batidas (0 = livre).
+double _gridBeats(DawController c) => c.snap == Snap.bar ? c.doc.beatsPerBar.toDouble() : c.snap.beats;
 
 class Timeline extends StatelessWidget {
   final DawController c;
@@ -78,7 +171,7 @@ class Timeline extends StatelessWidget {
                             SizedBox(
                               width: laneWidth,
                               height: (c.doc.tracks.length + 1) * laneHeight,
-                              child: _Lanes(c: c, laneHeight: laneHeight, width: laneWidth),
+                              child: _Lanes(c: c, laneHeight: laneHeight, width: laneWidth, touch: compact),
                             ),
                           ],
                         ),
@@ -260,12 +353,26 @@ class _RulerPainter extends CustomPainter {
 
 // ---------------------------------------------------------------------- cabeçalhos
 
-class _TrackHeader extends StatelessWidget {
+class _TrackHeader extends StatefulWidget {
   final DawController c;
   final int index;
   final double height;
   final bool compact;
   const _TrackHeader({required this.c, required this.index, required this.height, required this.compact});
+
+  @override
+  State<_TrackHeader> createState() => _TrackHeaderState();
+}
+
+class _TrackHeaderState extends State<_TrackHeader> {
+  // duplo toque à mão: o `onDoubleTap` seguraria por 300 ms os toques nos botões de dentro (M, S,
+  // ícone, menu) esperando um segundo toque
+  final _taps = _DoubleTap();
+
+  DawController get c => widget.c;
+  int get index => widget.index;
+  double get height => widget.height;
+  bool get compact => widget.compact;
 
   Future<void> _rename(BuildContext context, DawTrack t) async {
     final name = await promptText(context, title: 'Nome da faixa', label: 'Nome', initial: t.name, action: 'Salvar', maxLength: 60);
@@ -279,8 +386,10 @@ class _TrackHeader extends StatelessWidget {
     final color = trackColorAt(t.color);
     final selected = c.selectedTrack == index;
     return GestureDetector(
-      onTap: () => c.selectTrack(index),
-      onDoubleTap: () => _rename(context, t),
+      onTapUp: (d) {
+        c.selectTrack(index);
+        if (_taps(d.globalPosition)) _rename(context, t);
+      },
       child: Container(
         height: height,
         decoration: BoxDecoration(
@@ -302,6 +411,8 @@ class _TrackHeader extends StatelessWidget {
                   children: [
                     Row(
                       children: [
+                        _KindButton(c: c, index: index, color: color),
+                        const SizedBox(width: 4),
                         Expanded(
                           child: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge),
                         ),
@@ -337,6 +448,51 @@ class _TrackHeader extends StatelessWidget {
   }
 }
 
+/// Abre (ou fecha) o painel do instrumento da faixa.
+void _toggleInstrument(DawController c, int index) {
+  if (c.dock == Dock.instrument && c.selectedTrack == index) {
+    c.setDock(Dock.none);
+    return;
+  }
+  c.selectTrack(index);
+  c.setDock(Dock.instrument);
+}
+
+/// O ícone do tipo da faixa. Nas de instrumento é um botão que abre o painel do instrumento.
+class _KindButton extends StatelessWidget {
+  final DawController c;
+  final int index;
+  final Color color;
+  const _KindButton({required this.c, required this.index, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = c.doc.tracks[index];
+    if (!t.kind.isInstrument) {
+      return Tooltip(
+        message: 'Faixa de áudio',
+        child: SizedBox(width: 24, height: 24, child: Icon(t.kind.icon, size: 16, color: color)),
+      );
+    }
+    final open = c.dock == Dock.instrument && c.selectedTrack == index;
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 16,
+        tooltip: open ? 'Fechar o instrumento (I)' : '${t.kind.label}: abrir o instrumento (I)',
+        style: IconButton.styleFrom(
+          backgroundColor: open ? color.withValues(alpha: 0.22) : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        onPressed: () => _toggleInstrument(c, index),
+        icon: Icon(t.kind.icon, color: color),
+      ),
+    );
+  }
+}
+
 class _TrackMenu extends StatelessWidget {
   final DawController c;
   final int index;
@@ -354,6 +510,8 @@ class _TrackMenu extends StatelessWidget {
       icon: const Icon(Icons.more_vert),
       onSelected: (v) async {
         switch (v) {
+          case 'instrument':
+            _toggleInstrument(c, index);
           case 'rename':
             onRename();
           case 'color':
@@ -361,7 +519,7 @@ class _TrackMenu extends StatelessWidget {
             c.edit((_) => t.color = (t.color + 1) % Palette.tracks.length);
           case 'delete':
             final t = c.doc.tracks[index];
-            if (t.clips.isNotEmpty &&
+            if ((t.clips.isNotEmpty || t.midi.isNotEmpty) &&
                 !await confirmAction(
                   context,
                   title: 'Apagar "${t.name}"?',
@@ -374,10 +532,11 @@ class _TrackMenu extends StatelessWidget {
             c.removeTrack(index);
         }
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'rename', child: Text('Renomear')),
-        PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
-        PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
+      itemBuilder: (_) => [
+        if (c.doc.tracks[index].kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
+        const PopupMenuItem(value: 'rename', child: Text('Renomear')),
+        const PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
+        const PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
       ],
     ),
   );
@@ -447,23 +606,68 @@ class _AddTrackRow extends StatelessWidget {
   const _AddTrackRow({required this.c, required this.height});
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: height,
-    decoration: const BoxDecoration(
-      color: Palette.bar,
-      border: Border(right: BorderSide(color: Palette.hairline)),
-    ),
-    alignment: Alignment.center,
-    child: TextButton.icon(onPressed: c.addTrack, icon: const Icon(Icons.add), label: const Text('Faixa')),
-  );
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Container(
+      height: height,
+      decoration: const BoxDecoration(
+        color: Palette.bar,
+        border: Border(right: BorderSide(color: Palette.hairline)),
+      ),
+      alignment: Alignment.center,
+      child: PopupMenuButton<TrackKind>(
+        tooltip: 'Nova faixa',
+        position: PopupMenuPosition.under,
+        onSelected: (k) => k == TrackKind.audio ? c.addTrack() : c.addInstrumentTrack(k),
+        itemBuilder: (_) => [
+          for (final k in TrackKind.values)
+            PopupMenuItem(
+              value: k,
+              child: Row(children: [Icon(k.icon, size: 18), const SizedBox(width: 12), Text(k.label)]),
+            ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 18, color: accent),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Faixa',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge!.copyWith(color: accent),
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, size: 18, color: accent),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------- raias
 
-class _Lanes extends StatelessWidget {
+class _Lanes extends StatefulWidget {
   final DawController c;
   final double laneHeight, width;
-  const _Lanes({required this.c, required this.laneHeight, required this.width});
+
+  /// Aparelho de toque (muda só o texto da dica das faixas vazias).
+  final bool touch;
+  const _Lanes({required this.c, required this.laneHeight, required this.width, required this.touch});
+
+  @override
+  State<_Lanes> createState() => _LanesState();
+}
+
+class _LanesState extends State<_Lanes> {
+  final _taps = _DoubleTap();
+
+  DawController get c => widget.c;
 
   double _beatAt(double x) => c.scrollBeat + x / c.pxPerBeat;
 
@@ -483,20 +687,47 @@ class _Lanes extends StatelessWidget {
     });
   }
 
+  void _onTapUp(TapUpDetails d) {
+    c.selectClip(null);
+    final lane = (d.localPosition.dy / widget.laneHeight).floor();
+    final at = _beatAt(d.localPosition.dx);
+    if (lane < c.doc.tracks.length) c.selectTrack(lane);
+    c.seek(c.snapBeat(at));
+    if (_taps(d.globalPosition) && lane < c.doc.tracks.length && c.doc.tracks[lane].kind.isInstrument) _createClip(lane, at);
+  }
+
+  /// Duplo toque no vazio de uma faixa de instrumento: clipe novo no compasso tocado, sem montar
+  /// em cima dos vizinhos (começa depois do anterior e termina antes do próximo), já no editor.
+  void _createClip(int lane, double at) {
+    final t = c.doc.tracks[lane];
+    final bar = c.doc.beatsPerBar.toDouble();
+    var start = (math.max(0.0, at) / bar).floor() * bar;
+    for (final m in t.midi) {
+      if (m.start < at && m.end > start) start = math.max(start, m.end);
+    }
+    var length = bar;
+    for (final m in t.midi) {
+      if (m.start > start && m.start < start + length) length = m.start - start;
+    }
+    final clip = c.createMidiClip(lane, start, length: length);
+    c.openPianoRoll(clip.id);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final visibleEnd = c.scrollBeat + width / c.pxPerBeat;
+    final laneHeight = widget.laneHeight;
+    final visibleEnd = c.scrollBeat + widget.width / c.pxPerBeat;
     final bpm = c.doc.bpm;
+    final tracks = c.doc.tracks;
+    // o clipe selecionado fica montado mesmo fora da janela: é ele que está sendo arrastado, e
+    // desmontar no meio do gesto o perderia
+    bool shown(String id, double start, double end) => (end > c.scrollBeat && start < visibleEnd) || id == c.selectedClip;
+    final hint = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white30);
     return Listener(
       onPointerSignal: _onSignal,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapUp: (d) {
-          c.selectClip(null);
-          final lane = (d.localPosition.dy / laneHeight).floor();
-          if (lane < c.doc.tracks.length) c.selectTrack(lane);
-          c.seek(c.snapBeat(_beatAt(d.localPosition.dx)));
-        },
+        onTapUp: _onTapUp,
         onHorizontalDragUpdate: (d) => c.scrollBy(-d.delta.dx),
         child: ClipRect(
           child: Stack(
@@ -508,14 +739,33 @@ class _Lanes extends StatelessWidget {
                     ppb: c.pxPerBeat,
                     beatsPerBar: c.doc.beatsPerBar,
                     laneHeight: laneHeight,
-                    lanes: c.doc.tracks.length,
+                    lanes: tracks.length,
                     selected: c.selectedTrack,
                   ),
                 ),
               ),
-              for (var ti = 0; ti < c.doc.tracks.length; ti++)
-                for (final clip in c.doc.tracks[ti].clips)
-                  if (clip.end(bpm) > c.scrollBeat && clip.start < visibleEnd)
+              for (var ti = 0; ti < tracks.length; ti++)
+                if (tracks[ti].kind.isInstrument && tracks[ti].midi.isEmpty)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    top: ti * laneHeight,
+                    height: laneHeight,
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          widget.touch ? 'Toque duas vezes para criar um clipe de notas' : 'Clique duas vezes para criar um clipe de notas',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: hint,
+                        ),
+                      ),
+                    ),
+                  ),
+              for (var ti = 0; ti < tracks.length; ti++) ...[
+                for (final clip in tracks[ti].clips)
+                  if (shown(clip.id, clip.start, clip.end(bpm)))
                     Positioned(
                       key: ValueKey(clip.id),
                       left: (clip.start - c.scrollBeat) * c.pxPerBeat,
@@ -524,6 +774,17 @@ class _Lanes extends StatelessWidget {
                       height: laneHeight - 4,
                       child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight),
                     ),
+                for (final clip in tracks[ti].midi)
+                  if (shown(clip.id, clip.start, clip.end))
+                    Positioned(
+                      key: ValueKey('midi:${clip.id}'),
+                      left: (clip.start - c.scrollBeat) * c.pxPerBeat,
+                      top: ti * laneHeight + 2,
+                      width: math.max(4, clip.length * c.pxPerBeat),
+                      height: laneHeight - 4,
+                      child: _MidiClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight),
+                    ),
+              ],
             ],
           ),
         ),
@@ -566,9 +827,194 @@ class _GridPainter extends CustomPainter {
       o.scroll != scroll || o.ppb != ppb || o.beatsPerBar != beatsPerBar || o.lanes != lanes || o.selected != selected || o.laneHeight != laneHeight;
 }
 
-// ---------------------------------------------------------------------- clipe
+// ---------------------------------------------------------------------- clipes
 
 enum _Grab { move, left, right, fadeIn, fadeOut }
+
+MouseCursor _cursorFor(_Grab g) => switch (g) {
+  _Grab.left || _Grab.right => SystemMouseCursors.resizeLeftRight,
+  _Grab.fadeIn || _Grab.fadeOut => SystemMouseCursors.precise,
+  _Grab.move => SystemMouseCursors.grab,
+};
+
+/// Duplo toque sem o `onDoubleTap` do Flutter, que segura o toque simples por 300 ms esperando o
+/// segundo: aqui o primeiro age na hora e o segundo, perto no tempo e no espaço, vira o duplo.
+class _DoubleTap {
+  DateTime? _at;
+  Offset _pos = Offset.zero;
+
+  bool call(Offset global) {
+    final now = DateTime.now();
+    final hit = _at != null && now.difference(_at!) < kDoubleTapTimeout && (global - _pos).distance < 40;
+    _at = hit ? null : now;
+    _pos = global;
+    return hit;
+  }
+}
+
+/// Arraste de clipe que aceita com a mesma folga do arraste horizontal das raias e da rolagem
+/// vertical da lista (o pan comum pede o dobro). Como o clipe recebe o movimento antes dos
+/// ancestrais, ele ganha a disputa; senão arrastar um clipe rolaria a linha do tempo.
+class _ClipPanGestureRecognizer extends PanGestureRecognizer {
+  _ClipPanGestureRecognizer({super.debugOwner});
+
+  @override
+  bool hasSufficientGlobalDistanceToAccept(PointerDeviceKind pointerDeviceKind, double? deviceTouchSlop) =>
+      globalDistanceMoved.abs() > computeHitSlop(pointerDeviceKind, gestureSettings);
+}
+
+/// Gestos comuns aos clipes: cursor conforme a zona sob o ponteiro, seleção ao encostar, arraste
+/// com o deslocamento total desde o início (cada clipe guarda o estado de antes e recalcula a
+/// partir dele, sem acumular erro de encaixe), duplo toque e menu de contexto (botão direito, ou
+/// toque longo no celular).
+class _ClipGestures extends StatefulWidget {
+  /// Zona do clipe num ponto; `edge` é a largura das bordas de aparar.
+  final _Grab Function(Offset p, Size size, double edge) hit;
+  final VoidCallback onSelect;
+  final ValueChanged<_Grab> onStart;
+  final void Function(_Grab grab, Offset total) onDrag;
+  final VoidCallback? onDoubleTap;
+  final ValueChanged<Offset>? onMenu;
+  final Widget child;
+
+  const _ClipGestures({
+    required this.hit,
+    required this.onSelect,
+    required this.onStart,
+    required this.onDrag,
+    required this.child,
+    this.onDoubleTap,
+    this.onMenu,
+  });
+
+  @override
+  State<_ClipGestures> createState() => _ClipGesturesState();
+}
+
+class _ClipGesturesState extends State<_ClipGestures> {
+  _Grab? _grab;
+  Offset _total = Offset.zero;
+  MouseCursor _hover = SystemMouseCursors.grab;
+  bool _touch = false;
+  final _taps = _DoubleTap();
+
+  /// Dedo pede borda mais larga que o mouse; clipe estreito guarda o meio para mover.
+  double _edge(Size size) => math.min(_touch ? 16.0 : 8.0, size.width / 4);
+
+  void _start(DragStartDetails d) {
+    final size = context.size!;
+    final g = widget.hit(d.localPosition, size, _edge(size));
+    _total = Offset.zero;
+    setState(() => _grab = g);
+    widget.onStart(g);
+  }
+
+  void _update(DragUpdateDetails d) {
+    final g = _grab;
+    if (g == null) return;
+    _total += d.delta;
+    widget.onDrag(g, _total);
+  }
+
+  void _end() {
+    if (_grab != null && mounted) setState(() => _grab = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final menu = widget.onMenu;
+    return MouseRegion(
+      cursor: switch (_grab) {
+        null => _hover,
+        _Grab.move => SystemMouseCursors.grabbing,
+        _Grab g => _cursorFor(g),
+      },
+      onHover: (e) {
+        final size = context.size!;
+        final cur = _cursorFor(widget.hit(e.localPosition, size, math.min(8.0, size.width / 4)));
+        if (cur != _hover) setState(() => _hover = cur);
+      },
+      child: Listener(
+        onPointerDown: (e) {
+          _touch = e.kind == PointerDeviceKind.touch;
+          widget.onSelect();
+        },
+        child: RawGestureDetector(
+          gestures: {
+            TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+              () => TapGestureRecognizer(debugOwner: this),
+              (r) => r
+                // o toque do clipe precisa existir mesmo sem duplo: é ele que ganha do toque das
+                // raias (que desmarcaria o clipe e moveria o cursor)
+                ..onTapUp = (d) {
+                  if (_taps(d.globalPosition)) widget.onDoubleTap?.call();
+                }
+                ..onSecondaryTapUp = menu == null ? null : (d) => menu(d.globalPosition),
+            ),
+            _ClipPanGestureRecognizer: GestureRecognizerFactoryWithHandlers<_ClipPanGestureRecognizer>(
+              () => _ClipPanGestureRecognizer(debugOwner: this),
+              (r) => r
+                // a zona vale onde o dedo encostou, não onde o arraste foi reconhecido
+                ..dragStartBehavior = DragStartBehavior.down
+                ..onStart = _start
+                ..onUpdate = _update
+                ..onEnd = ((_) => _end())
+                ..onCancel = _end,
+            ),
+            if (menu != null)
+              LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+                // só no toque: com mouse, segurar parado antes de arrastar é normal
+                () => LongPressGestureRecognizer(debugOwner: this, supportedDevices: const {PointerDeviceKind.touch, PointerDeviceKind.stylus}),
+                (r) => r..onLongPressStart = (d) => menu(d.globalPosition),
+              ),
+          },
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Um arraste vira um passo só no desfazer, e só se mudou algo: o checkpoint sai na primeira
+/// mudança de fato, não ao encostar. Os clipes só chamam [change] quando o valor encaixado muda,
+/// então os passos repetidos da grade nem chegam ao motor.
+mixin _DragEdit<T extends StatefulWidget> on State<T> {
+  DawController get ctl;
+  bool _dirty = false;
+
+  void beginEdit() => _dirty = false;
+
+  void ensureCheckpoint() {
+    if (_dirty) return;
+    ctl.checkpoint();
+    _dirty = true;
+  }
+
+  void change(void Function() fn) {
+    ensureCheckpoint();
+    ctl.mutate((_) => fn());
+  }
+}
+
+PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {String? shortcut}) => PopupMenuItem(
+  value: value,
+  child: Row(
+    children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 12),
+      Expanded(child: Text(label)),
+      if (shortcut != null) ...[const SizedBox(width: 16), Text(shortcut, style: const TextStyle(fontSize: 12, color: Colors.white54))],
+    ],
+  ),
+);
+
+Future<String?> _showMenuAt(BuildContext context, Offset global, List<PopupMenuEntry<String>> items) {
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final p = overlay.globalToLocal(global);
+  return showMenu<String>(context: context, position: RelativeRect.fromLTRB(p.dx, p.dy, overlay.size.width - p.dx, overlay.size.height - p.dy), items: items);
+}
+
+// ---------------------------------------------------------------------- clipe de áudio
 
 class _ClipView extends StatefulWidget {
   final DawController c;
@@ -580,75 +1026,90 @@ class _ClipView extends StatefulWidget {
   State<_ClipView> createState() => _ClipViewState();
 }
 
-class _ClipViewState extends State<_ClipView> {
-  _Grab? _grab;
+class _ClipViewState extends State<_ClipView> with _DragEdit {
   late AudioClip _orig;
-  Offset _drag = Offset.zero;
-  MouseCursor _cursor = SystemMouseCursors.grab;
+  late int _origTrack;
 
-  static const _edge = 8.0;
+  @override
+  DawController get ctl => widget.c;
 
-  _Grab _hit(Offset p, Size size) {
+  _Grab _hit(Offset p, Size size, double edge) {
     if (p.dy < 14 && p.dx < 14) return _Grab.fadeIn;
     if (p.dy < 14 && p.dx > size.width - 14) return _Grab.fadeOut;
-    if (p.dx < _edge) return _Grab.left;
-    if (p.dx > size.width - _edge) return _Grab.right;
+    if (p.dx < edge) return _Grab.left;
+    if (p.dx > size.width - edge) return _Grab.right;
     return _Grab.move;
   }
 
-  MouseCursor _cursorFor(_Grab g) => switch (g) {
-    _Grab.left || _Grab.right => SystemMouseCursors.resizeLeftRight,
-    _Grab.fadeIn || _Grab.fadeOut => SystemMouseCursors.precise,
-    _Grab.move => SystemMouseCursors.grab,
-  };
-
-  void _start(DragStartDetails d) {
-    final c = widget.c;
-    final size = context.size!;
-    _grab = _hit(d.localPosition, size);
+  void _start(_Grab _) {
     _orig = AudioClip.fromJson(widget.clip.toJson());
-    _drag = Offset.zero;
-    c.checkpoint();
-    c.selectClip(widget.clip.id);
+    // a faixa de partida: depois de trocar de faixa, `widget.track` já é a nova
+    _origTrack = widget.track;
+    beginEdit();
   }
 
-  void _update(DragUpdateDetails d) {
+  void _drag(_Grab grab, Offset total) {
     final c = widget.c;
-    _drag += d.delta;
     final clip = widget.clip;
     final bpm = c.doc.bpm;
-    final dBeats = _drag.dx / c.pxPerBeat;
+    final dBeats = total.dx / c.pxPerBeat;
     final dur = c.doc.samples[clip.sample]?.duration ?? (_orig.offset + _orig.length);
     const minLen = 0.01;
-    switch (_grab!) {
+    switch (grab) {
       case _Grab.move:
-        final start = math.max(0.0, c.snapBeat(_orig.start + dBeats));
-        c.mutate((_) => clip.start = start);
-        final lane = widget.track + (_drag.dy / widget.laneHeight).round();
+        final start = math.max(0.0, _snapDrag(c, _orig.start + dBeats));
+        if (start != clip.start) change(() => clip.start = start);
+        // áudio só troca para outra faixa de áudio
+        final lane = (_origTrack + (total.dy / widget.laneHeight).round()).clamp(0, c.doc.tracks.length - 1);
         final current = c.doc.tracks.indexWhere((t) => t.clips.contains(clip));
-        if (lane != current) c.moveClipToTrack(clip.id, lane.clamp(0, c.doc.tracks.length - 1));
+        if (current >= 0 && lane != current && c.doc.tracks[lane].kind == TrackKind.audio) {
+          ensureCheckpoint();
+          c.moveClipToTrack(clip.id, lane);
+        }
       case _Grab.left:
-        var start = c.snapBeat(_orig.start + dBeats);
+        var start = _snapDrag(c, _orig.start + dBeats);
         // não passa do começo do áudio nem do fim do clipe
-        final minStart = _orig.start - _orig.offset * bpm / 60;
-        final maxStart = _orig.end(bpm) - minLen * bpm / 60;
-        start = start.clamp(math.max(0.0, minStart), maxStart);
+        final minStart = math.max(0.0, _orig.start - _orig.offset * bpm / 60);
+        final maxStart = math.max(minStart, _orig.end(bpm) - minLen * bpm / 60);
+        start = start.clamp(minStart, maxStart);
         final secs = (start - _orig.start) * 60 / bpm;
-        c.mutate((_) {
-          clip.start = start;
-          clip.offset = _orig.offset + secs;
-          clip.length = _orig.length - secs;
-        });
+        if (start != clip.start) {
+          change(() {
+            clip.start = start;
+            clip.offset = _orig.offset + secs;
+            clip.length = _orig.length - secs;
+          });
+        }
       case _Grab.right:
-        final end = c.snapBeat(_orig.end(bpm) + dBeats);
-        final len = ((end - _orig.start) * 60 / bpm).clamp(minLen, dur - _orig.offset);
-        c.mutate((_) => clip.length = len);
+        final end = _snapDrag(c, _orig.end(bpm) + dBeats);
+        final len = ((end - _orig.start) * 60 / bpm).clamp(minLen, math.max<double>(minLen, dur - _orig.offset));
+        if (len != clip.length) change(() => clip.length = len);
       case _Grab.fadeIn:
-        final f = (_orig.fadeIn + _drag.dx / c.pxPerBeat * 60 / bpm).clamp(0.0, clip.length - clip.fadeOut);
-        c.mutate((_) => clip.fadeIn = f);
+        final f = (_orig.fadeIn + total.dx / c.pxPerBeat * 60 / bpm).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeOut));
+        if (f != clip.fadeIn) change(() => clip.fadeIn = f);
       case _Grab.fadeOut:
-        final f = (_orig.fadeOut - _drag.dx / c.pxPerBeat * 60 / bpm).clamp(0.0, clip.length - clip.fadeIn);
-        c.mutate((_) => clip.fadeOut = f);
+        final f = (_orig.fadeOut - total.dx / c.pxPerBeat * 60 / bpm).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeIn));
+        if (f != clip.fadeOut) change(() => clip.fadeOut = f);
+    }
+  }
+
+  Future<void> _menu(Offset at) async {
+    final c = widget.c;
+    final v = await _showMenuAt(context, at, [
+      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
+      _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
+      _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
+    ]);
+    if (v == null || !mounted) return;
+    // age sobre este clipe, qualquer que seja a seleção ao fechar o menu
+    c.selectClip(widget.clip.id);
+    switch (v) {
+      case 'duplicate':
+        c.duplicateSelected();
+      case 'split':
+        c.splitAtPlayhead();
+      case 'delete':
+        c.deleteSelected();
     }
   }
 
@@ -663,65 +1124,278 @@ class _ClipViewState extends State<_ClipView> {
     final name = c.doc.samples[clip.sample]?.name ?? 'áudio';
     final bpm = c.doc.bpm;
     final pxPerSec = c.pxPerBeat * bpm / 60;
-    return MouseRegion(
-      cursor: _cursor,
-      onHover: (e) {
-        final cur = _cursorFor(_hit(e.localPosition, context.size!));
-        if (cur != _cursor) setState(() => _cursor = cur);
-      },
-      child: GestureDetector(
-        onTap: () => c.selectClip(clip.id),
-        onPanStart: _start,
-        onPanUpdate: _update,
-        onPanEnd: (_) => _grab = null,
-        child: Container(
-          decoration: BoxDecoration(
-            color: (missing ? Palette.danger : color).withValues(alpha: selected ? 0.34 : 0.22),
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: selected ? Colors.white : color.withValues(alpha: 0.8), width: selected ? 1.5 : 1),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  top: 16,
-                  child: missing
-                      ? const Center(child: Text('áudio fora deste aparelho', style: TextStyle(fontSize: 11)))
-                      : CustomPaint(
-                          painter: _WavePainter(
-                            wave: c.waveforms[clip.sample],
-                            offset: clip.offset,
-                            length: clip.length,
-                            pxPerSec: pxPerSec,
-                            gain: clip.gain,
-                            color: color,
-                          ),
+    return _ClipGestures(
+      hit: _hit,
+      onSelect: () => c.selectClip(clip.id),
+      onStart: _start,
+      onDrag: _drag,
+      onMenu: _menu,
+      child: Container(
+        decoration: BoxDecoration(
+          color: (missing ? Palette.danger : color).withValues(alpha: selected ? 0.34 : 0.22),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: selected ? Colors.white : color.withValues(alpha: 0.8), width: selected ? 1.5 : 1),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                top: 16,
+                child: missing
+                    ? const Center(child: Text('áudio fora deste aparelho', style: TextStyle(fontSize: 11)))
+                    : CustomPaint(
+                        painter: _WavePainter(
+                          wave: c.waveforms[clip.sample],
+                          offset: clip.offset,
+                          length: clip.length,
+                          pxPerSec: pxPerSec,
+                          gain: clip.gain,
+                          color: color,
                         ),
+                      ),
+              ),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _FadePainter(fadeIn: clip.fadeIn * pxPerSec, fadeOut: clip.fadeOut * pxPerSec),
                 ),
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _FadePainter(fadeIn: clip.fadeIn * pxPerSec, fadeOut: clip.fadeOut * pxPerSec),
-                  ),
+              ),
+              Positioned(
+                left: 6,
+                right: 6,
+                top: 1,
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
                 ),
-                Positioned(
-                  left: 6,
-                  right: 6,
-                  top: 1,
-                  child: Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------- clipe de notas
+
+class _MidiClipView extends StatefulWidget {
+  final DawController c;
+  final MidiClip clip;
+  final int track;
+  final double laneHeight;
+  const _MidiClipView({required this.c, required this.clip, required this.track, required this.laneHeight});
+  @override
+  State<_MidiClipView> createState() => _MidiClipViewState();
+}
+
+class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
+  late MidiClip _orig;
+  late int _origTrack;
+
+  @override
+  DawController get ctl => widget.c;
+
+  _Grab _hit(Offset p, Size size, double edge) {
+    if (p.dx < edge) return _Grab.left;
+    if (p.dx > size.width - edge) return _Grab.right;
+    return _Grab.move;
+  }
+
+  void _start(_Grab _) {
+    _orig = MidiClip.fromJson(widget.clip.toJson());
+    _origTrack = widget.track;
+    beginEdit();
+  }
+
+  /// Menor duração ao aparar: um passo da grade (1/16 de batida, livre).
+  double _minLength() {
+    final g = _gridBeats(widget.c);
+    return g > 0 && !HardwareKeyboard.instance.isAltPressed ? g : 0.0625;
+  }
+
+  void _drag(_Grab grab, Offset total) {
+    final c = widget.c;
+    final clip = widget.clip;
+    final dBeats = total.dx / c.pxPerBeat;
+    switch (grab) {
+      case _Grab.move:
+        final start = math.max(0.0, _snapDrag(c, _orig.start + dBeats));
+        if (start != clip.start) change(() => clip.start = start);
+        // notas só trocam para outra faixa de instrumento
+        final lane = (_origTrack + (total.dy / widget.laneHeight).round()).clamp(0, c.doc.tracks.length - 1);
+        final current = c.doc.tracks.indexWhere((t) => t.midi.contains(clip));
+        if (current >= 0 && lane != current && c.doc.tracks[lane].kind.isInstrument) {
+          change(() {
+            c.doc.tracks[current].midi.remove(clip);
+            c.doc.tracks[lane].midi.add(clip);
+            c.selectedTrack = lane;
+          });
+        }
+      case _Grab.left:
+        // aparar à esquerda anda o começo e desconta o mesmo das notas: elas ficam onde estavam
+        // na linha do tempo (as que saem antes do 0 ficam guardadas e voltam ao desfazer o corte)
+        final hi = math.max(0.0, _orig.end - _minLength());
+        final start = _snapDrag(c, _orig.start + dBeats).clamp(0.0, hi);
+        if (start != clip.start) {
+          final delta = start - _orig.start;
+          change(() {
+            clip.start = start;
+            clip.length = _orig.length - delta;
+            for (var i = 0; i < clip.notes.length && i < _orig.notes.length; i++) {
+              clip.notes[i].start = _orig.notes[i].start - delta;
+            }
+          });
+        }
+      case _Grab.right:
+        final end = _snapDrag(c, _orig.end + dBeats);
+        final len = math.max(_minLength(), end - _orig.start);
+        if (len != clip.length) change(() => clip.length = len);
+      case _Grab.fadeIn || _Grab.fadeOut:
+        break;
+    }
+  }
+
+  Future<void> _rename() async {
+    final clip = widget.clip;
+    final name = await promptText(
+      context,
+      title: 'Nome do clipe',
+      label: 'Nome',
+      hint: widget.c.doc.tracks[widget.track].name,
+      initial: clip.name,
+      action: 'Salvar',
+      maxLength: 60,
+    );
+    if (name == null || name == clip.name) return;
+    widget.c.edit((_) => clip.name = name);
+  }
+
+  Future<void> _menu(Offset at) async {
+    final c = widget.c;
+    final v = await _showMenuAt(context, at, [
+      _menuItem('open', Icons.edit_note, 'Abrir no editor', shortcut: 'E'),
+      _menuItem('rename', Icons.drive_file_rename_outline, 'Renomear'),
+      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
+      _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
+      _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
+    ]);
+    if (v == null || !mounted) return;
+    _selectMidi(c, widget.clip.id, widget.track);
+    switch (v) {
+      case 'open':
+        c.openPianoRoll(widget.clip.id);
+      case 'rename':
+        await _rename();
+      case 'duplicate':
+        duplicateSelectedClip(c);
+      case 'split':
+        splitClipsAtPlayhead(c);
+      case 'delete':
+        deleteSelectedClip(c);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final clip = widget.clip;
+    final t = c.doc.tracks[widget.track];
+    final color = trackColorAt(t.color);
+    final selected = c.selectedClip == clip.id;
+    final editing = c.dock == Dock.editor && c.editingClip == clip.id;
+    return _ClipGestures(
+      hit: _hit,
+      onSelect: () => _selectMidi(c, clip.id, widget.track),
+      onStart: _start,
+      onDrag: _drag,
+      onDoubleTap: () => c.openPianoRoll(clip.id),
+      onMenu: _menu,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: selected ? 0.42 : 0.3),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: selected ? Colors.white : color.withValues(alpha: 0.9), width: selected ? 1.5 : 1),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                top: 16,
+                bottom: 3,
+                child: CustomPaint(
+                  painter: _NotesPainter(notes: clip.notes, length: clip.length, ppb: c.pxPerBeat, color: Color.lerp(color, Colors.white, 0.45)!),
+                ),
+              ),
+              Positioned(
+                left: 6,
+                right: 6,
+                top: 1,
+                child: Row(
+                  children: [
+                    if (editing) ...[const Icon(Icons.edit_note, size: 13, color: Colors.white), const SizedBox(width: 3)],
+                    Expanded(
+                      child: Text(
+                        clip.name.isEmpty ? t.name : clip.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Miniatura das notas: a altura do desenho cobre só a faixa de notas que o clipe usa (com teto
+/// na espessura de cada linha, para poucas notas não virarem blocos); o que passa do fim do clipe
+/// ou fica antes do começo não aparece.
+class _NotesPainter extends CustomPainter {
+  final List<MidiNote> notes;
+  final double length, ppb;
+  final Color color;
+  _NotesPainter({required this.notes, required this.length, required this.ppb, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.height <= 0) return;
+    var lo = 128, hi = -1;
+    for (final n in notes) {
+      if (n.start >= length || n.end <= 0) continue;
+      if (n.pitch < lo) lo = n.pitch;
+      if (n.pitch > hi) hi = n.pitch;
+    }
+    if (hi < 0) return;
+    final rows = hi - lo + 1;
+    final rowH = math.min(math.max(2.0, size.height / 5), size.height / rows);
+    final top = (size.height - rowH * rows) / 2;
+    final barH = math.max(1.0, rowH > 3 ? rowH - 1 : rowH);
+    final endX = length * ppb;
+    final view = canvas.getLocalClipBounds();
+    final paint = Paint();
+    for (final n in notes) {
+      final x0 = math.max(0.0, n.start) * ppb;
+      final x1 = math.min(n.end, length) * ppb;
+      if (x1 <= x0 || x0 >= endX || x1 < view.left || x0 > view.right) continue;
+      final w = math.max(1.5, x1 - x0 - (x1 - x0 > 4 ? 1 : 0));
+      paint.color = color.withValues(alpha: 0.45 + 0.55 * n.velocity.clamp(0.0, 1.0));
+      canvas.drawRect(Rect.fromLTWH(x0, top + (hi - n.pitch) * rowH, w, barH), paint);
+    }
+  }
+
+  // as notas mudam no lugar (a lista é a mesma), então não há o que comparar barato: a linha do
+  // tempo só se redesenha quando o documento ou a visão mudam
+  @override
+  bool shouldRepaint(_NotesPainter o) => true;
 }
 
 class _WavePainter extends CustomPainter {

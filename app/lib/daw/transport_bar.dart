@@ -1,5 +1,6 @@
 /// Barra do transporte e das ferramentas: tocar, parar, posição, andamento, loop, metrônomo,
-/// grade, zoom, desfazer e importar.
+/// edição, grade, zoom, os painéis de baixo, as entradas de notas (teclado do computador e MIDI)
+/// e importar.
 library;
 
 import 'package:flutter/material.dart';
@@ -7,7 +8,9 @@ import 'package:flutter/services.dart';
 
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'dock.dart';
 import 'model.dart';
+import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
 class TransportBar extends StatelessWidget {
   final DawController c;
@@ -43,11 +46,15 @@ class TransportBar extends StatelessWidget {
         final tools = [
           IconButton(tooltip: 'Desfazer (Ctrl+Z)', onPressed: c.canUndo ? c.undo : null, icon: const Icon(Icons.undo)),
           IconButton(tooltip: 'Refazer (Ctrl+Shift+Z)', onPressed: c.canRedo ? c.redo : null, icon: const Icon(Icons.redo)),
-          IconButton(tooltip: 'Cortar no cursor (S)', onPressed: c.splitAtPlayhead, icon: const Icon(Icons.content_cut)),
-          IconButton(tooltip: 'Duplicar (Ctrl+D)', onPressed: c.selectedClip == null ? null : c.duplicateSelected, icon: const Icon(Icons.copy_all)),
-          IconButton(tooltip: 'Apagar o clipe (Delete)', onPressed: c.selectedClip == null ? null : c.deleteSelected, icon: const Icon(Icons.delete_outline)),
+          IconButton(tooltip: 'Cortar no cursor (S)', onPressed: () => splitClipsAtPlayhead(c), icon: const Icon(Icons.content_cut)),
+          IconButton(tooltip: 'Duplicar (Ctrl+D)', onPressed: c.selectedClip == null ? null : () => duplicateSelectedClip(c), icon: const Icon(Icons.copy_all)),
+          IconButton(
+            tooltip: 'Apagar o clipe (Delete)',
+            onPressed: c.selectedClip == null ? null : () => deleteSelectedClip(c),
+            icon: const Icon(Icons.delete_outline),
+          ),
           PopupMenuButton<Snap>(
-            tooltip: 'Grade de encaixe',
+            tooltip: 'Grade de encaixe (Alt ao arrastar: livre)',
             initialValue: c.snap,
             onSelected: c.setSnap,
             itemBuilder: (_) => [for (final s in Snap.values) PopupMenuItem(value: s, child: Text(s.label))],
@@ -58,10 +65,36 @@ class TransportBar extends StatelessWidget {
           ),
           IconButton(tooltip: 'Afastar', onPressed: () => c.zoom(1 / 1.5), icon: const Icon(Icons.zoom_out)),
           IconButton(tooltip: 'Aproximar', onPressed: () => c.zoom(1.5), icon: const Icon(Icons.zoom_in)),
-          _Toggle(icon: Icons.tune, on: c.mixerOpen, tooltip: 'Mixer (X)', onTap: c.toggleMixer),
-          const SizedBox(width: 4),
-          FilledButton.tonalIcon(onPressed: c.status == null ? c.importAudio : null, icon: const Icon(Icons.file_open_outlined), label: const Text('Importar')),
         ];
+        final panels = [
+          _Toggle(icon: Icons.tune, on: c.dock == Dock.mixer, tooltip: 'Mixer (X)', onTap: () => toggleDock(c, Dock.mixer)),
+          _Toggle(icon: Icons.edit_note, on: c.dock == Dock.editor, tooltip: 'Editor de notas (E)', onTap: () => toggleDock(c, Dock.editor)),
+          _Toggle(icon: dockInstrumentIcon(c), on: c.dock == Dock.instrument, tooltip: 'Instrumento da faixa (I)', onTap: () => toggleDock(c, Dock.instrument)),
+        ];
+        final velocity = (c.keyboardVelocity * 100).round();
+        final inputs = [
+          _Toggle(
+            icon: Icons.keyboard,
+            on: c.keyboardOn,
+            // a oitava à vista: é o que muda com Z/X sem outro retorno na tela
+            label: c.keyboardOn ? 'C${c.keyboardOctave}' : null,
+            tooltip: c.keyboardOn
+                ? 'Teclado do computador ligado (Ctrl+K): A a L tocam a partir do C${c.keyboardOctave}, Z/X mudam a oitava, C/V a intensidade ($velocity%)'
+                : 'Tocar com o teclado do computador (Ctrl+K)',
+            onTap: c.toggleKeyboard,
+          ),
+          _Toggle(
+            icon: Icons.cable,
+            on: c.midiInputs.isNotEmpty,
+            label: c.midiInputs.isEmpty ? null : '${c.midiInputs.length}',
+            tooltip: c.midiInputs.isEmpty ? 'Entrada MIDI: conectar teclado ou controlador' : 'Entrada MIDI: ${c.midiInputs.join(', ')}',
+            onTap: c.enableMidiInput,
+          ),
+        ];
+        const divider = Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: SizedBox(width: 1, height: 28, child: ColoredBox(color: Palette.hairline)),
+        );
         return Container(
           decoration: const BoxDecoration(
             color: Palette.bar,
@@ -75,10 +108,19 @@ class TransportBar extends StatelessWidget {
               child: Row(
                 children: [
                   ...transport,
-                  const SizedBox(width: 12),
-                  Container(width: 1, height: 28, color: Palette.hairline),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+                  divider,
                   ...tools,
+                  divider,
+                  ...panels,
+                  divider,
+                  ...inputs,
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: c.status == null ? c.importAudio : null,
+                    icon: const Icon(Icons.file_open_outlined),
+                    label: const Text('Importar'),
+                  ),
                   if (c.status != null) ...[
                     const SizedBox(width: 12),
                     const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -134,22 +176,46 @@ class _Position extends StatelessWidget {
   }
 }
 
+/// Botão de ligar e desligar: aceso na cor da marca. Com [label], mostra um valor ao lado do
+/// ícone (a oitava do teclado, quantas entradas MIDI).
 class _Toggle extends StatelessWidget {
   final IconData icon;
   final bool on;
   final String tooltip;
+  final String? label;
   final VoidCallback onTap;
-  const _Toggle({required this.icon, required this.on, required this.tooltip, required this.onTap});
+  const _Toggle({required this.icon, required this.on, required this.tooltip, required this.onTap, this.label});
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    onPressed: onTap,
-    isSelected: on,
-    style: IconButton.styleFrom(foregroundColor: Colors.white70),
-    selectedIcon: Icon(icon, color: Palette.accent),
-    icon: Icon(icon),
-  );
+  Widget build(BuildContext context) {
+    if (label == null) {
+      return IconButton(
+        tooltip: tooltip,
+        onPressed: onTap,
+        isSelected: on,
+        style: IconButton.styleFrom(foregroundColor: Colors.white70),
+        selectedIcon: Icon(icon, color: Palette.accent),
+        icon: Icon(icon),
+      );
+    }
+    return Tooltip(
+      message: tooltip,
+      child: TextButton.icon(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: on ? Palette.accent : Colors.white70,
+          backgroundColor: on ? Palette.accent.withValues(alpha: 0.1) : null,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          minimumSize: const Size(40, 40),
+        ),
+        icon: Icon(icon),
+        label: Text(
+          label!,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+        ),
+      ),
+    );
+  }
 }
 
 class _TempoDialog extends StatefulWidget {
