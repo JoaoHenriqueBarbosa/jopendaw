@@ -22,6 +22,7 @@ import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
 import 'model.dart';
+import 'wav.dart';
 
 /// Resumo de um áudio para desenhar a onda: mínimo e máximo a cada [bucket] quadros.
 class Waveform {
@@ -161,6 +162,54 @@ MidiClip? splitMidiClip(MidiClip clip, double at) {
   return r;
 }
 
+// ------------------------------------------------------------------ gravação (funções puras)
+
+/// Onde cada passada de uma gravação começa: a batida na linha do tempo e o quadro da gravação
+/// (contado do início dela). Sem loop (ou começando depois do fim dele) é uma passada só; com
+/// loop, uma a cada volta, até [frames].
+///
+/// Simula o transporte do motor quadro a quadro: ele anda em quadros inteiros e volta ao início do
+/// loop no primeiro quadro em que a posição alcança o fim, levando a fração que passou. Assim a
+/// divisão cai no mesmo quadro da volta que se ouviu, sem deriva ao longo de muitas passadas.
+List<({double beat, int frame})> recordingPasses({
+  required double start,
+  required int frames,
+  required double bpm,
+  required double rate,
+  bool loopOn = false,
+  double loopStart = 0,
+  double loopEnd = 0,
+}) {
+  final passes = [(beat: start, frame: 0)];
+  final fpb = rate * 60 / bpm;
+  final ls = math.max(0.0, loopStart) * fpb, le = math.max(0.0, loopEnd) * fpb;
+  var pos = math.max(0.0, start) * fpb;
+  var k = 0;
+  // o motor só volta quando a posição está antes do fim (depois dele o loop segue reto)
+  if (!loopOn || le <= ls || pos >= le || le - ls < 1) return passes;
+  while (true) {
+    final until = math.max(1, (le - pos).ceil());
+    if (k + until >= frames) break;
+    k += until;
+    pos = ls + (pos + until - le);
+    passes.add((beat: loopStart, frame: k));
+  }
+  return passes;
+}
+
+/// Os quadros [from, to) de uma sequência de blocos, copiados em [out] a partir de [at]. O que cai
+/// antes do começo ou depois do fim dos blocos fica em silêncio.
+void gatherFrames(List<Float32List> blocks, int from, int to, Float32List out, [int at = 0]) {
+  var pos = 0;
+  for (final b in blocks) {
+    final end = pos + b.length;
+    final s = math.max(from, pos), e = math.min(to, end);
+    if (s < e) out.setRange(at + s - from, at + e - from, b, s - pos);
+    pos = end;
+    if (pos >= to) break;
+  }
+}
+
 // ------------------------------------------------------------------ teclado do computador
 
 /// Teclas que tocam notas, pela posição (independe do layout): a fileira do meio são as brancas,
@@ -216,6 +265,16 @@ class _SentTrack {
   _SentTrack(this.kind);
 }
 
+/// O que um motor já recebeu do documento. O ao vivo guarda o dele (o sync só manda a diferença);
+/// o render fora de tempo real parte de um vazio e recebe a lista completa.
+class _SyncCache {
+  final tracks = <_SentTrack>[];
+  List<String> ids = const [];
+  List<EngineNote>? notes;
+  final master = _SentChain();
+  List<List<Object>>? auto;
+}
+
 /// Um slot de efeito como o motor o conhece.
 class _SentFx {
   final EffectKind kind;
@@ -234,6 +293,95 @@ class _SentChain {
 /// no índice do motor), id do parâmetro, faixa de valores e o valor atual sem automação.
 typedef _Resolved = ({int code, int slot, int id, double min, double max, double value, ParamSpec? spec});
 
+/// Uma gravação em andamento: o que foi armado, onde ela vale e o que a entrada mandou.
+class _Recording {
+  _Recording({
+    required this.start,
+    required this.bpm,
+    required this.rate,
+    required this.loopOn,
+    required this.loopStart,
+    required this.loopEnd,
+    required this.trackIds,
+    required this.audioIds,
+    required this.midiIds,
+    required this.audio,
+    required this.countBeats,
+    required this.zone,
+    required this.latency,
+    required this.skip,
+    required this.metronomeTemp,
+  }) : stopBeat = start;
+
+  /// Batida onde a gravação vale (o cursor quando ela começou).
+  final double start;
+  final double bpm, rate;
+
+  /// O loop no começo: a volta dele divide as passadas.
+  final bool loopOn;
+  final double loopStart, loopEnd;
+
+  /// Ids das faixas na ordem do motor no começo: as notas gravadas vêm com o índice.
+  final List<String> trackIds;
+  final Set<String> audioIds, midiIds;
+
+  /// A entrada estava aberta: há áudio para juntar.
+  final bool audio;
+
+  /// Batidas de contagem antes de [start] (0: sem contagem).
+  final double countBeats;
+
+  /// Contagem fora do lugar (cursor antes do fim do primeiro compasso, ou o fim do loop dentro do
+  /// compasso da contagem): a batida do motor onde ela começa, numa região vazia bem depois do fim
+  /// de tudo; null quando ela toca antes do cursor.
+  final double? zone;
+
+  /// Latência total da gravação (s): contexto, entrada e a compensação manual.
+  final double latency;
+
+  /// Quadros descartados do começo do que a entrada mandou: a contagem e a latência (negativo:
+  /// silêncio acrescentado).
+  final int skip;
+
+  /// O metrônomo liga só para a contagem (estava desligado).
+  final bool metronomeTemp;
+
+  /// Blocos da entrada (esq, dir), do mesmo tamanho aos pares, e quantos quadros somam.
+  final left = <Float32List>[], right = <Float32List>[];
+  int frames = 0;
+
+  /// A captura está ligada no motor.
+  bool captureOn = false;
+
+  /// Não aceita mais blocos (cancelada ou já juntada).
+  bool closed = false;
+
+  /// O metrônomo provisório e a automação já voltaram.
+  bool preRollDone = false;
+
+  /// Onde o transporte estava ao parar (estimado).
+  double stopBeat;
+
+  final clock = Stopwatch()..start();
+
+  /// Quanto durou, do começo ao stop (nos testes, dado no lugar do relógio).
+  Duration? elapsed;
+
+  /// Batidas gravadas depois da contagem, pelo relógio: as notas não dizem em que passada caíram.
+  double get recordedBeats => (elapsed ?? clock.elapsed).inMicroseconds / 1e6 * bpm / 60 - countBeats;
+}
+
+/// Um pedaço de áudio gravado que vira sample: quadros [from, to) da gravação, com [pad] quadros de
+/// silêncio antes (a tomada que começou no meio do loop).
+typedef _Piece = ({int from, int to, int pad});
+
+/// Um clipe da gravação: começa em [start] (batidas) e dura [seconds]; uma peça é um clipe comum,
+/// várias são as tomadas dele (a ativa é a última).
+typedef _ClipPlan = ({double start, double seconds, List<_Piece> pieces});
+
+/// Uma nota gravada, em batidas absolutas.
+typedef _RecNote = ({int pitch, double start, double end, double velocity});
+
 /// Ganho máximo do volume e dos envios: o topo do fader (+6 dB).
 const maxGain = 2.0;
 
@@ -242,10 +390,12 @@ const defaultSendLevel = 0.5;
 
 class DawController extends ChangeNotifier {
   final Project project;
-  DawController(this.project);
 
-  final _engine = AudioEngine.instance;
-  final _store = LocalStore.instance;
+  /// [engine] e [store] trocam o motor e o guardado local nos testes (padrão: os do aparelho).
+  DawController(this.project, {AudioEngine? engine, LocalStore? store}) : _engine = engine ?? AudioEngine.instance, _store = store ?? LocalStore.instance;
+
+  final AudioEngine _engine;
+  final LocalStore _store;
 
   late DawDoc doc;
   bool ready = false;
@@ -310,11 +460,9 @@ class DawController extends ChangeNotifier {
   bool _disposed = false;
 
   // o que já foi ao motor (ver [_sync])
-  final _sent = <_SentTrack>[];
-  List<String> _sentIds = const [];
-  List<EngineNote>? _sentNotes;
-  final _sentMaster = _SentChain();
-  List<List<Object>>? _sentAuto;
+  final _cache = _SyncCache();
+  List<_SentTrack> get _sent => _cache.tracks;
+  _SentChain get _sentMaster => _cache.master;
   (int, int)? _sentWatchFx;
   int? _sentWatchAnalyzer;
 
@@ -349,9 +497,17 @@ class DawController extends ChangeNotifier {
       for (final hash in doc.samples.keys.toList()) {
         await _loadSample(hash);
       }
+      try {
+        final device = await _store.get(_inputKey);
+        if (device is String && device.isNotEmpty) inputDevice = device;
+      } catch (_) {
+        // sem a escolha guardada, vale a entrada padrão
+      }
       if (_disposed) return;
       ready = true;
       _sync();
+      // faixa de áudio que ficou armada ou monitorando: a entrada volta aberta, como estava
+      if (doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
     } catch (e) {
       error = e is UnsupportedError ? e.message : '$e';
     }
@@ -359,13 +515,21 @@ class DawController extends ChangeNotifier {
   }
 
   void _onEngineState(EngineState s) {
-    beat.value = s.beat;
+    _stateClock
+      ..reset()
+      ..start();
+    final r = _rec;
+    if (r != null && countingIn) _countInState(r, s);
+    // na contagem fora do lugar o motor está longe, na região vazia: o cursor espera no começo da
+    // gravação em vez de pular para lá (e a janela não o segue)
+    final away = r != null && countingIn && r.zone != null;
+    beat.value = away ? r.start : s.beat;
     playing.value = s.playing;
     peaks.value = s.peaks;
     // um estado que chega depois de desligar a observação (já estava a caminho) não acende nada
     fxMeter.value = _sentWatchFx == null || _sentWatchFx!.$2 < 0 || !s.fxMeter.isFinite ? 0 : s.fxMeter;
     spectrum.value = _sentWatchAnalyzer == null || _sentWatchAnalyzer! < -1 ? null : s.spectrum;
-    _follow(s);
+    if (!away) _follow(s);
   }
 
   /// Nos testes: um estado do motor como se tivesse chegado dele.
@@ -402,9 +566,14 @@ class DawController extends ChangeNotifier {
   void _register(String hash, DecodedAudio audio) {
     final id = _sampleIds[hash] ??= _sampleIds.length + 1;
     _engine.loadSample(id, audio);
+    // o render fora de tempo real roda num motor separado, que precisa receber os áudios de novo
+    _decoded[id] = audio;
     waveforms[hash] = Waveform.of(audio);
     missing.remove(hash);
   }
+
+  /// Os áudios decodificados, pelo id do motor.
+  final _decoded = <int, DecodedAudio>{};
 
   @override
   void dispose() {
@@ -420,6 +589,16 @@ class DawController extends ChangeNotifier {
     if (_engine.onState == _onEngineState) _engine.onState = null;
     if (_engine.onMidi == _onMidi) _engine.onMidi = null;
     if (_engine.onMidiInputs == _onMidiInputs) _engine.onMidiInputs = null;
+    // gravação pela metade some com a tela; a entrada fecha (o navegador apaga o aviso de microfone)
+    if (_rec?.captureOn ?? false) _captureOff(null);
+    _rec = null;
+    if (_engine.onRecord == _onRecordBlock) _engine.onRecord = null;
+    if (_engine.onInputLevel == _onInputLevel) _engine.onInputLevel = null;
+    if (_engine.onRecordedNotes == _onRecordedNotes) _engine.onRecordedNotes = null;
+    if (_inputOpen) {
+      _inputOpen = false;
+      _quietly(_engine.stopInput);
+    }
     editorKeyHandler = null;
     _saveTimer?.cancel();
     _save();
@@ -429,6 +608,7 @@ class DawController extends ChangeNotifier {
     liveNotes.dispose();
     fxMeter.dispose();
     spectrum.dispose();
+    inputLevel.dispose();
     super.dispose();
   }
 
@@ -437,27 +617,61 @@ class DawController extends ChangeNotifier {
   /// Manda o documento ao motor. É barato: dezenas de chamadas numa mensagem. Instrumentos,
   /// efeitos, roteamento, automação e notas vão só no que mudou desde o último envio.
   ///
-  /// Ordem: áudio → instrumentos → efeitos → roteamento → automação → observação → notas.
+  /// Ordem: áudio → instrumentos → efeitos → roteamento → automação → observação → notas →
+  /// monitoração da entrada.
+  ///
+  /// Gravando, o loop, o metrônomo e a automação podem estar trocados pela contagem (ver
+  /// [_startRecording]): o sync manda o que vale agora, não o do documento.
   void _sync() {
-    final d = doc;
-    final ids = [for (final t in d.tracks) t.id];
+    final ids = [for (final t in doc.tracks) t.id];
     var release = const <List<Object>>[];
-    if (!_isPrefix(_sentIds, ids)) {
+    if (!_isPrefix(_cache.ids, ids)) {
       // faixas saíram ou mudaram de lugar: o índice de cada instrumento no motor agora é de outra
-      // faixa, e o que soa ao vivo ficaria preso no índice velho. Efeitos, envios e automação
-      // também eram de outra faixa: vai tudo de novo.
+      // faixa, e o que soa ao vivo ficaria preso no índice velho. Efeitos, envios, automação e a
+      // monitoração da entrada também eram de outra faixa: vai tudo de novo.
       release = _releaseLive();
-      _sent.clear();
-      _sentNotes = null;
-      _sentAuto = null;
+      _cache.tracks.clear();
+      _cache.notes = null;
+      _cache.auto = null;
     }
-    _sentIds = ids;
+    final loop = _loopOverride ?? (doc.loopOn, doc.loopStart, doc.loopEnd);
+    final calls = _docCalls(
+      _cache,
+      loop: loop,
+      metronome: doc.metronome || _countMetronome,
+      automation: !_autoSuppressed,
+      release: release,
+      observe: _watchCalls(),
+    );
+    // por último: um motor que ainda não conheça a entrada para aqui sem perder o resto
+    calls.addAll(_monitorCalls());
+    _engine.calls(calls);
+  }
+
+  /// O documento inteiro como chamadas, para um motor novo (o render fora de tempo real, que roda
+  /// as mesmas chamadas num motor separado): sem loop nem metrônomo, que não entram no arquivo,
+  /// sem observação e sem entrada.
+  List<List<Object>> _fullSyncCalls() => _docCalls(_SyncCache(), loop: (false, 0.0, 0.0), metronome: false);
+
+  /// As chamadas que levam o documento a um motor que já recebeu o que [c] registra (vazio: um
+  /// motor novo, a lista completa), atualizando [c]. [release] solta o que soa ao vivo antes de os
+  /// índices trocarem de instrumento; [observe] entra antes das notas.
+  List<List<Object>> _docCalls(
+    _SyncCache c, {
+    required (bool, double, double) loop,
+    required bool metronome,
+    bool automation = true,
+    List<List<Object>> release = const [],
+    List<List<Object>> observe = const [],
+  }) {
+    final d = doc;
+    c.ids = [for (final t in d.tracks) t.id];
     final calls = <List<Object>>[
       ['tempo', d.bpm, d.beatsPerBar],
       ['tracks', d.tracks.length],
       ['master', d.masterGain, d.masterPan],
-      ['loop_set', d.loopOn, d.loopStart, d.loopEnd],
-      ['metronome', d.metronome, 0.5],
+      ['loop_set', loop.$1, loop.$2, loop.$3],
+      ['metronome', metronome, 0.5],
       ['clips_clear'],
     ];
     for (var i = 0; i < d.tracks.length; i++) {
@@ -474,16 +688,17 @@ class DawController extends ChangeNotifier {
     // primeira que falta, e o arranjo de áudio já foi inteiro. O que soava ao vivo solta antes de
     // o índice trocar de instrumento.
     calls.addAll(release);
+    final sent = c.tracks;
     for (var i = 0; i < d.tracks.length; i++) {
       final t = d.tracks[i];
-      var s = i < _sent.length ? _sent[i] : null;
+      var s = i < sent.length ? sent[i] : null;
       final fresh = s == null || s.kind != t.kind;
       if (s == null || fresh) {
         s = _SentTrack(t.kind);
-        if (i < _sent.length) {
-          _sent[i] = s;
+        if (i < sent.length) {
+          sent[i] = s;
         } else {
-          _sent.add(s);
+          sent.add(s);
         }
         calls.add(['track_kind', i, t.kind.index]);
       }
@@ -502,33 +717,54 @@ class DawController extends ChangeNotifier {
         }
       }
     }
-    if (_sent.length > d.tracks.length) _sent.length = d.tracks.length;
+    if (sent.length > d.tracks.length) sent.length = d.tracks.length;
     for (var i = 0; i < d.tracks.length; i++) {
-      _syncChain(calls, i, d.tracks[i].effects, _sent[i].fx);
+      _syncChain(calls, i, d.tracks[i].effects, sent[i].fx);
     }
-    _syncChain(calls, -1, d.masterEffects, _sentMaster);
+    _syncChain(calls, -1, d.masterEffects, c.master);
     final index = _trackIndex();
     final sends = [for (var i = 0; i < d.tracks.length; i++) _validSends(i, index)];
     for (var i = 0; i < d.tracks.length; i++) {
-      _syncRouting(calls, i, sends[i], index);
+      _syncRouting(calls, i, sent[i], sends[i], index);
     }
-    final auto = _automationCalls(sends);
-    if (_sentAuto == null || !_sameCalls(auto, _sentAuto!)) {
+    final auto = automation ? _automationCalls(sends) : const <List<Object>>[];
+    if (c.auto == null || !_sameCalls(auto, c.auto!)) {
       calls.add(['auto_clear']);
       calls.addAll(auto);
-      _sentAuto = auto;
+      c.auto = auto;
     }
-    calls.addAll(_watchCalls());
+    calls.addAll(observe);
     final notes = flattenNotes(d.tracks);
-    if (_sentNotes == null || !listEquals(notes, _sentNotes)) {
+    if (c.notes == null || !listEquals(notes, c.notes)) {
       calls.add(['notes_clear']);
       for (final n in notes) {
         calls.add(['note_add', n.track, n.start, n.length, n.pitch, n.velocity]);
       }
-      _sentNotes = notes;
+      c.notes = notes;
     }
-    _engine.calls(calls);
+    return calls;
   }
+
+  /// A entrada soa nas faixas de áudio que monitoram. Só vai o que mudou em cada índice do motor:
+  /// o estado é do índice (não da faixa), então reordenar manda só onde a monitoração trocou.
+  List<List<Object>> _monitorCalls() {
+    final calls = <List<Object>>[];
+    final n = doc.tracks.length;
+    // faixas que saíram levam o estado junto (o motor recria o canal no padrão, desligado)
+    if (_engineMonitor.length > n) _engineMonitor.length = n;
+    for (var i = 0; i < n; i++) {
+      final t = doc.tracks[i];
+      final on = t.kind == TrackKind.audio && t.monitor;
+      if (i >= _engineMonitor.length) _engineMonitor.add(false);
+      if (_engineMonitor[i] == on) continue;
+      calls.add(['input_monitor', i, on]);
+      _engineMonitor[i] = on;
+    }
+    return calls;
+  }
+
+  /// Monitoração da entrada como o motor a conhece, por índice.
+  final _engineMonitor = <bool>[];
 
   static bool _isPrefix(List<String> a, List<String> b) {
     if (a.length > b.length) return false;
@@ -612,8 +848,7 @@ class DawController extends ChangeNotifier {
 
   static double _sendLevel(double v) => v.isFinite ? v.clamp(0.0, maxGain).toDouble() : 0;
 
-  void _syncRouting(List<List<Object>> calls, int i, List<(Send, int)> sends, Map<String, int> index) {
-    final s = _sent[i];
+  void _syncRouting(List<List<Object>> calls, int i, _SentTrack s, List<(Send, int)> sends, Map<String, int> index) {
     if (s.sendCount != sends.length) {
       calls.add(['sends_count', i, sends.length]);
       s.sendCount = sends.length;
@@ -790,7 +1025,10 @@ class DawController extends ChangeNotifier {
 
   // ------------------------------------------------------------------ transporte
 
+  /// Gravando, parar pelo transporte encerra a gravação (e o cursor volta ao começo dela).
   Future<void> togglePlay() async {
+    if (recording) return _finishRecording();
+    if (_recBusy) return;
     await _engine.resume();
     _engine.calls([
       [playing.value ? 'stop' : 'play'],
@@ -798,8 +1036,9 @@ class DawController extends ChangeNotifier {
     playing.value = !playing.value;
   }
 
-  /// Para e volta ao começo (ou ao início do loop, se ligado).
+  /// Para e volta ao começo (ou ao início do loop, se ligado). Gravando, encerra a gravação.
   Future<void> stop() async {
+    if (recording) return _finishRecording();
     final to = playing.value ? (doc.loopOn ? doc.loopStart : 0.0) : 0.0;
     _engine.calls([
       ['stop'],
@@ -811,7 +1050,10 @@ class DawController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Gravando, o cursor não pula: a gravação sabe onde cada quadro cai pela posição em que ela
+  /// começou e pelo loop, e um salto no meio deslocaria o resto.
   void seek(double b) {
+    if (recording) return;
     b = math.max(0, b);
     _engine.calls([
       ['seek', b],
@@ -819,16 +1061,35 @@ class DawController extends ChangeNotifier {
     beat.value = b;
   }
 
-  void toggleLoop() => edit((d) => d.loopOn = !d.loopOn, undoable: false);
+  void toggleLoop() {
+    if (_blockedByRecording('ligar ou desligar o loop')) return;
+    edit((d) => d.loopOn = !d.loopOn, undoable: false);
+  }
+
   void toggleMetronome() => edit((d) => d.metronome = !d.metronome, undoable: false);
 
-  void setLoop(double start, double end) => mutate((d) {
-    d.loopStart = math.max(0, math.min(start, end));
-    d.loopEnd = math.max(start, end);
-    d.loopOn = d.loopEnd - d.loopStart > 0.01;
-  });
+  /// Contagem de um compasso antes de gravar; preferência do projeto, fora do desfazer.
+  void toggleCountIn() => edit((d) => d.countIn = !d.countIn, undoable: false);
+
+  /// Compensação manual da latência de gravação (ms, −500..500), fora do desfazer.
+  void setRecLatency(double ms) {
+    final v = ms.isFinite ? ms.clamp(-500.0, 500.0).toDouble() : 0.0;
+    if (v == doc.recLatencyMs) return;
+    edit((d) => d.recLatencyMs = v, undoable: false);
+  }
+
+  void setLoop(double start, double end) {
+    // arrastar a região no meio de uma gravação mudaria onde as passadas se dividem
+    if (recording) return;
+    mutate((d) {
+      d.loopStart = math.max(0, math.min(start, end));
+      d.loopEnd = math.max(start, end);
+      d.loopOn = d.loopEnd - d.loopStart > 0.01;
+    });
+  }
 
   Future<void> setTempo(int bpm, int beatsPerBar) async {
+    if (_blockedByRecording('mudar o andamento')) return;
     edit((d) {
       d.bpm = bpm.toDouble();
       d.beatsPerBar = beatsPerBar;
@@ -868,9 +1129,21 @@ class DawController extends ChangeNotifier {
     to.add(jsonEncode(doc.toJson()));
     // ligar o metrônomo e o loop não entra no histórico: desfazer uma nota não pode mexer neles.
     // Só quando o passo desfeito foi desenhar a região do loop (que liga o loop) ele volta junto.
+    // As preferências de gravação e o armar/monitorar das faixas também ficam como estão.
     final before = doc;
-    doc = DawDoc.fromJson(jsonDecode(from.removeLast()))..metronome = before.metronome;
+    doc = DawDoc.fromJson(jsonDecode(from.removeLast()))
+      ..metronome = before.metronome
+      ..countIn = before.countIn
+      ..recLatencyMs = before.recLatencyMs;
     if (doc.loopStart == before.loopStart && doc.loopEnd == before.loopEnd) doc.loopOn = before.loopOn;
+    final live = {for (final t in before.tracks) t.id: t};
+    for (final t in doc.tracks) {
+      final now = live[t.id];
+      if (now == null) continue;
+      t
+        ..armed = now.armed
+        ..monitor = now.monitor;
+    }
     if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
     _prune();
     _sync();
@@ -939,9 +1212,12 @@ class DawController extends ChangeNotifier {
     if (i < 0 || i >= doc.tracks.length) return;
     edit((d) {
       final src = d.tracks[i];
+      // a cópia não sai armada nem monitorando: gravaria (e dobraria a entrada) sem pedir
       final copy = DawTrack.fromJson(jsonDecode(jsonEncode(src.toJson())))
         ..id = newId()
-        ..name = _copyName(src.name);
+        ..name = _copyName(src.name)
+        ..armed = false
+        ..monitor = false;
       final slotIds = <String, String>{};
       for (final e in copy.effects) {
         final old = e.id;
@@ -1601,6 +1877,18 @@ class DawController extends ChangeNotifier {
 
   static bool _typing() => FocusManager.instance.primaryFocus?.context?.widget is EditableText;
 
+  /// Faixa que o teclado do computador e o MIDI tocam: a selecionada, a não ser que haja faixa de
+  /// instrumento armada e a selecionada não seja uma delas; aí a primeira armada. Como nos DAWs,
+  /// armar leva a entrada para a faixa, e o que se toca é o que ela grava.
+  int get _inputTrack {
+    final sel = selectedTrack;
+    if (_isInstrument(sel) && doc.tracks[sel].armed) return sel;
+    for (var i = 0; i < doc.tracks.length; i++) {
+      if (doc.tracks[i].armed && doc.tracks[i].kind.isInstrument) return i;
+    }
+    return sel;
+  }
+
   /// Com o teclado do computador ligado, trata a tecla como nota (A W S E D F T G Y H U J K O L P;
   /// Z/X oitava, C/V velocidade). Devolve true se consumiu a tecla.
   bool handleNoteKey(KeyEvent e) {
@@ -1620,7 +1908,7 @@ class DawController extends ChangeNotifier {
     final pitch = keyboardNote(key, keyboardOctave);
     if (pitch != null) {
       if (_keyNotes.containsKey(key)) return true;
-      final t = selectedTrack;
+      final t = _inputTrack;
       noteOn(pitch, velocity: keyboardVelocity, track: t);
       if (_live.contains((t, pitch))) _keyNotes[key] = (t, pitch);
     } else if (key == _octaveDown) {
@@ -1692,7 +1980,7 @@ class DawController extends ChangeNotifier {
   void _midiNoteOn(int pitch, double velocity) {
     if (pitch < 0 || pitch > 127) return;
     _sustained.remove(pitch);
-    final t = selectedTrack;
+    final t = _inputTrack;
     final before = _midiNotes[pitch];
     if (before != null && before != t) _liveOff([(before, pitch)]);
     noteOn(pitch, velocity: velocity, track: t);
@@ -2075,7 +2363,6 @@ class DawController extends ChangeNotifier {
   double engineRate = 48000;
 
   // ------------------------------------------------------------------ gravação, exportação, bounce
-  // (contrato da fase 4: corpos preenchidos na implementação)
 
   /// Gravando agora (inclusive durante a contagem) e em que fase.
   bool recording = false;
@@ -2088,26 +2375,1123 @@ class DawController extends ChangeNotifier {
   List<(String, String)> inputDevices = const [];
   String? inputDevice;
 
+  /// Um render fora de tempo real (exportação ou congelamento) em andamento: um por vez.
+  bool get rendering => _rendering;
+  bool _rendering = false;
+
+  /// A entrada de áudio está aberta (o navegador mostra o aviso de microfone).
+  bool get inputOpen => _inputOpen;
+  bool _inputOpen = false;
+  Future<bool>? _opening;
+
+  /// Latência de entrada que o navegador informou ao abrir (s).
+  double _inputLatency = 0;
+
+  /// A entrada escolhida fica no aparelho (é do hardware, não do projeto).
+  static const _inputKey = 'rec:input';
+
+  _Recording? _rec;
+
+  /// Começando (abrindo a entrada) ou salvando uma gravação: outro gravar espera.
+  bool _recBusy = false;
+
+  /// Quem espera as notas de cada captura desligada, na ordem (null: ninguém, a captura foi
+  /// cancelada). O motor manda uma mensagem de notas por captura desligada.
+  final _notesWaiting = Queue<Completer<Float32List>?>();
+
+  /// Tempo desde o último estado do motor: estima a posição entre um estado e outro.
+  final _stateClock = Stopwatch();
+
+  // o que a contagem troca no motor enquanto dura (o sync manda estes no lugar do documento)
+  (bool, double, double)? _loopOverride;
+  bool _countMetronome = false;
+  bool _autoSuppressed = false;
+
+  /// Arma a faixa para gravar: a de áudio grava a entrada; a de instrumento, as notas tocadas nela
+  /// (o teclado e o MIDI passam a tocá-la). Armar a primeira faixa de áudio abre a entrada (o
+  /// navegador pede o microfone; negado, a faixa desarma e o motivo fica em [error]); desarmar a
+  /// última que precisava dela fecha. Barramento não grava. Fica no documento, fora do desfazer.
+  void setArmed(int track, bool on) {
+    if (track < 0 || track >= doc.tracks.length) return;
+    final t = doc.tracks[track];
+    if (t.kind == TrackKind.bus || t.armed == on) return;
+    edit((_) => t.armed = on, undoable: false);
+    if (t.kind != TrackKind.audio) return;
+    if (on) {
+      unawaited(_needInput(t.id, (t) => t.armed = false));
+    } else {
+      _releaseInputIfIdle();
+    }
+  }
+
+  /// A entrada passa pela cadeia da faixa de áudio ao vivo (antes dos inserts e do fader). Abre a
+  /// entrada como [setArmed]. Só faixas de áudio; fora do desfazer.
+  void setMonitor(int track, bool on) {
+    if (track < 0 || track >= doc.tracks.length) return;
+    final t = doc.tracks[track];
+    if (t.kind != TrackKind.audio || t.monitor == on) return;
+    edit((_) => t.monitor = on, undoable: false);
+    if (on) {
+      unawaited(_needInput(t.id, (t) => t.monitor = false));
+    } else {
+      _releaseInputIfIdle();
+    }
+  }
+
+  /// Abre a entrada para a faixa [id]; sem ela, desfaz com [undo] o que a pediu.
+  Future<void> _needInput(String id, void Function(DawTrack t) undo) async {
+    final ok = await _ensureInput();
+    if (_disposed) return;
+    if (ok) {
+      // desarmada enquanto o navegador perguntava
+      _releaseInputIfIdle();
+      return;
+    }
+    final t = doc.tracks.where((t) => t.id == id).firstOrNull;
+    if (t != null) mutate((_) => undo(t));
+  }
+
+  /// Ao abrir o projeto com faixa armada ou monitorando: a entrada volta; sem ela, as faixas
+  /// desarmam (senão pareceriam prontas para gravar).
+  Future<void> _restoreInput() async {
+    if (await _ensureInput() || _disposed) return;
+    mutate((d) {
+      for (final t in d.tracks) {
+        if (t.kind != TrackKind.audio) continue;
+        t
+          ..armed = false
+          ..monitor = false;
+      }
+    });
+  }
+
+  Future<bool> _ensureInput() {
+    if (_inputOpen) return Future.value(true);
+    return _opening ??= _openInput().whenComplete(() => _opening = null);
+  }
+
+  Future<bool> _openInput() async {
+    _hookCapture();
+    Object? failure;
+    for (final device in {inputDevice, null}) {
+      try {
+        final latency = await _engine.startInput(device);
+        if (_disposed) {
+          _quietly(_engine.stopInput);
+          return false;
+        }
+        _inputLatency = latency.isFinite ? latency.clamp(0.0, 1.0).toDouble() : 0;
+        _inputOpen = true;
+        if (device != inputDevice) {
+          // a escolhida não abriu (desconectada) e a padrão sim
+          error = 'A entrada de áudio escolhida não abriu (foi desconectada?): usando a entrada padrão.';
+          _chooseInput(null);
+        }
+        notifyListeners();
+        // com a permissão dada, a lista já vem com os nomes
+        unawaited(_listInputs());
+        return true;
+      } catch (e) {
+        failure ??= e;
+        // permissão negada não muda com outra entrada
+        if (_denied(e)) break;
+      }
+    }
+    if (!_disposed) {
+      error = _inputError(failure!);
+      notifyListeners();
+    }
+    return false;
+  }
+
+  void _hookCapture() {
+    _engine.onRecord = _onRecordBlock;
+    _engine.onInputLevel = _onInputLevel;
+    _engine.onRecordedNotes = _onRecordedNotes;
+  }
+
+  void _onInputLevel(double peak) {
+    if (_disposed) return;
+    inputLevel.value = peak.isFinite ? peak.clamp(0.0, 1.0).toDouble() : 0;
+  }
+
+  /// Fecha a entrada quando nada precisa dela (o aviso de microfone do navegador apaga).
+  void _releaseInputIfIdle() {
+    if (!_inputOpen || recording || _recBusy || _opening != null) return;
+    if (doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) return;
+    _inputOpen = false;
+    inputLevel.value = 0;
+    _quietly(_engine.stopInput);
+    notifyListeners();
+  }
+
+  /// Chama o motor sem deixar escapar um erro dele (entrada que já fechou, motor sem gravação).
+  static void _quietly(Future<void> Function() f) {
+    try {
+      unawaited(f().catchError((Object _) {}));
+    } catch (_) {}
+  }
+
+  static bool _denied(Object e) {
+    final s = e is StateError ? e.message : '$e';
+    return s.contains('NotAllowed') || s.contains('Permission') || s.contains('permiss') || s.contains('negou') || s.contains('denied');
+  }
+
+  /// O motivo de a entrada não abrir, para o usuário.
+  static String _inputError(Object e) {
+    if (e is UnsupportedError) return e.message ?? 'Este navegador não dá acesso ao microfone.';
+    if (e is UnimplementedError) return 'A gravação de áudio ainda não funciona neste aparelho.';
+    if (e is StateError) return e.message;
+    final s = '$e';
+    if (_denied(e)) return 'O navegador negou o acesso ao microfone. Libere o microfone nas permissões do site e tente de novo.';
+    if (s.contains('NotFound') || s.contains('Overconstrained')) return 'Nenhuma entrada de áudio encontrada: conecte um microfone ou escolha outra entrada.';
+    if (s.contains('NotReadable')) return 'A entrada de áudio está ocupada por outro programa ou foi desconectada.';
+    return 'Não deu para abrir a entrada de áudio: $s';
+  }
+
+  /// Pede acesso ao microfone (se ainda não tem) e lista as entradas. Se ninguém precisava da
+  /// entrada, ela fecha de novo depois.
+  Future<void> refreshInputDevices() async {
+    final wasOpen = _inputOpen;
+    await _ensureInput();
+    if (_disposed) return;
+    await _listInputs();
+    if (!wasOpen) _releaseInputIfIdle();
+  }
+
+  Future<void> _listInputs() async {
+    final List<(String, String)> list;
+    try {
+      list = await _engine.inputDevices();
+    } catch (_) {
+      return;
+    }
+    if (_disposed) return;
+    inputDevices = list;
+    final chosen = inputDevice;
+    // lista vazia é falta de permissão, não entrada que saiu
+    if (chosen != null && list.isNotEmpty && !list.any((d) => d.$1 == chosen)) {
+      _chooseInput(null);
+      error = 'A entrada de áudio escolhida foi desconectada: usando a entrada padrão.';
+      if (_inputOpen && !recording && !_recBusy) unawaited(_reopenInput());
+    }
+    notifyListeners();
+  }
+
+  /// Troca a entrada (null = a padrão do sistema); aberta, ela reabre na nova. Não troca no meio
+  /// de uma gravação.
+  Future<void> setInputDevice(String? id) async {
+    if (id == inputDevice) return;
+    if (recording || _recBusy) {
+      error = 'Pare a gravação antes de trocar a entrada.';
+      notifyListeners();
+      return;
+    }
+    _chooseInput(id);
+    notifyListeners();
+    if (_inputOpen) await _reopenInput();
+  }
+
+  void _chooseInput(String? id) {
+    inputDevice = id;
+    unawaited(_store.put(_inputKey, id ?? '').catchError((Object _) {}));
+  }
+
+  Future<void> _reopenInput() async {
+    _inputOpen = false;
+    inputLevel.value = 0;
+    try {
+      await _engine.stopInput();
+    } catch (_) {}
+    if (_disposed) return;
+    await _ensureInput();
+    // quem pediu a entrada pode ter desistido enquanto ela reabria
+    if (!_disposed) _releaseInputIfIdle();
+  }
+
   /// Liga/desliga a gravação: com faixas armadas, conta um compasso (se [DawDoc.countIn]) e grava
-  /// a partir do cursor; parar gera os clipes (áudio nas de áudio, notas nas de instrumento).
-  Future<void> toggleRecord() => throw UnimplementedError();
+  /// a partir do cursor; parar gera os clipes (áudio nas de áudio, notas nas de instrumento), num
+  /// passo só do desfazer. Tocando, grava dali na hora (sem contagem). Parar na contagem não grava
+  /// nada.
+  Future<void> toggleRecord() async {
+    if (!ready || _recBusy) return;
+    if (recording) return _finishRecording();
+    return _startRecording();
+  }
 
-  void setArmed(int track, bool on) => throw UnimplementedError();
-  void setMonitor(int track, bool on) => throw UnimplementedError();
+  Future<void> _startRecording() async {
+    final audioIds = {
+      for (final t in doc.tracks)
+        if (t.armed && t.kind == TrackKind.audio) t.id,
+    };
+    final midiIds = {
+      for (final t in doc.tracks)
+        if (t.armed && t.kind.isInstrument) t.id,
+    };
+    if (audioIds.isEmpty && midiIds.isEmpty) {
+      error = 'Arme uma faixa para gravar (o botão de gravação dela): a de áudio grava a entrada; a de instrumento, as notas tocadas.';
+      notifyListeners();
+      return;
+    }
+    _recBusy = true;
+    try {
+      // o clique no gravar é o gesto que destrava o áudio
+      _wake();
+      var audio = false;
+      if (audioIds.isNotEmpty) {
+        audio = await _ensureInput();
+        if (_disposed) return;
+        // sem entrada e sem instrumento armado não há o que gravar (o motivo já está em error)
+        if (!audio && midiIds.isEmpty) return;
+      }
+      _hookCapture();
+      _beginRecording(audioIds: audio ? audioIds : const {}, midiIds: midiIds, audio: audio);
+    } finally {
+      _recBusy = false;
+    }
+  }
 
-  /// Pede acesso ao microfone (se ainda não tem) e lista as entradas.
-  Future<void> refreshInputDevices() => throw UnimplementedError();
-  Future<void> setInputDevice(String? id) => throw UnimplementedError();
+  void _beginRecording({required Set<String> audioIds, required Set<String> midiIds, required bool audio}) {
+    final d = doc;
+    final bar = d.beatsPerBar.toDouble();
+    final wasPlaying = playing.value;
+    final start = wasPlaying ? _estimatedBeat() : math.max(0.0, beat.value);
+    final count = !wasPlaying && d.countIn;
+    double? zone;
+    var from = start;
+    if (count) {
+      final before = start - bar;
+      // o fim do loop no compasso da contagem: o transporte voltaria ao começo do loop e nunca
+      // chegaria ao cursor
+      final loopInside = d.loopOn && d.loopEnd > d.loopStart && d.loopEnd > before + 1e-9 && d.loopEnd <= start + 1e-9;
+      if (before >= -1e-9 && !loopInside) {
+        from = math.max(0.0, before);
+      } else {
+        // antes do fim do primeiro compasso não há onde contar (o transporte não vai abaixo de
+        // zero): a contagem toca numa região vazia bem depois do fim de tudo, e um loop provisório
+        // do fim dela até o cursor faz a volta no quadro exato
+        zone = math.max(_countZoneBars * bar, ((d.contentEnd / bar).ceil() + 2) * bar);
+        from = zone;
+      }
+    }
+    final rate = engineRate;
+    final latency = audio ? _engine.latency + _inputLatency + d.recLatencyMs / 1000 : 0.0;
+    final fpb = rate * 60 / d.bpm;
+    final r = _Recording(
+      start: start,
+      bpm: d.bpm,
+      rate: rate,
+      loopOn: d.loopOn && d.loopEnd > d.loopStart,
+      loopStart: d.loopStart,
+      loopEnd: d.loopEnd,
+      trackIds: [for (final t in d.tracks) t.id],
+      audioIds: audioIds,
+      midiIds: midiIds,
+      audio: audio,
+      countBeats: count ? bar : 0,
+      zone: zone,
+      latency: latency.isFinite ? latency : 0,
+      // a contagem e a latência saem do começo do que a entrada mandou (latência negativa, da
+      // compensação manual, acrescenta silêncio)
+      skip: (count ? (bar * fpb).round() : 0) + (latency.isFinite ? (latency * rate).round() : 0),
+      metronomeTemp: count && !d.metronome,
+    );
+    _rec = r;
+    recording = true;
+    countingIn = count;
+    _countMetronome = r.metronomeTemp;
+    if (zone != null) {
+      _loopOverride = (true, start, zone + bar);
+      // a automação do master vale para o clique, e lá no fim de tudo ela pode estar num fade que o
+      // calaria: fica de fora até meio tempo antes da volta
+      _autoSuppressed = true;
+    }
+    void captureOn() {
+      _engine.setCapture(true);
+      r.captureOn = true;
+    }
 
-  /// Troca a tomada ativa de um clipe gravado em loop.
-  void switchTake(String clipId, String sampleHash) => throw UnimplementedError();
+    try {
+      // parado, a captura liga antes do play: ela só junta com o transporte andando, e assim o
+      // primeiro quadro é o do play mesmo que ele caia num bloco de áudio depois dela. Tocando, liga
+      // depois do salto (senão levaria um pedaço de antes dele).
+      if (!wasPlaying) captureOn();
+      _sync();
+      // `rec_notes_start` também vai pela captura (a ponte liga as duas juntas); mandar aqui não
+      // custa nada e não depende dela. Por último: um motor que não a conheça para depois do play.
+      _engine.calls([
+        ['seek', from],
+        ['play'],
+        ['rec_notes_start'],
+      ]);
+      if (wasPlaying) captureOn();
+    } catch (e) {
+      // motor sem captura: não finge que grava
+      _rec = null;
+      recording = false;
+      countingIn = false;
+      _restoreCountIn();
+      _engine.calls([
+        ['stop'],
+        ['seek', start],
+      ]);
+      playing.value = false;
+      beat.value = start;
+      error = e is UnimplementedError ? 'A gravação ainda não funciona neste aparelho.' : 'Não deu para começar a gravação: $e';
+      notifyListeners();
+      return;
+    }
+    playing.value = true;
+    beat.value = zone != null ? start : from;
+    notifyListeners();
+  }
 
-  /// Renderiza fora de tempo real (mais rápido que tocando) e salva os arquivos.
-  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress}) => throw UnimplementedError();
+  /// Compassos até a região da contagem fora do lugar: longe o bastante para nenhuma gravação
+  /// chegar lá, perto o bastante para a posição em quadros ser exata no motor (f64).
+  static const _countZoneBars = 1 << 16;
 
-  /// Congela a faixa em áudio: renderiza ela (com instrumento e efeitos) numa faixa de áudio nova
-  /// logo abaixo e muda a original.
-  Future<void> bounceTrack(int track, {void Function(double progress)? onProgress}) => throw UnimplementedError();
+  /// Estado do motor durante a contagem: meio tempo antes do fim, o que ela trocou volta; no fim
+  /// (o cursor chegou, ou a contagem fora do lugar deu a volta), a gravação está valendo.
+  void _countInState(_Recording r, EngineState s) {
+    // estado ainda de antes do play (a caminho quando a gravação começou)
+    if (!s.playing) return;
+    final zone = r.zone;
+    final done = zone != null ? s.beat < zone - 1e-6 : s.beat >= r.start - 1e-6;
+    final end = zone != null ? zone + r.countBeats : r.start;
+    if (done || s.beat >= end - 0.5) _endPreRoll(r);
+    if (!done) return;
+    countingIn = false;
+    if (zone != null) {
+      _loopOverride = null;
+      _sync();
+    }
+    notifyListeners();
+  }
+
+  /// Meio tempo antes do primeiro tempo da gravação: o metrônomo provisório cala (não clica no
+  /// primeiro tempo) e a automação volta a tempo da volta.
+  void _endPreRoll(_Recording r) {
+    if (r.preRollDone) return;
+    r.preRollDone = true;
+    if (!_countMetronome && !_autoSuppressed) return;
+    _countMetronome = false;
+    _autoSuppressed = false;
+    _sync();
+  }
+
+  /// Desfaz as trocas da contagem (loop, metrônomo e automação voltam ao documento).
+  void _restoreCountIn() {
+    if (_loopOverride == null && !_countMetronome && !_autoSuppressed) return;
+    _loopOverride = null;
+    _countMetronome = false;
+    _autoSuppressed = false;
+    _sync();
+  }
+
+  /// A posição do motor agora: a do último estado mais o que andou desde ele (tocando), com a
+  /// volta do loop.
+  double _estimatedBeat() {
+    final b = beat.value;
+    if (!playing.value || !_stateClock.isRunning) return math.max(0.0, b);
+    // estados parados de chegar (aba em segundo plano) não viram um salto grande
+    final secs = math.min(_stateClock.elapsedMicroseconds / 1e6, 0.25);
+    var e = b + secs * doc.bpm / 60;
+    final ls = doc.loopStart, le = doc.loopEnd;
+    if (doc.loopOn && le > ls && b < le && e >= le) e = ls + (e - le) % (le - ls);
+    return math.max(0.0, e);
+  }
+
+  Future<void> _finishRecording() async {
+    final r = _rec;
+    if (r == null || !recording || _recBusy) return;
+    _recBusy = true;
+    final cancel = countingIn;
+    r
+      ..stopBeat = _estimatedBeat()
+      ..elapsed ??= r.clock.elapsed;
+    recording = false;
+    countingIn = false;
+    void stopTransport() {
+      _engine.calls([
+        ['stop'],
+      ]);
+      playing.value = false;
+      _restoreCountIn();
+    }
+
+    try {
+      if (cancel) {
+        // parou na contagem: nada foi gravado
+        stopTransport();
+        r.closed = true;
+        _captureOff(null);
+        _backTo(r.start);
+        return;
+      }
+      status = 'Salvando a gravação…';
+      notifyListeners();
+      // a entrada chega atrasada: o transporte (e a captura, que só junta com ele andando) segue o
+      // tanto da latência, para o arquivo ter o que se tocou até o stop
+      if (r.audio && r.latency > 0) await Future<void>.delayed(Duration(milliseconds: (r.latency * 1000).ceil() + 20));
+      // a tela fechou no meio: o dispose já parou tudo
+      if (_disposed) return;
+      stopTransport();
+      final wait = Completer<Float32List>();
+      _captureOff(wait);
+      // as notas vêm depois do último bloco da entrada (a mesma porta, em ordem): chegaram, o
+      // áudio está inteiro
+      Float32List? notes;
+      try {
+        notes = await wait.future.timeout(Duration(milliseconds: r.midiIds.isEmpty ? 400 : 2000));
+      } on TimeoutException {
+        notes = null;
+      }
+      r.closed = true;
+      if (_disposed) return;
+      _backTo(r.start);
+      await _commitRecording(r, notes);
+    } finally {
+      if (identical(_rec, r)) _rec = null;
+      _recBusy = false;
+      status = null;
+      if (!_disposed) {
+        _releaseInputIfIdle();
+        notifyListeners();
+      }
+    }
+  }
+
+  /// O cursor volta ao começo da gravação (para ouvir o que entrou), e a janela vai junto se ele
+  /// ficou fora dela.
+  void _backTo(double b) {
+    _engine.calls([
+      ['seek', b],
+    ]);
+    beat.value = b;
+    if (b < scrollBeat || b > scrollBeat + viewWidth / pxPerBeat) scrollBeat = math.max(0, b - 2);
+  }
+
+  /// Desliga a captura no motor; [wait] recebe as notas que ele manda de volta.
+  void _captureOff(Completer<Float32List>? wait) {
+    final r = _rec;
+    if (r == null || !r.captureOn) {
+      wait?.complete(Float32List(0));
+      return;
+    }
+    r.captureOn = false;
+    _notesWaiting.add(wait);
+    try {
+      _engine.setCapture(false);
+    } catch (_) {
+      _notesWaiting.removeLast();
+      if (wait != null && !wait.isCompleted) wait.complete(Float32List(0));
+    }
+  }
+
+  void _onRecordedNotes(Float32List data) {
+    if (_notesWaiting.isEmpty) return;
+    final c = _notesWaiting.removeFirst();
+    if (c != null && !c.isCompleted) c.complete(data);
+  }
+
+  void _onRecordBlock(Float32List left, Float32List right) {
+    final r = _rec;
+    if (r == null || r.closed) return;
+    // entrada mono que venha sem o lado direito: os dois lados iguais
+    final rr = right.isEmpty ? left : right;
+    final n = math.min(left.length, rr.length);
+    if (n == 0) return;
+    r.left.add(n == left.length ? left : Float32List.sublistView(left, 0, n));
+    r.right.add(n == rr.length ? rr : Float32List.sublistView(rr, 0, n));
+    r.frames += n;
+  }
+
+  /// Nos testes: quanto tempo a gravação atual durou (em vez do relógio).
+  @visibleForTesting
+  void debugRecordingElapsed(Duration d) => _rec?.elapsed = d;
+
+  /// Os clipes da gravação: o áudio vira sample (sha-256 do WAV 32f, guardado e registrado como no
+  /// importar) nas faixas de áudio armadas; as notas, clipe MIDI nas de instrumento. Um passo só
+  /// do desfazer.
+  Future<void> _commitRecording(_Recording r, Float32List? notesData) async {
+    final plans = r.audio ? _planAudio(r) : const <_ClipPlan>[];
+    final name = _nextRecordingName();
+    final hashes = <List<String>>[];
+    final infos = <String, SampleInfo>{};
+    for (var p = 0; p < plans.length; p++) {
+      final plan = plans[p];
+      final list = <String>[];
+      for (var k = 0; k < plan.pieces.length; k++) {
+        final piece = plan.pieces[k];
+        final len = piece.pad + piece.to - piece.from;
+        final l = Float32List(len), rr = Float32List(len);
+        gatherFrames(r.left, piece.from + r.skip, piece.to + r.skip, l, piece.pad);
+        gatherFrames(r.right, piece.from + r.skip, piece.to + r.skip, rr, piece.pad);
+        final channels = _inputChannels(l, rr);
+        final bytes = encodeWav(channels, r.rate.round(), ExportFormat.wav32f);
+        final hash = sha256.convert(bytes).toString();
+        if (!waveforms.containsKey(hash)) {
+          await _store.put('sample:$hash', bytes);
+          if (_disposed) return;
+          _register(hash, DecodedAudio(channels, r.rate));
+        }
+        final label = plan.pieces.length > 1 ? '$name - tomada ${k + 1}' : name;
+        // o mesmo áudio já no projeto (gravação idêntica, silêncio) fica com o nome que tinha
+        infos[hash] = doc.samples[hash] ?? SampleInfo('$label.wav', len / r.rate);
+        list.add(hash);
+      }
+      hashes.add(list);
+    }
+    final (notes, wrapped) = _recordedNotes(r, notesData);
+    if (plans.isEmpty && notes.isEmpty) {
+      if (r.audio && r.frames == 0) {
+        error = 'A entrada não mandou áudio durante a gravação: confira o microfone e a entrada escolhida.';
+      } else if (!r.audio && r.midiIds.isNotEmpty) {
+        error = 'Nenhuma nota foi tocada na faixa armada durante a gravação.';
+      }
+      return;
+    }
+    checkpoint();
+    mutate((d) {
+      d.samples.addAll(infos);
+      for (final id in r.audioIds) {
+        final t = d.tracks.where((t) => t.id == id && t.kind == TrackKind.audio).firstOrNull;
+        if (t == null) continue;
+        for (var p = 0; p < plans.length; p++) {
+          final takes = hashes[p];
+          final clip = AudioClip(
+            id: newId(),
+            sample: takes.last,
+            start: plans[p].start,
+            length: plans[p].seconds,
+            takes: takes.length > 1 ? List.of(takes) : null,
+          );
+          t.clips.add(clip);
+          // gravar por cima substitui o que estava embaixo, como nos DAWs
+          placeOnTop(clip.id);
+        }
+      }
+      for (final e in notes.entries) {
+        final t = d.tracks.where((t) => t.id == e.key && t.kind.isInstrument).firstOrNull;
+        if (t != null) _placeRecordedNotes(t, e.value, r, wrapped);
+      }
+    });
+  }
+
+  /// Onde cada pedaço de áudio da gravação vai. Sem volta de loop, um clipe do cursor até onde
+  /// parou. Com voltas, cada passada é uma tomada de um clipe que cobre o loop (a ativa é a
+  /// última); a primeira começa no cursor (silêncio antes, se ele estava no meio do loop) e o que
+  /// veio antes do loop, se começou antes dele, fica num clipe comum.
+  static List<_ClipPlan> _planAudio(_Recording r) {
+    final frames = r.frames - r.skip;
+    // menos de 50 ms depois da latência: um toque no gravar e parar, não uma gravação
+    if (frames < r.rate * 0.05) return const [];
+    final fpb = r.rate * 60 / r.bpm;
+    final passes = recordingPasses(start: r.start, frames: frames, bpm: r.bpm, rate: r.rate, loopOn: r.loopOn, loopStart: r.loopStart, loopEnd: r.loopEnd);
+    int endOf(int p) => p + 1 < passes.length ? passes[p + 1].frame : frames;
+    var kept = passes.length;
+    // a última passada com menos de uma batida é o passo além da volta de quem parou
+    if (kept > 1 && frames - passes.last.frame < fpb) kept--;
+    if (kept == 1) {
+      final end = endOf(0);
+      return [
+        (start: r.start, seconds: end / r.rate, pieces: [(from: 0, to: end, pad: 0)]),
+      ];
+    }
+    final plans = <_ClipPlan>[];
+    final _Piece first;
+    if (r.start < r.loopStart) {
+      final head = ((r.loopStart - r.start) * fpb).round();
+      plans.add((start: r.start, seconds: head / r.rate, pieces: [(from: 0, to: head, pad: 0)]));
+      first = (from: head, to: endOf(0), pad: 0);
+    } else {
+      first = (from: 0, to: endOf(0), pad: ((r.start - r.loopStart) * fpb).round());
+    }
+    plans.add((
+      start: r.loopStart,
+      seconds: (r.loopEnd - r.loopStart) * 60 / r.bpm,
+      pieces: [first, for (var p = 1; p < kept; p++) (from: passes[p].frame, to: endOf(p), pad: 0)],
+    ));
+    return plans;
+  }
+
+  /// A entrada vira um canal só quando é mono de fato: os dois lados iguais (o navegador duplica o
+  /// microfone mono) ou um deles em silêncio absoluto (microfone numa entrada de uma interface
+  /// estéreo, que soaria só de um lado).
+  static List<Float32List> _inputChannels(Float32List l, Float32List r) {
+    var same = true, lSilent = true, rSilent = true;
+    for (var i = 0; i < l.length; i++) {
+      final a = l[i], b = r[i];
+      if (a != b) same = false;
+      if (a != 0) lSilent = false;
+      if (b != 0) rSilent = false;
+      if (!same && !lSilent && !rSilent) return [l, r];
+    }
+    return same || rSilent ? [l] : [r];
+  }
+
+  /// "Gravação N" com o próximo N dos samples do projeto.
+  String _nextRecordingName() {
+    var n = 0;
+    final re = RegExp(r'^Gravação (\d+)');
+    for (final s in doc.samples.values) {
+      final m = re.firstMatch(s.name);
+      if (m != null) n = math.max(n, int.parse(m.group(1)!));
+    }
+    return 'Gravação ${n + 1}';
+  }
+
+  /// As notas gravadas por faixa armada, em batidas absolutas, e se a gravação deu a volta no loop.
+  ///
+  /// O motor manda grupos de 5 (faixa, altura, início, fim, velocidade) com a posição do
+  /// transporte. O que se tocou na contagem fica de fora, menos a nota adiantada (até um quarto de
+  /// tempo antes do primeiro, que entra nele) e a que ainda soava no primeiro tempo (começa nele).
+  /// A nota segurada na volta do loop vira duas: até o fim dele e do começo até a soltura.
+  (Map<String, List<_RecNote>>, bool) _recordedNotes(_Recording r, Float32List? data) {
+    final out = <String, List<_RecNote>>{};
+    final ls = r.loopStart, le = r.loopEnd;
+    final raw = <(int, int, double, double, double)>[];
+    if (data != null) {
+      for (var i = 0; i + 4 < data.length; i += 5) {
+        final s = data[i + 2].toDouble(), e = data[i + 3].toDouble();
+        if (!s.isFinite || !e.isFinite) continue;
+        raw.add((data[i].round(), data[i + 1].round(), s, e, data[i + 4].toDouble()));
+      }
+    }
+    final zone = r.zone;
+    // a volta do loop na contagem fora do lugar é a da contagem, não uma passada
+    final heldAcross = raw.any((n) => n.$4 < n.$3 - 1e-9 && (zone == null || n.$3 < zone - 1e-9));
+    final wrapped = r.loopOn && r.start < le && (r.recordedBeats >= le - r.start || heldAcross);
+    if (r.midiIds.isEmpty) return (out, wrapped);
+    const early = 0.25, minLength = 1 / 64;
+    void add(String id, int pitch, double s, double e, double v) {
+      if (e - s < minLength) e = s + minLength;
+      out.putIfAbsent(id, () => []).add((pitch: pitch, start: math.max(0.0, s), end: e, velocity: v.isFinite ? v.clamp(0.0, 1.0).toDouble() : 0.8));
+    }
+
+    for (final (ti, pitch, s0, e0, v) in raw) {
+      // velocidade zero é soltura no MIDI: não é nota
+      if (ti < 0 || ti >= r.trackIds.length || pitch < 0 || pitch > 127 || !(v > 0)) continue;
+      final id = r.trackIds[ti];
+      if (!r.midiIds.contains(id)) continue;
+      var s = s0, e = e0;
+      var counted = false;
+      if (zone != null) {
+        // tocada na contagem, lá longe: vem para antes do cursor
+        if (s >= zone - 1e-9) {
+          s = s - (zone + r.countBeats) + r.start;
+          counted = true;
+        }
+        if (e >= zone - 1e-9) e = e - (zone + r.countBeats) + r.start;
+      } else if (r.countBeats > 0 && s < r.start - 1e-9 && !(wrapped && s >= ls - 1e-9)) {
+        counted = true;
+      }
+      if (!counted && wrapped && e < s - 1e-9) {
+        add(id, pitch, s, le, v);
+        if (e > ls + minLength) add(id, pitch, ls, e, v);
+        continue;
+      }
+      if (counted) {
+        if (s >= r.start - early) {
+          final len = e - s;
+          s = r.start;
+          e = s + len;
+        } else if (e > r.start + minLength) {
+          s = r.start;
+        } else {
+          continue;
+        }
+      }
+      add(id, pitch, s, e, v);
+    }
+    return (out, wrapped);
+  }
+
+  /// As notas gravadas numa faixa de instrumento: vão para o clipe que já estava sob o cursor
+  /// (overdub, esticando o clipe em compassos inteiros se passarem dele) ou para um clipe novo que
+  /// cobre os compassos gravados.
+  void _placeRecordedNotes(DawTrack t, List<_RecNote> notes, _Recording r, bool wrapped) {
+    final bar = doc.beatsPerBar.toDouble();
+    double floorBar(double b) => math.max(0.0, (b / bar + 1e-9).floor() * bar);
+    double ceilBar(double b) => (b / bar - 1e-9).ceil() * bar;
+    final minStart = notes.map((n) => n.start).reduce(math.min);
+    final maxEnd = notes.map((n) => n.end).reduce(math.max);
+    MidiNote rel(_RecNote n, double origin) => MidiNote(pitch: n.pitch, start: n.start - origin, length: n.end - n.start, velocity: n.velocity);
+    final target = t.midi.where((c) => c.start <= r.start + 1e-9 && c.end > r.start + 1e-9).firstOrNull;
+    if (target != null) {
+      var start = target.start, end = target.end;
+      if (minStart < start - 1e-9) start = floorBar(minStart);
+      if (maxEnd > end + 1e-9) end = ceilBar(maxEnd);
+      final grew = start != target.start || end != target.end;
+      if (start != target.start) {
+        final shift = target.start - start;
+        for (final n in target.notes) {
+          n.start += shift;
+        }
+        target.start = start;
+      }
+      target
+        ..length = end - start
+        ..notes.addAll([for (final n in notes) rel(n, start)]);
+      if (grew) placeOnTop(target.id);
+      return;
+    }
+    final from = wrapped ? math.min(r.start, r.loopStart) : r.start;
+    final to = wrapped ? r.loopEnd : math.max(r.stopBeat, maxEnd);
+    final start = floorBar(math.min(from, minStart));
+    final end = math.max(ceilBar(math.max(to, maxEnd)), start + bar);
+    final clip = MidiClip(id: newId(), name: t.name, start: start, length: end - start, notes: [for (final n in notes) rel(n, start)]);
+    t.midi.add(clip);
+    placeOnTop(clip.id);
+  }
+
+  /// Troca a tomada ativa de um clipe gravado em loop (desfazível).
+  void switchTake(String clipId, String sampleHash) {
+    final f = _findClip(clipId);
+    if (f == null) return;
+    final clip = f.$2;
+    if (clip.sample == sampleHash || !clip.takes.contains(sampleHash)) return;
+    edit((_) => clip.sample = sampleHash);
+  }
+
+  /// Não deixa [what] no meio de uma gravação (avisa em [error]).
+  bool _blockedByRecording(String what) {
+    if (!recording) return false;
+    error = 'Pare a gravação para $what.';
+    notifyListeners();
+    return true;
+  }
+
+  /// Gravando ou renderizando, outro render espera (avisa em [error]).
+  bool _busyFor(String what) {
+    final why = recording || _recBusy
+        ? 'Pare a gravação antes de $what.'
+        : _rendering
+        ? 'Espere o render em andamento terminar antes de $what.'
+        : null;
+    if (why == null) return false;
+    error = why;
+    notifyListeners();
+    return true;
+  }
+
+  /// Memória de áudio (float) por render: projeto longo com muitos stems vai em vários renders,
+  /// cada um com as saídas que cabem, em vez de todas de uma vez.
+  static const _renderBudget = 384 * 1024 * 1024;
+
+  /// Renderiza fora de tempo real (mais rápido que tocando) e salva os arquivos: a mixagem
+  /// (`<projeto>.wav`, pós-limitador) e, com stems, uma por faixa (`<projeto> - <faixa>.wav`,
+  /// pós-fader; as que não soam nada no trecho ficam de fora). Normalizar leva o pico de cada
+  /// arquivo a −1 dBFS. Falha ou aviso ficam em [error].
+  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress}) async {
+    if (!ready || _busyFor('exportar')) return;
+    final d = doc;
+    final loop = options.range == ExportRange.loop;
+    final from = loop ? d.loopStart : 0.0;
+    final to = loop ? d.loopEnd : d.contentEnd;
+    if (!(to > from + 1e-9)) {
+      error = loop ? 'A região do loop está vazia: marque o loop antes de exportar.' : 'O projeto está vazio: não há nada para exportar.';
+      notifyListeners();
+      return;
+    }
+    final rate = (options.sampleRate ?? engineRate).toDouble();
+    final tail = options.tail.isFinite ? options.tail.clamp(0.0, 60.0).toDouble() : 0.0;
+    final outputs = [
+      -1,
+      if (options.stems)
+        for (var i = 0; i < d.tracks.length; i++) i,
+    ];
+    final base = _fileName(project.name, 'jopendaw');
+    final names = <int, String>{-1: '$base.wav'};
+    final taken = {'$base.wav'.toLowerCase()};
+    for (final i in outputs.skip(1)) {
+      final stem = _fileName(d.tracks[i].name, 'Faixa ${i + 1}');
+      var name = '$base - $stem.wav';
+      for (var k = 2; taken.contains(name.toLowerCase()); k++) {
+        name = '$base - $stem ($k).wav';
+      }
+      taken.add(name.toLowerCase());
+      names[i] = name;
+    }
+    final used = _usedHashes();
+    final lost = used.where((h) => !_sampleIds.containsKey(h)).length;
+    final calls = _fullSyncCalls();
+    final samples = _samplesFor(used);
+    _rendering = true;
+    status = 'Exportando…';
+    notifyListeners();
+    try {
+      final perOutput = ((to - from) * 60 / d.bpm + tail) * rate * 2 * 4;
+      final size = math.max(1, (_renderBudget / perOutput).floor());
+      final batches = [for (var i = 0; i < outputs.length; i += size) outputs.sublist(i, math.min(outputs.length, i + size))];
+      for (var b = 0; b < batches.length; b++) {
+        final batch = batches[b];
+        final result = await _engine.renderOffline(
+          calls: calls,
+          samples: samples,
+          fromBeat: from,
+          toBeat: to,
+          tailSeconds: tail,
+          outputs: batch,
+          rate: rate,
+          onProgress: onProgress == null ? null : (p) => onProgress(((b + (p.isFinite ? p.clamp(0.0, 1.0) : 0.0)) / batches.length) * 0.95),
+        );
+        if (_disposed) return;
+        for (var k = 0; k < batch.length && k < result.length; k++) {
+          final channels = result[k];
+          if (channels.isEmpty) continue;
+          final peak = _peak(channels);
+          // stem que não soa (vazia, muda, calada pelo solo): um arquivo de silêncio não serve
+          if (batch[k] >= 0 && peak == 0) continue;
+          if (options.normalize && peak > 0) _scale(channels, dbToGain(-1) / peak);
+          final bytes = encodeWav(channels, rate.round(), options.format);
+          await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
+          if (_disposed) return;
+        }
+      }
+      onProgress?.call(1);
+      if (lost > 0) error = 'Exportado sem ${lost == 1 ? 'um áudio que não está' : '$lost áudios que não estão'} neste aparelho.';
+    } catch (e) {
+      if (!_disposed) error = 'A exportação não terminou: ${_renderError(e)}';
+    } finally {
+      _rendering = false;
+      status = null;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  /// Cauda do congelamento (s): o que soar depois dela está abaixo de −100 dB e é aparado.
+  static const _bounceTail = 8.0;
+
+  /// Congela a faixa em áudio: renderiza ela (instrumento, clipes, efeitos e a automação deles)
+  /// do começo ao fim do conteúdo dela, mais a cauda, numa faixa de áudio nova logo abaixo, e muda
+  /// a original. Um passo só do desfazer.
+  ///
+  /// O render pega a saída da faixa depois dos inserts com o fader em 0 dB e o pan no centro (sem
+  /// a automação deles, sem mudo e sem solo em nenhuma faixa): volume, pan, a automação deles, a
+  /// saída e os envios passam para a faixa nova, que soa na mixagem como a original soava e segue
+  /// com o fader mexível. Os envios pré-fader saem da original (eles seguiriam soando com ela
+  /// muda, e dobrariam); os pós-fader ficam nela também (calam com o mudo). O sidechain que a
+  /// original alimenta continua (a chave é pós-inserts, antes do mudo).
+  Future<void> bounceTrack(int track, {void Function(double progress)? onProgress}) async {
+    if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('congelar')) return;
+    final src = doc.tracks[track];
+    final id = src.id, label = src.name;
+    final (from, to) = _bounceRange(src);
+    if (!(to > from + 1e-9)) {
+      error = 'A faixa "$label" está vazia: nada para congelar.';
+      notifyListeners();
+      return;
+    }
+    final rate = engineRate;
+    final calls = _callsFor(_bounceDoc(track));
+    final samples = _samplesFor(_usedHashes());
+    _rendering = true;
+    status = 'Congelando $label…';
+    notifyListeners();
+    try {
+      final result = await _engine.renderOffline(
+        calls: calls,
+        samples: samples,
+        fromBeat: from,
+        toBeat: to,
+        tailSeconds: _bounceTail,
+        outputs: [track],
+        rate: rate,
+        onProgress: onProgress == null ? null : (p) => onProgress((p.isFinite ? p.clamp(0.0, 1.0) : 0.0) * 0.95),
+      );
+      if (_disposed) return;
+      var channels = result.isEmpty ? const <Float32List>[] : result.first;
+      if (channels.isEmpty || _peak(channels) == 0) {
+        error = 'A faixa "$label" não soou nada: nada para congelar.';
+        return;
+      }
+      channels = _trimTail(channels, ((to - from) * 60 / doc.bpm * rate).ceil());
+      if (channels.length == 2 && _same(channels[0], channels[1])) channels = [channels[0]];
+      final bytes = encodeWav(channels, rate.round(), ExportFormat.wav32f);
+      final hash = sha256.convert(bytes).toString();
+      if (!waveforms.containsKey(hash)) {
+        await _store.put('sample:$hash', bytes);
+        if (_disposed) return;
+        _register(hash, DecodedAudio(channels, rate));
+      }
+      final i = doc.tracks.indexWhere((t) => t.id == id);
+      if (i < 0) {
+        error = 'A faixa "$label" foi apagada enquanto congelava.';
+        return;
+      }
+      final seconds = channels.first.length / rate;
+      checkpoint();
+      mutate((d) {
+        final src = d.tracks[i];
+        const moves = {AutoKind.volume, AutoKind.pan, AutoKind.send};
+        final frozen = DawTrack(
+          id: newId(),
+          name: '${src.name} (áudio)',
+          color: src.color,
+          gain: src.gain,
+          pan: src.pan,
+          // já muda, a original não soava: a congelada também não
+          mute: src.mute,
+          solo: src.solo,
+          output: src.output,
+          sends: [for (final s in src.sends) Send(target: s.target, level: s.level, pre: s.pre)],
+          lanes: [
+            for (final l in src.lanes)
+              if (moves.contains(l.target.kind))
+                AutoLane(
+                  id: newId(),
+                  target: l.target,
+                  open: l.open,
+                  points: [for (final p in l.points) AutoPoint(beat: p.beat, value: p.value, curve: p.curve)],
+                ),
+          ],
+          clips: [AudioClip(id: newId(), sample: hash, start: from, length: seconds)],
+        );
+        d.samples[hash] = SampleInfo('${src.name} (congelada).wav', seconds);
+        final pre = {
+          for (final s in src.sends)
+            if (s.pre) s.target,
+        };
+        src
+          ..mute = true
+          ..sends.removeWhere((s) => s.pre)
+          ..lanes.removeWhere((l) => l.target.kind == AutoKind.send && pre.contains(l.target.ref));
+        d.tracks.insert(i + 1, frozen);
+        // as faixas depois da nova desceram uma posição: sidechains acompanham
+        _remapSidechains((old) => old > i ? old + 1 : old);
+        _select(i + 1);
+        selectedClip = frozen.clips.first.id;
+      });
+      onProgress?.call(1);
+    } catch (e) {
+      if (!_disposed) error = 'O congelamento não terminou: ${_renderError(e)}';
+    } finally {
+      _rendering = false;
+      status = null;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  /// De onde até onde a faixa tem conteúdo (batidas). Barramento soa o que recebe: a música toda.
+  (double, double) _bounceRange(DawTrack t) {
+    if (t.kind == TrackKind.bus) return (0.0, doc.contentEnd);
+    var from = double.infinity, to = 0.0;
+    if (t.kind == TrackKind.audio) {
+      for (final c in t.clips) {
+        from = math.min(from, c.start);
+        to = math.max(to, c.end(doc.bpm));
+      }
+    } else {
+      for (final c in t.midi) {
+        from = math.min(from, c.start);
+        to = math.max(to, c.end);
+      }
+    }
+    return from.isFinite ? (math.max(0.0, from), to) : (0.0, 0.0);
+  }
+
+  /// O documento que o congelamento renderiza: a faixa com fader em 0 dB, pan no centro, sem mudo
+  /// e sem a automação de volume e pan; nenhuma faixa em solo (o solo de outra calaria esta).
+  DawDoc _bounceDoc(int track) {
+    final copy = DawDoc.fromJson(jsonDecode(jsonEncode(doc.toJson())));
+    for (final t in copy.tracks) {
+      t.solo = false;
+    }
+    copy.tracks[track]
+      ..gain = 1
+      ..pan = 0
+      ..mute = false
+      ..lanes.removeWhere((l) => l.target.kind == AutoKind.volume || l.target.kind == AutoKind.pan);
+    return copy;
+  }
+
+  /// As chamadas completas de outro documento. As funções que resolvem roteamento e automação
+  /// leem [doc]: ele é trocado só durante a montagem, que é síncrona.
+  List<List<Object>> _callsFor(DawDoc other) {
+    final live = doc;
+    doc = other;
+    try {
+      return _fullSyncCalls();
+    } finally {
+      doc = live;
+    }
+  }
+
+  /// Os áudios que o documento toca (clipes das faixas de áudio e o áudio dos samplers).
+  Set<String> _usedHashes() => {
+    for (final t in doc.tracks) ...[
+      if (t.kind == TrackKind.audio)
+        for (final c in t.clips) c.sample,
+      if (t.kind == TrackKind.sampler && t.sample != null) t.sample!,
+    ],
+  };
+
+  /// Os áudios decodificados pelo id do motor, para o render fora de tempo real.
+  Map<int, DecodedAudio> _samplesFor(Set<String> hashes) {
+    final out = <int, DecodedAudio>{};
+    for (final h in hashes) {
+      final id = _sampleIds[h];
+      final audio = id == null ? null : _decoded[id];
+      if (audio != null) out[id!] = audio;
+    }
+    return out;
+  }
+
+  static String _renderError(Object e) => switch (e) {
+    UnimplementedError() => 'o render fora de tempo real ainda não funciona neste aparelho.',
+    StateError(:final message) => message,
+    UnsupportedError(:final message) => message ?? '$e',
+    _ => '$e',
+  };
+
+  /// Nome de arquivo sem os caracteres que os sistemas recusam; vazio vira [fallback].
+  static String _fileName(String name, String fallback) {
+    var s = name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').replaceAll(RegExp(r'\s+'), ' ').trim();
+    s = s.replaceAll(RegExp(r'[. ]+$'), '');
+    if (s.length > 80) s = s.substring(0, 80).trim();
+    return s.isEmpty ? fallback : s;
+  }
+
+  static double _peak(List<Float32List> channels) {
+    var peak = 0.0;
+    for (final c in channels) {
+      for (final v in c) {
+        final a = v.abs();
+        if (a > peak && a.isFinite) peak = a;
+      }
+    }
+    return peak;
+  }
+
+  static void _scale(List<Float32List> channels, double gain) {
+    for (final c in channels) {
+      for (var i = 0; i < c.length; i++) {
+        c[i] *= gain;
+      }
+    }
+  }
+
+  static bool _same(Float32List a, Float32List b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Apara o silêncio (abaixo de −100 dB) depois de [keep] quadros.
+  static List<Float32List> _trimTail(List<Float32List> channels, int keep) {
+    final n = channels.map((c) => c.length).reduce(math.min);
+    var end = math.min(keep, n);
+    for (var i = n - 1; i >= end; i--) {
+      if (channels.any((c) => c[i].abs() > 1e-5)) {
+        end = i + 1;
+        break;
+      }
+    }
+    return [for (final c in channels) end == c.length ? c : (Float32List(end)..setRange(0, end, c))];
+  }
 
   // ------------------------------------------------------------------ visão
 
