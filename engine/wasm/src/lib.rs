@@ -285,6 +285,92 @@ pub unsafe extern "C" fn analyzer(out: *mut f32, n: u32) -> u32 {
     engine().analyzer(out) as u32
 }
 
+// ------------------------------------------------------------------ gravação e render
+
+/// Entrada de áudio do próximo bloco: `n` quadros (até 4096) nas memórias de `alloc`; `right` nulo
+/// é mono (vale nos dois lados). Vale só para o `process` seguinte: bloco sem entrada, o worklet
+/// não chama e o motor não soma nada.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn set_input(left: *const f32, right: *const f32, n: usize) {
+    if left.is_null() {
+        return;
+    }
+    let l = unsafe { std::slice::from_raw_parts(left, n) };
+    let r = if right.is_null() { None } else { Some(unsafe { std::slice::from_raw_parts(right, n) }) };
+    engine().set_input(l, r);
+}
+
+/// Monitoramento da entrada na faixa `track` (1 liga): a entrada soma no buffer dela antes dos
+/// inserts e passa pela cadeia, pelo fader e pelo roteamento. Só faixas de áudio.
+#[unsafe(no_mangle)]
+pub extern "C" fn input_monitor(track: i32, on: u32) {
+    if track >= 0 {
+        engine().set_monitor(track as usize, on != 0);
+    }
+}
+
+/// Começa a registrar (do zero) as notas ao vivo com a batida exata do quadro em que foram
+/// aplicadas; só entram as tocadas com o transporte andando.
+#[unsafe(no_mangle)]
+pub extern "C" fn rec_notes_start() {
+    engine().rec_notes_start();
+}
+
+/// Para de registrar; as teclas ainda seguradas terminam na posição de agora.
+#[unsafe(no_mangle)]
+pub extern "C" fn rec_notes_stop() {
+    engine().rec_notes_stop();
+}
+
+/// Escreve em `out` (memória de `alloc`, `max` floats) as notas registradas, em grupos de 5
+/// floats: faixa, altura, início e fim em batidas, velocidade. Nota ainda segurada termina na
+/// posição atual. As escritas saem do registro (com espaço para todas, ele fica vazio; as que não
+/// couberam ficam para a próxima chamada). Devolve quantos floats escreveu.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rec_notes(out: *mut f32, max: usize) -> usize {
+    if out.is_null() {
+        return 0;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(out, max) };
+    engine().rec_notes(out)
+}
+
+/// Render: esquece as capturas. O próximo `process` com capturas prepara o render (transições
+/// terminadas no silêncio, latência do limitador compensada): chame antes do `seek`/`play` dele.
+#[unsafe(no_mangle)]
+pub extern "C" fn capture_clear() {
+    engine().capture_clear();
+}
+
+/// Render: passa a copiar, a cada bloco, a saída pós-fader da faixa `track` (a posição dos
+/// medidores) ou, com −1, a do master depois do limitador. Devolve o índice para `captured`, ou
+/// −1 (até 64 capturas; faixa menor que −1). Com captura, blocos de até 4096 quadros.
+#[unsafe(no_mangle)]
+pub extern "C" fn capture_add(track: i32) -> i32 {
+    engine().capture_add(track)
+}
+
+/// Render: copia para `left`/`right` (memórias de `alloc`, `n` quadros) o que a captura `index`
+/// soltou no último bloco processado; o que passar do bloco sai zerado. Devolve quantos quadros
+/// eram do bloco.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn captured(index: i32, left: *mut f32, right: *mut f32, n: usize) -> usize {
+    if left.is_null() || right.is_null() {
+        return 0;
+    }
+    // índice negativo é inválido: silêncio, como um além do fim
+    let index = usize::try_from(index).unwrap_or(usize::MAX);
+    let l = unsafe { std::slice::from_raw_parts_mut(left, n) };
+    if left == right {
+        // a mesma memória para os dois lados não pode virar duas referências mutáveis: vai o
+        // esquerdo
+        return engine().captured(index, l, &mut []);
+    }
+    let r = unsafe { std::slice::from_raw_parts_mut(right, n) };
+    engine().captured(index, l, r)
+}
+
+/// Posição em batidas do próximo quadro que sai (no render, já descontado o adiantamento).
 #[unsafe(no_mangle)]
 pub extern "C" fn beat() -> f64 {
     engine().beat()

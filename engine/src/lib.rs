@@ -40,6 +40,28 @@
 //! passos de [`AUTO_STEP`] quadros e cada passo avalia as lanes e aplica: volume, pan, parâmetro
 //! do instrumento, parâmetro de efeito, nível de envio. O valor estático que o app manda fica
 //! guardado; parado (ou quando a lane some), vale ele de novo.
+//!
+//! # Gravação
+//!
+//! O hospedeiro entrega a entrada de áudio de cada bloco ([`Engine::set_input`]) antes do
+//! `process`; faixas de áudio monitorando ([`Engine::set_monitor`]) somam essa entrada no buffer
+//! delas antes dos inserts, então o que se ouve passa pela cadeia, pelo fader e pelo roteamento da
+//! faixa. Bloco sem entrada entregue não soma nada. O áudio gravado em si o hospedeiro copia da
+//! entrada; o motor registra as notas ao vivo ([`Engine::rec_notes_start`]) com a batida em que
+//! as aplicou, só com o transporte tocando.
+//!
+//! # Render fora de tempo real
+//!
+//! O mesmo motor, numa instância à parte, recebe as mesmas chamadas do documento e é processado
+//! o mais rápido possível; as capturas ([`Engine::capture_add`]) copiam a saída pós-fader de
+//! faixas (a mesma posição dos medidores) e a do master depois do limitador. O resultado depende
+//! só das chamadas e dos quadros processados, nunca de relógio: as fatias internas seguem uma
+//! grade fixa de [`CHUNK`] quadros contada desde o começo do render, então processar em blocos de
+//! 4096 dá exatamente o mesmo que em blocos de 128. No primeiro `process` depois de mexer nas
+//! capturas o motor prepara o render: termina no silêncio as transições que um motor recém-criado
+//! ainda faria (efeitos entrando em crossfade, envios subindo do zero) e adianta o transporte da
+//! latência do limitador do master, atrasando as faixas do mesmo tanto, para que todas as
+//! capturas saiam alinhadas com a linha do tempo desde o primeiro quadro.
 
 pub mod analyzer;
 pub mod drums;
@@ -50,6 +72,7 @@ pub mod instrument;
 mod limiter;
 mod metronome;
 pub mod mixer;
+pub mod record;
 pub mod sampler;
 pub mod synth;
 
@@ -62,13 +85,22 @@ pub use mixer::{Chain, MAX_SENDS, MAX_SLOTS, STATIC_PARAMS, Send, Track, pan_gai
 use analyzer::Analyzer;
 use instrument::Instrument;
 use mixer::{Scratch, Stereo};
+use record::{Captures, NoteRecorder};
 
-/// Maior bloco que instrumentos e efeitos recebem de uma vez (contrato com eles).
+/// Maior bloco que instrumentos e efeitos recebem de uma vez (contrato com eles). Também é o maior
+/// bloco do hospedeiro cuja entrada e capturas o motor guarda inteiras.
 pub const MAX_BLOCK: usize = 4096;
 
-/// Bloco interno de processamento: blocos maiores do hospedeiro são fatiados nele (os buffers de
-/// cada faixa têm este tamanho; o worklet manda 128).
-const CHUNK: usize = 512;
+/// Bloco interno de processamento, numa grade fixa: as fatias terminam nos múltiplos de `CHUNK`
+/// do relógio do motor (quadros processados), seja qual for o bloco do hospedeiro. Com isso um
+/// bloco de 4096 é fatiado nos mesmos pontos que 32 blocos de 128 (o que o worklet manda) e o
+/// render fora de tempo real sai idêntico, amostra por amostra. Os buffers de cada faixa têm este
+/// tamanho.
+pub const CHUNK: usize = 128;
+
+/// Silêncio que o preparo do render passa pelas cadeias de efeitos para terminar as transições
+/// (crossfade de 10 ms de efeito entrando), com folga.
+const WARMUP_SECS: f64 = 0.05;
 
 /// Com automação tocando, o bloco é fatiado neste passo (quadros) e cada fatia avalia as lanes:
 /// 0,7 ms a 48 kHz, fino o bastante para uma rampa de volume não dar degraus (o fader ainda
@@ -222,6 +254,9 @@ struct Lane {
     held: Vec<Held>,
     /// Últimos valores de parâmetro que o app mandou (NaN = nunca), para a automação devolver.
     statics: [f32; STATIC_PARAMS],
+    /// Monitorando a entrada de áudio (só vale em faixa de áudio). Guardado mesmo em outro tipo:
+    /// voltar a ser de áudio volta a monitorar.
+    monitor: bool,
 }
 
 impl Lane {
@@ -234,6 +269,7 @@ impl Lane {
             cursor: 0,
             held: Vec::with_capacity(128),
             statics: [f32::NAN; STATIC_PARAMS],
+            monitor: false,
         }
     }
 
@@ -493,6 +529,38 @@ pub struct Engine {
     watch_fx: (i32, i32),
     watch_analyzer: i32,
     analyzer: Analyzer,
+    /// Quadros processados desde o começo (ou desde o preparo do render): a grade das fatias.
+    clock: u64,
+    /// Entrada de áudio do bloco atual e quantos quadros dela valem (0 = o hospedeiro não entregou
+    /// entrada neste bloco); `block_at` é onde a fatia sendo renderizada começa dentro do bloco do
+    /// hospedeiro (para ler a entrada e escrever as capturas no lugar certo).
+    input: Stereo,
+    input_len: usize,
+    block_at: usize,
+    /// A faixa soou na fatia atual (as capturas de faixa calada saem em silêncio).
+    sounded: Vec<bool>,
+    recorder: NoteRecorder,
+    captures: Captures,
+    /// Latência do limitador de segurança do master (quadros), medida ao criar o motor.
+    latency: usize,
+    /// Quanto o transporte anda à frente do que sai (o adiantamento do render): [`Engine::beat`]
+    /// informa a posição do que sai.
+    out_delay: f64,
+    /// Bloco de rascunho do preparo do render (saída descartada do adiantamento, silêncio para as
+    /// cadeias do master).
+    spare: Stereo,
+}
+
+/// Latência do limitador de segurança em quadros, medida por um impulso (o lookahead é detalhe
+/// dele; medir não deixa esta conta envelhecer se ele mudar).
+fn limiter_latency(rate: f64) -> usize {
+    let mut lim = limiter::Limiter::new(rate);
+    let n = ((0.1 * rate) as usize).max(4096);
+    let (mut l, mut r) = (vec![0.0f32; n], vec![0.0f32; n]);
+    l[0] = 0.5;
+    r[0] = 0.5;
+    lim.process(&mut l, &mut r);
+    l.iter().position(|&s| s != 0.0).unwrap_or(0)
 }
 
 impl Engine {
@@ -540,6 +608,16 @@ impl Engine {
             watch_fx: (-1, -1),
             watch_analyzer: -2,
             analyzer: Analyzer::new(),
+            clock: 0,
+            input: Stereo::new(MAX_BLOCK),
+            input_len: 0,
+            block_at: 0,
+            sounded: Vec::new(),
+            recorder: NoteRecorder::new(),
+            captures: Captures::new(),
+            latency: limiter_latency(rate),
+            out_delay: 0.0,
+            spare: Stereo::new(CHUNK),
         }
     }
 
@@ -553,7 +631,7 @@ impl Engine {
     /// novo sem mais nada. Os efeitos sincronizados (delay, tremolo, filtro) recebem o novo.
     pub fn set_tempo(&mut self, bpm: f64, beats_per_bar: u32) {
         // a posição musical fica onde estava: quem toca no tempo 9 continua no tempo 9
-        let beat = self.beat();
+        let beat = self.transport_beat();
         let (ls, le) = (self.frames_to_beats(self.loop_start), self.frames_to_beats(self.loop_end));
         let old = self.bpm;
         self.bpm = bpm.clamp(20.0, 999.0);
@@ -578,8 +656,15 @@ impl Engine {
         frames / self.rate * self.bpm / 60.0
     }
 
-    /// Posição do transporte em batidas.
+    /// Posição do transporte em batidas: a do próximo quadro que sai. Só no render as duas diferem
+    /// do transporte interno (adiantado da latência do limitador), e aqui vale a do que sai, para
+    /// quem renderiza "até a batida X" parar no quadro certo.
     pub fn beat(&self) -> f64 {
+        self.frames_to_beats((self.pos - self.out_delay).max(0.0))
+    }
+
+    /// Posição do transporte interno em batidas (automação, notas, andamento).
+    fn transport_beat(&self) -> f64 {
         self.frames_to_beats(self.pos)
     }
 
@@ -603,6 +688,8 @@ impl Engine {
         if self.playing {
             self.tail = self.tail_len;
             self.tail_pos = self.pos;
+            // parado não se grava: as teclas seguradas terminam onde o transporte parou
+            self.recorder.close_all(self.transport_beat());
         }
         self.playing = false;
         self.metronome.silence();
@@ -616,7 +703,12 @@ impl Engine {
 
     /// Vai para uma posição; as notas do sequenciador que soavam são soltas.
     pub fn seek(&mut self, beat: f64) {
+        let from = self.transport_beat();
         self.pos = self.beats_to_frames(beat.max(0.0));
+        self.out_delay = 0.0;
+        if self.playing {
+            self.recorder.jump(from, self.transport_beat());
+        }
         self.metronome.silence();
         for lane in &mut self.lanes {
             lane.release_held();
@@ -674,6 +766,7 @@ impl Engine {
         self.bufs.resize_with(n, || Stereo::new(CHUNK));
         self.keys.resize_with(n, || Stereo::new(CHUNK));
         self.incoming.resize(n, false);
+        self.sounded.resize(n, false);
         self.up.resize(n, false);
         self.aud.resize(n, true);
         self.rank.resize(n, usize::MAX);
@@ -801,25 +894,33 @@ impl Engine {
 
     /// Toca uma nota na hora, fora do sequenciador (teclado, MIDI, prévia do editor): não depende
     /// do transporte e não é solta por seek nem pela volta do loop. Velocidade 0 é note off, como
-    /// no MIDI.
+    /// no MIDI. Gravando e tocando, entra no registro com a batida de agora: os comandos chegam
+    /// entre um bloco e outro, então é o quadro em que o instrumento começa a nota.
     pub fn live_on(&mut self, track: usize, pitch: u32, velocity: f32) {
         if velocity.is_nan() || velocity <= 0.0 {
             self.live_off(track, pitch);
             return;
         }
-        if pitch > 127 {
+        if pitch > 127 || track >= self.lanes.len() {
             return;
         }
-        if let Some(inst) = self.lanes.get_mut(track).and_then(|l| l.instrument.as_mut()) {
-            inst.note_on(pitch as u8, velocity.min(1.0));
+        let velocity = velocity.min(1.0);
+        if self.playing {
+            self.recorder.note_on(track as u32, pitch as u8, velocity, self.transport_beat());
+        }
+        if let Some(inst) = self.lanes[track].instrument.as_mut() {
+            inst.note_on(pitch as u8, velocity);
         }
     }
 
     pub fn live_off(&mut self, track: usize, pitch: u32) {
-        if pitch > 127 {
+        if pitch > 127 || track >= self.lanes.len() {
             return;
         }
-        if let Some(inst) = self.lanes.get_mut(track).and_then(|l| l.instrument.as_mut()) {
+        if self.playing {
+            self.recorder.note_off(track as u32, pitch as u8, self.transport_beat());
+        }
+        if let Some(inst) = self.lanes[track].instrument.as_mut() {
             inst.note_off(pitch as u8);
         }
     }
@@ -1124,7 +1225,7 @@ impl Engine {
             }
             return;
         }
-        let beat = self.beat();
+        let beat = self.transport_beat();
         for i in 0..self.auto_count {
             let lane = &mut self.auto[i];
             let Some(v) = lane.value_at(beat) else { continue };
@@ -1249,18 +1350,160 @@ impl Engine {
         if self.watch_analyzer < -1 { 0 } else { self.analyzer.spectrum(out) }
     }
 
+    // ---------------------------------------------------------------- entrada, gravação e render
+
+    /// Entrada de áudio do próximo bloco (até [`MAX_BLOCK`] quadros; `right` `None` = mono, vale
+    /// nos dois lados). Vale só para o `process` seguinte: bloco sem entrega não tem entrada (o
+    /// microfone foi fechado ou desconectado e nada fica repetindo). Amostra inválida vira
+    /// silêncio, para não chegar NaN às cadeias.
+    pub fn set_input(&mut self, left: &[f32], right: Option<&[f32]>) {
+        let right = right.unwrap_or(left);
+        let n = left.len().min(right.len()).min(MAX_BLOCK);
+        let clean = |s: f32| if s.is_finite() { s } else { 0.0 };
+        for (d, &s) in self.input.l[..n].iter_mut().zip(&left[..n]) {
+            *d = clean(s);
+        }
+        for (d, &s) in self.input.r[..n].iter_mut().zip(&right[..n]) {
+            *d = clean(s);
+        }
+        self.input_len = n;
+    }
+
+    /// Monitoramento da entrada na faixa: a entrada soma no buffer dela antes dos inserts e passa
+    /// pela cadeia, pelo fader (mudo, solo, pan) e pelo roteamento como qualquer som da faixa. Só
+    /// faixas de áudio monitoram.
+    pub fn set_monitor(&mut self, track: usize, on: bool) {
+        if let Some(lane) = self.lanes.get_mut(track) {
+            lane.monitor = on;
+        }
+    }
+
+    /// Começa a registrar as notas ao vivo (do zero), com a batida exata em que cada uma foi
+    /// aplicada; só entram as tocadas com o transporte andando.
+    pub fn rec_notes_start(&mut self) {
+        self.recorder.start();
+    }
+
+    /// Para de registrar; as teclas ainda seguradas terminam na posição de agora.
+    pub fn rec_notes_stop(&mut self) {
+        let beat = self.transport_beat();
+        self.recorder.stop(beat);
+    }
+
+    /// Escreve as notas registradas em grupos de 5 floats (faixa, altura, início e fim em batidas,
+    /// velocidade); nota ainda segurada termina na posição atual. As escritas saem do registro (com
+    /// espaço para todas, ele fica vazio). Devolve quantos floats escreveu.
+    pub fn rec_notes(&mut self, out: &mut [f32]) -> usize {
+        let beat = self.transport_beat();
+        self.recorder.drain(out, beat)
+    }
+
+    /// Notas descartadas por falta de espaço na gravação atual (o registro guarda
+    /// [`record::MAX_REC_NOTES`]).
+    pub fn rec_notes_dropped(&self) -> usize {
+        self.recorder.dropped()
+    }
+
+    /// Esquece as capturas. O próximo `process` com capturas prepara o render de novo.
+    pub fn capture_clear(&mut self) {
+        self.captures.clear();
+        self.out_delay = 0.0;
+    }
+
+    /// Passa a capturar, a cada bloco, a saída pós-fader da faixa `track` (a mesma posição dos
+    /// medidores: depois do volume, do pan, do mudo e da porta do solo) ou, com −1, a do master
+    /// depois do limitador (exatamente o que o `process` devolve). Devolve o índice para
+    /// [`Engine::captured`], ou −1 sem lugar (até [`record::MAX_CAPTURES`]) ou faixa inválida. Uma
+    /// faixa que ainda não existe captura silêncio até existir. Com captura, o hospedeiro processa
+    /// blocos de até [`MAX_BLOCK`] quadros. As capturas são montadas antes do render começar: mexer
+    /// nelas faz o próximo `process` preparar o render de novo.
+    pub fn capture_add(&mut self, track: i32) -> i32 {
+        self.captures.add(track, self.latency)
+    }
+
+    /// O que a captura `index` soltou no último bloco processado, em `left`/`right`; além do bloco
+    /// (ou com índice inválido) sai silêncio. Devolve quantos quadros eram do bloco.
+    pub fn captured(&self, index: usize, left: &mut [f32], right: &mut [f32]) -> usize {
+        self.captures.read(index, left, right)
+    }
+
+    /// Primeiro bloco de um render. Um motor recém-criado ainda faria transições que tocando ao
+    /// vivo acontecem longe de qualquer som (efeitos entrando em crossfade do seco, envios subindo
+    /// do zero, o fader indo ao valor da automação): aqui elas terminam no silêncio, com o
+    /// transporte parado no lugar. Depois o transporte é adiantado da latência do limitador do
+    /// master, com a saída descartada e as faixas capturadas esperando o mesmo tanto, para o
+    /// primeiro quadro de toda captura ser o da posição de partida.
+    fn start_render(&mut self) {
+        self.captures.pending = false;
+        self.clock = 0;
+        let warm = ((WARMUP_SECS * self.rate) as usize).max(CHUNK);
+        for t in 0..self.tracks.len() {
+            let (strip, buf) = (&mut self.strips[t], &mut self.bufs[t]);
+            if strip.chain.live() {
+                silence_through(&mut strip.chain, buf, warm, &self.keys, t, &mut self.scratch);
+            }
+            strip.chain.collect();
+        }
+        if self.master_fx.live() {
+            silence_through(&mut self.master_fx, &mut self.spare, warm, &self.keys, usize::MAX, &mut self.scratch);
+        }
+        self.master_fx.collect();
+        // volume, pan, porta do solo e envios direto no alvo, com a automação da partida aplicada
+        self.automate();
+        self.solo();
+        for t in 0..self.tracks.len() {
+            let audible = self.aud[t];
+            self.tracks[t].settle(audible);
+            for s in &mut self.strips[t].sends {
+                s.settle(audible || (s.dst >= 0 && self.up[s.dst as usize]));
+            }
+        }
+        let delay = if self.limiter_on { self.latency } else { 0 };
+        self.captures.arm(delay);
+        if delay > 0 {
+            // o render não tem entrada; a de um bloco entregue fica para o bloco de verdade
+            let input = std::mem::replace(&mut self.input_len, 0);
+            let mut spare = std::mem::replace(&mut self.spare, Stereo { l: Vec::new(), r: Vec::new() });
+            self.captures.priming = true;
+            let mut left = delay;
+            while left > 0 {
+                let k = left.min(CHUNK);
+                self.run(&mut spare.l[..k], &mut spare.r[..k]);
+                left -= k;
+            }
+            self.captures.priming = false;
+            self.spare = spare;
+            self.input_len = input;
+        }
+        self.out_delay = delay as f64;
+        // a grade das fatias recomeça junto com os blocos do render
+        self.clock = 0;
+    }
+
     // ---------------------------------------------------------------- áudio
 
     /// Enche `left` e `right` (mesmo tamanho) com o próximo bloco e avança o transporte.
     pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
         self.prepare();
+        if self.captures.pending && !self.captures.is_empty() {
+            self.start_render();
+        }
+        let n = left.len().min(right.len());
+        self.captures.begin_block(n);
+        self.run(&mut left[..n], &mut right[..n]);
+        // a entrada valia só para este bloco
+        self.input_len = 0;
+    }
+
+    /// O bloco fatiado na grade (e nas voltas do loop), fatia por fatia.
+    fn run(&mut self, left: &mut [f32], right: &mut [f32]) {
         let n = left.len().min(right.len());
         let mut done = 0;
         while done < n {
-            let mut chunk = (n - done).min(CHUNK);
+            let mut chunk = (n - done).min(CHUNK - (self.clock % CHUNK as u64) as usize);
             // com automação tocando, fatias curtas: cada uma avalia as lanes na posição dela
             if self.playing && self.auto_count > 0 {
-                chunk = chunk.min(AUTO_STEP);
+                chunk = chunk.min(AUTO_STEP - (self.clock % AUTO_STEP as u64) as usize);
             }
             // o loop fatia o bloco na volta; tocando depois do fim do loop, segue reto
             let looping = self.playing && self.loop_on && self.pos < self.loop_end;
@@ -1268,13 +1511,17 @@ impl Engine {
                 let until_end = (self.loop_end - self.pos).ceil().max(1.0) as usize;
                 chunk = chunk.min(until_end);
             }
+            self.block_at = done;
             let (l, r) = (&mut left[done..done + chunk], &mut right[done..done + chunk]);
             self.render(l, r);
             done += chunk;
+            self.clock += chunk as u64;
             if self.playing {
                 self.pos += chunk as f64;
                 if looping && self.pos >= self.loop_end {
                     self.pos = self.loop_start + (self.pos - self.loop_end);
+                    let (from, to) = (self.frames_to_beats(self.loop_end), self.frames_to_beats(self.loop_start));
+                    self.recorder.jump(from, to);
                     self.wrap_notes();
                 }
             }
@@ -1341,7 +1588,12 @@ impl Engine {
         let mut to_master = false;
         for oi in 0..self.order.len() {
             let t = self.order[oi];
-            to_master |= self.render_track(t, n, fpb, out_l, out_r) && self.strips[t].out_dst < 0;
+            let sounded = self.render_track(t, n, fpb, out_l, out_r);
+            self.sounded[t] = sounded;
+            to_master |= sounded && self.strips[t].out_dst < 0;
+        }
+        if !self.captures.is_empty() {
+            self.capture_tracks(n);
         }
 
         // master: cadeia dele, volume, limitador (inserts antes do fader, como nas faixas: um
@@ -1401,9 +1653,29 @@ impl Engine {
         if self.watch_analyzer == -1 {
             self.analyzer.push(out_l, out_r);
         }
+        for i in 0..self.captures.len() {
+            if self.captures.track(i) == -1 {
+                self.captures.write(i, self.block_at, n, Some((out_l, out_r)));
+            }
+        }
     }
 
-    /// O som próprio da faixa no buffer dela: clipes e instrumento. Devolve se soou algo.
+    /// Guarda nas capturas de faixa a saída pós-fader da fatia (silêncio se a faixa não soou ou
+    /// não existe).
+    fn capture_tracks(&mut self, n: usize) {
+        for i in 0..self.captures.len() {
+            let track = self.captures.track(i);
+            if track < 0 {
+                continue;
+            }
+            let t = track as usize;
+            let src = (t < self.tracks.len() && self.sounded[t]).then(|| (&self.bufs[t].l[..n], &self.bufs[t].r[..n]));
+            self.captures.write(i, self.block_at, n, src);
+        }
+    }
+
+    /// O som próprio da faixa no buffer dela: clipes, instrumento e, monitorando, a entrada.
+    /// Devolve se soou algo.
     fn render_source(&mut self, t: usize, n: usize, fpb: f64) -> bool {
         let buf = &mut self.bufs[t];
         let (bl, br) = (&mut buf.l[..n], &mut buf.r[..n]);
@@ -1420,6 +1692,18 @@ impl Engine {
                 *l *= g;
                 *r *= g;
             }
+        }
+        // a entrada depois do fade de parada dos clipes: monitorar não depende do transporte
+        let lane = &self.lanes[t];
+        if lane.monitor && lane.kind == instrument::kind::AUDIO && self.block_at < self.input_len {
+            let (from, m) = (self.block_at, (self.input_len - self.block_at).min(n));
+            for (d, s) in bl[..m].iter_mut().zip(&self.input.l[from..from + m]) {
+                *d += s;
+            }
+            for (d, s) in br[..m].iter_mut().zip(&self.input.r[from..from + m]) {
+                *d += s;
+            }
+            sounded = true;
         }
         // instrumentos tocam parados também (notas ao vivo e caudas)
         sounded | self.lanes[t].render(bl, br, self.playing, self.pos, fpb)
@@ -1504,6 +1788,21 @@ impl Engine {
         }
         true
     }
+}
+
+/// Passa `frames` quadros de silêncio pela cadeia, com a saída descartada: as transições dela
+/// (crossfades de efeito entrando, trocando ou saindo) terminam sem som nenhum passando.
+fn silence_through(chain: &mut Chain, buf: &mut Stereo, frames: usize, keys: &[Stereo], own: usize, scratch: &mut Scratch) {
+    let mut left = frames;
+    while left > 0 && !buf.l.is_empty() {
+        let k = left.min(CHUNK).min(buf.l.len());
+        buf.l[..k].fill(0.0);
+        buf.r[..k].fill(0.0);
+        chain.process(&mut buf.l[..k], &mut buf.r[..k], keys, own, scratch);
+        left -= k;
+    }
+    buf.l.fill(0.0);
+    buf.r.fill(0.0);
 }
 
 /// Soma os clipes de áudio da faixa `track` no bloco que começa em `pos` (quadros). Devolve se
@@ -2717,5 +3016,332 @@ mod tests {
         e.play();
         let (l, r) = run(&mut e, 48_000);
         assert!(l.iter().chain(&r).all(|v| v.is_finite() && v.abs() <= 1.0));
+    }
+
+    // ------------------------------------------------------------ gravação e render
+
+    /// Roda `frames` quadros em blocos de 128 entregando a cada bloco a entrada constante `left`
+    /// (e `right`; `None` = mono).
+    fn run_input(e: &mut Engine, frames: usize, left: f32, right: Option<f32>) -> (Vec<f32>, Vec<f32>) {
+        let (mut l, mut r) = (vec![0.0; frames], vec![0.0; frames]);
+        for (cl, cr) in l.chunks_mut(128).zip(r.chunks_mut(128)) {
+            let il = vec![left; cl.len()];
+            let ir = right.map(|v| vec![v; cl.len()]);
+            e.set_input(&il, ir.as_deref());
+            e.process(cl, cr);
+        }
+        (l, r)
+    }
+
+    #[test]
+    fn monitor_soma_a_entrada_na_faixa_e_passa_pelos_efeitos() {
+        let mut e = engine();
+        e.set_track_count(2);
+        let (fx, s) = TestFx::new(2.0);
+        put(&mut e, 0, 0, fx_kind::UTILITY, fx);
+        // sem monitorar, a entrada não soa
+        let (l, _) = run_input(&mut e, 256, 0.1, None);
+        assert!(l.iter().all(|&v| v == 0.0));
+        e.set_monitor(0, true);
+        let (l, r) = run_input(&mut e, 256, 0.1, Some(0.05));
+        // pelos inserts (×2) e pelo pan central, com o transporte parado
+        assert!((l[200] - 0.2 * c()).abs() < 1e-6, "{}", l[200]);
+        assert!((r[200] - 0.1 * c()).abs() < 1e-6, "{}", r[200]);
+        assert!((seen(&s).input.last().unwrap() - 0.1).abs() < 1e-7, "a entrada chega antes do efeito");
+        // mono vale nos dois lados
+        let (_, r) = run_input(&mut e, 128, 0.1, None);
+        assert!((r[100] - 0.2 * c()).abs() < 1e-6);
+        // bloco sem entrada entregue: nada (o efeito de teste não tem cauda)
+        let (l, _) = run(&mut e, 256);
+        assert!(l.iter().all(|&v| v == 0.0), "{:?}", &l[..4]);
+        // entrada mais curta que o bloco: o resto é silêncio
+        e.set_input(&[0.1; 64], None);
+        let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+        e.process(&mut l, &mut r);
+        assert!(l[63] > 0.1 && l[64] == 0.0, "{} {}", l[63], l[64]);
+        // amostra inválida vira silêncio, sem estragar a cadeia
+        e.set_input(&[f32::NAN; 128], Some(&[f32::INFINITY; 128]));
+        e.process(&mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|&v| v == 0.0));
+        assert_eq!(seen(&s).resets, 0);
+        // fader e mudo valem
+        e.track_mut(0).unwrap().gain = 0.5;
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!((l[4799] - 0.1 * c()).abs() < 1e-5, "{}", l[4799]);
+        e.track_mut(0).unwrap().mute = true;
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!(l[4799].abs() < 1e-6);
+        e.track_mut(0).unwrap().mute = false;
+        // solo de outra faixa cala
+        e.track_mut(1).unwrap().solo = true;
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!(l[4799].abs() < 1e-6);
+        e.track_mut(1).unwrap().solo = false;
+        // roteada para um barramento, sai por ele
+        e.set_track_kind(1, instrument::kind::BUS);
+        e.set_output(0, 1);
+        e.track_mut(1).unwrap().gain = 0.5;
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!((l[4799] - 0.1 * c() * 0.5 * c()).abs() < 1e-5, "{}", l[4799]);
+        // tocando, soma com os clipes da faixa
+        e.set_output(0, -1);
+        e.load_sample(1, Sample::new(vec![vec![0.5; 96_000]], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 1.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        e.play();
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!((l[4799] - 0.6 * c()).abs() < 1e-5, "{}", l[4799]);
+        // e parar não leva a entrada junto no fade dos clipes
+        e.stop();
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!((l[4799] - 0.1 * c()).abs() < 1e-5, "{}", l[4799]);
+        // faixa de instrumento não monitora
+        e.set_track_kind(0, instrument::kind::SYNTH);
+        let (l, _) = run_input(&mut e, 4800, 0.1, None);
+        assert!(l[4000..].iter().all(|&v| v == 0.0));
+    }
+
+    fn rec_read(e: &mut Engine) -> Vec<[f32; 5]> {
+        let mut out = vec![0.0f32; 500];
+        let n = e.rec_notes(&mut out);
+        out[..n].as_chunks::<5>().0.to_vec()
+    }
+
+    #[test]
+    fn rec_notes_com_a_batida_do_quadro_e_nada_parado() {
+        let (mut e, _) = probe_engine();
+        e.rec_notes_start();
+        // parado não entra
+        e.live_on(0, 60, 0.8);
+        run(&mut e, 256);
+        e.live_off(0, 60);
+        assert!(rec_read(&mut e).is_empty());
+        e.play();
+        run(&mut e, 24_000); // batida 1
+        e.live_on(0, 60, 0.8);
+        run(&mut e, 12_000); // 1,5
+        e.live_off(0, 60);
+        e.live_on(0, 62, 0.5);
+        run(&mut e, 100); // fora da grade dos blocos
+        e.live_on(0, 64, 1.0);
+        e.live_on(7, 64, 1.0); // faixa inexistente não entra
+        run(&mut e, 5900); // 1,75
+        e.live_on(0, 64, 0.0); // velocidade 0 solta
+        e.rec_notes_stop(); // a 62, ainda segurada, termina aqui
+        e.live_off(0, 62);
+        let at = b(36_100.0) as f32;
+        assert_eq!(rec_read(&mut e), vec![[0.0, 60.0, 1.0, 1.5, 0.8], [0.0, 62.0, 1.5, 1.75, 0.5], [0.0, 64.0, at, 1.75, 1.0]]);
+        assert!(rec_read(&mut e).is_empty(), "a leitura zera");
+        // sem gravar, nada
+        e.live_on(0, 60, 0.8);
+        run(&mut e, 128);
+        e.live_off(0, 60);
+        assert!(rec_read(&mut e).is_empty());
+    }
+
+    #[test]
+    fn rec_notes_seguradas_na_volta_do_loop_no_seek_e_no_stop() {
+        let (mut e, _) = probe_engine();
+        e.set_loop(true, 0.0, 1.0);
+        e.rec_notes_start();
+        e.play();
+        run(&mut e, 18_000); // 0,75
+        e.live_on(0, 60, 1.0);
+        run(&mut e, 12_000); // passa da volta: 0,25
+        e.live_off(0, 60);
+        e.live_on(0, 62, 1.0);
+        run(&mut e, 6000); // 0,5
+        e.seek(0.125);
+        run(&mut e, 3000); // 0,25
+        // parar fecha a segurada onde parou, e o que vem depois não muda nada
+        e.stop();
+        e.seek(0.0);
+        e.live_off(0, 62);
+        // leitura ainda gravando: a nota segurada termina na posição atual
+        e.play();
+        e.live_on(0, 67, 1.0);
+        run(&mut e, 2400);
+        assert_eq!(
+            rec_read(&mut e),
+            vec![
+                [0.0, 60.0, 0.75, 1.0, 1.0],
+                [0.0, 60.0, 0.0, 0.25, 1.0],
+                [0.0, 62.0, 0.25, 0.5, 1.0],
+                [0.0, 62.0, 0.125, 0.25, 1.0],
+                [0.0, 67.0, 0.0, 0.1, 1.0]
+            ]
+        );
+    }
+
+    type Channels = (Vec<f32>, Vec<f32>);
+
+    /// Renderiza como o render fora de tempo real faz: capturas das saídas pedidas, depois
+    /// `seek`/`play` e blocos de `blocks(i)` quadros. Devolve (esq, dir) de cada captura, na
+    /// ordem de `outputs`, e o que o `process` devolveu.
+    fn render_offline(e: &mut Engine, outputs: &[i32], from: f64, frames: usize, blocks: &dyn Fn(usize) -> usize) -> (Vec<Channels>, Channels) {
+        e.capture_clear();
+        let idx: Vec<i32> = outputs.iter().map(|&t| e.capture_add(t)).collect();
+        e.seek(from);
+        e.play();
+        let mut caps = vec![(Vec::with_capacity(frames), Vec::with_capacity(frames)); outputs.len()];
+        let (mut out_l, mut out_r) = (Vec::with_capacity(frames), Vec::with_capacity(frames));
+        let (mut l, mut r) = (vec![0.0; MAX_BLOCK], vec![0.0; MAX_BLOCK]);
+        let (mut cl, mut cr) = (vec![0.0; MAX_BLOCK], vec![0.0; MAX_BLOCK]);
+        let mut done = 0;
+        let mut i = 0;
+        while done < frames {
+            let n = blocks(i).min(frames - done);
+            e.process(&mut l[..n], &mut r[..n]);
+            out_l.extend_from_slice(&l[..n]);
+            out_r.extend_from_slice(&r[..n]);
+            for (c, &k) in caps.iter_mut().zip(&idx) {
+                assert_eq!(e.captured(k as usize, &mut cl[..n], &mut cr[..n]), n);
+                c.0.extend_from_slice(&cl[..n]);
+                c.1.extend_from_slice(&cr[..n]);
+            }
+            done += n;
+            i += 1;
+        }
+        (caps, (out_l, out_r))
+    }
+
+    #[test]
+    fn capturas_de_faixa_e_master_batem_com_o_que_sai() {
+        // com o limitador do master ligado: a latência dele é compensada e tudo sai alinhado
+        let mut e = Engine::new(RATE);
+        e.set_tempo(120.0, 4);
+        e.set_track_count(3);
+        e.load_sample(1, Sample::new(vec![vec![0.25; 96_000]], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.5, offset: 0.0, length: 1.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        e.add_clip(Clip { track: 1, sample: 1, start: 0.0, offset: 0.0, length: 0.25, gain: 0.5, fade_in: 0.0, fade_out: 0.0 });
+        e.track_mut(1).unwrap().pan = -1.0;
+        assert!(e.latency > 0);
+        let (caps, (out_l, out_r)) = render_offline(&mut e, &[-1, 0, 1, 2, 9], 0.25, 30_000, &|_| 4096);
+        let [m, a, b1, quiet, missing] = &caps[..] else { unreachable!() };
+        // o master capturado é exatamente o que saiu
+        assert_eq!(&m.0, &out_l);
+        assert_eq!(&m.1, &out_r);
+        // a faixa 0 entra na batida 0,5: quadro 6000 do render (que começou em 0,25)
+        let g = 0.25 * c();
+        assert_eq!(a.0[5999], 0.0);
+        assert_eq!(a.0[6000], g);
+        assert_eq!(a.1[29_999], g);
+        // a 1, toda à esquerda, termina no mesmo quadro (0,25 s = 0,5 batida)
+        assert_eq!(b1.0[5999], 0.125);
+        assert_eq!(b1.0[6000], 0.0);
+        assert!(b1.1.iter().all(|&v| v == 0.0));
+        // o master é a soma das faixas, sem atraso nenhum
+        for i in 0..30_000 {
+            assert_eq!(out_l[i], a.0[i] + b1.0[i], "quadro {i}");
+            assert_eq!(out_r[i], a.1[i] + b1.1[i], "quadro {i}");
+        }
+        assert!(quiet.0.iter().chain(&missing.0).all(|&v| v == 0.0));
+        // a posição informada é a do que sai
+        assert!((e.beat() - (0.25 + 30_000.0 / 24_000.0)).abs() < 1e-9, "{}", e.beat());
+        // índice inválido: silêncio
+        let (mut l, mut r) = (vec![1.0; 8], vec![1.0; 8]);
+        assert_eq!(e.captured(40, &mut l, &mut r), 0);
+        assert!(l.iter().chain(&r).all(|&v| v == 0.0));
+        assert_eq!(e.capture_add(-2), -1);
+    }
+
+    #[test]
+    fn render_comeca_com_as_transicoes_terminadas() {
+        // efeito posto sem assentar (como o `fx_set` num motor novo) e envio recém-apontado: no
+        // render, o primeiro quadro já sai com o efeito inteiro e o envio no nível
+        let mut e = engine_with_dc_clip(0.0, 2.0);
+        e.set_track_count(2);
+        e.set_track_kind(1, instrument::kind::BUS);
+        e.set_fx_count(0, 1);
+        let (fx, _) = TestFx::new(2.0);
+        e.strips[0].chain.install(0, fx_kind::UTILITY, fx);
+        e.set_sends_count(0, 1);
+        e.set_send(0, 0, 1, 0.5, true);
+        e.track_mut(0).unwrap().gain = 0.0;
+        let (caps, _) = render_offline(&mut e, &[0, 1], 0.0, 256, &|_| 128);
+        assert_eq!(caps[0].0[0], 0.0, "o volume 0 já vale no primeiro quadro");
+        let bus = 0.5 * 2.0 * 0.5 * c();
+        assert!((caps[1].0[0] - bus).abs() < 1e-6, "{}", caps[1].0[0]);
+        assert!((caps[1].0[255] - bus).abs() < 1e-6);
+    }
+
+    /// Uma cena com quase tudo: clipes, sintetizador, bateria, sampler, efeitos reais nas faixas,
+    /// no barramento e no master, envio, saída roteada, sidechain, automação e loop.
+    fn scene(e: &mut Engine) {
+        use effect::{compressor_param as cp, delay_param as dp, distortion_param as sp, reverb_param as rp};
+        e.set_tempo(128.0, 4);
+        e.set_track_count(5);
+        let noise: Vec<f32> = (0..96_000u32).map(|i| ((i.wrapping_mul(2_654_435_761) >> 8) as f32 / 16_777_216.0 - 0.5) * 0.6).collect();
+        let tone: Vec<f32> = (0..48_000).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+        e.load_sample(1, Sample::new(vec![noise.clone(), noise.iter().rev().copied().collect()], 44_100.0));
+        e.load_sample(2, Sample::new(vec![tone], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.5, offset: 0.1, length: 1.5, gain: 0.8, fade_in: 0.01, fade_out: 0.2 });
+        e.set_track_kind(1, instrument::kind::SYNTH);
+        e.set_track_kind(2, instrument::kind::DRUMS);
+        e.set_track_kind(3, instrument::kind::SAMPLER);
+        e.set_track_kind(4, instrument::kind::BUS);
+        e.set_instrument_sample(3, 2);
+        for (i, p) in [60, 64, 67, 72].into_iter().enumerate() {
+            e.add_note(1, i as f64 * 0.75, 1.0, p, 0.9);
+            e.add_note(3, 0.25 + i as f64 * 0.5, 0.4, p - 12, 0.7);
+        }
+        for i in 0..16 {
+            e.add_note(2, i as f64 * 0.25, 0.1, [36, 42, 38, 42][i % 4], 1.0);
+        }
+        e.set_fx(0, 0, fx_kind::EQ);
+        e.set_fx(0, 1, fx_kind::COMPRESSOR);
+        e.set_fx_param(0, 1, cp::SIDECHAIN, 2.0);
+        e.set_fx_param(0, 1, cp::THRESHOLD, -30.0);
+        e.set_fx(0, 2, fx_kind::DISTORTION);
+        e.set_fx_param(0, 2, sp::DRIVE, 12.0);
+        e.set_fx(1, 0, fx_kind::CHORUS);
+        e.set_fx(1, 1, fx_kind::PHASER);
+        e.set_fx(1, 2, fx_kind::FILTER);
+        e.set_sends_count(1, 1);
+        e.set_send(1, 0, 4, 0.6, false);
+        e.set_output(3, 4);
+        e.set_fx(4, 0, fx_kind::REVERB);
+        e.set_fx_param(4, 0, rp::MIX, 0.5);
+        e.set_fx(4, 1, fx_kind::DELAY);
+        e.set_fx_param(4, 1, dp::FEEDBACK, 0.5);
+        e.set_fx(-1, 0, fx_kind::COMPRESSOR);
+        e.set_fx(-1, 1, fx_kind::LIMITER);
+        e.master_mut().gain = 1.5;
+        let vol = e.add_lane(1, auto_target::VOLUME, 0, 0);
+        e.add_point(vol, 0.0, 0.2, 0.0);
+        e.add_point(vol, 2.0, 1.0, 0.5);
+        let cut = e.add_lane(1, auto_target::EFFECT, 2, effect::filter_param::CUTOFF);
+        e.add_point(cut, 0.0, 300.0, 0.0);
+        e.add_point(cut, 3.0, 8000.0, -0.3);
+        let send = e.add_lane(1, auto_target::SEND, 0, 0);
+        e.add_point(send, 1.0, 0.0, 0.0);
+        e.add_point(send, 2.5, 1.0, 0.0);
+        e.set_loop(true, 1.0, 3.0);
+    }
+
+    #[test]
+    fn mesma_sequencia_de_chamadas_da_a_mesma_saida_em_qualquer_bloco() {
+        const FRAMES: usize = 72_000;
+        let outputs = [-1, 0, 1, 2, 3, 4];
+        // com e sem automação: com ela as fatias são de 32 quadros, sem ela de 128
+        for automation in [true, false] {
+            let go = |blocks: &dyn Fn(usize) -> usize| {
+                let mut e = Engine::new(RATE);
+                scene(&mut e);
+                if !automation {
+                    e.clear_automation();
+                }
+                render_offline(&mut e, &outputs, 0.5, FRAMES, blocks)
+            };
+            let (a, out) = go(&|_| 128);
+            let peak = out.0.iter().chain(&out.1).fold(0.0f32, |m, v| m.max(v.abs()));
+            assert!(peak > 0.05 && out.0.iter().chain(&out.1).all(|v| v.is_finite()), "{peak}");
+            for (c, _) in &a[1..] {
+                assert!(c.iter().any(|&v| v != 0.0), "toda faixa soa na cena");
+            }
+            assert_eq!(go(&|_| 128).0, a, "de novo, igual");
+            assert_eq!(go(&|_| MAX_BLOCK).0, a, "em blocos de 4096, igual (automação: {automation})");
+            let mixed = [256, 1024, 128, 4096, 384, 640, 2048];
+            assert_eq!(go(&|i| mixed[i % mixed.len()]).0, a, "em blocos variados, igual (automação: {automation})");
+        }
     }
 }
