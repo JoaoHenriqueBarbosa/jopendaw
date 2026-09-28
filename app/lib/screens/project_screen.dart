@@ -69,7 +69,7 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
                 if (!daw.ready) {
                   return daw.error != null ? InlineNotice(daw.error!) : const LoadingState();
                 }
-                return _Studio(c: daw);
+                return DawStudio(c: daw);
               },
             ),
     );
@@ -77,10 +77,10 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
 }
 
 /// Transporte, arranjo e o painel de baixo quando aberto. No celular o transporte fica embaixo,
-/// perto do polegar.
-class _Studio extends StatelessWidget {
+/// perto do polegar. Público para os testes montarem a tela sem a API.
+class DawStudio extends StatelessWidget {
   final DawController c;
-  const _Studio({required this.c});
+  const DawStudio({super.key, required this.c});
 
   bool _typing() {
     final f = FocusManager.instance.primaryFocus?.context?.widget;

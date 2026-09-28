@@ -601,17 +601,25 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     ];
   }
 
+  /// Item do menu de áudio que importa um arquivo (um sha-256 nunca é este texto).
+  static const _importSample = 'importar';
+
   Widget? _samplePicker(_Ctx x) {
     final hash = x.t.sample;
     final samples = c.doc.samples.entries.toList()..sort((a, b) => a.value.name.toLowerCase().compareTo(b.value.name.toLowerCase()));
-    if (samples.isEmpty && hash == null) return null;
     final info = hash == null ? null : c.doc.samples[hash];
-    final label = hash == null ? 'Escolher o áudio' : (info?.name ?? 'Áudio fora do projeto');
+    final label = hash == null ? (samples.isEmpty ? 'Importar o áudio' : 'Escolher o áudio') : (info?.name ?? 'Áudio fora do projeto');
     return PopupMenuButton<String>(
       tooltip: 'Áudio que o sampler toca',
       position: PopupMenuPosition.under,
       constraints: const BoxConstraints(minWidth: 240, maxWidth: 360, maxHeight: 420),
-      onSelected: (h) => c.setInstrumentSample(x.ti, h.isEmpty ? null : h),
+      onSelected: (h) {
+        if (h == _importSample) {
+          c.importSamplerAudio(x.ti);
+        } else {
+          c.setInstrumentSample(x.ti, h.isEmpty ? null : h);
+        }
+      },
       itemBuilder: (_) => [
         for (final e in samples)
           PopupMenuItem(
@@ -629,14 +637,23 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
               ],
             ),
           ),
-        if (hash != null) ...[
-          const PopupMenuDivider(),
+        if (samples.isNotEmpty) const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: _importSample,
+          height: 38,
+          child: Row(
+            children: [
+              SizedBox(width: 24, child: Icon(Icons.upload_file, size: 16)),
+              Text('Importar um arquivo…'),
+            ],
+          ),
+        ),
+        if (hash != null)
           const PopupMenuItem(
             value: '',
             height: 38,
             child: Row(children: [SizedBox(width: 24), Text('Sem áudio')]),
           ),
-        ],
       ],
       child: Container(
         height: 24,
@@ -671,7 +688,10 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     if (hash == null) {
       return _Display(
         child: c.doc.samples.isEmpty
-            ? const _Hint('Nenhum áudio no projeto ainda. Importe um arquivo pelo botão Importar e escolha-o aqui.', icon: Icons.upload_file)
+            ? const _Hint(
+                'Nenhum áudio no projeto ainda. Importe um arquivo pelo menu acima: ele vira o som deste sampler, sem entrar no arranjo.',
+                icon: Icons.upload_file,
+              )
             : const _Hint('Escolha acima qual áudio do projeto este sampler toca.', icon: Icons.touch_app_outlined),
       );
     }

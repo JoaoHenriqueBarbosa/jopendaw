@@ -85,8 +85,8 @@ class _PianoRollState extends State<PianoRoll> {
     c.editorKeyHandler = _onKey;
     c.beat.addListener(_onBeat);
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointer);
-    // o clique direito apaga notas: o menu do navegador não pode abrir por cima
-    if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
+    // o clique direito apaga notas: quem desliga o menu do navegador é a tela do projeto, pelo
+    // tempo em que ela está aberta (ligar de volta ao fechar o editor estragaria o menu dos clipes)
   }
 
   @override
@@ -110,7 +110,6 @@ class _PianoRollState extends State<PianoRoll> {
     if (c.editorKeyHandler == _onKey) c.editorKeyHandler = null;
     c.beat.removeListener(_onBeat);
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
-    if (kIsWeb) unawaited(BrowserContextMenu.enableContextMenu());
     _autoTimer?.cancel();
     _drag?.longPress?.cancel();
     for (final t in _blips) {

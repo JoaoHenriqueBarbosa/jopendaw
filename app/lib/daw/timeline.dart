@@ -21,85 +21,25 @@ import 'model.dart';
 const _rulerHeight = 30.0;
 
 // ---------------------------------------------------------------------- ações sobre a seleção
-// O controlador cuida dos clipes de áudio; estas cobrem também os de notas, para que Delete,
-// Ctrl+D, S e os botões da barra valham para os dois tipos.
+// Delete, Ctrl+D, S e os botões da barra valem para clipes de áudio e de notas: o controlador
+// trata os dois tipos; aqui só entra o que é da tela (o editor aberto segue a seleção).
 
 /// Apaga o clipe selecionado, de áudio ou de notas.
-void deleteSelectedClip(DawController c) {
-  final id = c.selectedClip;
-  final midi = id == null ? null : c.findMidiClip(id);
-  if (midi == null) {
-    c.deleteSelected();
-    return;
-  }
-  final (t, clip) = midi;
-  c.edit((_) {
-    t.midi.remove(clip);
-    c.selectedClip = null;
-  });
-}
+void deleteSelectedClip(DawController c) => c.deleteSelected();
 
-/// Duplica o clipe selecionado logo depois dele.
+/// Duplica o clipe selecionado logo depois dele; com o editor aberto, ele passa à cópia.
 void duplicateSelectedClip(DawController c) {
+  c.duplicateSelected();
   final id = c.selectedClip;
-  final midi = id == null ? null : c.findMidiClip(id);
-  if (midi == null) {
-    c.duplicateSelected();
-    return;
-  }
-  final (t, clip) = midi;
-  final copy = MidiClip.fromJson(clip.toJson())
-    ..id = newId()
-    ..start = clip.end;
-  c.edit((_) => t.midi.add(copy));
-  _selectMidi(c, copy.id, c.doc.tracks.indexOf(t));
+  if (id != null && c.dock == Dock.editor && c.editingClip != id && c.findMidiClip(id) != null) c.openPianoRoll(id);
 }
 
-/// Corta no cursor de reprodução. Com um clipe de notas selecionado (ou, sem seleção, os clipes de
-/// notas da faixa atual que o cursor cruza), as notas se dividem entre as duas metades e as que
-/// cruzam o corte terminam nele; sem clipe de notas envolvido, o corte é o de áudio do controlador.
-void splitClipsAtPlayhead(DawController c) {
-  final at = c.beat.value;
-  final targets = <(DawTrack, MidiClip)>[];
-  final id = c.selectedClip;
-  if (id != null) {
-    final f = c.findMidiClip(id);
-    if (f != null) targets.add(f);
-  } else if (c.selectedTrack < c.doc.tracks.length) {
-    final t = c.doc.tracks[c.selectedTrack];
-    targets.addAll(t.midi.map((m) => (t, m)));
-  }
-  final cuts = targets.where((f) => f.$2.start < at && f.$2.end > at).toList();
-  if (cuts.isEmpty) {
-    c.splitAtPlayhead();
-    return;
-  }
-  c.edit((_) {
-    for (final (t, clip) in cuts) {
-      final rel = at - clip.start;
-      final right = MidiClip(
-        id: newId(),
-        name: clip.name,
-        start: at,
-        length: clip.length - rel,
-        notes: [
-          for (final n in clip.notes)
-            if (n.start >= rel) n.copy()..start = n.start - rel,
-        ],
-      );
-      clip.notes.removeWhere((n) => n.start >= rel);
-      for (final n in clip.notes) {
-        if (n.end > rel) n.length = rel - n.start;
-      }
-      clip.length = rel;
-      t.midi.add(right);
-    }
-  });
-}
+/// Corta no cursor de reprodução o clipe selecionado ou, sem seleção, o que o cursor cruza na faixa
+/// atual. Nos clipes de notas, a nota que cruza o corte vira duas ([splitMidiClip]).
+void splitClipsAtPlayhead(DawController c) => c.splitAtPlayhead();
 
 /// Seleciona um clipe de notas; com o editor aberto, ele passa a mostrar esse clipe.
 void _selectMidi(DawController c, String id, int track) {
-  // a faixa antes: o `selectClip` do controlador só acha a faixa dos clipes de áudio
   c.selectedTrack = track;
   c.selectClip(id);
   if (c.dock == Dock.editor && c.editingClip != id) c.openPianoRoll(id);
@@ -1228,11 +1168,8 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
         final lane = (_origTrack + (total.dy / widget.laneHeight).round()).clamp(0, c.doc.tracks.length - 1);
         final current = c.doc.tracks.indexWhere((t) => t.midi.contains(clip));
         if (current >= 0 && lane != current && c.doc.tracks[lane].kind.isInstrument) {
-          change(() {
-            c.doc.tracks[current].midi.remove(clip);
-            c.doc.tracks[lane].midi.add(clip);
-            c.selectedTrack = lane;
-          });
+          ensureCheckpoint();
+          c.moveClipToTrack(clip.id, lane);
         }
       case _Grab.left:
         // aparar à esquerda anda o começo e desconta o mesmo das notas: elas ficam onde estavam

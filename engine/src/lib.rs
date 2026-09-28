@@ -20,9 +20,6 @@
 //! meio de uma nota não a "persegue": só soam as notas que começam dali em diante.
 
 pub mod drums;
-// `Adsr::next` avança um quadro e devolve o nível: não é um `Iterator` (nunca acaba, não devolve
-// `Option`), e o nome é o do contrato da fase 2.
-#[allow(clippy::should_implement_trait)]
 pub mod dsp;
 pub mod instrument;
 mod metronome;

@@ -56,7 +56,8 @@ class ParamSpec {
   final Curve curve;
   final List<String> options;
 
-  const ParamSpec(this.id, this.name, this.group, this.min, double max, this.def, {this.unit = '', this.curve = Curve.linear, this.options = const []}) : _max = max;
+  const ParamSpec(this.id, this.name, this.group, this.min, double max, this.def, {this.unit = '', this.curve = Curve.linear, this.options = const []})
+    : _max = max;
 
   const ParamSpec.choice(this.id, this.name, this.group, this.options, {this.def = 0}) : min = 0, _max = 0, unit = '', curve = Curve.choice;
 
