@@ -121,7 +121,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       if (!fromText) _latencyText.text = _ms(v);
     });
     // não entra no desfazer: é calibragem do aparelho, não edição da música
-    if (c.doc.recLatencyMs != v) c.mutate((d) => d.recLatencyMs = v);
+    c.setRecLatency(v);
   }
 
   /// Aplica o que foi digitado; devolve false (e mostra o motivo) quando não é um número no curso.
@@ -273,7 +273,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   title: const Text('Contagem de um compasso'),
                   subtitle: const Text('O metrônomo conta um compasso antes de a gravação começar'),
                   value: c.doc.countIn,
-                  onChanged: (v) => c.edit((d) => d.countIn = v, undoable: false),
+                  onChanged: (v) {
+                    if (v != c.doc.countIn) c.toggleCountIn();
+                  },
                 ),
                 const SizedBox(height: 8),
                 Text('Compensação de latência', style: theme.textTheme.bodyLarge),

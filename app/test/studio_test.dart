@@ -2,6 +2,7 @@
 // verdade e o motor stub: cada painel com cada tipo de faixa, no computador e no celular, e o
 // encadeamento das teclas (teclado musical → editor → atalhos).
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,13 +10,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/audio/engine.dart';
 import 'package:jopendaw_app/daw/controller.dart';
 import 'package:jopendaw_app/daw/effects.dart';
+import 'package:jopendaw_app/daw/export_options.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
 import 'package:jopendaw_app/daw/model.dart';
 import 'package:jopendaw_app/models/project.dart';
 import 'package:jopendaw_app/screens/project_screen.dart';
 import 'package:jopendaw_app/widgets/theme.dart';
 
+import 'fake_engine.dart';
+
 final engine = AudioEngine.instance;
+
+/// As funções que o engine.wasm exporta, com o número de argumentos de cada uma.
+Map<String, int> wasmExports() {
+  final src = File('../engine/wasm/src/lib.rs').readAsStringSync();
+  return {
+    for (final m in RegExp(r'pub (?:unsafe )?extern "C" fn (\w+)\(([^)]*)\)').allMatches(src))
+      m.group(1)!: m.group(2)!.trim().isEmpty ? 0 : m.group(2)!.split(',').length,
+  };
+}
+
+/// Confere cada chamada ([nome, ...argumentos]) contra as funções do wasm.
+void expectCallsExist(Map<String, int> exports, Iterable<List<Object>> calls) {
+  for (final call in calls) {
+    final name = call.first as String;
+    expect(exports.keys, contains(name), reason: 'o motor não exporta $name');
+    expect(call.length - 1, exports[name], reason: 'argumentos de $name: $call');
+  }
+}
 
 DawController studio() {
   final c = DawController(
@@ -179,11 +201,7 @@ void main() {
   });
 
   test('toda chamada que o controlador manda existe no motor wasm, com o número certo de argumentos', () async {
-    final src = File('../engine/wasm/src/lib.rs').readAsStringSync();
-    final exports = <String, int>{
-      for (final m in RegExp(r'pub (?:unsafe )?extern "C" fn (\w+)\(([^)]*)\)').allMatches(src))
-        m.group(1)!: m.group(2)!.trim().isEmpty ? 0 : m.group(2)!.split(',').length,
-    };
+    final exports = wasmExports();
     expect(exports, contains('note_add'));
 
     final c = studio();
@@ -220,17 +238,17 @@ void main() {
     c.seek(2);
     await c.togglePlay();
     await c.stop();
+    // fase 4: monitorar liga a entrada no motor (aqui o stub não abre microfone: desliga de novo)
+    c.setMonitor(0, true);
+    await Future<void>.delayed(Duration.zero);
+    expect(c.doc.tracks[0].monitor, isFalse);
     c.removeTrack(0);
     c.dispose();
 
     expect(engine.log, isNotEmpty);
-    for (final call in engine.log!) {
-      final name = call.first as String;
-      expect(exports.keys, contains(name), reason: 'o motor não exporta $name');
-      expect(call.length - 1, exports[name], reason: 'argumentos de $name: $call');
-    }
+    expectCallsExist(exports, engine.log!);
     final names = {for (final call in engine.log!) call.first};
-    expect(names, containsAll(['track_kind', 'param', 'instrument_sample', 'notes_clear', 'note_add', 'live_on', 'live_off', 'panic']));
+    expect(names, containsAll(['track_kind', 'param', 'instrument_sample', 'notes_clear', 'note_add', 'live_on', 'live_off', 'panic', 'input_monitor']));
     expect(
       names,
       containsAll([
@@ -250,5 +268,88 @@ void main() {
     );
     // o motor também exporta o que o worklet lê a cada estado
     expect(exports.keys, containsAll(['fx_meter', 'analyzer', 'peaks', 'beat', 'playing']));
+  });
+
+  test('fase 4: gravar, exportar e congelar mandam ao motor e ao render só o que o wasm exporta', () async {
+    final exports = wasmExports();
+    final e = FakeEngine();
+    final c = fakeController(
+      e,
+      tracks: [
+        DawTrack(id: 'a', name: 'Voz', color: 0),
+        DawTrack(
+          id: 's',
+          name: 'Synth',
+          color: 1,
+          kind: TrackKind.synth,
+          midi: [
+            MidiClip(id: 'm', name: 'Riff', start: 0, length: 4, notes: [MidiNote(pitch: 60, start: 0, length: 1)]),
+          ],
+        ),
+      ],
+    );
+    c.doc.countIn = false;
+    c.setMonitor(0, true);
+    c.setArmed(0, true);
+    c.setArmed(1, true);
+    await settle();
+    expect(c.inputOpen, isTrue);
+    await c.toggleRecord();
+    expect(c.recording, isTrue);
+    e.feed(0, 400, (i) => 0.25);
+    e.notes = Float32List.fromList([1, 62, 0.5, 1.5, 0.8]);
+    c.debugRecordingElapsed(const Duration(seconds: 2));
+    await c.toggleRecord();
+    expect(c.doc.tracks[0].clips, hasLength(1));
+    expect([for (final n in c.doc.tracks[1].midi.single.notes) n.pitch], containsAll([60, 62]));
+
+    e.renderResult = (outputs) => [
+      for (final _ in outputs) [Float32List(600)..fillRange(0, 600, 0.1), Float32List(600)..fillRange(0, 600, 0.1)],
+    ];
+    await c.exportAudio(const ExportOptions(stems: true));
+    await c.bounceTrack(1);
+    expect(c.error, isNull);
+    expect(e.saved, isNotEmpty);
+    expect(e.renders, hasLength(2));
+    expect(c.doc.tracks, hasLength(3), reason: 'a faixa congelada entra logo abaixo');
+    c.dispose();
+
+    // o que foi ao motor que toca e o que o render aplica no motor dele
+    expectCallsExist(exports, e.log!);
+    for (final r in e.renders) {
+      expectCallsExist(exports, r.calls);
+      expect(r.calls.where((c) => c.first == 'loop_set').last, ['loop_set', false, 0.0, 0.0], reason: 'o render não tem loop');
+    }
+    final names = {for (final call in e.log!) call.first};
+    expect(names, containsAll(['input_monitor', 'rec_notes_start', 'seek', 'play', 'stop']));
+  });
+
+  test('o worklet e o render chamam só funções que o wasm exporta, com o número certo de argumentos', () {
+    final exports = wasmExports();
+    expect(
+      exports.keys,
+      containsAll(['set_input', 'input_monitor', 'rec_notes_start', 'rec_notes_stop', 'rec_notes', 'capture_clear', 'capture_add', 'captured']),
+    );
+    // `w.nome(argumentos)` com um nível de parênteses dentro dos argumentos
+    final call = RegExp(r'\bw\.(\w+)\(((?:[^()]|\([^()]*\))*)\)');
+    final used = <String>{};
+    for (final file in ['web/engine/worklet.js', 'web/engine/render-worker.js']) {
+      final src = File(file).readAsStringSync();
+      for (final m in call.allMatches(src)) {
+        final name = m.group(1)!;
+        final args = m.group(2)!.trim();
+        var count = args.isEmpty ? 0 : 1;
+        var depth = 0;
+        for (final ch in args.split('')) {
+          if (ch == '(' || ch == '[') depth++;
+          if (ch == ')' || ch == ']') depth--;
+          if (ch == ',' && depth == 0) count++;
+        }
+        used.add(name);
+        expect(exports.keys, contains(name), reason: '$file chama $name, que o motor não exporta');
+        expect(count, exports[name], reason: '$file: argumentos de $name(${m.group(2)})');
+      }
+    }
+    expect(used, containsAll(['set_input', 'rec_notes_start', 'rec_notes_stop', 'rec_notes', 'capture_clear', 'capture_add', 'captured', 'process']));
   });
 }

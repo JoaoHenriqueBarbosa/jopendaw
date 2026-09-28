@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jopendaw_app/audio/engine.dart';
 import 'package:jopendaw_app/daw/controller.dart';
 import 'package:jopendaw_app/daw/effects.dart';
 import 'package:jopendaw_app/daw/export_options.dart';
@@ -46,6 +47,25 @@ void main() {
   setUp(() => e = FakeEngine());
 
   group('exportar', () {
+    test('cancelar: o render para, nada é salvo e não vira aviso de falha', () async {
+      final c = await project(e);
+      c.cancelRender();
+      expect(e.cancels, 0, reason: 'sem render em andamento não há o que cancelar');
+      e.renderResult = (outputs) {
+        c.cancelRender();
+        throw const RenderCanceled();
+      };
+      await c.exportAudio(const ExportOptions(stems: true));
+      expect(e.cancels, 1);
+      expect(e.saved, isEmpty);
+      expect(c.error, isNull);
+      expect(c.rendering, isFalse);
+      await c.bounceTrack(1);
+      expect(e.cancels, 2);
+      expect(c.error, isNull);
+      expect(c.doc.tracks, hasLength(3), reason: 'congelamento cancelado não cria faixa');
+    });
+
     test('manda o documento inteiro ao render, sem loop nem metrônomo, e salva a mixagem', () async {
       final c = await project(e);
       e.renderResult = (outputs) => [

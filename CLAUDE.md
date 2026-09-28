@@ -72,8 +72,10 @@ depuração da 9222 (o MCP chrome-devtools fica desligado neste projeto). Suba o
 reais, screenshots em pixels CSS, `probe` para ler os picos do motor e provar que o som sai).
 Arquivos de teste (ex.: um WAV) vão em `app/build/web/` e entram no seletor com `file`. O login
 de teste é o código de acesso (`REVIEW_EMAIL`/`REVIEW_CODE` do `server/.env`). Gotchas: a
-emulação de viewport fica presa na aba (feche a aba e abra outra para voltar ao desktop); o
-`Browser.grantPermissions` de `midi` evita o aviso de permissão que trava a automação; o
+emulação de viewport fica presa na aba (feche a aba e abra outra para voltar ao desktop); as
+permissões vão por `node tool/cdp.mjs grant http://localhost:8080 audioCapture midi midiSysex` em
+segundo plano (o Chrome desfaz a concessão quando a sessão do CDP fecha, e o Web MIDI dele só
+libera com `midiSysex` junto), o que evita o aviso de permissão que trava a automação; o
 `jopendawEngine.injectMidi(status, d1, d2)` simula um aparelho MIDI. O que aparecer, corrija e
 teste de novo.
 

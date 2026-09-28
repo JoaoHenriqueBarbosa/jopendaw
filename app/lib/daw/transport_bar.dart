@@ -310,7 +310,7 @@ class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderS
   void _menu(_RecordMenu v) {
     switch (v) {
       case _RecordMenu.countIn:
-        c.edit((d) => d.countIn = !d.countIn, undoable: false);
+        c.toggleCountIn();
       case _RecordMenu.settings:
         showSettingsDialog(context, c);
     }

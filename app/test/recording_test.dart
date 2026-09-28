@@ -56,6 +56,23 @@ void main() {
       expect(c.canUndo, isFalse, reason: 'armar não entra no desfazer');
     });
 
+    test('entrada que cai sozinha: aviso em error, entrada fechada, medidor zerado e a faixa segue armada', () async {
+      final c = fakeController(e);
+      c.setArmed(0, true);
+      await settle();
+      e.onInputLevel!(0.5);
+      expect(c.inputLevel.value, 0.5);
+      e.onInputLost!('A entrada de áudio "USB" foi desconectada.');
+      expect(c.inputOpen, isFalse);
+      expect(c.inputLevel.value, 0);
+      expect(c.error, contains('desconectada'));
+      expect(c.doc.tracks[0].armed, isTrue);
+      // gravar tenta abrir de novo
+      await c.toggleRecord();
+      expect(e.opened, [null, null]);
+      expect(c.recording, isTrue);
+    });
+
     test('permissão negada: a mensagem fica em error e a faixa desarma', () async {
       e.inputFailure = (_) => StateError('O navegador negou o acesso ao microfone.');
       final c = fakeController(e);
@@ -271,7 +288,7 @@ void main() {
       // o fade do master lá no fim calaria o clique: a automação sai durante a contagem
       expect(e.sent('auto_lane'), isEmpty);
       c.debugEngineState(state(zone + 1));
-      expect(c.beat.value, 0, reason: 'o cursor espera no começo da gravação');
+      expect(c.beat.value, -3, reason: 'o cursor conta o compasso antes do começo da gravação');
       c.debugEngineState(state(zone + 3.6));
       expect(e.sent('auto_lane'), isNotEmpty);
       expect(e.sent('metronome').last, ['metronome', false, 0.5]);
@@ -364,7 +381,7 @@ void main() {
       expect(e.captures, [true, false]);
       expect(e.stopped, 1);
       expect(e.onRecord, isNull);
-      expect(e.onRecordedNotes, isNull);
+      expect(e.onCaptureEnd, isNull);
     });
 
     test('sem a entrada mandar nada: avisa em vez de criar clipe vazio', () async {
@@ -525,6 +542,34 @@ void main() {
       final clip = c.doc.tracks[1].midi.single;
       final notes = [for (final n in clip.notes) (n.pitch, n.start, double.parse(n.length.toStringAsFixed(6)))];
       expect(notes, [(62, 0.0, 0.3), (64, 0.0, 1.0), (65, 0.5, 0.1)]);
+    });
+
+    test('a nota que o motor parte na volta do loop conta como volta: a metade do começo do loop fica', () async {
+      // contagem de 2 a 6, grava de 6 a 8 e volta a 4: o motor termina a nota segurada em 8 e
+      // recomeça em 4 (sem o fim antes do começo); pelo relógio ainda nem teria dado a volta
+      final c = await recordNotes(
+        [1, 64, 7.5, 8, 0.8, 1, 64, 4, 4.5, 0.8],
+        start: 6,
+        countIn: true,
+        elapsed: const Duration(milliseconds: 500),
+        setup: (c) => c.doc
+          ..loopOn = true
+          ..loopStart = 4
+          ..loopEnd = 8,
+      );
+      final clip = c.doc.tracks[1].midi.single;
+      expect((clip.start, clip.length), (4.0, 4.0));
+      expect([for (final n in clip.notes) (n.pitch, n.start, n.length)]..sort((a, b) => a.$2.compareTo(b.$2)), [(64, 0.0, 0.5), (64, 3.5, 0.5)]);
+    });
+
+    test('contagem fora do lugar: a nota segurada na volta dela (que o motor parte) volta a ser uma só', () async {
+      const zone = 65536 * 4.0;
+      // apertada 0,1 batida antes do fim da contagem, solta 1 batida depois do começo
+      final c = await recordNotes([1, 60, zone + 3.9, zone + 4, 0.8, 1, 60, 0, 1, 0.8], start: 0, countIn: true);
+      final note = c.doc.tracks[1].midi.single.notes.single;
+      expect((note.pitch, note.start), (60, 0.0));
+      // o float de 32 bits do motor lá longe anda de 1/32 em 1/32 de batida
+      expect(note.length, closeTo(1.1, 0.04));
     });
 
     test('nenhuma nota tocada: avisa e não cria clipe', () async {

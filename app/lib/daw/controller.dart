@@ -520,10 +520,16 @@ class DawController extends ChangeNotifier {
       ..start();
     final r = _rec;
     if (r != null && countingIn) _countInState(r, s);
-    // na contagem fora do lugar o motor está longe, na região vazia: o cursor espera no começo da
-    // gravação em vez de pular para lá (e a janela não o segue)
+    // na contagem fora do lugar o motor está longe, na região vazia: o cursor anda o compasso antes
+    // do começo da gravação, como na contagem no lugar (antes do zero, a barra mostra as batidas
+    // que faltam), em vez de pular para lá (e a janela não o segue)
     final away = r != null && countingIn && r.zone != null;
-    beat.value = away ? r.start : s.beat;
+    if (away) {
+      final zone = r.zone!;
+      beat.value = s.playing && s.beat >= zone - 1e-6 ? r.start - math.max(0.0, zone + r.countBeats - s.beat) : r.start - r.countBeats;
+    } else {
+      beat.value = s.beat;
+    }
     playing.value = s.playing;
     peaks.value = s.peaks;
     // um estado que chega depois de desligar a observação (já estava a caminho) não acende nada
@@ -594,7 +600,8 @@ class DawController extends ChangeNotifier {
     _rec = null;
     if (_engine.onRecord == _onRecordBlock) _engine.onRecord = null;
     if (_engine.onInputLevel == _onInputLevel) _engine.onInputLevel = null;
-    if (_engine.onRecordedNotes == _onRecordedNotes) _engine.onRecordedNotes = null;
+    if (_engine.onCaptureEnd == _onCaptureEnd) _engine.onCaptureEnd = null;
+    if (_engine.onInputLost == _onInputLost) _engine.onInputLost = null;
     if (_inputOpen) {
       _inputOpen = false;
       _quietly(_engine.stopInput);
@@ -2368,6 +2375,9 @@ class DawController extends ChangeNotifier {
   bool recording = false;
   bool countingIn = false;
 
+  /// Batida onde a gravação em andamento vale (o cursor quando ela começou); null sem gravação.
+  double? get recordStart => _rec?.start;
+
   /// Nível de pico da entrada (0..1), ao vivo, para o medidor das faixas armadas.
   final inputLevel = ValueNotifier<double>(0);
 
@@ -2397,7 +2407,7 @@ class DawController extends ChangeNotifier {
 
   /// Quem espera as notas de cada captura desligada, na ordem (null: ninguém, a captura foi
   /// cancelada). O motor manda uma mensagem de notas por captura desligada.
-  final _notesWaiting = Queue<Completer<Float32List>?>();
+  final _notesWaiting = Queue<Completer<List<RecordedNote>>?>();
 
   /// Tempo desde o último estado do motor: estima a posição entre um estado e outro.
   final _stateClock = Stopwatch();
@@ -2507,7 +2517,19 @@ class DawController extends ChangeNotifier {
   void _hookCapture() {
     _engine.onRecord = _onRecordBlock;
     _engine.onInputLevel = _onInputLevel;
-    _engine.onRecordedNotes = _onRecordedNotes;
+    _engine.onCaptureEnd = _onCaptureEnd;
+    _engine.onInputLost = _onInputLost;
+  }
+
+  /// A entrada caiu sozinha (cabo, interface desligada, permissão revogada): a ponte já fechou.
+  /// As faixas seguem armadas (armar de novo, ou gravar, tenta reabrir); uma gravação em andamento
+  /// segue com silêncio no lugar do que viria.
+  void _onInputLost(String message) {
+    if (_disposed) return;
+    _inputOpen = false;
+    inputLevel.value = 0;
+    error = message;
+    notifyListeners();
   }
 
   void _onInputLevel(double peak) {
@@ -2742,7 +2764,7 @@ class DawController extends ChangeNotifier {
       return;
     }
     playing.value = true;
-    beat.value = zone != null ? start : from;
+    beat.value = zone != null ? start - bar : from;
     notifyListeners();
   }
 
@@ -2836,11 +2858,11 @@ class DawController extends ChangeNotifier {
       // a tela fechou no meio: o dispose já parou tudo
       if (_disposed) return;
       stopTransport();
-      final wait = Completer<Float32List>();
+      final wait = Completer<List<RecordedNote>>();
       _captureOff(wait);
       // as notas vêm depois do último bloco da entrada (a mesma porta, em ordem): chegaram, o
       // áudio está inteiro
-      Float32List? notes;
+      List<RecordedNote>? notes;
       try {
         notes = await wait.future.timeout(Duration(milliseconds: r.midiIds.isEmpty ? 400 : 2000));
       } on TimeoutException {
@@ -2872,10 +2894,10 @@ class DawController extends ChangeNotifier {
   }
 
   /// Desliga a captura no motor; [wait] recebe as notas que ele manda de volta.
-  void _captureOff(Completer<Float32List>? wait) {
+  void _captureOff(Completer<List<RecordedNote>>? wait) {
     final r = _rec;
     if (r == null || !r.captureOn) {
-      wait?.complete(Float32List(0));
+      wait?.complete(const []);
       return;
     }
     r.captureOn = false;
@@ -2884,11 +2906,11 @@ class DawController extends ChangeNotifier {
       _engine.setCapture(false);
     } catch (_) {
       _notesWaiting.removeLast();
-      if (wait != null && !wait.isCompleted) wait.complete(Float32List(0));
+      if (wait != null && !wait.isCompleted) wait.complete(const []);
     }
   }
 
-  void _onRecordedNotes(Float32List data) {
+  void _onCaptureEnd(List<RecordedNote> data) {
     if (_notesWaiting.isEmpty) return;
     final c = _notesWaiting.removeFirst();
     if (c != null && !c.isCompleted) c.complete(data);
@@ -2913,7 +2935,7 @@ class DawController extends ChangeNotifier {
   /// Os clipes da gravação: o áudio vira sample (sha-256 do WAV 32f, guardado e registrado como no
   /// importar) nas faixas de áudio armadas; as notas, clipe MIDI nas de instrumento. Um passo só
   /// do desfazer.
-  Future<void> _commitRecording(_Recording r, Float32List? notesData) async {
+  Future<void> _commitRecording(_Recording r, List<RecordedNote>? notesData) async {
     final plans = r.audio ? _planAudio(r) : const <_ClipPlan>[];
     final name = _nextRecordingName();
     final hashes = <List<String>>[];
@@ -3043,24 +3065,27 @@ class DawController extends ChangeNotifier {
 
   /// As notas gravadas por faixa armada, em batidas absolutas, e se a gravação deu a volta no loop.
   ///
-  /// O motor manda grupos de 5 (faixa, altura, início, fim, velocidade) com a posição do
-  /// transporte. O que se tocou na contagem fica de fora, menos a nota adiantada (até um quarto de
-  /// tempo antes do primeiro, que entra nele) e a que ainda soava no primeiro tempo (começa nele).
-  /// A nota segurada na volta do loop vira duas: até o fim dele e do começo até a soltura.
-  (Map<String, List<_RecNote>>, bool) _recordedNotes(_Recording r, Float32List? data) {
+  /// O motor manda as notas com a posição do transporte. O que se tocou na contagem fica de fora,
+  /// menos a nota adiantada (até um quarto de tempo antes do primeiro, que entra nele) e a que
+  /// ainda soava no primeiro tempo (começa nele). A nota segurada na volta do loop vira duas: até
+  /// o fim dele e do começo até a soltura.
+  (Map<String, List<_RecNote>>, bool) _recordedNotes(_Recording r, List<RecordedNote>? data) {
     final out = <String, List<_RecNote>>{};
     final ls = r.loopStart, le = r.loopEnd;
-    final raw = <(int, int, double, double, double)>[];
-    if (data != null) {
-      for (var i = 0; i + 4 < data.length; i += 5) {
-        final s = data[i + 2].toDouble(), e = data[i + 3].toDouble();
-        if (!s.isFinite || !e.isFinite) continue;
-        raw.add((data[i].round(), data[i + 1].round(), s, e, data[i + 4].toDouble()));
-      }
-    }
+    final raw = <(int, int, double, double, double)>[
+      for (final n in data ?? const <RecordedNote>[])
+        if (n.start.isFinite && n.end.isFinite) (n.track, n.pitch, n.start, n.end, n.velocity),
+    ];
     final zone = r.zone;
-    // a volta do loop na contagem fora do lugar é a da contagem, não uma passada
-    final heldAcross = raw.any((n) => n.$4 < n.$3 - 1e-9 && (zone == null || n.$3 < zone - 1e-9));
+    // o motor parte a nota segurada num salto do transporte: ela termina no ponto do salto e
+    // recomeça do outro lado. A volta da contagem fora do lugar (do fim dela ao cursor) não é
+    // passada nenhuma: ali a nota segurada volta a ser uma só
+    if (zone != null) _joinAcross(raw, zone + r.countBeats, r.start);
+    // a volta do loop na contagem fora do lugar é a da contagem, não uma passada. A nota segurada
+    // na volta do loop chega partida nele (de um motor que não parte, com o fim antes do começo)
+    final heldAcross =
+        raw.any((n) => n.$4 < n.$3 - 1e-9 && (zone == null || n.$3 < zone - 1e-9)) ||
+        (r.loopOn && raw.any((a) => _nearBeat(a.$4, le) && raw.any((b) => b.$1 == a.$1 && b.$2 == a.$2 && _nearBeat(b.$3, ls))));
     final wrapped = r.loopOn && r.start < le && (r.recordedBeats >= le - r.start || heldAcross);
     if (r.midiIds.isEmpty) return (out, wrapped);
     const early = 0.25, minLength = 1 / 64;
@@ -3105,6 +3130,24 @@ class DawController extends ChangeNotifier {
       add(id, pitch, s, e, v);
     }
     return (out, wrapped);
+  }
+
+  /// A mesma batida, com a folga do float de 32 bits em que as notas chegam do motor (lá na região
+  /// da contagem fora do lugar, centenas de milhares de batidas adiante, um passo dele é 1/32).
+  static bool _nearBeat(double a, double b) => (a - b).abs() <= 1e-4 + b.abs() * 2.4e-7;
+
+  /// Junta de volta as notas que o motor partiu num salto de [cut] para [restart]: a que termina
+  /// em [cut] com a da mesma faixa e altura que começa em [restart].
+  static void _joinAcross(List<(int, int, double, double, double)> raw, double cut, double restart) {
+    for (var i = 0; i < raw.length; i++) {
+      final a = raw[i];
+      if (!_nearBeat(a.$4, cut)) continue;
+      final j = raw.indexWhere((b) => b.$1 == a.$1 && b.$2 == a.$2 && _nearBeat(b.$3, restart));
+      if (j < 0) continue;
+      raw[i] = (a.$1, a.$2, a.$3, raw[j].$4, a.$5);
+      raw.removeAt(j);
+      if (j < i) i--;
+    }
   }
 
   /// As notas gravadas numa faixa de instrumento: vão para o clipe que já estava sob o cursor
@@ -3251,6 +3294,8 @@ class DawController extends ChangeNotifier {
       }
       onProgress?.call(1);
       if (lost > 0) error = 'Exportado sem ${lost == 1 ? 'um áudio que não está' : '$lost áudios que não estão'} neste aparelho.';
+    } on RenderCanceled {
+      // quem cancelou já sabe: não é falha
     } catch (e) {
       if (!_disposed) error = 'A exportação não terminou: ${_renderError(e)}';
     } finally {
@@ -3258,6 +3303,12 @@ class DawController extends ChangeNotifier {
       status = null;
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Interrompe o render em andamento (exportação ou congelamento): ele termina sem salvar nada e
+  /// sem aviso.
+  void cancelRender() {
+    if (_rendering) _engine.cancelRender();
   }
 
   /// Cauda do congelamento (s): o que soar depois dela está abaixo de −100 dB e é aparado.
@@ -3364,6 +3415,8 @@ class DawController extends ChangeNotifier {
         selectedClip = frozen.clips.first.id;
       });
       onProgress?.call(1);
+    } on RenderCanceled {
+      // quem cancelou já sabe: não é falha
     } catch (e) {
       if (!_disposed) error = 'O congelamento não terminou: ${_renderError(e)}';
     } finally {

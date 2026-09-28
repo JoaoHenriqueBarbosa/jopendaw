@@ -93,14 +93,26 @@ class FakeEngine implements AudioEngine {
   @override
   Future<List<(String, String)>> inputDevices() async => devices;
 
-  /// Liga/desliga da captura, na ordem; desligar devolve [notes] como o worklet devolveria.
+  /// Liga/desliga da captura, na ordem; desligar devolve [notes] (grupos de 5: faixa, altura,
+  /// início, fim, velocidade, como o motor registra) em [onCaptureEnd], como a ponte devolveria.
   final captures = <bool>[];
   Float32List notes = Float32List(0);
 
   @override
   void setCapture(bool on) {
     captures.add(on);
-    if (!on) onRecordedNotes?.call(notes);
+    if (!on) {
+      onCaptureEnd?.call([
+        for (var i = 0; i + 4 < notes.length; i += 5)
+          (
+            track: notes[i].round(),
+            pitch: notes[i + 1].round(),
+            start: notes[i + 2].toDouble(),
+            end: notes[i + 3].toDouble(),
+            velocity: notes[i + 4].toDouble(),
+          ),
+      ]);
+    }
   }
 
   @override
@@ -110,7 +122,19 @@ class FakeEngine implements AudioEngine {
   void Function(double peak)? onInputLevel;
 
   @override
-  void Function(Float32List data)? onRecordedNotes;
+  double recordBeat = 0;
+
+  @override
+  void Function(List<RecordedNote> notes)? onCaptureEnd;
+
+  @override
+  void Function(String message)? onInputLost;
+
+  /// Cancelamentos pedidos ao render.
+  int cancels = 0;
+
+  @override
+  void cancelRender() => cancels++;
 
   /// Manda [frames] quadros pela entrada em blocos de [block], com o valor de cada quadro dado
   /// por [left] e [right] (o índice é contado do começo da captura).

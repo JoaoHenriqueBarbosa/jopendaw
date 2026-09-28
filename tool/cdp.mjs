@@ -9,6 +9,9 @@
 //   key <tabId> <tecla> [mods] → tecla real (mods: 1 alt 2 ctrl 4 meta 8 shift)
 //   drag <tabId> x1 y1 x2 y2
 //   close <tabId>
+//   grant <origin> <permissão...> → concede (ex.: audioCapture midi midiSysex) e fica rodando: o
+//                              Chrome desfaz as concessões do CDP quando a sessão que as fez fecha,
+//                              então rode em segundo plano durante o teste e encerre no fim
 //   reset <tabId>              → tira a emulação de viewport
 //   run <tabId> passos.json [largura altura]
 //                              → vários passos numa sessão só (com largura/altura, emula o aparelho):
@@ -69,6 +72,24 @@ try {
     console.log(t.id);
   } else if (cmd === 'close') {
     await fetch(`${base}/json/close/${args[0]}`);
+  } else if (cmd === 'grant') {
+    const [origin, ...permissions] = args;
+    const v = await (await fetch(`${base}/json/version`)).json();
+    const sock = new WebSocket(v.webSocketDebuggerUrl);
+    await new Promise((r, j) => { sock.onopen = r; sock.onerror = j; });
+    let id = 0;
+    const pending = new Map();
+    sock.onmessage = (e) => { const m = JSON.parse(e.data); if (pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
+    const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); sock.send(JSON.stringify({ id: i, method, params })); });
+    // cada contexto com aba no origin (o padrão também, sem aba aberta ainda)
+    const targets = await send('Target.getTargets');
+    const contexts = new Set([undefined, ...targets.result.targetInfos.filter((t) => t.url.startsWith(origin)).map((t) => t.browserContextId)]);
+    for (const browserContextId of contexts) {
+      const r = await send('Browser.grantPermissions', { origin, permissions, browserContextId });
+      if (r.error) throw new Error(r.error.message);
+    }
+    console.log('concedido:', permissions.join(' '), '(segurando a sessão; Ctrl+C encerra)');
+    await new Promise(() => {});
   } else {
     const c = await ws(args[0]);
     if (cmd === 'run') {

@@ -69,6 +69,15 @@ class FakeDaw extends DawController {
   /// Segura o render no meio, para o teste olhar o diálogo de progresso.
   Completer<void>? exportGate;
 
+  /// Como o controlador de verdade falha: o motivo vai para `error`, sem lançar.
+  String? exportFailure;
+
+  @override
+  void cancelRender() {
+    calls.add('cancel');
+    if (!(exportGate?.isCompleted ?? true)) exportGate!.complete();
+  }
+
   @override
   Future<void> toggleRecord() async {
     calls.add('record');
@@ -110,6 +119,13 @@ class FakeDaw extends DawController {
     exported = options;
     onProgress?.call(0.25);
     await exportGate?.future;
+    // cancelado: termina quieto, como o de verdade
+    if (calls.contains('cancel')) return;
+    if (exportFailure != null) {
+      error = exportFailure;
+      notifyListeners();
+      return;
+    }
     onProgress?.call(1);
     if (exportError != null) throw exportError!;
   }
@@ -266,7 +282,8 @@ void main() {
     expect(c.doc.countIn, isTrue);
     await t.tap(find.byTooltip('Opções de gravação'));
     await t.pumpAndSettle();
-    await t.tap(find.text('Contagem de um compasso'));
+    // o item inteiro (o texto fica embaixo da área de toque do item)
+    await t.tap(find.ancestor(of: find.text('Contagem de um compasso'), matching: find.byWidgetPredicate((w) => w is CheckedPopupMenuItem)));
     await t.pumpAndSettle();
     expect(c.doc.countIn, isFalse);
 
@@ -335,6 +352,38 @@ void main() {
     expect(t.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Stems')).value, isTrue);
     await t.tap(find.text('Cancelar'));
     await t.pumpAndSettle();
+    await settle(t);
+  });
+
+  testWidgets('exportar: a falha que o controlador põe em error aparece no diálogo; cancelar fecha sem aviso', (t) async {
+    final c = FakeDaw();
+    await mount(t, c, const Size(1400, 900));
+    c.exportFailure = 'A exportação não terminou: sem memória.';
+    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(FilledButton, 'Exportar').last);
+    await t.pumpAndSettle();
+    expect(find.text('A exportação falhou'), findsOneWidget);
+    expect(find.textContaining('sem memória'), findsOneWidget);
+    expect(c.error, isNull, reason: 'mostrado no diálogo, sai da tela de trás');
+    await t.tap(find.text('Fechar'));
+    await t.pumpAndSettle();
+
+    c.exportFailure = null;
+    c.exportGate = Completer();
+    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(FilledButton, 'Exportar').last);
+    await t.pump();
+    await t.pump();
+    expect(find.text('Exportando…'), findsOneWidget);
+    // o do progresso, por cima do das opções
+    await t.tap(find.widgetWithText(TextButton, 'Cancelar').last);
+    await t.pumpAndSettle();
+    expect(c.calls, contains('cancel'));
+    expect(find.text('Exportando…'), findsNothing);
+    expect(find.text('Exportação concluída'), findsNothing);
+    expect(find.text('A exportação falhou'), findsNothing);
     await settle(t);
   });
 

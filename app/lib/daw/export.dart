@@ -231,8 +231,8 @@ class _Label extends StatelessWidget {
 }
 
 /// O render em andamento: barra de progresso enquanto o controlador trabalha, depois o resultado
-/// ou o erro. Não fecha no meio (não há como cancelar o render; fechar só esconderia o trabalho).
-/// Devolve true quando a pessoa quer voltar às opções depois de um erro.
+/// ou o erro. Não fecha por fora no meio (só esconderia o trabalho): "Cancelar" interrompe o render
+/// e fecha. Devolve true quando a pessoa quer voltar às opções depois de um erro.
 class ExportProgressDialog extends StatefulWidget {
   final DawController c;
   final ExportOptions options;
@@ -247,6 +247,13 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
   double? _progress;
   bool _done = false;
   String? _error;
+
+  /// Aviso de uma exportação que terminou (um áudio que faltava, por exemplo).
+  String? _warning;
+
+  /// O render chegou ao fim (o controlador avisou 100%): o que vier depois é aviso, não falha.
+  bool _rendered = false;
+  bool _canceled = false;
   final _elapsed = Stopwatch();
 
   @override
@@ -258,13 +265,17 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
 
   Future<void> _run() async {
     _elapsed.start();
+    final c = widget.c;
+    // o controlador não lança: falha e aviso chegam no error dele, que começa limpo
+    c.clearError();
     String? error;
     try {
-      await widget.c.exportAudio(
+      await c.exportAudio(
         widget.options,
         onProgress: (p) {
           if (!mounted || !p.isFinite) return;
           final v = p.clamp(0.0, 1.0);
+          if (v >= 1) _rendered = true;
           // um aviso por quadro basta: o render manda muitos
           if (_progress != null && (v - _progress!).abs() < 0.002 && v < 1) return;
           setState(() => _progress = v);
@@ -275,10 +286,31 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     }
     _elapsed.stop();
     if (!mounted) return;
+    if (_canceled) {
+      Navigator.pop(context, false);
+      return;
+    }
+    final said = c.error;
+    String? warning;
+    if (said != null) {
+      // mostrado aqui, sai da tela de trás
+      c.clearError();
+      if (_rendered && error == null) {
+        warning = said;
+      } else {
+        error ??= said;
+      }
+    }
     setState(() {
       _done = error == null;
       _error = error;
+      _warning = warning;
     });
+  }
+
+  void _cancel() {
+    setState(() => _canceled = true);
+    widget.c.cancelRender();
   }
 
   bool get _running => !_done && _error == null;
@@ -308,18 +340,26 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     } else if (_done) {
       final format = widget.options.format.label;
       final secs = math.max(1, (_elapsed.elapsedMilliseconds / 1000).ceil());
-      body = Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      final warning = _warning;
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.check_circle_outline, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              widget.options.stems
-                  ? 'A mixagem e os stems foram salvos ($format) em $secs s. No navegador, os arquivos ficam nos downloads.'
-                  : 'A mixagem foi salva ($format) em $secs s. No navegador, o arquivo fica nos downloads.',
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.check_circle_outline, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.options.stems
+                      ? 'A mixagem e os stems foram salvos ($format) em $secs s. No navegador, os arquivos ficam nos downloads.'
+                      : 'A mixagem foi salva ($format) em $secs s. No navegador, o arquivo fica nos downloads.',
+                ),
+              ),
+            ],
           ),
+          if (warning != null) ...[const SizedBox(height: 12), InlineNotice(warning)],
         ],
       );
     } else {
@@ -333,7 +373,9 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         title: Text(_running ? 'Exportando…' : (_done ? 'Exportação concluída' : 'A exportação falhou')),
         content: SizedBox(width: 400, child: body),
         actions: [
-          if (_error != null) ...[
+          if (_running)
+            TextButton(onPressed: _canceled || (p ?? 0) >= 1 ? null : _cancel, child: Text(_canceled ? 'Cancelando…' : 'Cancelar'))
+          else if (_error != null) ...[
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Fechar')),
             FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Voltar às opções')),
           ] else if (_done)

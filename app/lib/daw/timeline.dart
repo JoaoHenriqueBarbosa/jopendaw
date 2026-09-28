@@ -972,8 +972,8 @@ String _failureText(Object e, String fallback) => switch (e) {
 };
 
 /// Progresso do congelamento. O render roda fora de tempo real num motor à parte, então dá para
-/// esperar aqui; não fecha por fora enquanto trabalha (o controlador não tem como cancelar no meio)
-/// e, se falhar, mostra o erro no próprio diálogo.
+/// esperar aqui; não fecha por fora enquanto trabalha ("Cancelar" interrompe o render e fecha) e,
+/// se falhar, mostra o erro no próprio diálogo.
 class _BounceDialog extends StatefulWidget {
   final DawController c;
   final int track;
@@ -987,6 +987,7 @@ class _BounceDialog extends StatefulWidget {
 class _BounceDialogState extends State<_BounceDialog> {
   double _progress = 0;
   String? _error;
+  bool _canceled = false;
 
   @override
   void initState() {
@@ -996,12 +997,28 @@ class _BounceDialogState extends State<_BounceDialog> {
   }
 
   Future<void> _run() async {
+    final c = widget.c;
+    // o controlador não lança: a falha chega no error dele, que começa limpo
+    c.clearError();
     try {
-      await widget.c.bounceTrack(widget.track, onProgress: _onProgress);
-      if (mounted) Navigator.of(context).pop();
+      await c.bounceTrack(widget.track, onProgress: _onProgress);
+      if (!mounted) return;
+      final said = c.error;
+      if (said != null && !_canceled) {
+        // mostrado aqui, sai da tela de trás
+        c.clearError();
+        setState(() => _error = said);
+      } else {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) setState(() => _error = _failureText(e, 'Não deu para congelar a faixa'));
     }
+  }
+
+  void _cancel() {
+    setState(() => _canceled = true);
+    widget.c.cancelRender();
   }
 
   void _onProgress(double p) {
@@ -1034,7 +1051,9 @@ class _BounceDialogState extends State<_BounceDialog> {
                   ],
                 ),
         ),
-        actions: error == null ? null : [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar'))],
+        actions: error == null
+            ? [TextButton(onPressed: _canceled ? null : _cancel, child: Text(_canceled ? 'Cancelando…' : 'Cancelar'))]
+            : [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar'))],
       ),
     );
   }
@@ -1681,10 +1700,9 @@ class _GridPainter extends CustomPainter {
 /// gravação até o cursor. Na contagem ainda não há região (nada entra). Gravando em loop, cada
 /// volta do cursor é uma tomada nova: a passada atual fica forte e o que já foi coberto, fraco.
 ///
-/// O controlador não diz onde a gravação começou (só `recording` e `countingIn`), então a região
-/// começa na primeira posição vista depois da contagem; se ela ainda está a menos de meia batida
-/// depois de onde o cursor estava quando a gravação ligou, vale aquela (a posição do motor chega
-/// um quadro atrasada, e a gravação começa no cursor).
+/// A região começa onde a gravação vale ([DawController.recordStart]); sem ela, na primeira
+/// posição vista depois da contagem, ou onde o cursor estava quando a gravação ligou se a posição
+/// ainda está a menos de meia batida dali (a do motor chega um quadro atrasada).
 class _RecordingOverlay extends StatefulWidget {
   final DawController c;
 
@@ -1740,7 +1758,7 @@ class _RecordingOverlayState extends State<_RecordingOverlay> {
       return;
     }
     if (_from == null) {
-      _from = b >= _pressedAt && b - _pressedAt < 0.5 ? _pressedAt : b;
+      _from = c.recordStart ?? (b >= _pressedAt && b - _pressedAt < 0.5 ? _pressedAt : b);
       _last = b;
       return;
     }

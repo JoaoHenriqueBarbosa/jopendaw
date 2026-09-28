@@ -15,9 +15,10 @@
 // O resto do arquivo (sem `self`) também roda no node, para os testes da lógica de render.
 'use strict';
 
-// Quadros por chamada de `process`. O motor fatia internamente em 512 (e em 32 com automação),
-// então o bloco maior só economiza chamadas; 1024 fica bem abaixo do MAX_BLOCK dele (4096), que
-// também limita o que `captured` devolve de uma vez.
+// Quadros por chamada de `process`. O motor fatia internamente numa grade fixa de 128 quadros
+// contada do começo do render (e mais fino com automação), então o bloco maior só economiza
+// chamadas e dá o mesmo resultado; 1024 (múltiplo de 128) fica bem abaixo do MAX_BLOCK dele
+// (4096), que também limita o que `captured` devolve de uma vez.
 const RENDER_BLOCK = 1024;
 
 // Fade curto de um clipe cortado no fim do trecho: sem ele a cauda começaria com um estalo (o
@@ -196,9 +197,15 @@ function renderWith(w, job, onProgress) {
   w.watch_fx(-1, -1);
   w.watch_analyzer(-2);
 
-  // de onde vem cada saída: o master é a própria saída do `process`; as faixas, capturas do motor
+  // de onde vem cada saída: o master é a própria saída do `process`; as faixas, capturas do motor.
+  // Com capturas, o primeiro `process` prepara o render: as transições de um motor recém-criado
+  // (efeitos entrando do seco, envios subindo do zero) terminam no silêncio e o atraso do limitador
+  // do master é descontado, para a saída começar alinhada na posição de partida. Só o master
+  // também quer isso (senão a mixagem sairia diferente com e sem stems): a captura dele serve só
+  // para preparar.
+  const canCapture = typeof w.capture_clear === 'function' && typeof w.capture_add === 'function';
   const sources = [];
-  if (wantsTracks && typeof w.capture_clear === 'function') w.capture_clear();
+  if (canCapture) w.capture_clear();
   for (const o of outputs) {
     if (o === -1) {
       sources.push(-1);
@@ -208,6 +215,7 @@ function renderWith(w, job, onProgress) {
     if (!(index >= 0)) throw new RenderError('failed', `O motor não conseguiu separar a faixa ${o + 1} no render.`);
     sources.push(index);
   }
+  if (canCapture && !wantsTracks) w.capture_add(-1);
 
   const pl = w.alloc(RENDER_BLOCK);
   const pr = w.alloc(RENDER_BLOCK);
