@@ -64,6 +64,19 @@ cada patch. Mudou struct, enum ou assinatura: `r` no terminal do dx (rebuild com
 `std::env::var` na parte quente. Não ponha `[profile.dev.package."*"] opt-level = 3` no
 `Cargo.toml`: com ele o patch aplica e o processo cai com "no reactor running".
 
+## Teste de uso (obrigatório antes de dar uma fase por pronta)
+
+O teste é usar o app no Chrome, não revisar código: `node tool/cdp.mjs` fala CDP com o Chrome de
+depuração da 9222 (o MCP chrome-devtools fica desligado neste projeto). Suba o `./hot.sh`, faça o
+`flutter build web --release` e rode passos com `run` (clicar, arrastar, teclas com modificadores
+reais, screenshots em pixels CSS, `probe` para ler os picos do motor e provar que o som sai).
+Arquivos de teste (ex.: um WAV) vão em `app/build/web/` e entram no seletor com `file`. O login
+de teste é o código de acesso (`REVIEW_EMAIL`/`REVIEW_CODE` do `server/.env`). Gotchas: a
+emulação de viewport fica presa na aba (feche a aba e abra outra para voltar ao desktop); o
+`Browser.grantPermissions` de `midi` evita o aviso de permissão que trava a automação; o
+`jopendawEngine.injectMidi(status, d1, d2)` simula um aparelho MIDI. O que aparecer, corrija e
+teste de novo.
+
 ## Arquitetura
 
 - Auth igual à do bulkscan: magic link (`auth.rs`), Google e Discord (`oauth.rs`, fluxo de código no
