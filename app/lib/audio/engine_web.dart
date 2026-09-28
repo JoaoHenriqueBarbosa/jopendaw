@@ -48,9 +48,13 @@ class AudioEngine {
   Future<double> start() async {
     if (!_hooked) {
       _hooked = true;
+      // medidor do efeito e espectro: opcionais, porque o dart2js despacha a função pelo número de
+      // argumentos da chamada (com 5 obrigatórios, um host que manda 3 quebra todo estado); null
+      // ou undefined viram 0 e null
       _host.setOnState(
-        ((JSNumber beat, JSBoolean playing, JSFloat32Array peaks) {
-          onState?.call(EngineState(beat.toDartDouble, playing.toDart, peaks.toDart));
+        ((JSNumber beat, JSBoolean playing, JSFloat32Array peaks, [JSNumber? fxMeter, JSFloat32Array? spectrum]) {
+          final meter = fxMeter?.toDartDouble ?? 0;
+          onState?.call(EngineState(beat.toDartDouble, playing.toDart, peaks.toDart, fxMeter: meter.isFinite ? meter : 0, spectrum: spectrum?.toDart));
         }).toJS,
       );
     }

@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -196,14 +197,46 @@ int? keyboardNote(PhysicalKeyboardKey key, int octave) {
 
 bool _isKeyboardKey(PhysicalKeyboardKey k) => noteKeys.contains(k) || k == _octaveDown || k == _octaveUp || k == _velocityDown || k == _velocityUp;
 
-/// O que o motor já recebeu de uma faixa (tipo, parâmetros, áudio do sampler): o sync só manda o
-/// que mudou, senão um arraste mandaria centenas de parâmetros por quadro.
+/// O que o motor já recebeu de uma faixa (tipo, parâmetros, áudio do sampler, efeitos, envios,
+/// saída): o sync só manda o que mudou, senão um arraste mandaria centenas de parâmetros por quadro.
 class _SentTrack {
   final TrackKind kind;
   final params = <int, double>{};
   int sample = 0;
+  final fx = _SentChain();
+
+  /// Envios como o motor os conhece: (índice do barramento, nível, pré-fader), só os válidos.
+  final sends = <(int, double, bool)>[];
+  int sendCount = -1;
+
+  /// Índice do barramento de saída (−1 master); null: ainda não foi.
+  int? output;
   _SentTrack(this.kind);
 }
+
+/// Um slot de efeito como o motor o conhece.
+class _SentFx {
+  final EffectKind kind;
+  final params = <int, double>{};
+  bool? bypass;
+  _SentFx(this.kind);
+}
+
+/// A cadeia de efeitos de uma faixa (ou do master) como o motor a conhece.
+class _SentChain {
+  int count = -1;
+  final slots = <_SentFx?>[];
+}
+
+/// Um alvo de automação resolvido para o motor: código de `auto_target`, slot (efeito ou envio,
+/// no índice do motor), id do parâmetro, faixa de valores e o valor atual sem automação.
+typedef _Resolved = ({int code, int slot, int id, double min, double max, double value});
+
+/// Ganho máximo do volume e dos envios: o topo do fader (+6 dB).
+const maxGain = 2.0;
+
+/// Nível de um envio novo: −6 dB.
+const defaultSendLevel = 0.5;
 
 class DawController extends ChangeNotifier {
   final Project project;
@@ -278,6 +311,10 @@ class DawController extends ChangeNotifier {
   final _sent = <_SentTrack>[];
   List<String> _sentIds = const [];
   List<EngineNote>? _sentNotes;
+  final _sentMaster = _SentChain();
+  List<List<Object>>? _sentAuto;
+  (int, int)? _sentWatchFx;
+  int? _sentWatchAnalyzer;
 
   /// Notas ao vivo soando no motor, como (faixa, nota), para soltar tudo quando preciso.
   final _live = <(int, int)>{};
@@ -323,8 +360,15 @@ class DawController extends ChangeNotifier {
     beat.value = s.beat;
     playing.value = s.playing;
     peaks.value = s.peaks;
+    // um estado que chega depois de desligar a observação (já estava a caminho) não acende nada
+    fxMeter.value = _sentWatchFx == null || _sentWatchFx!.$2 < 0 || !s.fxMeter.isFinite ? 0 : s.fxMeter;
+    spectrum.value = _sentWatchAnalyzer == null || _sentWatchAnalyzer! < -1 ? null : s.spectrum;
     _follow(s);
   }
+
+  /// Nos testes: um estado do motor como se tivesse chegado dele.
+  @visibleForTesting
+  void debugEngineState(EngineState s) => _onEngineState(s);
 
   /// Tocando, a janela acompanha o cursor quando ele sai dela.
   void _follow(EngineState s) {
@@ -363,10 +407,13 @@ class DawController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    // o motor sobrevive à tela: nada pode ficar soando nem preso para o próximo projeto
+    // o motor sobrevive à tela: nada pode ficar soando nem preso para o próximo projeto, nem
+    // medindo o que ninguém mais olha
     _engine.calls([
       ['stop'],
       ['panic'],
+      ['watch_fx', -1, -1],
+      ['watch_analyzer', -2],
     ]);
     if (_engine.onState == _onEngineState) _engine.onState = null;
     if (_engine.onMidi == _onMidi) _engine.onMidi = null;
@@ -378,23 +425,29 @@ class DawController extends ChangeNotifier {
     playing.dispose();
     peaks.dispose();
     liveNotes.dispose();
+    fxMeter.dispose();
+    spectrum.dispose();
     super.dispose();
   }
 
   // ------------------------------------------------------------------ motor
 
-  /// Manda o documento ao motor. É barato: dezenas de chamadas numa mensagem. Instrumentos e
-  /// notas vão só no que mudou desde o último envio.
+  /// Manda o documento ao motor. É barato: dezenas de chamadas numa mensagem. Instrumentos,
+  /// efeitos, roteamento, automação e notas vão só no que mudou desde o último envio.
+  ///
+  /// Ordem: áudio → instrumentos → efeitos → roteamento → automação → observação → notas.
   void _sync() {
     final d = doc;
     final ids = [for (final t in d.tracks) t.id];
     var release = const <List<Object>>[];
     if (!_isPrefix(_sentIds, ids)) {
       // faixas saíram ou mudaram de lugar: o índice de cada instrumento no motor agora é de outra
-      // faixa, e o que soa ao vivo ficaria preso no índice velho
+      // faixa, e o que soa ao vivo ficaria preso no índice velho. Efeitos, envios e automação
+      // também eram de outra faixa: vai tudo de novo.
       release = _releaseLive();
       _sent.clear();
       _sentNotes = null;
+      _sentAuto = null;
     }
     _sentIds = ids;
     final calls = <List<Object>>[
@@ -408,6 +461,7 @@ class DawController extends ChangeNotifier {
     for (var i = 0; i < d.tracks.length; i++) {
       final t = d.tracks[i];
       calls.add(['track', i, t.gain, t.pan, t.mute, t.solo]);
+      if (t.kind != TrackKind.audio) continue;
       for (final c in t.clips) {
         final id = _sampleIds[c.sample];
         if (id == null) continue;
@@ -447,6 +501,22 @@ class DawController extends ChangeNotifier {
       }
     }
     if (_sent.length > d.tracks.length) _sent.length = d.tracks.length;
+    for (var i = 0; i < d.tracks.length; i++) {
+      _syncChain(calls, i, d.tracks[i].effects, _sent[i].fx);
+    }
+    _syncChain(calls, -1, d.masterEffects, _sentMaster);
+    final index = _trackIndex();
+    final sends = [for (var i = 0; i < d.tracks.length; i++) _validSends(i, index)];
+    for (var i = 0; i < d.tracks.length; i++) {
+      _syncRouting(calls, i, sends[i], index);
+    }
+    final auto = _automationCalls(sends);
+    if (_sentAuto == null || !_sameCalls(auto, _sentAuto!)) {
+      calls.add(['auto_clear']);
+      calls.addAll(auto);
+      _sentAuto = auto;
+    }
+    calls.addAll(_watchCalls());
     final notes = flattenNotes(d.tracks);
     if (_sentNotes == null || !listEquals(notes, _sentNotes)) {
       calls.add(['notes_clear']);
@@ -464,6 +534,221 @@ class DawController extends ChangeNotifier {
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  static bool _sameCalls(List<List<Object>> a, List<List<Object>> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!listEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  /// Cadeia de efeitos no motor: quantos slots, o tipo de cada um (só quando muda naquele índice)
+  /// e os parâmetros e o bypass que mudaram. Tipo novo no slot é um efeito novo no motor, no
+  /// padrão dele: vai tudo daquele slot.
+  void _syncChain(List<List<Object>> calls, int track, List<EffectSlot> chain, _SentChain s) {
+    if (s.count != chain.length) {
+      calls.add(['fx_count', track, chain.length]);
+      s.count = chain.length;
+    }
+    if (s.slots.length > chain.length) s.slots.length = chain.length;
+    for (var k = 0; k < chain.length; k++) {
+      final slot = chain[k];
+      var f = k < s.slots.length ? s.slots[k] : null;
+      final fresh = f == null || f.kind != slot.kind;
+      if (f == null || fresh) {
+        f = _SentFx(slot.kind);
+        if (k < s.slots.length) {
+          s.slots[k] = f;
+        } else {
+          s.slots.add(f);
+        }
+        calls.add(['fx_set', track, k, slot.kind.code]);
+      }
+      for (final p in slot.kind.params) {
+        final v = slot.param(p.id);
+        if (fresh || f.params[p.id] != v) {
+          calls.add(['fx_param', track, k, p.id, v]);
+          f.params[p.id] = v;
+        }
+      }
+      if (fresh || f.bypass != slot.bypass) {
+        calls.add(['fx_bypass', track, k, slot.bypass]);
+        f.bypass = slot.bypass;
+      }
+    }
+  }
+
+  Map<String, int> _trackIndex() => {for (var i = 0; i < doc.tracks.length; i++) doc.tracks[i].id: i};
+
+  /// Índice do barramento [busId] como destino (envio ou saída) da faixa [from], ou −1 se ele não
+  /// serve: não existe, não é barramento, é a própria faixa ou fecharia um ciclo.
+  ///
+  /// A regra do fluxo: faixa comum manda para qualquer barramento (ela não recebe áudio, então não
+  /// fecha ciclo); barramento só manda para barramento de índice MAIOR que o dele. Assim a ordem
+  /// das faixas é a ordem do sinal entre barramentos, e o motor processa as faixas comuns e depois
+  /// os barramentos em ordem, sem montar grafo. Reordenar faixas desfaz o que passar a violar isso.
+  int _routeIndex(int from, String? busId, Map<String, int> index) {
+    if (busId == null) return -1;
+    final j = index[busId];
+    if (j == null || j == from || doc.tracks[j].kind != TrackKind.bus) return -1;
+    if (doc.tracks[from].kind == TrackKind.bus && j < from) return -1;
+    return j;
+  }
+
+  /// Os envios da faixa que vão ao motor (destino válido, na ordem da lista), com o índice do
+  /// barramento. A posição nesta lista é o índice do envio no motor (`send_set`, automação).
+  List<(Send, int)> _validSends(int track, Map<String, int> index) {
+    final out = <(Send, int)>[];
+    for (final s in doc.tracks[track].sends) {
+      final j = _routeIndex(track, s.target, index);
+      if (j >= 0) out.add((s, j));
+    }
+    return out;
+  }
+
+  static double _sendLevel(double v) => v.isFinite ? v.clamp(0.0, maxGain).toDouble() : 0;
+
+  void _syncRouting(List<List<Object>> calls, int i, List<(Send, int)> sends, Map<String, int> index) {
+    final s = _sent[i];
+    if (s.sendCount != sends.length) {
+      calls.add(['sends_count', i, sends.length]);
+      s.sendCount = sends.length;
+    }
+    if (s.sends.length > sends.length) s.sends.length = sends.length;
+    for (var k = 0; k < sends.length; k++) {
+      final (send, j) = sends[k];
+      final v = (j, _sendLevel(send.level), send.pre);
+      if (k < s.sends.length && s.sends[k] == v) continue;
+      calls.add(['send_set', i, k, j, v.$2, v.$3]);
+      if (k < s.sends.length) {
+        s.sends[k] = v;
+      } else {
+        s.sends.add(v);
+      }
+    }
+    final out = _routeIndex(i, doc.tracks[i].output, index);
+    if (s.output != out) {
+      calls.add(['track_output', i, out]);
+      s.output = out;
+    }
+  }
+
+  /// A automação inteira como chamadas (`auto_lane` + `auto_point`), das faixas e do master. Vão só
+  /// as lanes com pontos e alvo que existe; o índice de cada lane no motor é a ordem de criação
+  /// depois do `auto_clear` (o worklet não devolve o retorno de `auto_lane`).
+  List<List<Object>> _automationCalls(List<List<(Send, int)>> sends) {
+    final out = <List<Object>>[];
+    var lane = 0;
+    void add(int track, List<AutoLane> lanes) {
+      for (final l in lanes) {
+        if (l.points.isEmpty) continue;
+        final r = _resolve(track, l.target, sends: track >= 0 ? sends[track] : const []);
+        if (r == null) continue;
+        final points = _sortedPoints(l.points);
+        if (points.isEmpty) continue;
+        out.add(['auto_lane', track, r.code, r.slot, r.id]);
+        for (final p in points) {
+          final curve = p.curve.isFinite ? p.curve.clamp(-1.0, 1.0).toDouble() : 0.0;
+          out.add(['auto_point', lane, math.max(0.0, p.beat), p.value.clamp(r.min, r.max).toDouble(), curve]);
+        }
+        lane++;
+      }
+    }
+
+    for (var i = 0; i < doc.tracks.length; i++) {
+      add(i, doc.tracks[i].lanes);
+    }
+    add(-1, doc.masterLanes);
+    return out;
+  }
+
+  /// Pontos válidos em ordem de batida. Estável: dois pontos na mesma batida são um degrau, e a
+  /// ordem deles decide de onde para onde.
+  static List<AutoPoint> _sortedPoints(List<AutoPoint> points) {
+    final valid = [
+      for (final p in points)
+        if (p.beat.isFinite && p.value.isFinite) p,
+    ];
+    final order = List.generate(valid.length, (i) => i)
+      ..sort((a, b) {
+        final c = valid[a].beat.compareTo(valid[b].beat);
+        return c != 0 ? c : a - b;
+      });
+    return [for (final i in order) valid[i]];
+  }
+
+  /// O alvo de automação para o motor, ou null se ele não existe nesta faixa. [sends] são os
+  /// envios válidos da faixa (calculados se faltarem).
+  _Resolved? _resolve(int track, AutoTarget target, {List<(Send, int)>? sends}) {
+    final master = track == -1;
+    if (!master && (track < 0 || track >= doc.tracks.length)) return null;
+    final t = master ? null : doc.tracks[track];
+    switch (target.kind) {
+      case AutoKind.volume:
+        return (code: 0, slot: 0, id: 0, min: 0.0, max: maxGain, value: t?.gain ?? doc.masterGain);
+      case AutoKind.pan:
+        return (code: 1, slot: 0, id: 0, min: -1.0, max: 1.0, value: t?.pan ?? doc.masterPan);
+      case AutoKind.instrument:
+        if (t == null || !t.kind.isInstrument) return null;
+        final p = _spec(t.kind, target.param);
+        if (p == null) return null;
+        return (code: 2, slot: 0, id: p.id, min: p.min, max: p.max, value: t.param(p.id));
+      case AutoKind.effect:
+        final chain = t?.effects ?? doc.masterEffects;
+        final k = chain.indexWhere((s) => s.id == target.ref);
+        if (k < 0) return null;
+        final p = _fxSpec(chain[k].kind, target.param);
+        if (p == null) return null;
+        return (code: 3, slot: k, id: p.id, min: p.min, max: p.max, value: chain[k].param(p.id));
+      case AutoKind.send:
+        if (t == null) return null;
+        final list = sends ?? _validSends(track, _trackIndex());
+        final k = list.indexWhere((e) => e.$1.target == target.ref);
+        if (k < 0) return null;
+        return (code: 4, slot: k, id: 0, min: 0.0, max: maxGain, value: list[k].$1.level);
+    }
+  }
+
+  /// Observação (medidor de efeito e analisador) resolvida pelos ids: segue o slot e a faixa
+  /// quando mudam de lugar e desliga quando somem.
+  List<List<Object>> _watchCalls() {
+    final calls = <List<Object>>[];
+    final fx = _watchFxTarget();
+    if (fx != _sentWatchFx) {
+      calls.add(['watch_fx', fx.$1, fx.$2]);
+      _sentWatchFx = fx;
+      if (fx.$2 < 0) fxMeter.value = 0;
+    }
+    final an = _watchAnalyzerTarget();
+    if (an != _sentWatchAnalyzer) {
+      calls.add(['watch_analyzer', an]);
+      _sentWatchAnalyzer = an;
+      if (an < -1) spectrum.value = null;
+    }
+    return calls;
+  }
+
+  (int, int) _watchFxTarget() {
+    const off = (-1, -1);
+    final slotId = _watchFxSlot;
+    if (slotId == null) return off;
+    final track = _watchFxTrack == null ? -1 : doc.tracks.indexWhere((t) => t.id == _watchFxTrack);
+    // faixa apagada: não pode cair no −1, que é o master
+    if (_watchFxTrack != null && track < 0) return off;
+    final chain = _chain(track);
+    if (chain == null) return off;
+    final k = chain.indexWhere((s) => s.id == slotId);
+    return k < 0 ? off : (track, k);
+  }
+
+  int _watchAnalyzerTarget() {
+    if (!_watchingAnalyzer) return -2;
+    final id = _watchAnalyzerTrack;
+    if (id == null) return -1;
+    final i = doc.tracks.indexWhere((t) => t.id == id);
+    return i < 0 ? -2 : i;
   }
 
   // ------------------------------------------------------------------ transporte
@@ -565,6 +850,12 @@ class DawController extends ChangeNotifier {
       editingClip = null;
       if (dock == Dock.editor) dock = Dock.none;
     }
+    // a faixa do rack sumiu (apagada, desfeita): o rack passa para a selecionada, nunca cai
+    // calado no master
+    final fx = _effectsId;
+    if (fx != null && !doc.tracks.any((t) => t.id == fx)) {
+      _effectsId = selectedTrack < doc.tracks.length ? doc.tracks[selectedTrack].id : null;
+    }
   }
 
   void _scheduleSave() {
@@ -592,14 +883,94 @@ class DawController extends ChangeNotifier {
     selectedTrack = n;
   });
 
-  void removeTrack(int i) => edit((d) {
-    d.tracks.removeAt(i);
-    selectedTrack = math.max(0, math.min(selectedTrack, d.tracks.length - 1));
-  });
+  /// Apaga a faixa. Se era um barramento, o que mandava para ele (envios, saídas e a automação
+  /// desses envios) sai junto; os sidechains que apontavam para faixas depois dela acompanham a
+  /// mudança de índice.
+  void removeTrack(int i) {
+    if (i < 0 || i >= doc.tracks.length) return;
+    edit((d) {
+      final gone = d.tracks.removeAt(i);
+      _dropRoutesTo(gone.id);
+      _remapSidechains((old) => old == i ? -1 : (old > i ? old - 1 : old));
+      selectedTrack = math.max(0, math.min(selectedTrack, d.tracks.length - 1));
+    });
+  }
+
+  /// Move a faixa [from] para a posição [to]. A ordem das faixas é a ordem do sinal entre
+  /// barramentos: o roteamento de barramento que passar a apontar para trás é desfeito (a faixa
+  /// volta ao master, o envio sai). Sidechains seguem as faixas.
+  void moveTrack(int from, int to) {
+    final n = doc.tracks.length;
+    if (from < 0 || from >= n) return;
+    to = to.clamp(0, n - 1);
+    if (to == from) return;
+    edit((d) {
+      final selectedId = selectedTrack < n ? d.tracks[selectedTrack].id : null;
+      final before = [for (final t in d.tracks) t.id];
+      d.tracks.insert(to, d.tracks.removeAt(from));
+      final after = _trackIndex();
+      _remapSidechains((old) => old < before.length ? after[before[old]] ?? -1 : -1);
+      _dropBackwardRoutes();
+      if (selectedId != null) selectedTrack = after[selectedId] ?? selectedTrack;
+    });
+  }
+
+  /// Tira do documento envios e saídas para [busId] e a automação desses envios.
+  void _dropRoutesTo(String busId) {
+    for (final t in doc.tracks) {
+      t.sends.removeWhere((s) => s.target == busId);
+      if (t.output == busId) t.output = null;
+      t.lanes.removeWhere((l) => l.target.kind == AutoKind.send && l.target.ref == busId);
+    }
+  }
+
+  /// Desfaz o roteamento de barramento para barramento que ficou contra a ordem das faixas.
+  void _dropBackwardRoutes() {
+    final index = _trackIndex();
+    for (var i = 0; i < doc.tracks.length; i++) {
+      final t = doc.tracks[i];
+      if (t.kind != TrackKind.bus) continue;
+      final bad = {
+        for (final s in t.sends)
+          if (index.containsKey(s.target) && _routeIndex(i, s.target, index) < 0) s.target,
+      };
+      t.sends.removeWhere((s) => bad.contains(s.target));
+      t.lanes.removeWhere((l) => l.target.kind == AutoKind.send && bad.contains(l.target.ref));
+      if (t.output != null && index.containsKey(t.output) && _routeIndex(i, t.output, index) < 0) t.output = null;
+    }
+  }
+
+  /// Sidechain de compressor e gate é um índice de faixa (contrato da tabela): quando as faixas
+  /// mudam de lugar, o índice acompanha a faixa ([map] do índice velho para o novo; −1 desliga).
+  void _remapSidechains(int Function(int old) map) {
+    for (final chain in [for (final t in doc.tracks) t.effects, doc.masterEffects]) {
+      for (final s in chain) {
+        final id = _sidechainParam(s.kind);
+        if (id == null) continue;
+        final old = s.param(id).round();
+        if (old < 0) continue;
+        final now = map(old);
+        if (now != old) s.params[id] = now.toDouble();
+      }
+    }
+  }
+
+  /// Id do parâmetro de sidechain do efeito, se ele tem.
+  static int? _sidechainParam(EffectKind k) => switch (k) {
+    EffectKind.compressor => 10,
+    EffectKind.gate => 6,
+    _ => null,
+  };
 
   void selectTrack(int i) {
-    selectedTrack = i;
+    _select(i);
     notifyListeners();
+  }
+
+  void _select(int i) {
+    selectedTrack = i;
+    // com o rack aberto, escolher outra faixa mostra os efeitos dela (como o painel de instrumento)
+    if (dock == Dock.effects && i >= 0 && i < doc.tracks.length) _effectsId = doc.tracks[i].id;
   }
 
   // ------------------------------------------------------------------ clipes
@@ -623,7 +994,7 @@ class DawController extends ChangeNotifier {
     selectedClip = id;
     if (id != null) {
       final t = _findClip(id)?.$1 ?? findMidiClip(id)?.$1;
-      if (t != null) selectedTrack = doc.tracks.indexOf(t);
+      if (t != null) _select(doc.tracks.indexOf(t));
     }
     notifyListeners();
   }
@@ -636,7 +1007,7 @@ class DawController extends ChangeNotifier {
     final a = _findClip(id);
     if (a != null) {
       final (from, clip) = a;
-      if (identical(from, to) || to.kind.isInstrument) return;
+      if (identical(from, to) || to.kind != TrackKind.audio) return;
       mutate((_) {
         from.clips.remove(clip);
         to.clips.add(clip);
@@ -837,7 +1208,10 @@ class DawController extends ChangeNotifier {
         final hash = await _ingest(name, bytes);
         if (_disposed) return;
         final info = doc.samples[hash]!;
-        if (ti >= doc.tracks.length || doc.tracks[ti].kind.isInstrument || i > 0 || _occupied(doc.tracks[ti], start, start + info.duration * doc.bpm / 60)) {
+        if (ti >= doc.tracks.length ||
+            doc.tracks[ti].kind != TrackKind.audio ||
+            i > 0 ||
+            _occupied(doc.tracks[ti], start, start + info.duration * doc.bpm / 60)) {
           ti = doc.tracks.length;
           doc.tracks.add(DawTrack(id: newId(), name: _baseName(name), color: ti % Palette.tracks.length));
         }
@@ -925,6 +1299,10 @@ class DawController extends ChangeNotifier {
 
   /// Nova faixa de instrumento com o instrumento no padrão; fica selecionada.
   void addInstrumentTrack(TrackKind kind) {
+    if (kind == TrackKind.bus) {
+      addBusTrack();
+      return;
+    }
     if (!kind.isInstrument) {
       addTrack();
       return;
@@ -981,12 +1359,15 @@ class DawController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Troca o painel de baixo. O editor sem clipe aberto pega o clipe MIDI selecionado.
+  /// Troca o painel de baixo. O editor sem clipe aberto pega o clipe MIDI selecionado; o rack de
+  /// efeitos aberto pela aba mostra a faixa selecionada (o master é escolha explícita, por
+  /// [showEffects] ou [effectsTrack]).
   void setDock(Dock d) {
     if (d == Dock.editor && editing == null) {
       final m = midiSelection;
       if (m != null) editingClip = m.$2.id;
     }
+    if (d == Dock.effects && dock != Dock.effects && selectedTrack < doc.tracks.length) _effectsId = doc.tracks[selectedTrack].id;
     dock = d;
     notifyListeners();
   }
@@ -1272,58 +1653,339 @@ class DawController extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------ efeitos, roteamento, automação
-  // (contrato da fase 3: corpos preenchidos na implementação). Faixa −1 é o master.
+  // Faixa −1 é o master.
+
+  /// Faixa do rack que o painel mostra, pelo id (null = master): segue a faixa se ela muda de lugar.
+  String? _effectsId;
 
   /// Faixa cujo rack de efeitos o painel mostra (−1 = master).
-  int effectsTrack = -1;
+  int get effectsTrack {
+    final id = _effectsId;
+    return id == null ? -1 : doc.tracks.indexWhere((t) => t.id == id);
+  }
 
-  /// Mostra os efeitos de uma faixa (ou do master) no painel de baixo.
-  void showEffects(int track) => throw UnimplementedError();
+  set effectsTrack(int track) {
+    final id = track >= 0 && track < doc.tracks.length ? doc.tracks[track].id : null;
+    if (id == _effectsId) return;
+    _effectsId = id;
+    notifyListeners();
+  }
 
-  /// A cadeia de efeitos de uma faixa ou do master.
-  List<EffectSlot> effectsOf(int track) => throw UnimplementedError();
+  /// Mostra os efeitos de uma faixa (ou do master, −1) no painel de baixo; a faixa fica selecionada.
+  void showEffects(int track) {
+    final valid = track >= 0 && track < doc.tracks.length;
+    _effectsId = valid ? doc.tracks[track].id : null;
+    if (valid) selectedTrack = track;
+    dock = Dock.effects;
+    notifyListeners();
+  }
 
-  /// Adiciona um efeito no fim da cadeia (ou na posição [at]); desfazível.
-  EffectSlot addEffect(int track, EffectKind kind, {int? at}) => throw UnimplementedError();
-  void removeEffect(int track, String slotId) => throw UnimplementedError();
-  void moveEffect(int track, String slotId, int to) => throw UnimplementedError();
+  /// A cadeia de uma faixa ou do master, viva (null se a faixa não existe).
+  List<EffectSlot>? _chain(int track) => track == -1 ? doc.masterEffects : (track >= 0 && track < doc.tracks.length ? doc.tracks[track].effects : null);
+
+  List<AutoLane>? _lanes(int track) => track == -1 ? doc.masterLanes : (track >= 0 && track < doc.tracks.length ? doc.tracks[track].lanes : null);
+
+  /// A cadeia de efeitos de uma faixa ou do master, só leitura (vazia se a faixa não existe). Para
+  /// mudar, os métodos abaixo.
+  List<EffectSlot> effectsOf(int track) {
+    final chain = _chain(track);
+    return chain == null ? const [] : UnmodifiableListView(chain);
+  }
+
+  (List<EffectSlot>, EffectSlot)? _findSlot(int track, String slotId) {
+    final chain = _chain(track);
+    if (chain == null) return null;
+    for (final s in chain) {
+      if (s.id == slotId) return (chain, s);
+    }
+    return null;
+  }
+
+  static ParamSpec? _fxSpec(EffectKind kind, int id) {
+    for (final p in kind.params) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  /// Adiciona um efeito no padrão no fim da cadeia (ou na posição [at]); desfazível.
+  EffectSlot addEffect(int track, EffectKind kind, {int? at}) {
+    final chain = _chain(track);
+    if (chain == null) throw ArgumentError.value(track, 'track', 'faixa inexistente');
+    final slot = EffectSlot(id: newId(), kind: kind);
+    edit((_) => chain.insert((at ?? chain.length).clamp(0, chain.length), slot));
+    return slot;
+  }
+
+  /// Tira o efeito da cadeia, com a automação que apontava para ele; desfazível.
+  void removeEffect(int track, String slotId) {
+    final f = _findSlot(track, slotId);
+    if (f == null) return;
+    edit((_) {
+      f.$1.remove(f.$2);
+      _lanes(track)!.removeWhere((l) => l.target.kind == AutoKind.effect && l.target.ref == slotId);
+    });
+  }
+
+  /// Leva o efeito para a posição [to] da cadeia (índice final dele); desfazível.
+  void moveEffect(int track, String slotId, int to) {
+    final f = _findSlot(track, slotId);
+    if (f == null) return;
+    final (chain, slot) = f;
+    final from = chain.indexOf(slot);
+    final dest = to.clamp(0, chain.length - 1);
+    if (dest == from) return;
+    edit((_) => chain.insert(dest, chain.removeAt(from)));
+  }
 
   /// Muda um parâmetro de efeito pelo caminho rápido (só a chamada `fx_param`). Para arrastes:
   /// [checkpoint] no começo e `undoable: false`.
-  void setEffectParam(int track, String slotId, int id, double value, {bool undoable = false}) => throw UnimplementedError();
-  void setEffectBypass(int track, String slotId, bool bypass) => throw UnimplementedError();
-  void applyEffectPreset(int track, String slotId, Map<int, double> values) => throw UnimplementedError();
+  void setEffectParam(int track, String slotId, int id, double value, {bool undoable = false}) {
+    final f = _findSlot(track, slotId);
+    if (f == null) return;
+    final (chain, slot) = f;
+    final spec = _fxSpec(slot.kind, id);
+    if (spec == null) return;
+    final v = _fit(spec, value);
+    if (slot.params.containsKey(id) && slot.params[id] == v) return;
+    if (undoable) checkpoint();
+    slot.params[id] = v;
+    final k = chain.indexOf(slot);
+    final sent = track == -1 ? _sentMaster : (track < _sent.length ? _sent[track].fx : null);
+    final s = sent != null && k < sent.slots.length ? sent.slots[k] : null;
+    if (s != null && s.kind == slot.kind) {
+      _engine.calls([
+        ['fx_param', track, k, id, v],
+      ]);
+      s.params[id] = v;
+    } else {
+      // o motor ainda não tem este efeito neste slot: um fx_param solto cairia noutro efeito
+      _sync();
+    }
+    _scheduleSave();
+    notifyListeners();
+  }
 
-  /// Nova faixa barramento ("Barramento N"), selecionada.
-  void addBusTrack() => throw UnimplementedError();
+  /// Liga ou desliga o bypass do efeito; desfazível.
+  void setEffectBypass(int track, String slotId, bool bypass) {
+    final f = _findSlot(track, slotId);
+    if (f == null || f.$2.bypass == bypass) return;
+    edit((_) => f.$2.bypass = bypass);
+  }
 
-  /// Cria ou muda o envio da faixa para o barramento [busId].
-  void setSend(int track, String busId, {double? level, bool? pre, bool undoable = false}) => throw UnimplementedError();
-  void removeSend(int track, String busId) => throw UnimplementedError();
+  /// Aplica um preset ao efeito: o que falta volta ao padrão, menos o sidechain (é roteamento, não
+  /// timbre: um preset não sabe das faixas deste projeto). Desfazível.
+  void applyEffectPreset(int track, String slotId, Map<int, double> values) {
+    final f = _findSlot(track, slotId);
+    if (f == null) return;
+    final slot = f.$2;
+    final sc = _sidechainParam(slot.kind);
+    edit((_) {
+      slot.params = {for (final p in slot.kind.params) p.id: _fit(p, values[p.id] ?? (p.id == sc ? slot.param(p.id) : p.def))};
+    });
+  }
 
-  /// Barramentos para onde a faixa pode enviar ou sair sem criar ciclo.
-  List<DawTrack> busTargets(int track) => throw UnimplementedError();
+  /// Nova faixa barramento ("Barramento N") no fim, selecionada. No fim porque barramento só
+  /// manda para barramento depois dele: assim todos os outros podem mandar para ela.
+  DawTrack addBusTrack() {
+    late DawTrack bus;
+    edit((d) {
+      final n = d.tracks.length;
+      final names = {for (final t in d.tracks) t.name};
+      var k = d.tracks.where((t) => t.kind == TrackKind.bus).length + 1;
+      while (names.contains('${TrackKind.bus.label} $k')) {
+        k++;
+      }
+      bus = DawTrack(id: newId(), name: '${TrackKind.bus.label} $k', color: n % Palette.tracks.length, kind: TrackKind.bus);
+      d.tracks.add(bus);
+      selectedTrack = n;
+    });
+    return bus;
+  }
 
-  /// Saída da faixa: um barramento (id) ou null para o master. Recusa ciclo.
-  void setOutput(int track, String? busId) => throw UnimplementedError();
+  /// Cria ou muda o envio da faixa para o barramento [busId]. Envio novo nasce em −6 dB
+  /// pós-fader (e é sempre desfazível); mudar o nível de um que existe vai pelo caminho rápido,
+  /// como um parâmetro (para arrastes: [checkpoint] no começo e `undoable: false`). Recusa (false)
+  /// destino que não é barramento ou que fecharia um ciclo.
+  bool setSend(int track, String busId, {double? level, bool? pre, bool undoable = false}) {
+    if (!busTargets(track).any((b) => b.id == busId)) return false;
+    final t = doc.tracks[track];
+    final lv = level == null || level.isNaN ? null : _sendLevel(level);
+    final send = t.sends.where((s) => s.target == busId).firstOrNull;
+    if (send == null) {
+      edit((_) => t.sends.add(Send(target: busId, level: lv ?? defaultSendLevel, pre: pre ?? false)));
+      return true;
+    }
+    final newLevel = lv ?? send.level, newPre = pre ?? send.pre;
+    if (newLevel == send.level && newPre == send.pre) return true;
+    if (undoable) checkpoint();
+    send
+      ..level = newLevel
+      ..pre = newPre;
+    final valid = _validSends(track, _trackIndex());
+    final k = valid.indexWhere((e) => identical(e.$1, send));
+    final s = track < _sent.length ? _sent[track] : null;
+    if (s != null && k >= 0 && k < s.sends.length) {
+      final v = (valid[k].$2, _sendLevel(newLevel), newPre);
+      _engine.calls([
+        ['send_set', track, k, v.$1, v.$2, v.$3],
+      ]);
+      s.sends[k] = v;
+    } else {
+      _sync();
+    }
+    _scheduleSave();
+    notifyListeners();
+    return true;
+  }
 
-  /// Alvos automatizáveis da faixa (ou do master), com o nome para o menu.
-  List<(AutoTarget, String)> automatable(int track) => throw UnimplementedError();
+  /// Tira o envio (e a automação dele); desfazível.
+  void removeSend(int track, String busId) {
+    if (track < 0 || track >= doc.tracks.length) return;
+    final t = doc.tracks[track];
+    if (!t.sends.any((s) => s.target == busId)) return;
+    edit((_) {
+      t.sends.removeWhere((s) => s.target == busId);
+      t.lanes.removeWhere((l) => l.target.kind == AutoKind.send && l.target.ref == busId);
+    });
+  }
 
-  /// Nova faixa de automação para o alvo (ou abre a que já existe); desfazível.
-  AutoLane addLane(int track, AutoTarget target) => throw UnimplementedError();
-  void removeLane(int track, String laneId) => throw UnimplementedError();
+  /// Barramentos para onde a faixa pode enviar ou sair sem criar ciclo: qualquer um para faixa
+  /// comum; para um barramento, só os que vêm depois dele na lista (ver [_routeIndex]). O master
+  /// não envia.
+  List<DawTrack> busTargets(int track) {
+    if (track < 0 || track >= doc.tracks.length) return const [];
+    final index = _trackIndex();
+    return [
+      for (final t in doc.tracks)
+        if (_routeIndex(track, t.id, index) >= 0) t,
+    ];
+  }
 
-  /// Faixa de, mínimo, máximo e valor atual (sem automação) de um alvo, para desenhar e editar.
-  (double, double, double) targetRange(int track, AutoTarget target) => throw UnimplementedError();
+  /// Saída da faixa: um barramento (id) ou null para o master. Recusa (false) ciclo e destino que
+  /// não é barramento; desfazível.
+  bool setOutput(int track, String? busId) {
+    if (track < 0 || track >= doc.tracks.length) return false;
+    if (busId != null && !busTargets(track).any((b) => b.id == busId)) return false;
+    final t = doc.tracks[track];
+    if (t.output == busId) return true;
+    edit((_) => t.output = busId);
+    return true;
+  }
 
-  /// Efeito cujo indicador (redução de ganho) o motor manda; null desliga.
-  void watchEffect(int track, String? slotId) => throw UnimplementedError();
+  /// Alvos automatizáveis da faixa (ou do master), com o nome para o menu: volume, pan,
+  /// parâmetros do instrumento, de cada efeito e o nível de cada envio. O sidechain fica de fora
+  /// (é escolha de faixa, não um valor que anda).
+  List<(AutoTarget, String)> automatable(int track) {
+    final chain = _chain(track);
+    if (chain == null) return const [];
+    final out = <(AutoTarget, String)>[(const AutoTarget(AutoKind.volume), 'Volume'), (const AutoTarget(AutoKind.pan), 'Pan')];
+    final t = track >= 0 ? doc.tracks[track] : null;
+    if (t != null && t.kind.isInstrument) {
+      for (final p in t.kind.params) {
+        out.add((AutoTarget(AutoKind.instrument, param: p.id), 'Instrumento · ${_paramLabel(t.kind.params, p)}'));
+      }
+    }
+    final count = <EffectKind, int>{};
+    for (final s in chain) {
+      count[s.kind] = (count[s.kind] ?? 0) + 1;
+    }
+    final seen = <EffectKind, int>{};
+    for (final s in chain) {
+      final n = seen[s.kind] = (seen[s.kind] ?? 0) + 1;
+      // dois do mesmo tipo na cadeia: numerados, senão o menu teria nomes iguais
+      final name = count[s.kind]! > 1 ? '${s.kind.label} $n' : s.kind.label;
+      final sc = _sidechainParam(s.kind);
+      for (final p in s.kind.params) {
+        if (p.id == sc) continue;
+        out.add((AutoTarget(AutoKind.effect, ref: s.id, param: p.id), '$name · ${_paramLabel(s.kind.params, p)}'));
+      }
+    }
+    if (t != null) {
+      for (final s in t.sends) {
+        final bus = doc.tracks.where((b) => b.id == s.target).firstOrNull;
+        if (bus != null) out.add((AutoTarget(AutoKind.send, ref: s.target), 'Envio → ${bus.name}'));
+      }
+    }
+    return out;
+  }
 
-  /// Faixa cujo espectro o motor manda (−1 master); null desliga.
-  void watchAnalyzer(int? track) => throw UnimplementedError();
+  /// Nome do parâmetro para o menu, com o grupo quando o nome se repete (as duas "Onda" do
+  /// sintetizador, as bandas do EQ, as peças da bateria).
+  static String _paramLabel(List<ParamSpec> params, ParamSpec p) {
+    final repeated = params.any((q) => !identical(q, p) && q.name == p.name);
+    return repeated ? '${p.name} (${p.group})' : p.name;
+  }
 
-  /// Indicador do efeito observado e espectro da faixa observada, ao vivo.
+  /// Nome de um alvo de automação da faixa (o mesmo do menu), ou null se ele não existe mais.
+  String? targetName(int track, AutoTarget target) {
+    for (final (t, name) in automatable(track)) {
+      if (t == target) return name;
+    }
+    return null;
+  }
+
+  /// Nova faixa de automação para o alvo, vazia e aberta (a interface põe os pontos); se já
+  /// existe uma para ele, só abre. Criar é desfazível.
+  AutoLane addLane(int track, AutoTarget target) {
+    final lanes = _lanes(track);
+    if (lanes == null) throw ArgumentError.value(track, 'track', 'faixa inexistente');
+    if (!automatable(track).any((e) => e.$1 == target)) throw ArgumentError.value(target.toJson(), 'target', 'a faixa não tem este alvo');
+    final existing = lanes.where((l) => l.target == target).firstOrNull;
+    if (existing != null) {
+      if (!existing.open) {
+        existing.open = true;
+        _scheduleSave();
+        notifyListeners();
+      }
+      return existing;
+    }
+    final lane = AutoLane(id: newId(), target: target);
+    edit((_) => lanes.add(lane));
+    return lane;
+  }
+
+  /// Apaga a faixa de automação (o parâmetro volta ao valor fixo); desfazível.
+  void removeLane(int track, String laneId) {
+    final lanes = _lanes(track);
+    if (lanes == null || !lanes.any((l) => l.id == laneId)) return;
+    edit((_) => lanes.removeWhere((l) => l.id == laneId));
+  }
+
+  /// Mínimo, máximo e valor atual (sem automação) de um alvo, na unidade dele (ganho linear no
+  /// volume e nos envios, −1..1 no pan, a da tabela nos parâmetros), para desenhar e editar.
+  /// Alvo que não existe mais: (0, 1, 0).
+  (double, double, double) targetRange(int track, AutoTarget target) {
+    final r = _resolve(track, target);
+    return r == null ? (0.0, 1.0, 0.0) : (r.min, r.max, r.value);
+  }
+
+  // observação pedida pela interface, pelos ids (null = master)
+  String? _watchFxTrack, _watchFxSlot;
+  bool _watchingAnalyzer = false;
+  String? _watchAnalyzerTrack;
+
+  /// Efeito cujo indicador (redução de ganho) o motor manda em [fxMeter]; null desliga. Segue o
+  /// slot se ele muda de lugar.
+  void watchEffect(int track, String? slotId) {
+    final valid = track == -1 || (track >= 0 && track < doc.tracks.length);
+    _watchFxSlot = valid ? slotId : null;
+    _watchFxTrack = valid && track >= 0 ? doc.tracks[track].id : null;
+    final calls = _watchCalls();
+    if (calls.isNotEmpty) _engine.calls(calls);
+  }
+
+  /// Faixa cujo espectro o motor manda em [spectrum] (−1 master); null desliga.
+  void watchAnalyzer(int? track) {
+    final valid = track == -1 || (track != null && track >= 0 && track < doc.tracks.length);
+    _watchingAnalyzer = valid;
+    _watchAnalyzerTrack = valid && track! >= 0 ? doc.tracks[track].id : null;
+    final calls = _watchCalls();
+    if (calls.isNotEmpty) _engine.calls(calls);
+  }
+
+  /// Indicador do efeito observado (redução de ganho em dB, ≥ 0) e espectro da faixa observada
+  /// (dB por faixa linear de frequência, de 0 à metade da taxa), ao vivo.
   final fxMeter = ValueNotifier<double>(0);
   final spectrum = ValueNotifier<Float32List?>(null);
 
