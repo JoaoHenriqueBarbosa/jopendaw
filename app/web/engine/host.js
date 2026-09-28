@@ -1,5 +1,7 @@
 // Ponte entre o Flutter (lib/audio/engine_web.dart) e o motor no AudioWorklet, mais o guardado
-// local do DAW no IndexedDB (documento do projeto e os áudios importados) e as entradas MIDI.
+// local do DAW no IndexedDB (documento do projeto e os áudios importados), as entradas MIDI e,
+// na fase 4, a entrada de áudio (gravação e monitoramento), o render fora de tempo real num Worker
+// (exportar e congelar) e o download de arquivos.
 (() => {
   let ctx = null;
   let node = null;
@@ -8,7 +10,7 @@
 
   // Último estado do motor e o maior pico de cada canal desde a última leitura: para conferir de
   // fora (console, testes automatizados) que o áudio está saindo mesmo, sem precisar ouvir.
-  const probe = { beat: 0, playing: false, peaks: [], fxMeter: 0, spectrum: null };
+  const probe = { beat: 0, playing: false, peaks: [], fxMeter: 0, spectrum: null, inputPeak: 0 };
   // O worklet manda o espectro a cada poucos estados; entre um e outro vale o último (null só
   // quando nada é observado, como o Dart espera).
   let spectrum = null;
@@ -23,34 +25,58 @@
     probe.peaks.length = peaks.length;
   }
 
+  // Os bytes do engine.wasm, baixados uma vez: o worklet recebe uma cópia (os bytes vão
+  // transferidos) e o render compila o módulo dele a partir daqui, sem depender da rede de novo.
+  let wasmBytes = null;
+  function engineBytes() {
+    if (!wasmBytes) {
+      const p = fetch('engine/engine.wasm').then((r) => {
+        if (!r.ok) throw new Error(`engine.wasm: HTTP ${r.status}`);
+        return r.arrayBuffer();
+      });
+      wasmBytes = p;
+      // deixa tentar de novo quando a rede voltar
+      p.catch(() => {
+        if (wasmBytes === p) wasmBytes = null;
+      });
+    }
+    return wasmBytes;
+  }
+
   async function start() {
     if (starting) return starting;
     starting = (async () => {
       ctx = new AudioContext({ latencyHint: 'interactive' });
-      const [bytes] = await Promise.all([
-        fetch('engine/engine.wasm').then((r) => r.arrayBuffer()),
-        ctx.audioWorklet.addModule('engine/worklet.js'),
-      ]);
-      node = new AudioWorkletNode(ctx, 'jopendaw-engine', { numberOfInputs: 0, outputChannelCount: [2] });
+      const [bytes] = await Promise.all([engineBytes(), ctx.audioWorklet.addModule('engine/worklet.js')]);
+      // Uma entrada sempre: o microfone liga nela quando a gravação pede, sem recriar o nó (que
+      // levaria junto o motor e tudo o que ele sabe). Sem nada ligado, o worklet vê zero canais.
+      node = new AudioWorkletNode(ctx, 'jopendaw-engine', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
       node.connect(ctx.destination);
       const ready = new Promise((resolve, reject) => {
         node.port.onmessage = (e) => {
           const m = e.data;
-          if (m.t === 'ready') resolve(m.rate);
-          else if (m.t === 'error') {
-            console.error('motor de áudio:', m.message);
-            reject(new Error(m.message));
-          }
-          else if (m.t === 'state') {
+          if (m.t === 'state') {
             if (!m.analyzing) spectrum = null;
             else if (m.spectrum) spectrum = m.spectrum;
             const fxMeter = m.fxMeter || 0;
             track(m.beat, m.playing, m.peaks, fxMeter);
             if (onState) onState(m.beat, m.playing, m.peaks, fxMeter, spectrum);
+          } else if (m.t === 'level') {
+            probe.inputPeak = Math.max(probe.inputPeak, m.peak);
+            if (onInputLevel) onInputLevel(m.peak);
+          } else if (m.t === 'rec') {
+            onRecBlock(m);
+          } else if (m.t === 'captured') {
+            if (onCaptureEnd) onCaptureEnd(m.notes);
+          } else if (m.t === 'ready') resolve(m.rate);
+          else if (m.t === 'error') {
+            console.error('motor de áudio:', m.message);
+            reject(new Error(m.message));
           }
         };
       });
-      node.port.postMessage({ t: 'init', bytes }, [bytes]);
+      const copy = bytes.slice(0);
+      node.port.postMessage({ t: 'init', bytes: copy }, [copy]);
       return ready;
     })();
     return starting;
@@ -154,6 +180,244 @@
     return { inputs: midiNames() };
   }
 
+  // ------------------------------------------------------------ entrada de áudio (gravação)
+
+  // A entrada aberta: o stream do getUserMedia e o nó que liga ele no worklet.
+  let input = null;
+  // Cada abertura ou fechamento ganha um número: uma permissão que chega depois de um stopInput
+  // (ou de outro startInput) é descartada em vez de reabrir a entrada por trás.
+  let inputGen = 0;
+  let onRecord = null;
+  let onInputLevel = null;
+  let onCaptureEnd = null;
+  let onInputLost = null;
+
+  function closeInput() {
+    if (!input) return;
+    const { stream, source } = input;
+    input = null;
+    for (const t of stream.getTracks()) {
+      t.onended = null;
+      t.stop();
+    }
+    try {
+      source.disconnect();
+    } catch (_) {
+      // já desligado
+    }
+    if (node) node.port.postMessage({ t: 'input', on: false });
+    if (onInputLevel) onInputLevel(0);
+  }
+
+  // Erros do getUserMedia viram códigos que o Dart transforma em mensagem para o usuário.
+  function inputError(err) {
+    const name = err && err.name;
+    const message = String((err && err.message) || err);
+    if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') return { error: 'denied', message };
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return { error: 'notfound', message };
+    if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') return { error: 'missing', message };
+    if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') return { error: 'busy', message };
+    return { error: 'failed', message };
+  }
+
+  // Abre a entrada ([deviceId] null = a padrão do sistema) sem nenhum processamento de voz (eco,
+  // ruído e ganho automático estragam instrumento e voz gravada) e liga no worklet. Devolve
+  // { latency, label } (latência de entrada em segundos: a do aparelho, quando o navegador
+  // informa, mais a base do contexto) ou { error, message }.
+  async function startInput(deviceId) {
+    const md = navigator.mediaDevices;
+    if (!md || !md.getUserMedia) return { error: 'unsupported' };
+    const gen = ++inputGen;
+    closeInput();
+    try {
+      await start();
+    } catch (err) {
+      return { error: 'failed', message: String((err && err.message) || err) };
+    }
+    if (gen !== inputGen) return { error: 'aborted' };
+    const audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: { ideal: 2 },
+      // na mesma taxa do motor, o navegador não precisa converter (o Firefox nem converte)
+      sampleRate: { ideal: ctx.sampleRate },
+    };
+    if (deviceId) audio.deviceId = { exact: deviceId };
+    let stream;
+    try {
+      stream = await md.getUserMedia({ audio });
+    } catch (err) {
+      return inputError(err);
+    }
+    if (gen !== inputGen) {
+      // fechada ou reaberta enquanto o navegador pedia a permissão
+      for (const t of stream.getTracks()) t.stop();
+      return { error: 'aborted' };
+    }
+    const tracks = stream.getAudioTracks();
+    if (tracks.length === 0) {
+      for (const t of stream.getTracks()) t.stop();
+      return { error: 'notfound', message: 'o stream veio sem áudio' };
+    }
+    let source;
+    try {
+      source = new MediaStreamAudioSourceNode(ctx, { mediaStream: stream });
+    } catch (err) {
+      for (const t of stream.getTracks()) t.stop();
+      const settings = tracks[0].getSettings ? tracks[0].getSettings() : {};
+      // o Firefox recusa ligar um microfone numa taxa diferente da do contexto
+      if (err && err.name === 'NotSupportedError') return { error: 'rate', message: String(err.message || err), inputRate: settings.sampleRate || 0, rate: ctx.sampleRate };
+      return { error: 'failed', message: String((err && err.message) || err) };
+    }
+    source.connect(node);
+    input = { stream, source };
+    const track0 = tracks[0];
+    // cabo puxado, interface desligada, permissão revogada: a trilha termina sozinha
+    track0.onended = () => {
+      if (!input || input.stream !== stream) return;
+      closeInput();
+      if (onInputLost) onInputLost(track0.label || '');
+    };
+    node.port.postMessage({ t: 'input', on: true });
+    const settings = track0.getSettings ? track0.getSettings() : {};
+    const deviceLatency = typeof settings.latency === 'number' && Number.isFinite(settings.latency) ? settings.latency : 0;
+    return { latency: deviceLatency + (ctx.baseLatency || 0), label: track0.label || '' };
+  }
+
+  async function stopInput() {
+    inputGen++;
+    closeInput();
+  }
+
+  // Entradas de áudio: [{ id, name }]. Os nomes (e, no Safari, os próprios ids) só aparecem depois
+  // de o site ganhar a permissão do microfone. As pseudo-entradas "default" e "communications" do
+  // Chrome repetem uma entrada de verdade e ficam de fora: a padrão é o id nulo.
+  async function inputDevices() {
+    const md = navigator.mediaDevices;
+    if (!md || !md.enumerateDevices) return [];
+    const all = await md.enumerateDevices();
+    const list = [];
+    for (const d of all) {
+      if (d.kind !== 'audioinput' || !d.deviceId || d.deviceId === 'default' || d.deviceId === 'communications') continue;
+      list.push({ id: d.deviceId, name: d.label || `Entrada ${list.length + 1}` });
+    }
+    return list;
+  }
+
+  // Liga ou desliga a captura no worklet (entrada em blocos para onRecord e notas ao vivo no
+  // motor). Desligar faz chegar o resto da gravação e depois onCaptureEnd, nessa ordem.
+  function setCapture(on) {
+    if (node) node.port.postMessage({ t: 'capture', on: !!on });
+  }
+
+  // O par de captura chega transferido: o Dart fica com uma cópia do trecho válido e o par volta ao
+  // worklet para ser reusado (lá, criar arrays no caminho de áudio é o que se evita).
+  function onRecBlock(m) {
+    try {
+      if (onRecord) onRecord(m.left.slice(0, m.frames), m.right.slice(0, m.frames), m.beat);
+    } finally {
+      // mesmo se o Dart falhar no bloco: sem a devolução o pool do worklet secaria
+      if (node) node.port.postMessage({ t: 'recycle', left: m.left, right: m.right }, [m.left.buffer, m.right.buffer]);
+    }
+  }
+
+  // ------------------------------------------------------------ render fora de tempo real
+
+  let wasmModule = null;
+  function engineModule() {
+    if (!wasmModule) {
+      const p = engineBytes().then((b) => WebAssembly.compile(b));
+      wasmModule = p;
+      p.catch(() => {
+        if (wasmModule === p) wasmModule = null;
+      });
+    }
+    return wasmModule;
+  }
+
+  // Renders em andamento (cada um num Worker próprio): cancelar encerra o Worker na hora, mesmo
+  // no meio de um bloco.
+  const renders = new Set();
+
+  // Renderiza num Worker com um motor só dele. `job`: { calls, samples: [{ id, channels, rate }],
+  // fromBeat, toBeat, tail, outputs, rate }. Devolve { outputs: [[esq, dir], ...], frames } ou
+  // { error, message } (nunca rejeita: o Dart escreve a mensagem).
+  async function renderOffline(job, onProgress) {
+    if (typeof Worker === 'undefined') return { error: 'unsupported', message: 'Este navegador não consegue renderizar em segundo plano (sem Web Worker).' };
+    let module;
+    try {
+      module = await engineModule();
+    } catch (err) {
+      return { error: 'failed', message: `Não deu para carregar o motor de áudio: ${(err && err.message) || err}` };
+    }
+    return new Promise((resolve) => {
+      const worker = new Worker('engine/render-worker.js');
+      const entry = { worker, resolve };
+      renders.add(entry);
+      const finish = (r) => {
+        if (!renders.delete(entry)) return;
+        worker.terminate();
+        resolve(r);
+      };
+      entry.finish = finish;
+      worker.onmessage = (e) => {
+        const m = e.data;
+        if (m.t === 'progress') {
+          if (onProgress) onProgress(m.p);
+        } else if (m.t === 'done') {
+          finish({ outputs: m.outputs, frames: m.frames });
+        } else if (m.t === 'error') {
+          finish({ error: m.code || 'failed', message: m.message });
+        }
+      };
+      worker.onerror = (e) => {
+        e.preventDefault();
+        finish({ error: 'failed', message: `O render parou: ${e.message || 'erro no Worker'}` });
+      };
+      worker.onmessageerror = () => finish({ error: 'failed', message: 'O render devolveu dados ilegíveis.' });
+      try {
+        // os áudios vão copiados: o Dart continua dono dos dele
+        worker.postMessage({
+          t: 'render',
+          wasm: module,
+          rate: job.rate,
+          calls: job.calls,
+          samples: job.samples,
+          fromBeat: job.fromBeat,
+          toBeat: job.toBeat,
+          tail: job.tail,
+          outputs: job.outputs,
+        });
+      } catch (err) {
+        const memory = err && (err.name === 'DataCloneError' || err instanceof RangeError);
+        finish({ error: memory ? 'memory' : 'failed', message: String((err && err.message) || err) });
+      }
+    });
+  }
+
+  function cancelRender() {
+    for (const entry of [...renders]) entry.finish({ error: 'canceled' });
+  }
+
+  // ------------------------------------------------------------ arquivos
+
+  // Oferece os bytes como download. O link temporário vive um minuto: revogar logo depois do
+  // clique cancela o download em alguns navegadores.
+  async function saveFile(name, bytes, mime) {
+    const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
   window.jopendawEngine = {
     start,
     resume,
@@ -170,9 +434,21 @@
     setOnMidiInputs: (cb) => { onMidiInputs = cb; },
     // mensagem MIDI entrando pelo mesmo caminho de um aparelho (teste e depuração sem hardware)
     injectMidi: (status, d1, d2) => onMidiMessage({ data: [status, d1, d2] }),
+    startInput,
+    stopInput,
+    inputDevices,
+    setCapture,
+    setOnRecord: (cb) => { onRecord = cb; },
+    setOnInputLevel: (cb) => { onInputLevel = cb; },
+    setOnCaptureEnd: (cb) => { onCaptureEnd = cb; },
+    setOnInputLost: (cb) => { onInputLost = cb; },
+    renderOffline,
+    cancelRender,
+    saveFile,
     // posição, tocando, estado do contexto, os picos (esq, dir por faixa; o master por último) e
     // o maior indicador do efeito observado desde a leitura anterior, que zera os dois; com o
-    // analisador ligado, a faixa mais forte do espectro (índice e dB) e quantas faixas ele tem
+    // analisador ligado, a faixa mais forte do espectro (índice e dB) e quantas faixas ele tem; com
+    // a entrada aberta, o maior pico dela
     probe: () => {
       const r = { beat: probe.beat, playing: probe.playing, context: ctx ? ctx.state : 'none', peaks: probe.peaks.map((v) => Math.round(v * 1000) / 1000) };
       r.fxMeter = Math.round(probe.fxMeter * 100) / 100;
@@ -182,8 +458,10 @@
         for (let i = 1; i < s.length; i++) if (s[i] > s[bin]) bin = i;
         r.spectrum = { bins: s.length, peakBin: bin, peakDb: Math.round(s[bin] * 10) / 10 };
       }
+      if (input) r.input = Math.round(probe.inputPeak * 1000) / 1000;
       probe.peaks = probe.peaks.map(() => 0);
       probe.fxMeter = 0;
+      probe.inputPeak = 0;
       return r;
     },
   };

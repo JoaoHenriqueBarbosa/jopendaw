@@ -20,6 +20,73 @@ extension type _Host._(JSObject _) implements JSObject {
   external JSPromise<_MidiAccess> enableMidi();
   external void setOnMidi(JSFunction cb);
   external void setOnMidiInputs(JSFunction cb);
+  external JSPromise<_InputOpened> startInput(String? deviceId);
+  external JSPromise<JSAny?> stopInput();
+  external JSPromise<JSArray<_InputDevice>> inputDevices();
+  external void setCapture(bool on);
+  external void setOnRecord(JSFunction cb);
+  external void setOnInputLevel(JSFunction cb);
+  external void setOnCaptureEnd(JSFunction cb);
+  external void setOnInputLost(JSFunction cb);
+  external JSPromise<_RenderResult> renderOffline(_RenderJob job, JSFunction? onProgress);
+  external void cancelRender();
+  external JSPromise<JSAny?> saveFile(String name, JSUint8Array bytes, String mime);
+}
+
+/// Resposta do `startInput` do host: a latência de entrada (s), ou o código do erro
+/// (`unsupported`, `denied`, `notfound`, `missing`, `busy`, `rate`, `aborted`, `failed`) com a
+/// mensagem do navegador.
+extension type _InputOpened._(JSObject _) implements JSObject {
+  external double? get latency;
+  external String? get error;
+  external String? get message;
+
+  /// Só no erro `rate`: a taxa da entrada e a do motor.
+  external double? get inputRate;
+  external double? get rate;
+}
+
+extension type _InputDevice._(JSObject _) implements JSObject {
+  external String get id;
+  external String get name;
+}
+
+/// Pedido de render para o host (vira um objeto literal no JS).
+extension type _RenderJob._(JSObject _) implements JSObject {
+  external factory _RenderJob({
+    JSArray<JSArray<JSAny>> calls,
+    JSArray<_RenderSample> samples,
+    double fromBeat,
+    double toBeat,
+    double tail,
+    JSArray<JSNumber> outputs,
+    double rate,
+  });
+}
+
+extension type _RenderSample._(JSObject _) implements JSObject {
+  external factory _RenderSample({int id, JSArray<JSFloat32Array> channels, double rate});
+}
+
+/// Resposta do `renderOffline` do host: os canais (esq, dir) de cada saída, ou o código do erro
+/// (`canceled`, `empty`, `memory`, `unsupported`, `failed`) com a mensagem já em português.
+extension type _RenderResult._(JSObject _) implements JSObject {
+  external JSArray<JSArray<JSFloat32Array>>? get outputs;
+  external String? get error;
+  external String? get message;
+}
+
+/// Nota tocada ao vivo durante uma captura, como o motor registrou: faixa, altura MIDI, início e
+/// fim em batidas (a posição do quadro em que o motor processou o note on e o note off) e
+/// velocidade 0..1.
+typedef RecordedNote = ({int track, int pitch, double start, double end, double velocity});
+
+/// O render foi cancelado por [AudioEngine.cancelRender] (não é falha: não pede aviso).
+class RenderCanceled implements Exception {
+  const RenderCanceled();
+
+  @override
+  String toString() => 'A renderização foi cancelada.';
 }
 
 /// Resposta do `enableMidi` do host: as entradas, ou o código do erro (`unsupported`, `denied`,
@@ -46,6 +113,7 @@ class AudioEngine {
 
   /// Sobe o contexto de áudio e o motor; devolve a taxa de amostragem.
   Future<double> start() async {
+    _hookInput();
     if (!_hooked) {
       _hooked = true;
       // medidor do efeito e espectro: opcionais, porque o dart2js despacha a função pelo número de
@@ -130,27 +198,155 @@ class AudioEngine {
     _ => throw ArgumentError('argumento do motor: $v'),
   };
 
-  // gravação e render fora de tempo real (contrato da fase 4)
+  // ------------------------------------------------------------------ gravação e render (fase 4)
 
-  /// Abre a entrada de áudio ([deviceId] null = padrão) e liga a captura no worklet; devolve a
-  /// latência de entrada que o navegador informa (s).
-  Future<double> startInput(String? deviceId) => throw UnimplementedError();
-  Future<void> stopInput() => throw UnimplementedError();
+  /// Abre a entrada de áudio ([deviceId] null = padrão), sem cancelamento de eco, supressão de
+  /// ruído nem ganho automático, e liga ela no worklet (o motor recebe cada bloco; o pico chega em
+  /// [onInputLevel]). Devolve a latência de entrada que o navegador informa (s): a do aparelho,
+  /// quando há, mais a base do contexto. Abrir de novo troca a entrada.
+  ///
+  /// Sem suporte no navegador: [UnsupportedError]; permissão negada, entrada inexistente, ocupada
+  /// ou fechada durante a abertura: [StateError] com a mensagem para o usuário.
+  Future<double> startInput(String? deviceId) async {
+    _hookInput();
+    final r = await _host.startInput(deviceId).toDart;
+    switch (r.error) {
+      case null:
+        final latency = r.latency ?? 0;
+        return latency.isFinite && latency > 0 ? latency : 0;
+      case 'unsupported':
+        throw UnsupportedError('Este navegador não dá acesso ao microfone. Use um navegador atual, com o jopendaw aberto em https.');
+      case 'denied':
+        throw StateError('O navegador negou o acesso ao microfone. Libere o microfone nas permissões do site e tente de novo.');
+      case 'notfound':
+        throw StateError('Nenhuma entrada de áudio encontrada. Conecte um microfone ou uma interface de áudio e tente de novo.');
+      case 'missing':
+        throw StateError('A entrada de áudio escolhida não está mais conectada. Escolha outra ou volte para a padrão.');
+      case 'busy':
+        throw StateError('A entrada de áudio está ocupada por outro programa ou não respondeu. Feche o que estiver usando ela e tente de novo.');
+      case 'rate':
+        final input = (r.inputRate ?? 0).round();
+        final engine = (r.rate ?? 0).round();
+        throw StateError(
+          'A entrada de áudio está em ${input > 0 ? '$input Hz' : 'outra taxa'} e o motor em $engine Hz, e este navegador não converte. '
+          'Ajuste a entrada para $engine Hz nas configurações de som do sistema.',
+        );
+      case 'aborted':
+        throw StateError('A abertura da entrada de áudio foi cancelada.');
+      default:
+        throw StateError('Não deu para abrir a entrada de áudio: ${r.message ?? r.error}.');
+    }
+  }
 
-  /// Entradas de áudio (id, nome); pedir o microfone antes revela os nomes.
-  Future<List<(String, String)>> inputDevices() => throw UnimplementedError();
+  /// Fecha a entrada (o navegador solta o microfone) e zera o medidor. Sem entrada aberta, nada.
+  Future<void> stopInput() => _host.stopInput().toDart;
 
-  /// Liga/desliga a captura do que entra (blocos chegam em [onRecord]) e das notas ao vivo no
-  /// motor.
-  void setCapture(bool on) => throw UnimplementedError();
+  /// Entradas de áudio (id, nome), sem as pseudo-entradas do sistema (a padrão é o id null). Os
+  /// nomes só aparecem depois de o site ganhar a permissão do microfone ([startInput]).
+  Future<List<(String, String)>> inputDevices() async {
+    final list = await _host.inputDevices().toDart;
+    return [for (final d in list.toDart) (d.id, d.name)];
+  }
 
-  /// Blocos capturados da entrada (esq, dir) e o pico dela, enquanto a captura está ligada.
+  /// Liga/desliga a captura: enquanto o transporte toca, o que entra chega em blocos (~85 ms) em
+  /// [onRecord], cada um com a batida do primeiro quadro em [recordBeat], e o motor registra as
+  /// notas tocadas ao vivo. Desligar entrega o resto do áudio e depois [onCaptureEnd], nessa ordem.
+  ///
+  /// Os blocos de uma captura são contínuos no tempo do transporte a partir do [recordBeat] de
+  /// cada um (com a volta do loop, quando ligado, no quadro exato do fim dele); um salto de
+  /// posição ou uma parada fecha o bloco, e o seguinte vem com a batida nova. Com o transporte
+  /// parado nada é capturado. Sem entrada aberta, só as notas (gravar numa faixa de instrumento
+  /// não pede microfone); se a entrada cair no meio, a captura segue com silêncio para o resto
+  /// continuar no lugar.
+  void setCapture(bool on) {
+    _hookInput();
+    _host.setCapture(on);
+  }
+
+  /// Blocos capturados da entrada (esq, dir) e o pico dela. O pico chega ~30 vezes por segundo
+  /// sempre que a entrada está aberta (o medidor das faixas armadas funciona antes de gravar),
+  /// não só durante a captura.
   void Function(Float32List left, Float32List right)? onRecord;
   void Function(double peak)? onInputLevel;
 
-  /// Renderiza fora de tempo real num motor separado (Worker): [calls] são as chamadas do
-  /// documento (como o _sync manda), [samples] os áudios por id do motor; devolve os canais de
-  /// cada saída pedida em [outputs] (−1 = master, i = só a faixa i, pós-fader).
+  /// Batida do transporte no primeiro quadro do bloco que [onRecord] está entregando (vale durante
+  /// a chamada). Sem compensação de latência: descontar a de entrada, a de saída e a do documento
+  /// é do controlador.
+  double recordBeat = 0;
+
+  /// Fim de uma captura ([setCapture] false): chega depois do último bloco de [onRecord] e traz as
+  /// notas ao vivo que o motor registrou (vazia quando ninguém tocou ou o motor não registra).
+  void Function(List<RecordedNote> notes)? onCaptureEnd;
+
+  /// A entrada aberta sumiu sozinha (cabo, interface desligada, permissão revogada): ela já foi
+  /// fechada; vem a mensagem para o usuário.
+  void Function(String message)? onInputLost;
+
+  bool _inputHooked = false;
+
+  void _hookInput() {
+    if (_inputHooked) return;
+    _inputHooked = true;
+    // argumentos opcionais pelo mesmo motivo do setOnState: o dart2js despacha pelo número deles
+    _host.setOnRecord(
+      ((JSFloat32Array left, JSFloat32Array right, [JSNumber? beat]) {
+        final b = beat?.toDartDouble ?? 0;
+        recordBeat = b.isFinite ? b : 0;
+        onRecord?.call(left.toDart, right.toDart);
+      }).toJS,
+    );
+    _host.setOnInputLevel(
+      ((JSNumber peak) {
+        final p = peak.toDartDouble;
+        onInputLevel?.call(p.isFinite ? p.clamp(0, 1).toDouble() : 0);
+      }).toJS,
+    );
+    _host.setOnCaptureEnd(
+      ([JSFloat32Array? notes]) {
+        onCaptureEnd?.call(_recordedNotes(notes?.toDart));
+      }.toJS,
+    );
+    _host.setOnInputLost(
+      ([JSString? label]) {
+        final name = label?.toDart ?? '';
+        onInputLost?.call(name.isEmpty ? 'A entrada de áudio foi desconectada.' : 'A entrada de áudio "$name" foi desconectada.');
+      }.toJS,
+    );
+  }
+
+  /// Notas do registro do motor: grupos de 5 floats (faixa, altura, início, fim, velocidade).
+  static List<RecordedNote> _recordedNotes(Float32List? flat) {
+    if (flat == null) return const [];
+    final notes = <RecordedNote>[];
+    for (var i = 0; i + 5 <= flat.length; i += 5) {
+      final start = flat[i + 2];
+      final end = flat[i + 3];
+      if (!start.isFinite || !end.isFinite || !flat[i].isFinite || !flat[i + 1].isFinite) continue;
+      final velocity = flat[i + 4];
+      notes.add((
+        track: flat[i].round(),
+        pitch: flat[i + 1].round().clamp(0, 127),
+        start: start,
+        end: end < start ? start : end,
+        velocity: velocity.isFinite ? velocity.clamp(0, 1).toDouble() : 0.8,
+      ));
+    }
+    return notes;
+  }
+
+  /// Renderiza fora de tempo real num motor separado (Worker, sem esperar o relógio e sem travar a
+  /// interface): [calls] são as chamadas do documento (como o _sync manda), [samples] os áudios
+  /// por id do motor; devolve os canais de cada saída pedida em [outputs] (−1 = master,
+  /// pós-limitador; i = só a faixa i, pós-fader), com (toBeat − fromBeat) no andamento das
+  /// chamadas mais [tailSeconds] de quadros.
+  ///
+  /// O render não tem metrônomo nem loop, e as chamadas de transporte e de notas ao vivo em
+  /// [calls] são ignoradas. Na cauda o transporte segue (a automação continua valendo), mas nada
+  /// começa depois de [toBeat]: clipes e notas que atravessam o fim terminam nele (clipe com um
+  /// fade de 10 ms, nota com a soltura do instrumento); soam só as caudas do que já tocava.
+  ///
+  /// Cancelado por [cancelRender]: [RenderCanceled]. Trecho vazio, falta de memória ou falha do
+  /// motor: [StateError] com a mensagem para o usuário.
   Future<List<List<Float32List>>> renderOffline({
     required List<List<Object>> calls,
     required Map<int, DecodedAudio> samples,
@@ -160,10 +356,48 @@ class AudioEngine {
     required List<int> outputs,
     required double rate,
     void Function(double progress)? onProgress,
-  }) => throw UnimplementedError();
+  }) async {
+    final job = _RenderJob(
+      calls: [
+        for (final c in calls) [for (final a in c) _js(a)].toJS,
+      ].toJS,
+      samples: [
+        for (final e in samples.entries) _RenderSample(id: e.key, channels: [for (final c in e.value.channels) c.toJS].toJS, rate: e.value.rate),
+      ].toJS,
+      fromBeat: fromBeat,
+      toBeat: toBeat,
+      tail: tailSeconds,
+      outputs: [for (final o in outputs) o.toJS].toJS,
+      rate: rate,
+    );
+    final progress = onProgress == null
+        ? null
+        : ((JSNumber p) {
+            onProgress(p.toDartDouble.clamp(0, 1).toDouble());
+          }).toJS;
+    final r = await _host.renderOffline(job, progress).toDart;
+    switch (r.error) {
+      case null:
+        final outs = r.outputs;
+        if (outs == null) throw StateError('O render não devolveu áudio.');
+        return [
+          for (final o in outs.toDart) [for (final c in o.toDart) c.toDart],
+        ];
+      case 'canceled':
+        throw const RenderCanceled();
+      case 'unsupported':
+        throw UnsupportedError(r.message ?? 'Este navegador não consegue renderizar em segundo plano.');
+      default:
+        throw StateError(r.message ?? 'O render falhou.');
+    }
+  }
+
+  /// Interrompe os renders em andamento: cada [renderOffline] pendente termina com
+  /// [RenderCanceled].
+  void cancelRender() => _host.cancelRender();
 
   /// Oferece os bytes para salvar como arquivo (download no navegador).
-  Future<void> saveFile(String name, Uint8List bytes, String mime) => throw UnimplementedError();
+  Future<void> saveFile(String name, Uint8List bytes, String mime) => _host.saveFile(name, bytes.toJS, mime).toDart;
 }
 
 /// Guardado local do DAW no IndexedDB: textos (o documento) e bytes (os áudios importados).

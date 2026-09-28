@@ -31,27 +31,46 @@ class AudioEngine {
   /// Pede acesso ao MIDI; fora do navegador ainda não há.
   Future<List<String>> enableMidi() => Future.error(UnsupportedError('O MIDI ainda não funciona fora do navegador.'));
 
-  // gravação e render fora de tempo real (contrato da fase 4)
+  // ------------------------------------------------------------------ gravação e render (fase 4)
+  // Mesma interface do engine_web.dart (veja a documentação de lá). Fora do navegador ainda não há
+  // entrada de áudio nem render: abrir, capturar, renderizar e salvar falham com
+  // [UnsupportedError]; fechar e cancelar (limpeza) não têm o que fazer e só voltam.
 
-  /// Abre a entrada de áudio ([deviceId] null = padrão) e liga a captura no worklet; devolve a
-  /// latência de entrada que o navegador informa (s).
-  Future<double> startInput(String? deviceId) => throw UnimplementedError();
-  Future<void> stopInput() => throw UnimplementedError();
+  static const _noRecording = 'A gravação ainda não funciona fora do navegador: use o jopendaw no navegador por enquanto.';
+  static const _noRender = 'Exportar e congelar faixas ainda não funcionam fora do navegador: use o jopendaw no navegador por enquanto.';
 
-  /// Entradas de áudio (id, nome); pedir o microfone antes revela os nomes.
-  Future<List<(String, String)>> inputDevices() => throw UnimplementedError();
+  /// Abre a entrada de áudio ([deviceId] null = padrão) sem processamento de voz e devolve a
+  /// latência de entrada (s). Aqui: [UnsupportedError].
+  Future<double> startInput(String? deviceId) => Future.error(UnsupportedError(_noRecording));
 
-  /// Liga/desliga a captura do que entra (blocos chegam em [onRecord]) e das notas ao vivo no
-  /// motor.
-  void setCapture(bool on) => throw UnimplementedError();
+  /// Fecha a entrada. Aqui: nada aberto, nada a fechar.
+  Future<void> stopInput() async {}
 
-  /// Blocos capturados da entrada (esq, dir) e o pico dela, enquanto a captura está ligada.
+  /// Entradas de áudio (id, nome), a padrão sendo o id null. Aqui: [UnsupportedError].
+  Future<List<(String, String)>> inputDevices() => Future.error(UnsupportedError(_noRecording));
+
+  /// Liga/desliga a captura (áudio da entrada em [onRecord] enquanto o transporte toca, notas ao
+  /// vivo no motor; o fim chega em [onCaptureEnd]). Aqui: desligar não tem o que fazer, ligar dá
+  /// [UnsupportedError].
+  void setCapture(bool on) {
+    if (on) throw UnsupportedError(_noRecording);
+  }
+
+  /// Blocos capturados da entrada (esq, dir) e o pico dela (~30 por segundo com a entrada aberta).
   void Function(Float32List left, Float32List right)? onRecord;
   void Function(double peak)? onInputLevel;
 
-  /// Renderiza fora de tempo real num motor separado (Worker): [calls] são as chamadas do
-  /// documento (como o _sync manda), [samples] os áudios por id do motor; devolve os canais de
-  /// cada saída pedida em [outputs] (−1 = master, i = só a faixa i, pós-fader).
+  /// Batida do transporte no primeiro quadro do bloco que [onRecord] está entregando.
+  double recordBeat = 0;
+
+  /// Fim de uma captura, depois do último bloco de [onRecord], com as notas registradas.
+  void Function(List<RecordedNote> notes)? onCaptureEnd;
+
+  /// A entrada aberta sumiu sozinha (já fechada); vem a mensagem para o usuário.
+  void Function(String message)? onInputLost;
+
+  /// Renderiza fora de tempo real os canais de cada saída em [outputs] (−1 = master, i = faixa i,
+  /// pós-fader), de [fromBeat] a [toBeat] mais [tailSeconds]. Aqui: [UnsupportedError].
   Future<List<List<Float32List>>> renderOffline({
     required List<List<Object>> calls,
     required Map<int, DecodedAudio> samples,
@@ -61,10 +80,26 @@ class AudioEngine {
     required List<int> outputs,
     required double rate,
     void Function(double progress)? onProgress,
-  }) => throw UnimplementedError();
+  }) => Future.error(UnsupportedError(_noRender));
 
-  /// Oferece os bytes para salvar como arquivo (download no navegador).
-  Future<void> saveFile(String name, Uint8List bytes, String mime) => throw UnimplementedError();
+  /// Interrompe os renders em andamento ([RenderCanceled]). Aqui: nenhum para cancelar.
+  void cancelRender() {}
+
+  /// Oferece os bytes para salvar como arquivo. Aqui: [UnsupportedError].
+  Future<void> saveFile(String name, Uint8List bytes, String mime) =>
+      Future.error(UnsupportedError('Salvar arquivos ainda não funciona fora do navegador: use o jopendaw no navegador por enquanto.'));
+}
+
+/// Nota tocada ao vivo durante uma captura (faixa, altura MIDI, início e fim em batidas,
+/// velocidade 0..1); igual à do engine_web.dart.
+typedef RecordedNote = ({int track, int pitch, double start, double end, double velocity});
+
+/// O render foi cancelado por [AudioEngine.cancelRender]; igual à do engine_web.dart.
+class RenderCanceled implements Exception {
+  const RenderCanceled();
+
+  @override
+  String toString() => 'A renderização foi cancelada.';
 }
 
 /// Guardado local do DAW (documento e áudios).
