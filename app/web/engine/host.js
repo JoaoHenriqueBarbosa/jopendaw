@@ -8,10 +8,15 @@
 
   // Último estado do motor e o maior pico de cada canal desde a última leitura: para conferir de
   // fora (console, testes automatizados) que o áudio está saindo mesmo, sem precisar ouvir.
-  const probe = { beat: 0, playing: false, peaks: [] };
-  function track(beat, playing, peaks) {
+  const probe = { beat: 0, playing: false, peaks: [], fxMeter: 0, spectrum: null };
+  // O worklet manda o espectro a cada poucos estados; entre um e outro vale o último (null só
+  // quando nada é observado, como o Dart espera).
+  let spectrum = null;
+  function track(beat, playing, peaks, fxMeter) {
     probe.beat = beat;
     probe.playing = playing;
+    probe.fxMeter = Math.max(probe.fxMeter, fxMeter);
+    probe.spectrum = spectrum;
     // faixas entraram ou saíram: as posições agora são de outros canais
     if (peaks.length !== probe.peaks.length) probe.peaks = [];
     for (let i = 0; i < peaks.length; i++) probe.peaks[i] = Math.max(probe.peaks[i] || 0, peaks[i]);
@@ -37,8 +42,11 @@
             reject(new Error(m.message));
           }
           else if (m.t === 'state') {
-            track(m.beat, m.playing, m.peaks);
-            if (onState) onState(m.beat, m.playing, m.peaks);
+            if (!m.analyzing) spectrum = null;
+            else if (m.spectrum) spectrum = m.spectrum;
+            const fxMeter = m.fxMeter || 0;
+            track(m.beat, m.playing, m.peaks, fxMeter);
+            if (onState) onState(m.beat, m.playing, m.peaks, fxMeter, spectrum);
           }
         };
       });
@@ -162,11 +170,20 @@
     setOnMidiInputs: (cb) => { onMidiInputs = cb; },
     // mensagem MIDI entrando pelo mesmo caminho de um aparelho (teste e depuração sem hardware)
     injectMidi: (status, d1, d2) => onMidiMessage({ data: [status, d1, d2] }),
-    // posição, tocando, estado do contexto e os picos (esq, dir por faixa; o master por último)
-    // desde a leitura anterior, que zera os picos
+    // posição, tocando, estado do contexto, os picos (esq, dir por faixa; o master por último) e
+    // o maior indicador do efeito observado desde a leitura anterior, que zera os dois; com o
+    // analisador ligado, a faixa mais forte do espectro (índice e dB) e quantas faixas ele tem
     probe: () => {
       const r = { beat: probe.beat, playing: probe.playing, context: ctx ? ctx.state : 'none', peaks: probe.peaks.map((v) => Math.round(v * 1000) / 1000) };
+      r.fxMeter = Math.round(probe.fxMeter * 100) / 100;
+      const s = probe.spectrum;
+      if (s) {
+        let bin = 0;
+        for (let i = 1; i < s.length; i++) if (s[i] > s[bin]) bin = i;
+        r.spectrum = { bins: s.length, peakBin: bin, peakDb: Math.round(s[bin] * 10) / 10 };
+      }
       probe.peaks = probe.peaks.map(() => 0);
+      probe.fxMeter = 0;
       return r;
     },
   };

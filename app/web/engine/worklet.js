@@ -3,15 +3,22 @@
 // O host (host.js) baixa o engine.wasm e manda os bytes; a compilação é aqui (o Chrome não entrega
 // um WebAssembly.Module compilado na thread principal para o escopo do worklet).
 // Os comandos chegam pela porta como listas de chamadas ([nome, ...args]) e rodam entre um bloco
-// e outro; o estado (posição, tocando, picos) volta pela porta ~60 vezes por segundo.
+// e outro; o estado (posição, tocando, picos, indicador do efeito observado e, com o analisador
+// ligado, o espectro) volta pela porta ~60 vezes por segundo.
 const BLOCK = 128;
 const MAX_PEAKS = 2 * 257;
+// Faixas do espectro (FFT de 2048 pontos), mandado a cada 3 estados (~20 por segundo).
+const SPECTRUM = 1024;
+const SPECTRUM_EVERY = 3;
 
 class EngineProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.wasm = null;
     this.blocks = 0;
+    this.states = 0;
+    // o analisador só custa (FFT e cópia) quando alguém observa uma faixa
+    this.analyzing = false;
     this.port.onmessage = (e) => {
       try {
         this.onMessage(e.data);
@@ -28,6 +35,8 @@ class EngineProcessor extends AudioWorkletProcessor {
       this.left = this.wasm.alloc(BLOCK);
       this.right = this.wasm.alloc(BLOCK);
       this.peaks = this.wasm.alloc(MAX_PEAKS);
+      this.spectrum = this.wasm.alloc(SPECTRUM);
+      this.analyzing = false;
       this.port.postMessage({ t: 'ready', rate: sampleRate });
       return;
     }
@@ -45,7 +54,10 @@ class EngineProcessor extends AudioWorkletProcessor {
       }
       w.sample_load(msg.id, pl, pr, frames, msg.rate);
     } else if (msg.t === 'calls') {
-      for (const [name, ...args] of msg.list) w[name](...args);
+      for (const [name, ...args] of msg.list) {
+        w[name](...args);
+        if (name === 'watch_analyzer') this.analyzing = args[0] !== -2;
+      }
     }
   }
 
@@ -63,7 +75,19 @@ class EngineProcessor extends AudioWorkletProcessor {
     if (++this.blocks % 6 === 0) {
       const count = w.peaks(this.peaks, MAX_PEAKS);
       const peaks = new Float32Array(w.memory.buffer, this.peaks, count).slice();
-      this.port.postMessage({ t: 'state', beat: w.beat(), playing: w.playing() === 1, peaks }, [peaks.buffer]);
+      const transfer = [peaks.buffer];
+      let spectrum = null;
+      if (this.analyzing && ++this.states % SPECTRUM_EVERY === 0) {
+        const bins = w.analyzer(this.spectrum, SPECTRUM);
+        if (bins > 0) {
+          spectrum = new Float32Array(w.memory.buffer, this.spectrum, bins).slice();
+          transfer.push(spectrum.buffer);
+        }
+      }
+      this.port.postMessage(
+        { t: 'state', beat: w.beat(), playing: w.playing() === 1, peaks, fxMeter: w.fx_meter(), analyzing: this.analyzing, spectrum },
+        transfer,
+      );
     }
     return true;
   }

@@ -134,8 +134,9 @@ pub extern "C" fn clip_add(track: usize, sample: u32, start: f64, offset: f64, l
     engine().add_clip(Clip { track, sample, start, offset, length, gain, fade_in, fade_out });
 }
 
-/// Tipo da faixa `i` (0 áudio, 1 sintetizador, 2 bateria, 3 sampler). Mandar o mesmo tipo de
-/// novo não mexe em nada; trocar recria o instrumento nos padrões, então vem antes dos `param`.
+/// Tipo da faixa `i` (0 áudio, 1 sintetizador, 2 bateria, 3 sampler, 4 barramento). Mandar o
+/// mesmo tipo de novo não mexe em nada; trocar recria o instrumento nos padrões, então vem antes
+/// dos `param`.
 #[unsafe(no_mangle)]
 pub extern "C" fn track_kind(i: usize, kind: u32) {
     engine().set_track_kind(i, kind);
@@ -181,6 +182,107 @@ pub extern "C" fn live_off(track: usize, pitch: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn panic() {
     engine().panic();
+}
+
+// ------------------------------------------------------------------ efeitos, roteamento, automação
+// Faixa −1 é o master onde faz sentido (efeitos, automação de volume/pan/efeito, analisador).
+
+/// Quantos slots de efeito a faixa tem (até 16). Os que sobram saem em fade.
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_count(track: i32, n: u32) {
+    engine().set_fx_count(track, n as usize);
+}
+
+/// Tipo do efeito no slot (1..12, 0 esvazia). O mesmo tipo de novo não faz nada; outro tipo cria o
+/// efeito nos padrões (então vem antes dos `fx_param`) e troca por crossfade.
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_set(track: i32, slot: u32, kind: u32) {
+    engine().set_fx(track, slot as usize, kind);
+}
+
+/// Parâmetro `id` do efeito no slot, na unidade da tabela (dB, Hz, s...).
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_param(track: i32, slot: u32, id: u32, value: f32) {
+    engine().set_fx_param(track, slot as usize, id, value);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_bypass(track: i32, slot: u32, on: u32) {
+    engine().set_fx_bypass(track, slot as usize, on != 0);
+}
+
+/// Quantos envios a faixa tem (até 16).
+#[unsafe(no_mangle)]
+pub extern "C" fn sends_count(track: i32, n: u32) {
+    if track >= 0 {
+        engine().set_sends_count(track as usize, n as usize);
+    }
+}
+
+/// Envio `index` da faixa para o barramento `bus_track`, nível em ganho linear, `pre` 1 =
+/// pré-fader.
+#[unsafe(no_mangle)]
+pub extern "C" fn send_set(track: i32, index: u32, bus_track: i32, level: f32, pre: u32) {
+    if track >= 0 {
+        engine().set_send(track as usize, index as usize, bus_track, level, pre != 0);
+    }
+}
+
+/// Saída da faixa: −1 master, senão o índice do barramento.
+#[unsafe(no_mangle)]
+pub extern "C" fn track_output(track: i32, target: i32) {
+    if track >= 0 {
+        engine().set_output(track as usize, target);
+    }
+}
+
+/// Apaga as lanes de automação (antes de reenviá-las com `auto_lane` e `auto_point`).
+#[unsafe(no_mangle)]
+pub extern "C" fn auto_clear() {
+    engine().clear_automation();
+}
+
+/// Nova lane: alvo 0 volume, 1 pan, 2 parâmetro do instrumento (`id`), 3 parâmetro do efeito
+/// (`slot`, `id`), 4 nível do envio (`slot` = índice). Devolve o índice da lane.
+#[unsafe(no_mangle)]
+pub extern "C" fn auto_lane(track: i32, target: u32, slot: u32, id: u32) -> u32 {
+    engine().add_lane(track, target, slot, id)
+}
+
+/// Ponto na lane: batida absoluta, valor na unidade do alvo e curva −1..1 até o próximo.
+#[unsafe(no_mangle)]
+pub extern "C" fn auto_point(lane: u32, beat: f64, value: f32, curve: f32) {
+    engine().add_point(lane, beat, value, curve);
+}
+
+/// Efeito cujo indicador vai em `fx_meter` (slot −1 desliga).
+#[unsafe(no_mangle)]
+pub extern "C" fn watch_fx(track: i32, slot: i32) {
+    engine().watch_fx(track, slot);
+}
+
+/// Faixa do analisador de espectro (−1 master, −2 desliga).
+#[unsafe(no_mangle)]
+pub extern "C" fn watch_analyzer(track: i32) {
+    engine().watch_analyzer(track);
+}
+
+/// Indicador do efeito observado (redução de ganho em dB na dinâmica; 0 se nenhum).
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_meter() -> f32 {
+    engine().fx_meter()
+}
+
+/// Escreve em `out` (memória de `alloc`) até `n` magnitudes em dB (−120..0) do espectro da faixa
+/// observada: FFT de 2n pontos com janela de Hann, faixas lineares de 0 à metade da taxa. Devolve
+/// quantas escreveu (a maior potência de 2 até `n` e 2048; 0 sem faixa observada).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn analyzer(out: *mut f32, n: u32) -> u32 {
+    if out.is_null() {
+        return 0;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(out, n as usize) };
+    engine().analyzer(out) as u32
 }
 
 #[unsafe(no_mangle)]

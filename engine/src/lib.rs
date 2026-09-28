@@ -18,7 +18,30 @@
 //! que o sequenciador disparou e ainda soam (altura e fim), mantido aqui, e não da lista: assim um
 //! reenvio no meio de uma nota (que pode até apagá-la) nunca deixa nota presa. Tocar a partir do
 //! meio de uma nota não a "persegue": só soam as notas que começam dali em diante.
+//!
+//! # Roteamento
+//!
+//! Cada faixa tem um buffer de trabalho por bloco. O caminho de uma faixa é: instrumento e clipes
+//! (ou, num barramento, o que chegou nele) → inserts ([`Chain`]) → envios pré-fader → volume, pan
+//! e mudo → envios pós-fader → porta do solo → saída (master ou um barramento). As faixas normais
+//! são processadas primeiro (quem serve de chave de sidechain antes de quem a usa), depois os
+//! barramentos em ordem de índice: o app garante que barramento só sai ou envia para barramento
+//! de índice maior; um destino que quebre isso é ignorado (a saída vira o master). O master soma
+//! tudo, aplica o volume, a cadeia dele e, por último, o limitador de segurança.
+//!
+//! Os efeitos rodam mesmo sem nada tocando enquanto houver cauda; quando a entrada está calada e
+//! a saída da cadeia fica em silêncio por mais tempo que o maior atraso que ela pode devolver, a
+//! cadeia para de rodar até a entrada voltar. Latência de efeito (lookahead) ainda não é
+//! compensada.
+//!
+//! # Automação
+//!
+//! Lanes com pontos em batidas (curva entre um ponto e o próximo). Tocando, o bloco é fatiado em
+//! passos de [`AUTO_STEP`] quadros e cada passo avalia as lanes e aplica: volume, pan, parâmetro
+//! do instrumento, parâmetro de efeito, nível de envio. O valor estático que o app manda fica
+//! guardado; parado (ou quando a lane some), vale ele de novo.
 
+pub mod analyzer;
 pub mod drums;
 pub mod dsp;
 pub mod effect;
@@ -26,7 +49,7 @@ pub mod fx;
 pub mod instrument;
 mod limiter;
 mod metronome;
-mod mixer;
+pub mod mixer;
 pub mod sampler;
 pub mod synth;
 
@@ -34,12 +57,26 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub use metronome::Metronome;
-pub use mixer::{Track, pan_gains};
+pub use mixer::{Chain, MAX_SENDS, MAX_SLOTS, STATIC_PARAMS, Send, Track, pan_gains};
 
+use analyzer::Analyzer;
 use instrument::Instrument;
+use mixer::{Scratch, Stereo};
 
-/// Maior bloco processado de uma vez; blocos maiores são fatiados.
+/// Maior bloco que instrumentos e efeitos recebem de uma vez (contrato com eles).
 pub const MAX_BLOCK: usize = 4096;
+
+/// Bloco interno de processamento: blocos maiores do hospedeiro são fatiados nele (os buffers de
+/// cada faixa têm este tamanho; o worklet manda 128).
+const CHUNK: usize = 512;
+
+/// Com automação tocando, o bloco é fatiado neste passo (quadros) e cada fatia avalia as lanes:
+/// 0,7 ms a 48 kHz, fino o bastante para uma rampa de volume não dar degraus (o fader ainda
+/// suaviza entre um passo e outro).
+pub const AUTO_STEP: usize = 32;
+
+/// Saída abaixo disso (−120 dB) conta como silêncio para a cadeia de efeitos poder parar.
+const SILENCE: f32 = 1e-6;
 
 /// Fade dos clipes de áudio ao parar: cortar o áudio no meio de uma onda estala.
 const STOP_FADE_SECS: f64 = 0.01;
@@ -183,11 +220,21 @@ struct Lane {
     cursor: usize,
     /// Notas do sequenciador soando; no máximo uma por altura.
     held: Vec<Held>,
+    /// Últimos valores de parâmetro que o app mandou (NaN = nunca), para a automação devolver.
+    statics: [f32; STATIC_PARAMS],
 }
 
 impl Lane {
     fn new() -> Self {
-        Self { kind: instrument::kind::AUDIO, instrument: None, sample: 0, notes: Vec::with_capacity(NOTES_RESERVED), cursor: 0, held: Vec::with_capacity(128) }
+        Self {
+            kind: instrument::kind::AUDIO,
+            instrument: None,
+            sample: 0,
+            notes: Vec::with_capacity(NOTES_RESERVED),
+            cursor: 0,
+            held: Vec::with_capacity(128),
+            statics: [f32::NAN; STATIC_PARAMS],
+        }
     }
 
     /// Aponta o cursor para a primeira nota que ainda não começou em `pos`.
@@ -265,6 +312,122 @@ fn hold(held: &mut Vec<Held>, pitch: u8, end: f64) {
     }
 }
 
+/// Um ponto de automação: o valor numa batida e a curva até o próximo ponto.
+#[derive(Clone, Copy, Debug)]
+struct AutoPoint {
+    beat: f64,
+    value: f32,
+    /// −1..1: entre este ponto e o próximo o valor segue t^(2^(curva·3)) (0 = reta).
+    curve: f32,
+}
+
+/// O que uma lane de automação move: faixa (−1 master), tipo ([`effect::auto_target`]), slot (do
+/// efeito ou índice do envio) e id do parâmetro. Campos que o tipo não usa ficam em 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Target {
+    track: i32,
+    kind: u32,
+    slot: u32,
+    id: u32,
+}
+
+impl Target {
+    fn new(track: i32, kind: u32, slot: u32, id: u32) -> Self {
+        use effect::auto_target as at;
+        let (slot, id) = match kind {
+            at::VOLUME | at::PAN => (0, 0),
+            at::INSTRUMENT => (0, id),
+            at::SEND => (slot, 0),
+            _ => (slot, id),
+        };
+        Self { track, kind, slot, id }
+    }
+}
+
+/// Pontos reservados por lane (cabem sem realocar; passar disso realoca no comando).
+const POINTS_RESERVED: usize = 256;
+
+struct AutoLane {
+    target: Target,
+    /// Ordenados pela batida; pontos na mesma batida ficam na ordem em que chegaram (um salto).
+    points: Vec<AutoPoint>,
+    /// Último valor aplicado (NaN = nenhum): parâmetros de instrumento e efeito só são mexidos
+    /// quando o valor muda.
+    last: f32,
+}
+
+impl AutoLane {
+    fn new() -> Self {
+        Self { target: Target::new(-1, 0, 0, 0), points: Vec::with_capacity(POINTS_RESERVED), last: f32::NAN }
+    }
+
+    /// Valor na batida: antes do primeiro ponto vale o primeiro; depois do último, o último.
+    fn value_at(&self, beat: f64) -> Option<f32> {
+        let p = &self.points;
+        let first = p.first()?;
+        let j = p.partition_point(|q| q.beat <= beat);
+        if j == 0 {
+            return Some(first.value);
+        }
+        let a = p[j - 1];
+        let Some(b) = p.get(j) else { return Some(a.value) };
+        // b.beat > beat >= a.beat: o intervalo nunca é vazio
+        let t = ((beat - a.beat) / (b.beat - a.beat)).clamp(0.0, 1.0) as f32;
+        let shaped = if a.curve == 0.0 { t } else { t.powf((a.curve * 3.0).exp2()) };
+        Some(a.value + (b.value - a.value) * shaped)
+    }
+}
+
+/// O roteamento e os inserts de uma faixa.
+struct Strip {
+    chain: Chain,
+    sends: Vec<Send>,
+    /// Saída pedida pelo app: −1 master, senão o índice de um barramento.
+    output: i32,
+    /// Saída validada (−1 = master): só um barramento processado depois desta faixa.
+    out_dst: i32,
+    /// Cadeia parada: entrada calada e saída em silêncio há `chain.hold()` quadros.
+    idle: bool,
+    quiet: usize,
+    /// Alguma cadeia usa esta faixa como chave de sidechain: a saída pós-inserts é guardada.
+    is_key: bool,
+    /// A chave guardada já foi zerada (a faixa está calada).
+    key_silent: bool,
+}
+
+impl Strip {
+    fn new(rate: f64, bpm: f64) -> Self {
+        let mut chain = Chain::new(rate);
+        chain.set_tempo(bpm);
+        Self { chain, sends: Vec::with_capacity(MAX_SENDS), output: -1, out_dst: -1, idle: false, quiet: 0, is_key: false, key_silent: false }
+    }
+}
+
+/// Maior pico e se o bloco é todo finito (NaN ou infinito não entram no pico: `max` os ignora).
+fn scan(l: &[f32], r: &[f32]) -> (f32, bool) {
+    let mut peak = 0.0f32;
+    let mut sum = 0.0f32;
+    for &v in l.iter().chain(r) {
+        peak = peak.max(v.abs());
+        sum += v;
+    }
+    (peak, sum.is_finite())
+}
+
+/// Soma os envios pré (ou pós) fader da faixa `src` nos barramentos. `audible` é a faixa passar
+/// pelo solo; um envio para um barramento solado (ou que alimenta um solado) segue mesmo com a
+/// origem calada pelo solo, para o retorno solado soar com tudo o que chega nele.
+#[allow(clippy::too_many_arguments)]
+fn mix_sends(sends: &mut [Send], bufs: &mut [Stereo], incoming: &mut [bool], up: &[bool], audible: bool, src: usize, n: usize, pre: bool, k: f32) {
+    for s in sends.iter_mut().filter(|s| s.pre == pre && s.dst >= 0) {
+        let d = s.dst as usize;
+        let on = audible || up[d];
+        let Ok([from, to]) = bufs.get_disjoint_mut([src, d]) else { continue };
+        s.mix(&from.l[..n], &from.r[..n], &mut to.l[..n], &mut to.r[..n], on, k);
+        incoming[d] = true;
+    }
+}
+
 /// O motor. Um por contexto de áudio.
 pub struct Engine {
     rate: f64,
@@ -279,14 +442,34 @@ pub struct Engine {
     samples: HashMap<u32, Arc<Sample>>,
     clips: Vec<Clip>,
     tracks: Vec<Track>,
-    /// Paralelo a `tracks`.
+    /// Paralelos a `tracks`: instrumento e notas, roteamento e inserts, o buffer de trabalho do
+    /// bloco (o barramento acumula nele o que chega) e a última saída pós-inserts (chave de
+    /// sidechain).
     lanes: Vec<Lane>,
+    strips: Vec<Strip>,
+    bufs: Vec<Stereo>,
+    keys: Vec<Stereo>,
+    /// Algo chegou no barramento neste bloco.
+    incoming: Vec<bool>,
+    /// Solo: `up` = solada ou alimenta pela saída uma solada; `aud` = passa pelo solo (`up` mais
+    /// os barramentos que recebem de alguma dessas).
+    up: Vec<bool>,
+    aud: Vec<bool>,
+    /// Ordem de processamento: faixas normais (as que servem de chave de sidechain antes das que
+    /// as usam), depois os barramentos em ordem de índice. `rank` é a posição de cada faixa nela.
+    order: Vec<usize>,
+    rank: Vec<usize>,
+    routing_dirty: bool,
     master: Track,
+    master_fx: Chain,
+    master_idle: bool,
+    master_quiet: usize,
     limiter: limiter::Limiter,
     limiter_on: bool,
     metronome: Metronome,
-    buf_l: Vec<f32>,
-    buf_r: Vec<f32>,
+    scratch: Scratch,
+    /// Coeficiente de suavização dos envios (o mesmo dos canais).
+    smooth: f32,
     /// Depois do stop, os clipes de áudio ainda soam por alguns quadros descendo a zero: quantos
     /// faltam, de quantos, e de que posição (quadros).
     tail: usize,
@@ -296,6 +479,20 @@ pub struct Engine {
     notes_dirty: bool,
     /// Reposicionar os cursores das notas na posição atual antes do próximo bloco.
     recue: bool,
+    /// Lanes de automação: as `auto_count` primeiras valem; as outras são reaproveitadas (com os
+    /// pontos já reservados) no próximo envio.
+    auto: Vec<AutoLane>,
+    auto_count: usize,
+    /// Alvos das lanes apagadas pelo último `clear_automation`: os que não voltarem a ser
+    /// automatizados retornam ao valor estático.
+    auto_restore: Vec<Target>,
+    /// A automação está aplicada (tocando): ao parar, tudo volta ao estático.
+    auto_live: bool,
+    /// Efeito observado (faixa, slot; slot −1 = nenhum) e faixa do analisador (−1 master, −2
+    /// nenhuma).
+    watch_fx: (i32, i32),
+    watch_analyzer: i32,
+    analyzer: Analyzer,
 }
 
 impl Engine {
@@ -313,17 +510,36 @@ impl Engine {
             clips: Vec::new(),
             tracks: Vec::new(),
             lanes: Vec::new(),
+            strips: Vec::new(),
+            bufs: Vec::new(),
+            keys: Vec::new(),
+            incoming: Vec::new(),
+            up: Vec::new(),
+            aud: Vec::new(),
+            order: Vec::new(),
+            rank: Vec::new(),
+            routing_dirty: false,
             master: Track::new(rate),
+            master_fx: Chain::new(rate),
+            master_idle: false,
+            master_quiet: 0,
             limiter: limiter::Limiter::new(rate),
             limiter_on: true,
             metronome: Metronome::default(),
-            buf_l: vec![0.0; MAX_BLOCK],
-            buf_r: vec![0.0; MAX_BLOCK],
+            scratch: Scratch::new(CHUNK),
+            smooth: mixer::smooth_coef(rate),
             tail: 0,
             tail_len: ((STOP_FADE_SECS * rate) as usize).max(1),
             tail_pos: 0.0,
             notes_dirty: false,
             recue: false,
+            auto: Vec::new(),
+            auto_count: 0,
+            auto_restore: Vec::with_capacity(64),
+            auto_live: false,
+            watch_fx: (-1, -1),
+            watch_analyzer: -2,
+            analyzer: Analyzer::new(),
         }
     }
 
@@ -334,16 +550,24 @@ impl Engine {
     // ---------------------------------------------------------------- andamento e posição
 
     /// Muda o andamento. As notas e os fins das que soam estão em batidas: seguem o andamento
-    /// novo sem mais nada.
+    /// novo sem mais nada. Os efeitos sincronizados (delay, tremolo, filtro) recebem o novo.
     pub fn set_tempo(&mut self, bpm: f64, beats_per_bar: u32) {
         // a posição musical fica onde estava: quem toca no tempo 9 continua no tempo 9
         let beat = self.beat();
         let (ls, le) = (self.frames_to_beats(self.loop_start), self.frames_to_beats(self.loop_end));
+        let old = self.bpm;
         self.bpm = bpm.clamp(20.0, 999.0);
         self.beats_per_bar = beats_per_bar.clamp(1, 32);
         self.pos = self.beats_to_frames(beat);
         self.loop_start = self.beats_to_frames(ls);
         self.loop_end = self.beats_to_frames(le);
+        // o app manda o andamento a cada sincronização: só repassa quando muda
+        if self.bpm != old {
+            for s in &mut self.strips {
+                s.chain.set_tempo(self.bpm);
+            }
+            self.master_fx.set_tempo(self.bpm);
+        }
     }
 
     pub fn beats_to_frames(&self, beats: f64) -> f64 {
@@ -372,8 +596,9 @@ impl Engine {
         }
     }
 
-    /// Para. Os instrumentos soltam tudo com o release normal (as caudas continuam soando) e os
-    /// clipes de áudio descem a zero num fade curto.
+    /// Para. Os instrumentos soltam tudo com o release normal (as caudas continuam soando, e as
+    /// dos efeitos também) e os clipes de áudio descem a zero num fade curto. A automação solta e
+    /// valem de novo os valores estáticos.
     pub fn stop(&mut self) {
         if self.playing {
             self.tail = self.tail_len;
@@ -436,10 +661,24 @@ impl Engine {
         }
     }
 
+    /// Número de faixas. Os buffers de cada faixa (trabalho e chave) são alocados aqui, nunca no
+    /// `process`; faixas novas nascem sem efeitos, sem envios e saindo no master.
     pub fn set_track_count(&mut self, n: usize) {
-        let rate = self.rate;
+        if n == self.tracks.len() {
+            return;
+        }
+        let (rate, bpm) = (self.rate, self.bpm);
         self.tracks.resize_with(n, || Track::new(rate));
         self.lanes.resize_with(n, Lane::new);
+        self.strips.resize_with(n, || Strip::new(rate, bpm));
+        self.bufs.resize_with(n, || Stereo::new(CHUNK));
+        self.keys.resize_with(n, || Stereo::new(CHUNK));
+        self.incoming.resize(n, false);
+        self.up.resize(n, false);
+        self.aud.resize(n, true);
+        self.rank.resize(n, usize::MAX);
+        self.order.reserve(n.saturating_sub(self.order.len()));
+        self.routing_dirty = true;
     }
 
     pub fn track_mut(&mut self, i: usize) -> Option<&mut Track> {
@@ -489,8 +728,11 @@ impl Engine {
         if lane.kind == kind {
             return;
         }
+        // virar ou deixar de ser barramento muda a ordem de processamento
+        self.routing_dirty |= lane.kind == instrument::kind::BUS || kind == instrument::kind::BUS;
         lane.kind = kind;
         lane.held.clear();
+        lane.statics = [f32::NAN; STATIC_PARAMS];
         lane.instrument = instrument::create(kind, self.rate);
         if let Some(inst) = lane.instrument.as_mut()
             && lane.sample != 0
@@ -504,12 +746,22 @@ impl Engine {
         self.lanes.get(i).map(|l| l.kind)
     }
 
-    /// Parâmetro do instrumento da faixa, na unidade da tabela.
+    /// Parâmetro do instrumento da faixa, na unidade da tabela. Com a automação tocando esse
+    /// parâmetro, o valor fica guardado como o estático (vale ao parar) e a automação segue no
+    /// comando.
     pub fn set_param(&mut self, i: usize, id: u32, value: f32) {
         if !value.is_finite() {
             return;
         }
-        if let Some(inst) = self.lanes.get_mut(i).and_then(|l| l.instrument.as_mut()) {
+        let automated = self.automated(Target::new(i as i32, effect::auto_target::INSTRUMENT, 0, id));
+        let Some(lane) = self.lanes.get_mut(i) else { return };
+        if let Some(s) = lane.statics.get_mut(id as usize) {
+            *s = value;
+        }
+        if automated {
+            return;
+        }
+        if let Some(inst) = lane.instrument.as_mut() {
             inst.set_param(id, value);
         }
     }
@@ -572,8 +824,8 @@ impl Engine {
         }
     }
 
-    /// Pânico: corta na hora todo som de instrumento (notas presas, caudas) e o metrônomo. O
-    /// transporte segue como estava.
+    /// Pânico: corta na hora todo som de instrumento (notas presas, caudas), as caudas dos efeitos
+    /// e o metrônomo. O transporte segue como estava.
     pub fn panic(&mut self) {
         self.metronome.silence();
         for lane in &mut self.lanes {
@@ -582,17 +834,434 @@ impl Engine {
                 inst.silence();
             }
         }
+        for s in &mut self.strips {
+            s.chain.reset();
+        }
+        self.master_fx.reset();
+    }
+
+    // ---------------------------------------------------------------- efeitos
+
+    fn chain_mut(&mut self, track: i32) -> Option<&mut Chain> {
+        match track {
+            -1 => Some(&mut self.master_fx),
+            t if t >= 0 => self.strips.get_mut(t as usize).map(|s| &mut s.chain),
+            _ => None,
+        }
+    }
+
+    fn chain(&self, track: i32) -> Option<&Chain> {
+        match track {
+            -1 => Some(&self.master_fx),
+            t if t >= 0 => self.strips.get(t as usize).map(|s| &s.chain),
+            _ => None,
+        }
+    }
+
+    /// Quantos slots de efeito a faixa (−1 = master) tem, até [`MAX_SLOTS`]. Os que sobram saem
+    /// em fade; os novos nascem vazios.
+    pub fn set_fx_count(&mut self, track: i32, n: usize) {
+        if let Some(c) = self.chain_mut(track)
+            && c.set_count(n)
+        {
+            self.routing_dirty = true;
+        }
+    }
+
+    /// Tipo do efeito num slot ([`effect::kind`], 0 esvazia). O mesmo tipo de novo não faz nada;
+    /// outro tipo cria o efeito nos padrões, então vem antes dos [`Engine::set_fx_param`]. Criar
+    /// aloca (buffers de atraso no tamanho máximo), o que é aceitável porque só acontece quando o
+    /// usuário põe ou troca um efeito. A troca é por crossfade curto, sem estalo.
+    pub fn set_fx(&mut self, track: i32, slot: usize, kind: u32) {
+        if let Some(c) = self.chain_mut(track)
+            && c.set_kind(slot, kind)
+        {
+            self.routing_dirty = true;
+        }
+    }
+
+    /// Parâmetro de um efeito, na unidade da tabela. A faixa-chave do sidechain (compressor e
+    /// gate) é interceptada aqui (o motor entrega a chave) e também repassada ao efeito. Com a
+    /// automação tocando esse parâmetro, o valor só fica guardado como o estático.
+    pub fn set_fx_param(&mut self, track: i32, slot: usize, id: u32, value: f32) {
+        let automated = self.automated(Target::new(track, effect::auto_target::EFFECT, slot as u32, id));
+        if let Some(c) = self.chain_mut(track)
+            && c.set_param(slot, id, value, true, !automated)
+        {
+            self.routing_dirty = true;
+        }
+    }
+
+    /// Bypass de um efeito, por crossfade.
+    pub fn set_fx_bypass(&mut self, track: i32, slot: usize, on: bool) {
+        if let Some(c) = self.chain_mut(track) {
+            c.set_bypass(slot, on);
+        }
+    }
+
+    // ---------------------------------------------------------------- roteamento
+
+    /// Quantos envios a faixa tem, até [`MAX_SENDS`]; os novos nascem sem destino.
+    pub fn set_sends_count(&mut self, track: usize, n: usize) {
+        let Some(s) = self.strips.get_mut(track) else { return };
+        let n = n.min(MAX_SENDS);
+        if n != s.sends.len() {
+            s.sends.resize_with(n, Send::default);
+            self.routing_dirty = true;
+        }
+    }
+
+    /// Envio `index` da faixa para o barramento `bus` (índice da faixa), com nível em ganho linear,
+    /// antes (`pre`) ou depois do fader. Um destino que não seja barramento, ou que seja processado
+    /// antes da origem (barramento só envia para barramento de índice maior), é ignorado.
+    /// Um índice além do fim estica a lista até ele (o app pode mandar o envio antes da contagem).
+    pub fn set_send(&mut self, track: usize, index: usize, bus: i32, level: f32, pre: bool) {
+        let Some(strip) = self.strips.get_mut(track) else { return };
+        if index >= MAX_SENDS {
+            return;
+        }
+        if index >= strip.sends.len() {
+            strip.sends.resize_with(index + 1, Send::default);
+            self.routing_dirty = true;
+        }
+        let send = &mut strip.sends[index];
+        if send.bus != bus {
+            send.retarget(bus);
+            self.routing_dirty = true;
+        }
+        if level.is_finite() {
+            send.level = level.max(0.0);
+        }
+        send.pre = pre;
+    }
+
+    /// Saída da faixa: −1 master, senão o índice de um barramento processado depois dela (um
+    /// destino inválido vale como master).
+    pub fn set_output(&mut self, track: usize, target: i32) {
+        if let Some(s) = self.strips.get_mut(track)
+            && s.output != target
+        {
+            s.output = target;
+            self.routing_dirty = true;
+        }
+    }
+
+    /// Refaz a ordem de processamento, as chaves de sidechain e os destinos validados. Só quando
+    /// algo do roteamento mudou, entre um bloco e outro.
+    fn route(&mut self) {
+        self.routing_dirty = false;
+        let n = self.tracks.len();
+        let is_bus = |lanes: &[Lane], t: usize| lanes[t].kind == instrument::kind::BUS;
+        // faixas que servem de chave (usa `up` como rascunho: o solo o refaz a cada bloco)
+        self.up.fill(false);
+        for t in 0..n {
+            for k in self.strips[t].chain.keys() {
+                if k < n && k != t {
+                    self.up[k] = true;
+                }
+            }
+        }
+        for k in self.master_fx.keys() {
+            if k < n {
+                self.up[k] = true;
+            }
+        }
+        for (s, &key) in self.strips.iter_mut().zip(&self.up) {
+            if s.is_key != key {
+                s.is_key = key;
+                s.key_silent = false;
+            }
+        }
+        // faixas normais: a chave antes de quem a usa, para a chave ser do mesmo bloco; num ciclo
+        // (A é chave de B e B de A) uma delas fica com a chave do bloco anterior
+        self.order.clear();
+        self.rank.fill(usize::MAX);
+        loop {
+            let mut waiting = None;
+            let mut placed = false;
+            for t in 0..n {
+                if is_bus(&self.lanes, t) || self.rank[t] != usize::MAX {
+                    continue;
+                }
+                let ready = self.strips[t].chain.keys().all(|k| k >= n || k == t || is_bus(&self.lanes, k) || self.rank[k] != usize::MAX);
+                if ready {
+                    self.rank[t] = self.order.len();
+                    self.order.push(t);
+                    placed = true;
+                } else if waiting.is_none() {
+                    waiting = Some(t);
+                }
+            }
+            match (waiting, placed) {
+                (None, _) => break,
+                (Some(_), true) => {}
+                (Some(t), false) => {
+                    self.rank[t] = self.order.len();
+                    self.order.push(t);
+                }
+            }
+        }
+        // barramentos em ordem de índice: recebem de todas as normais e dos barramentos antes deles
+        for t in 0..n {
+            if is_bus(&self.lanes, t) {
+                self.rank[t] = self.order.len();
+                self.order.push(t);
+            }
+        }
+        for t in 0..n {
+            let valid = |b: i32| {
+                let ok = b >= 0 && (b as usize) < n && b as usize != t && is_bus(&self.lanes, b as usize) && self.rank[b as usize] > self.rank[t];
+                if ok { b } else { -1 }
+            };
+            let out = valid(self.strips[t].output);
+            let strip = &mut self.strips[t];
+            strip.out_dst = out;
+            for s in &mut strip.sends {
+                s.dst = valid(s.bus);
+            }
+        }
+    }
+
+    /// Solo com barramentos: uma faixa solada mantém audível o que recebe dela (a saída e os
+    /// envios, em cadeia) e um barramento solado mantém audível o que sai nele.
+    fn solo(&mut self) {
+        if !self.tracks.iter().any(|t| t.solo) {
+            self.aud.fill(true);
+            self.up.fill(false);
+            return;
+        }
+        for (u, t) in self.up.iter_mut().zip(&self.tracks) {
+            *u = t.solo;
+        }
+        // subindo: quem sai num solado (a saída vai sempre para alguém depois na ordem)
+        for oi in (0..self.order.len()).rev() {
+            let t = self.order[oi];
+            let d = self.strips[t].out_dst;
+            if d >= 0 && self.up[d as usize] {
+                self.up[t] = true;
+            }
+        }
+        self.aud.copy_from_slice(&self.up);
+        // descendo: o que recebe de quem toca
+        for oi in 0..self.order.len() {
+            let t = self.order[oi];
+            if !self.aud[t] {
+                continue;
+            }
+            let s = &self.strips[t];
+            if s.out_dst >= 0 {
+                self.aud[s.out_dst as usize] = true;
+            }
+            for send in s.sends.iter().filter(|s| s.dst >= 0) {
+                self.aud[send.dst as usize] = true;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- automação
+
+    /// Apaga todas as lanes (antes de reenviá-las). Os alvos que não voltarem a ser automatizados
+    /// retornam ao valor estático no próximo bloco; os que voltarem seguem sem degrau.
+    pub fn clear_automation(&mut self) {
+        for lane in &mut self.auto[..self.auto_count] {
+            self.auto_restore.push(lane.target);
+            lane.points.clear();
+        }
+        self.auto_count = 0;
+    }
+
+    /// Nova lane: faixa (−1 master), alvo ([`effect::auto_target`]), slot (efeito ou índice do
+    /// envio) e id do parâmetro. Devolve o índice para [`Engine::add_point`].
+    pub fn add_lane(&mut self, track: i32, target: u32, slot: u32, id: u32) -> u32 {
+        if self.auto_count == self.auto.len() {
+            self.auto.push(AutoLane::new());
+        }
+        let lane = &mut self.auto[self.auto_count];
+        lane.target = Target::new(track, target, slot, id);
+        lane.points.clear();
+        lane.last = f32::NAN;
+        self.auto_count += 1;
+        (self.auto_count - 1) as u32
+    }
+
+    /// Ponto numa lane: batida absoluta, valor na unidade do alvo (ganho linear no volume e nos
+    /// envios, −1..1 no pan, a unidade da tabela nos parâmetros) e curva até o próximo.
+    pub fn add_point(&mut self, lane: u32, beat: f64, value: f32, curve: f32) {
+        if !beat.is_finite() || !value.is_finite() {
+            return;
+        }
+        let Some(lane) = self.auto[..self.auto_count].get_mut(lane as usize) else { return };
+        let beat = beat.max(0.0);
+        let curve = if curve.is_finite() { curve.clamp(-1.0, 1.0) } else { 0.0 };
+        // chegam em ordem quase sempre: a inserção vira um push
+        let at = lane.points.partition_point(|p| p.beat <= beat);
+        lane.points.insert(at, AutoPoint { beat, value, curve });
+    }
+
+    /// O alvo está sob automação agora (tocando, com pontos)?
+    fn automated(&self, t: Target) -> bool {
+        self.playing && self.auto[..self.auto_count].iter().any(|l| l.target == t && !l.points.is_empty())
+    }
+
+    /// Avalia as lanes na posição atual e aplica; parado, devolve tudo ao estático.
+    fn automate(&mut self) {
+        if !self.auto_restore.is_empty() {
+            for i in 0..self.auto_restore.len() {
+                let t = self.auto_restore[i];
+                if !self.automated(t) {
+                    self.restore(t);
+                }
+            }
+            self.auto_restore.clear();
+        }
+        if !self.playing {
+            if self.auto_live {
+                self.auto_live = false;
+                for i in 0..self.auto_count {
+                    let t = self.auto[i].target;
+                    self.restore(t);
+                }
+            }
+            return;
+        }
+        let beat = self.beat();
+        for i in 0..self.auto_count {
+            let lane = &mut self.auto[i];
+            let Some(v) = lane.value_at(beat) else { continue };
+            let changed = v != lane.last;
+            lane.last = v;
+            let t = lane.target;
+            self.apply_auto(t, v, changed);
+        }
+        self.auto_live = self.auto_count > 0;
+    }
+
+    fn channel_mut(&mut self, track: i32) -> Option<&mut Track> {
+        match track {
+            -1 => Some(&mut self.master),
+            t if t >= 0 => self.tracks.get_mut(t as usize),
+            _ => None,
+        }
+    }
+
+    fn apply_auto(&mut self, t: Target, v: f32, changed: bool) {
+        use effect::auto_target as at;
+        match t.kind {
+            at::VOLUME => {
+                if let Some(ch) = self.channel_mut(t.track) {
+                    ch.auto_gain = Some(v.max(0.0));
+                }
+            }
+            at::PAN => {
+                if let Some(ch) = self.channel_mut(t.track) {
+                    ch.auto_pan = Some(v.clamp(-1.0, 1.0));
+                }
+            }
+            at::INSTRUMENT if changed && t.track >= 0 => {
+                if let Some(inst) = self.lanes.get_mut(t.track as usize).and_then(|l| l.instrument.as_mut()) {
+                    inst.set_param(t.id, v);
+                }
+            }
+            at::EFFECT if changed => {
+                if let Some(c) = self.chain_mut(t.track) {
+                    c.set_param(t.slot as usize, t.id, v, false, true);
+                }
+            }
+            at::SEND if t.track >= 0 => {
+                if let Some(s) = self.strips.get_mut(t.track as usize).and_then(|s| s.sends.get_mut(t.slot as usize)) {
+                    s.auto_level = Some(v.max(0.0));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Devolve o alvo ao último valor estático que o app mandou.
+    fn restore(&mut self, t: Target) {
+        use effect::auto_target as at;
+        for lane in self.auto[..self.auto_count].iter_mut().filter(|l| l.target == t) {
+            lane.last = f32::NAN;
+        }
+        match t.kind {
+            at::VOLUME => {
+                if let Some(ch) = self.channel_mut(t.track) {
+                    ch.auto_gain = None;
+                }
+            }
+            at::PAN => {
+                if let Some(ch) = self.channel_mut(t.track) {
+                    ch.auto_pan = None;
+                }
+            }
+            at::INSTRUMENT if t.track >= 0 => {
+                if let Some(lane) = self.lanes.get_mut(t.track as usize)
+                    && let Some(&v) = lane.statics.get(t.id as usize)
+                    && !v.is_nan()
+                    && let Some(inst) = lane.instrument.as_mut()
+                {
+                    inst.set_param(t.id, v);
+                }
+            }
+            at::EFFECT => {
+                if let Some(c) = self.chain_mut(t.track) {
+                    c.restore_param(t.slot as usize, t.id);
+                }
+            }
+            at::SEND if t.track >= 0 => {
+                if let Some(s) = self.strips.get_mut(t.track as usize).and_then(|s| s.sends.get_mut(t.slot as usize)) {
+                    s.auto_level = None;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // ---------------------------------------------------------------- medição
+
+    /// Efeito cujo indicador ([`Effect::meter`](effect::Effect::meter)) vai em
+    /// [`Engine::fx_meter`]; slot −1 desliga.
+    pub fn watch_fx(&mut self, track: i32, slot: i32) {
+        self.watch_fx = (track, slot);
+    }
+
+    /// Indicador do efeito observado (redução de ganho em dB na dinâmica); 0 se nenhum.
+    pub fn fx_meter(&self) -> f32 {
+        let (track, slot) = self.watch_fx;
+        if slot < 0 {
+            return 0.0;
+        }
+        self.chain(track).map_or(0.0, |c| c.meter(slot as usize))
+    }
+
+    /// Faixa cuja saída pós-fader vai para o analisador (−1 master, depois do limitador; −2
+    /// desliga). Trocar esquece o que o anel tinha.
+    pub fn watch_analyzer(&mut self, track: i32) {
+        let track = track.max(-2);
+        if track != self.watch_analyzer {
+            self.watch_analyzer = track;
+            self.analyzer.clear();
+        }
+    }
+
+    /// Espectro da faixa observada em `out` (dB, −120..0, faixas lineares de 0 à metade da taxa);
+    /// devolve quantas faixas escreveu (0 sem faixa observada).
+    pub fn analyzer(&mut self, out: &mut [f32]) -> usize {
+        if self.watch_analyzer < -1 { 0 } else { self.analyzer.spectrum(out) }
     }
 
     // ---------------------------------------------------------------- áudio
 
     /// Enche `left` e `right` (mesmo tamanho) com o próximo bloco e avança o transporte.
     pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
-        self.prepare_notes();
+        self.prepare();
         let n = left.len().min(right.len());
         let mut done = 0;
         while done < n {
-            let mut chunk = (n - done).min(MAX_BLOCK);
+            let mut chunk = (n - done).min(CHUNK);
+            // com automação tocando, fatias curtas: cada uma avalia as lanes na posição dela
+            if self.playing && self.auto_count > 0 {
+                chunk = chunk.min(AUTO_STEP);
+            }
             // o loop fatia o bloco na volta; tocando depois do fim do loop, segue reto
             let looping = self.playing && self.loop_on && self.pos < self.loop_end;
             if looping {
@@ -609,6 +1278,18 @@ impl Engine {
                     self.wrap_notes();
                 }
             }
+        }
+    }
+
+    /// Entre um bloco e outro: notas, efeitos que terminaram de sair e o roteamento.
+    fn prepare(&mut self) {
+        self.prepare_notes();
+        for s in &mut self.strips {
+            s.chain.collect();
+        }
+        self.master_fx.collect();
+        if self.routing_dirty {
+            self.route();
         }
     }
 
@@ -646,59 +1327,68 @@ impl Engine {
         out_l.fill(0.0);
         out_r.fill(0.0);
         let n = out_l.len();
-        let any_solo = self.tracks.iter().any(|t| t.solo);
+        self.automate();
+        self.solo();
         let fpb = self.beats_to_frames(1.0);
-
-        for ti in 0..self.tracks.len() {
-            let (bl, br) = (&mut self.buf_l[..n], &mut self.buf_r[..n]);
-            bl.fill(0.0);
-            br.fill(0.0);
-            let mut sounded = false;
-            if self.playing {
-                sounded = render_clips(&self.clips, &self.samples, ti, bl, br, self.pos, self.bpm, self.rate);
-            } else if self.tail > 0 && render_clips(&self.clips, &self.samples, ti, bl, br, self.tail_pos, self.bpm, self.rate) {
-                sounded = true;
-                let len = self.tail_len as f32;
-                for (i, (l, r)) in bl.iter_mut().zip(br.iter_mut()).enumerate() {
-                    let g = (self.tail as f32 - i as f32).max(0.0) / len;
-                    *l *= g;
-                    *r *= g;
-                }
-            }
-            // instrumentos tocam parados também (notas ao vivo e caudas)
-            if let Some(lane) = self.lanes.get_mut(ti) {
-                sounded |= lane.render(bl, br, self.playing, self.pos, fpb);
-            }
-            let track = &mut self.tracks[ti];
-            let audible = !track.mute && (!any_solo || track.solo);
-            if sounded {
-                track.apply(bl, br, audible);
-                for i in 0..n {
-                    out_l[i] += bl[i];
-                    out_r[i] += br[i];
-                }
-            } else {
-                track.settle(audible);
+        // barramentos começam o bloco vazios e acumulam o que chega
+        for t in 0..self.tracks.len() {
+            if self.lanes[t].kind == instrument::kind::BUS {
+                self.bufs[t].l[..n].fill(0.0);
+                self.bufs[t].r[..n].fill(0.0);
             }
         }
-
-        if self.playing {
-            let bpm = self.bpm;
-            let frames_per_beat = 60.0 / bpm * self.rate;
-            self.metronome.render(out_l, out_r, self.pos, frames_per_beat, self.beats_per_bar, self.rate);
-        } else if self.tail > 0 {
-            self.tail = self.tail.saturating_sub(n);
-            self.tail_pos += n as f64;
+        self.incoming.fill(false);
+        let mut to_master = false;
+        for oi in 0..self.order.len() {
+            let t = self.order[oi];
+            to_master |= self.render_track(t, n, fpb, out_l, out_r) && self.strips[t].out_dst < 0;
         }
 
-        let before = self.master.peaks();
+        // master: volume, cadeia dele, limitador
         self.master.apply_master(out_l, out_r);
-        // NaN que escape de algum instrumento vira silêncio antes do limitador (senão contaminaria
-        // o estado dele); depois do limitador a trava só pega o que ele não pegou (nada, em tese)
+        if self.master_fx.live() && (to_master || !self.master_idle) {
+            self.master_fx.process(out_l, out_r, &self.keys, usize::MAX, &mut self.scratch);
+            let (peak, finite) = scan(out_l, out_r);
+            if !finite {
+                // as amostras ruins viram silêncio logo abaixo; o estado estragado é esquecido
+                self.master_fx.reset();
+            }
+            if to_master {
+                self.master_quiet = 0;
+                self.master_idle = false;
+            } else if peak > SILENCE {
+                self.master_quiet = 0;
+            } else {
+                self.master_quiet += n;
+                self.master_idle = self.master_quiet >= self.master_fx.hold();
+            }
+        } else if to_master {
+            self.master_idle = false;
+            self.master_quiet = 0;
+        }
+        // NaN que escape de algum instrumento ou efeito vira silêncio antes do limitador (senão
+        // contaminaria o estado dele); depois do limitador a trava só pega o que ele não pegou
         for s in out_l.iter_mut().chain(out_r.iter_mut()) {
             if !s.is_finite() {
                 *s = 0.0;
             }
+        }
+        if self.playing {
+            // o clique fica fora da cadeia do master (não ganha o reverb dele), mas segue o volume
+            if self.metronome.on {
+                let [gl, gr] = self.master.now_gains();
+                let (cl, cr) = self.scratch.pair(n);
+                self.metronome.render(cl, cr, self.pos, fpb, self.beats_per_bar, self.rate);
+                for i in 0..n {
+                    out_l[i] += cl[i] * gl;
+                    out_r[i] += cr[i] * gr;
+                }
+            } else {
+                self.metronome.silence();
+            }
+        } else if self.tail > 0 {
+            self.tail = self.tail.saturating_sub(n);
+            self.tail_pos += n as f64;
         }
         if self.limiter_on {
             self.limiter.process(out_l, out_r);
@@ -706,7 +1396,112 @@ impl Engine {
         for s in out_l.iter_mut().chain(out_r.iter_mut()) {
             *s = s.clamp(-1.0, 1.0);
         }
-        self.master.meter(before, out_l, out_r);
+        self.master.meter(out_l, out_r);
+        if self.watch_analyzer == -1 {
+            self.analyzer.push(out_l, out_r);
+        }
+    }
+
+    /// O som próprio da faixa no buffer dela: clipes e instrumento. Devolve se soou algo.
+    fn render_source(&mut self, t: usize, n: usize, fpb: f64) -> bool {
+        let buf = &mut self.bufs[t];
+        let (bl, br) = (&mut buf.l[..n], &mut buf.r[..n]);
+        bl.fill(0.0);
+        br.fill(0.0);
+        let mut sounded = false;
+        if self.playing {
+            sounded = render_clips(&self.clips, &self.samples, t, bl, br, self.pos, self.bpm, self.rate);
+        } else if self.tail > 0 && render_clips(&self.clips, &self.samples, t, bl, br, self.tail_pos, self.bpm, self.rate) {
+            sounded = true;
+            let len = self.tail_len as f32;
+            for (i, (l, r)) in bl.iter_mut().zip(br.iter_mut()).enumerate() {
+                let g = (self.tail as f32 - i as f32).max(0.0) / len;
+                *l *= g;
+                *r *= g;
+            }
+        }
+        // instrumentos tocam parados também (notas ao vivo e caudas)
+        sounded | self.lanes[t].render(bl, br, self.playing, self.pos, fpb)
+    }
+
+    /// Uma faixa inteira: fonte (ou o que chegou no barramento) → inserts → envios pré-fader →
+    /// volume/pan/mudo → envios pós-fader → porta do solo → saída. Devolve se mandou som.
+    fn render_track(&mut self, t: usize, n: usize, fpb: f64, out_l: &mut [f32], out_r: &mut [f32]) -> bool {
+        let mut active = if self.lanes[t].kind == instrument::kind::BUS { self.incoming[t] } else { self.render_source(t, n, fpb) };
+        let strip = &mut self.strips[t];
+        let buf = &mut self.bufs[t];
+        let (bl, br) = (&mut buf.l[..n], &mut buf.r[..n]);
+        // os inserts rodam também com a entrada calada, enquanto houver cauda (reverb, delay)
+        if strip.chain.live() && (active || !strip.idle) {
+            strip.chain.process(bl, br, &self.keys, t, &mut self.scratch);
+            let (peak, finite) = scan(bl, br);
+            if !finite {
+                // um efeito explodiu: silêncio neste bloco e estado esquecido, em vez de NaN
+                // contaminando barramentos e master para sempre
+                bl.fill(0.0);
+                br.fill(0.0);
+                strip.chain.reset();
+            }
+            if active {
+                strip.quiet = 0;
+                strip.idle = false;
+            } else if peak > SILENCE {
+                strip.quiet = 0;
+            } else {
+                strip.quiet += n;
+                strip.idle = strip.quiet >= strip.chain.hold();
+            }
+            active |= finite && peak > 0.0;
+        } else if active {
+            strip.idle = false;
+            strip.quiet = 0;
+        }
+        // chave de sidechain: a saída pós-inserts, pré-fader
+        if strip.is_key {
+            let key = &mut self.keys[t];
+            if active {
+                key.l[..n].copy_from_slice(bl);
+                key.r[..n].copy_from_slice(br);
+                strip.key_silent = false;
+            } else if !strip.key_silent {
+                key.l.fill(0.0);
+                key.r.fill(0.0);
+                strip.key_silent = true;
+            }
+        }
+        let track = &mut self.tracks[t];
+        let audible = self.aud[t];
+        if !active {
+            track.settle(audible);
+            for s in &mut strip.sends {
+                s.settle(audible || (s.dst >= 0 && self.up[s.dst as usize]));
+            }
+            if self.watch_analyzer == t as i32 {
+                self.analyzer.push_silence(n);
+            }
+            return false;
+        }
+        let k = self.smooth;
+        mix_sends(&mut strip.sends, &mut self.bufs, &mut self.incoming, &self.up, audible, t, n, true, k);
+        {
+            let buf = &mut self.bufs[t];
+            track.fader(&mut buf.l[..n], &mut buf.r[..n]);
+        }
+        mix_sends(&mut strip.sends, &mut self.bufs, &mut self.incoming, &self.up, audible, t, n, false, k);
+        let d = strip.out_dst;
+        if d >= 0 {
+            let Ok([from, to]) = self.bufs.get_disjoint_mut([t, d as usize]) else { return false };
+            track.output(&mut from.l[..n], &mut from.r[..n], &mut to.l[..n], &mut to.r[..n], audible);
+            self.incoming[d as usize] = true;
+        } else {
+            let buf = &mut self.bufs[t];
+            track.output(&mut buf.l[..n], &mut buf.r[..n], out_l, out_r, audible);
+        }
+        if self.watch_analyzer == t as i32 {
+            let buf = &self.bufs[t];
+            self.analyzer.push(&buf.l[..n], &buf.r[..n]);
+        }
+        true
     }
 }
 
@@ -1269,5 +2064,657 @@ mod tests {
         e.panic();
         let (l, _) = run(&mut e, 256);
         assert!(l.iter().all(|&s| s == 0.0));
+    }
+
+    // ------------------------------------------------------------ efeitos, roteamento, automação
+
+    use effect::{Effect, auto_target, kind as fx_kind};
+
+    /// O que um efeito de teste viu em cada bloco: primeira amostra da entrada (esq), primeira da
+    /// chave (NaN sem chave) e o tamanho do bloco; e os parâmetros que recebeu.
+    #[derive(Default)]
+    struct Seen {
+        input: Vec<f32>,
+        key: Vec<f32>,
+        frames: usize,
+        params: Vec<(u32, f32)>,
+        resets: usize,
+    }
+
+    type Shared = Arc<Mutex<Seen>>;
+
+    /// Efeito de teste: multiplica pelo ganho, anota o que viu e devolve `meter`. Com `echo`,
+    /// devolve a entrada de novo depois de `echo` quadros (um delay de um eco só).
+    struct TestFx {
+        gain: f32,
+        seen: Shared,
+        meter: f32,
+        echo: usize,
+        line: Vec<(f32, f32)>,
+        at: usize,
+        nan_once: bool,
+    }
+
+    impl TestFx {
+        fn new(gain: f32) -> (Box<Self>, Shared) {
+            let seen = Shared::default();
+            (Box::new(Self { gain, seen: seen.clone(), meter: 0.0, echo: 0, line: Vec::new(), at: 0, nan_once: false }), seen)
+        }
+
+        fn echo(frames: usize) -> (Box<Self>, Shared) {
+            let (mut fx, seen) = Self::new(1.0);
+            fx.echo = frames;
+            fx.line = vec![(0.0, 0.0); frames];
+            (fx, seen)
+        }
+    }
+
+    impl Effect for TestFx {
+        fn set_param(&mut self, id: u32, value: f32) {
+            self.seen.lock().unwrap().params.push((id, value));
+        }
+        fn process(&mut self, left: &mut [f32], right: &mut [f32]) {
+            self.process_keyed(left, right, None);
+        }
+        fn process_keyed(&mut self, left: &mut [f32], right: &mut [f32], key: Option<(&[f32], &[f32])>) {
+            {
+                let mut s = self.seen.lock().unwrap();
+                s.input.push(left[0]);
+                s.key.push(key.map_or(f32::NAN, |(k, _)| k[0]));
+                s.frames += left.len();
+            }
+            for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+                *l *= self.gain;
+                *r *= self.gain;
+                if self.echo > 0 {
+                    let (dl, dr) = std::mem::replace(&mut self.line[self.at], (*l, *r));
+                    self.at = (self.at + 1) % self.echo;
+                    *l += dl;
+                    *r += dr;
+                }
+            }
+            if self.nan_once {
+                self.nan_once = false;
+                left[0] = f32::NAN;
+            }
+        }
+        fn reset(&mut self) {
+            self.seen.lock().unwrap().resets += 1;
+            self.line.fill((0.0, 0.0));
+        }
+        fn meter(&self) -> f32 {
+            self.meter
+        }
+    }
+
+    /// Põe um efeito de teste no slot, já assentado (sem o fade de entrada).
+    fn put(e: &mut Engine, track: i32, slot: usize, kind: u32, fx: Box<dyn Effect>) {
+        let c = e.chain_mut(track).unwrap();
+        if c.len() <= slot {
+            c.set_count(slot + 1);
+        }
+        c.install(slot, kind, fx);
+        c.snap();
+        e.routing_dirty = true;
+    }
+
+    fn seen(s: &Shared) -> std::sync::MutexGuard<'_, Seen> {
+        s.lock().unwrap()
+    }
+
+    /// Ganho do pan central (−3 dB).
+    fn c() -> f32 {
+        pan_gains(0.0).0
+    }
+
+    /// Motor com a faixa 0 tocando o clipe DC de 0,5 e mais `extra` faixas (as de `buses` viram
+    /// barramentos), tocando.
+    fn routed(extra: usize, buses: &[usize]) -> Engine {
+        let mut e = engine_with_dc_clip(0.0, 2.0);
+        e.set_track_count(1 + extra);
+        for &b in buses {
+            e.set_track_kind(b, instrument::kind::BUS);
+        }
+        e.play();
+        e
+    }
+
+    fn max_jump(l: &[f32]) -> f32 {
+        l.windows(2).map(|w| (w[0] - w[1]).abs()).fold(0.0, f32::max)
+    }
+
+    #[test]
+    fn envio_pos_fader_chega_ao_barramento_com_o_nivel_certo() {
+        let mut e = routed(1, &[1]);
+        e.track_mut(0).unwrap().gain = 0.5;
+        e.set_sends_count(0, 1);
+        e.set_send(0, 0, 1, 0.25, false);
+        let (tap, s) = TestFx::new(1.0);
+        put(&mut e, 1, 0, fx_kind::EQ, tap);
+        // o envio novo entra do zero (sem degrau no barramento)
+        let (l, _) = run(&mut e, 4800);
+        assert!(seen(&s).input[0].abs() < 0.001);
+        let post = 0.5 * 0.5 * c();
+        assert!((seen(&s).input.last().unwrap() - post * 0.25).abs() < 1e-6, "{:?}", seen(&s).input.last());
+        // no master: a faixa direto e o barramento (pan central de novo)
+        assert!((l[4700] - (post + post * 0.25 * c())).abs() < 1e-5, "{}", l[4700]);
+        // nível 0: o barramento para de receber (suave)
+        e.set_send(0, 0, 1, 0.0, false);
+        run(&mut e, 4800);
+        assert!(seen(&s).input.last().unwrap().abs() < 1e-6);
+    }
+
+    #[test]
+    fn saida_roteada_para_o_barramento() {
+        let mut e = routed(2, &[2]);
+        e.set_output(0, 2);
+        e.track_mut(2).unwrap().gain = 0.5;
+        let (l, _) = run(&mut e, 1024);
+        let expect = 0.5 * c() * 0.5 * c();
+        assert!((l[1000] - expect).abs() < 1e-5, "{}", l[1000]);
+        assert!(e.tracks[2].take_peaks().0 > 0.0);
+        // mudo do barramento cala o que sai nele
+        e.track_mut(2).unwrap().mute = true;
+        let (l, _) = run(&mut e, 4800);
+        assert!(l[4799].abs() < 1e-6);
+        // destino que não é barramento vale como master
+        e.track_mut(2).unwrap().mute = false;
+        e.set_output(0, 1);
+        let (l, _) = run(&mut e, 128);
+        assert!((l[100] - 0.5 * c()).abs() < 1e-5, "{}", l[100]);
+    }
+
+    #[test]
+    fn barramento_so_sai_para_barramento_de_indice_maior() {
+        // faixa 0 → barramento 2 → barramento 1: o 1 é processado antes do 2, a saída vira master
+        let mut e = routed(2, &[1, 2]);
+        e.set_output(0, 2);
+        e.set_output(2, 1);
+        e.track_mut(1).unwrap().gain = 0.0;
+        let (l, _) = run(&mut e, 256);
+        assert!((l[200] - 0.5 * c() * c()).abs() < 1e-5, "{}", l[200]);
+        // e um envio para trás é ignorado
+        e.set_output(2, -1);
+        e.set_sends_count(2, 1);
+        e.set_send(2, 0, 1, 1.0, false);
+        let (l, _) = run(&mut e, 256);
+        assert!((l[200] - 0.5 * c() * c()).abs() < 1e-5, "{}", l[200]);
+    }
+
+    #[test]
+    fn mudo_da_origem_corta_o_envio_pos_mas_nao_o_pre() {
+        let mut e = routed(2, &[1, 2]);
+        e.track_mut(0).unwrap().gain = 0.5;
+        e.set_sends_count(0, 2);
+        e.set_send(0, 0, 1, 1.0, false);
+        e.set_send(0, 1, 2, 0.5, true);
+        let (post, sp) = TestFx::new(1.0);
+        let (pre, sq) = TestFx::new(1.0);
+        put(&mut e, 1, 0, fx_kind::EQ, post);
+        put(&mut e, 2, 0, fx_kind::EQ, pre);
+        run(&mut e, 4800);
+        assert!((seen(&sp).input.last().unwrap() - 0.5 * 0.5 * c()).abs() < 1e-6);
+        // o pré-fader não passa pelo volume nem pelo pan
+        assert!((seen(&sq).input.last().unwrap() - 0.25).abs() < 1e-6);
+        e.track_mut(0).unwrap().mute = true;
+        run(&mut e, 4800);
+        assert!(seen(&sp).input.last().unwrap().abs() < 1e-6);
+        assert!((seen(&sq).input.last().unwrap() - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn solo_com_barramentos() {
+        // 0 → barramento 2; 1 → master e envia para o barramento 3 (retorno)
+        let mut e = routed(3, &[2, 3]);
+        e.add_clip(Clip { track: 1, sample: 1, start: 0.0, offset: 0.0, length: 2.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        e.set_output(0, 2);
+        e.set_sends_count(1, 1);
+        e.set_send(1, 0, 3, 1.0, false);
+        let (ret, sr) = TestFx::new(1.0);
+        put(&mut e, 3, 0, fx_kind::REVERB, ret);
+        // solo da 0: o barramento 2 que ela alimenta continua audível; a 1 e o retorno não
+        e.track_mut(0).unwrap().solo = true;
+        let (l, _) = run(&mut e, 4800);
+        assert!((l[4799] - 0.5 * c() * c()).abs() < 1e-4, "{}", l[4799]);
+        assert!(seen(&sr).input.last().unwrap().abs() < 1e-6, "o envio da faixa calada pelo solo para");
+        // solo do barramento 2: a faixa que sai nele soa
+        e.track_mut(0).unwrap().solo = false;
+        e.track_mut(2).unwrap().solo = true;
+        let (l, _) = run(&mut e, 4800);
+        assert!((l[4799] - 0.5 * c() * c()).abs() < 1e-4, "{}", l[4799]);
+        // solo do retorno: só ele soa, com o que chega pelos envios
+        e.track_mut(2).unwrap().solo = false;
+        e.track_mut(3).unwrap().solo = true;
+        let (l, _) = run(&mut e, 4800);
+        assert!((seen(&sr).input.last().unwrap() - 0.5 * c()).abs() < 1e-5);
+        assert!((l[4799] - 0.5 * c() * c()).abs() < 1e-4, "{}", l[4799]);
+    }
+
+    #[test]
+    fn bypass_sem_estalo() {
+        let mut e = engine_with_dc_clip(0.0, 2.0);
+        let (fx, s) = TestFx::new(2.0);
+        put(&mut e, 0, 0, fx_kind::UTILITY, fx);
+        e.play();
+        let (l, _) = run(&mut e, 256);
+        let dry = 0.5 * c();
+        assert!((l[200] - 2.0 * dry).abs() < 1e-5);
+        e.set_fx_bypass(0, 0, true);
+        let (l, _) = run(&mut e, 1280);
+        assert!(max_jump(&l) < 0.01, "{}", max_jump(&l));
+        assert!((l[1279] - dry).abs() < 1e-6, "{}", l[1279]);
+        // assentado em bypass, o efeito nem roda
+        let frames = seen(&s).frames;
+        run(&mut e, 256);
+        assert_eq!(seen(&s).frames, frames);
+        // ao voltar, esquece o estado velho e entra suave
+        e.set_fx_bypass(0, 0, false);
+        assert_eq!(seen(&s).resets, 1);
+        let (l, _) = run(&mut e, 1280);
+        assert!(max_jump(&l) < 0.01, "{}", max_jump(&l));
+        assert!((l[1279] - 2.0 * dry).abs() < 1e-5);
+    }
+
+    #[test]
+    fn trocar_o_efeito_por_crossfade_e_o_mesmo_tipo_nao_recria() {
+        let mut e = engine_with_dc_clip(0.0, 2.0);
+        let (fx, s) = TestFx::new(2.0);
+        put(&mut e, 0, 0, fx_kind::UTILITY, fx);
+        e.play();
+        run(&mut e, 256);
+        // o mesmo tipo de novo (o app manda a cada sync) não mexe no efeito
+        e.set_fx(0, 0, fx_kind::UTILITY);
+        run(&mut e, 256);
+        assert_eq!(seen(&s).frames, 512);
+        // outro tipo: um efeito de ganho 1 no lugar; a troca é um crossfade
+        e.set_fx(0, 0, fx_kind::EQ);
+        let (unity, _) = TestFx::new(1.0);
+        e.strips[0].chain.install(0, fx_kind::EQ, unity);
+        let (l, _) = run(&mut e, 1280);
+        assert!(max_jump(&l) < 0.01, "{}", max_jump(&l));
+        assert!((l[1279] - 0.5 * c()).abs() < 1e-5);
+        assert!(e.strips[0].chain.slot(0).is_some_and(|s| s.kind == fx_kind::EQ));
+        // o antigo sai de vez entre um bloco e outro
+        let frames = seen(&s).frames;
+        run(&mut e, 256);
+        assert_eq!(seen(&s).frames, frames);
+        // esvaziar e encolher a cadeia também desce sem degrau
+        let (fx, _) = TestFx::new(0.25);
+        put(&mut e, 0, 1, fx_kind::UTILITY, fx);
+        run(&mut e, 256);
+        e.set_fx_count(0, 1);
+        let (l, _) = run(&mut e, 1280);
+        assert!(max_jump(&l) < 0.01, "{}", max_jump(&l));
+        assert!((l[1279] - 0.5 * c()).abs() < 1e-5);
+        run(&mut e, 128);
+        assert_eq!(e.strips[0].chain.slots_len(), 1);
+        let (fx, _) = TestFx::new(0.25);
+        put(&mut e, 0, 0, fx_kind::UTILITY, fx);
+        run(&mut e, 256);
+        e.set_fx(0, 0, 0);
+        let (l, _) = run(&mut e, 1280);
+        assert!(max_jump(&l) < 0.01, "{}", max_jump(&l));
+        assert!((l[1279] - 0.5 * c()).abs() < 1e-5);
+        assert!(!e.strips[0].chain.live());
+    }
+
+    #[test]
+    fn automacao_de_volume() {
+        let mut e = engine_with_dc_clip(0.0, 4.0);
+        e.track_mut(0).unwrap().gain = 1.0;
+        let lane = e.add_lane(0, auto_target::VOLUME, 0, 0);
+        e.add_point(lane, 1.0, 0.0, 0.0);
+        e.add_point(lane, 2.0, 1.0, 0.0);
+        e.play();
+        let (l, _) = run(&mut e, 48_000);
+        let dry = 0.5 * c();
+        // antes do primeiro ponto vale o primeiro
+        assert!(l[12_000].abs() < 1e-6, "{}", l[12_000]);
+        // no meio da rampa (o fader segue com 5 ms de atraso)
+        assert!((l[36_000] - 0.5 * dry).abs() < 0.01, "{}", l[36_000]);
+        assert!(max_jump(&l) < 0.001, "sem degraus: {}", max_jump(&l));
+        // depois do último, o último
+        let (l, _) = run(&mut e, 24_000);
+        assert!((l[20_000] - dry).abs() < 1e-5);
+        // parado, volta o estático (que a automação não apagou)
+        e.track_mut(0).unwrap().gain = 0.3;
+        e.stop();
+        run(&mut e, 128);
+        assert_eq!(e.tracks[0].effective().0, 0.3);
+        // tocando de novo, a automação volta
+        e.seek(1.5);
+        e.play();
+        run(&mut e, 128);
+        assert!((e.tracks[0].effective().0 - 0.5).abs() < 0.01);
+        // reenviar sem a lane devolve o estático mesmo tocando
+        e.clear_automation();
+        run(&mut e, 128);
+        assert_eq!(e.tracks[0].effective().0, 0.3);
+    }
+
+    #[test]
+    fn curva_da_automacao() {
+        let mut lane = AutoLane::new();
+        lane.points.push(AutoPoint { beat: 0.0, value: 0.0, curve: 1.0 });
+        lane.points.push(AutoPoint { beat: 1.0, value: 1.0, curve: 0.0 });
+        // curva 1: t^8
+        assert!((lane.value_at(0.5).unwrap() - 0.5f32.powi(8)).abs() < 1e-6);
+        lane.points[0].curve = -1.0;
+        assert!((lane.value_at(0.5).unwrap() - 0.5f32.powf(0.125)).abs() < 1e-6);
+        // dois pontos na mesma batida: salto, vale o de depois
+        lane.points = vec![
+            AutoPoint { beat: 0.0, value: 0.2, curve: 0.0 },
+            AutoPoint { beat: 1.0, value: 0.2, curve: 0.0 },
+            AutoPoint { beat: 1.0, value: 0.9, curve: 0.0 },
+        ];
+        assert_eq!(lane.value_at(0.99).unwrap(), 0.2);
+        assert_eq!(lane.value_at(1.0).unwrap(), 0.9);
+        assert!(AutoLane::new().value_at(1.0).is_none());
+        // pontos fora de ordem são inseridos no lugar; os da mesma batida na ordem de chegada
+        let mut e = engine();
+        let i = e.add_lane(-1, auto_target::VOLUME, 0, 0);
+        e.add_point(i, 2.0, 1.0, 0.0);
+        e.add_point(i, 1.0, 0.5, 0.0);
+        e.add_point(i, 1.0, 0.7, 0.0);
+        e.add_point(i, f64::NAN, 0.7, 0.0);
+        e.add_point(9, 1.0, 0.7, 0.0);
+        let beats: Vec<(f64, f32)> = e.auto[0].points.iter().map(|p| (p.beat, p.value)).collect();
+        assert_eq!(beats, vec![(1.0, 0.5), (1.0, 0.7), (2.0, 1.0)]);
+    }
+
+    #[test]
+    fn automacao_de_efeito_envio_e_master() {
+        let mut e = routed(1, &[1]);
+        let (fx, s) = TestFx::new(1.0);
+        put(&mut e, 0, 0, fx_kind::FILTER, fx);
+        e.stop();
+        e.set_fx_param(0, 0, 3, 10.0);
+        let lane = e.add_lane(0, auto_target::EFFECT, 0, 3);
+        e.add_point(lane, 0.0, 100.0, 0.0);
+        e.add_point(lane, 4.0, 200.0, 0.0);
+        e.set_sends_count(0, 1);
+        e.set_send(0, 0, 1, 1.0, false);
+        let send = e.add_lane(0, auto_target::SEND, 0, 0);
+        e.add_point(send, 0.0, 0.25, 0.0);
+        let master = e.add_lane(-1, auto_target::VOLUME, 0, 0);
+        e.add_point(master, 0.0, 0.5, 0.0);
+        e.seek(0.0);
+        e.play();
+        run(&mut e, 256);
+        let last = *seen(&s).params.last().unwrap();
+        assert_eq!(last.0, 3);
+        assert!((100.0..101.0).contains(&last.1), "{last:?}");
+        assert_eq!(e.strips[0].sends[0].auto_level, Some(0.25));
+        assert_eq!(e.master.effective().0, 0.5);
+        // o app mexe no botão tocando: fica guardado, a automação segue no comando
+        e.set_fx_param(0, 0, 3, 20.0);
+        assert!(seen(&s).params.iter().all(|&(_, v)| v != 20.0));
+        e.stop();
+        run(&mut e, 128);
+        assert_eq!(*seen(&s).params.last().unwrap(), (3, 20.0));
+        assert_eq!(e.strips[0].sends[0].auto_level, None);
+        assert_eq!(e.master.effective().0, 1.0);
+    }
+
+    #[test]
+    fn automacao_de_instrumento_volta_ao_estatico() {
+        let (mut e, _) = probe_engine();
+        struct Param(Arc<Mutex<Vec<(u32, f32)>>>);
+        impl Instrument for Param {
+            fn note_on(&mut self, _: u8, _: f32) {}
+            fn note_off(&mut self, _: u8) {}
+            fn release_all(&mut self) {}
+            fn silence(&mut self) {}
+            fn set_param(&mut self, id: u32, value: f32) {
+                self.0.lock().unwrap().push((id, value));
+            }
+            fn render(&mut self, _: &mut [f32], _: &mut [f32]) {}
+            fn active(&self) -> bool {
+                false
+            }
+        }
+        let log = Arc::new(Mutex::new(Vec::new()));
+        e.lanes[0].instrument = Some(Box::new(Param(log.clone())));
+        e.set_param(0, 13, 5000.0);
+        let lane = e.add_lane(0, auto_target::INSTRUMENT, 7, 13);
+        e.add_point(lane, 0.0, 300.0, 0.0);
+        e.play();
+        run(&mut e, 256);
+        // valor constante: aplicado uma vez só, não a cada passo
+        assert_eq!(*log.lock().unwrap(), vec![(13, 5000.0), (13, 300.0)]);
+        e.set_param(0, 13, 800.0);
+        e.stop();
+        run(&mut e, 128);
+        assert_eq!(*log.lock().unwrap(), vec![(13, 5000.0), (13, 300.0), (13, 800.0)]);
+    }
+
+    #[test]
+    fn sidechain_entrega_a_chave() {
+        // 0: a faixa com o compressor (e o clipe); 1: a chave, com clipe próprio e volume baixo
+        let mut e = routed(2, &[2]);
+        e.add_clip(Clip { track: 1, sample: 1, start: 0.0, offset: 0.0, length: 2.0, gain: 0.5, fade_in: 0.0, fade_out: 0.0 });
+        e.track_mut(1).unwrap().gain = 0.1;
+        let (comp, s) = TestFx::new(1.0);
+        put(&mut e, 0, 0, fx_kind::COMPRESSOR, comp);
+        e.set_fx_param(0, 0, effect::compressor_param::SIDECHAIN, 1.0);
+        run(&mut e, 128);
+        // chave pós-inserts e pré-fader, do mesmo bloco mesmo com índice maior (a chave vem antes)
+        assert!((seen(&s).key[0] - 0.25).abs() < 1e-6, "{:?}", seen(&s).key);
+        // o parâmetro também chega ao efeito
+        assert!(seen(&s).params.contains(&(effect::compressor_param::SIDECHAIN, 1.0)));
+        // −1: a própria entrada (sem chave externa)
+        e.set_fx_param(0, 0, effect::compressor_param::SIDECHAIN, -1.0);
+        run(&mut e, 128);
+        assert!(seen(&s).key.last().unwrap().is_nan());
+        // um barramento como chave é processado depois: vale a saída do bloco anterior
+        e.set_sends_count(1, 1);
+        e.set_send(1, 0, 2, 1.0, true);
+        e.set_fx_param(0, 0, effect::compressor_param::SIDECHAIN, 2.0);
+        run(&mut e, 128);
+        assert_eq!(*seen(&s).key.last().unwrap(), 0.0, "primeiro bloco: a chave ainda está vazia");
+        // (o envio novo entra do zero em 5 ms)
+        run(&mut e, 4800);
+        assert!((seen(&s).key.last().unwrap() - 0.25).abs() < 1e-6, "{:?}", seen(&s).key.last());
+        // no gate também
+        let (gate, g) = TestFx::new(1.0);
+        put(&mut e, 0, 1, fx_kind::GATE, gate);
+        e.set_fx_param(0, 1, effect::gate_param::SIDECHAIN, 1.0);
+        run(&mut e, 128);
+        assert!((seen(&g).key[0] - 0.25).abs() < 1e-6);
+        // a chave não é automatizável
+        let lane = e.add_lane(0, auto_target::EFFECT, 1, effect::gate_param::SIDECHAIN);
+        e.add_point(lane, 0.0, 0.0, 0.0);
+        run(&mut e, 128);
+        assert!((seen(&g).key.last().unwrap() - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn efeito_no_master_roda_antes_do_limitador() {
+        let mut e = Engine::new(RATE);
+        e.set_track_count(1);
+        e.load_sample(1, Sample::new(vec![vec![0.5; 96_000]], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 2.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        e.master_mut().gain = 0.5;
+        let (fx, s) = TestFx::new(8.0);
+        put(&mut e, -1, 0, fx_kind::UTILITY, fx);
+        e.play();
+        let (l, _) = run(&mut e, 4800);
+        // o efeito vê o master depois do volume
+        assert!((seen(&s).input[10] - 0.5 * c() * 0.5).abs() < 1e-6);
+        // 0,18 × 8 = 1,4 antes do limitador: ele segura no teto (depois dele, a trava daria 1)
+        let max = l.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        assert!(max <= 0.967 && l[4000] > 0.9, "{max} {}", l[4000]);
+        assert!(e.take_limiter_gain() < 0.8);
+    }
+
+    #[test]
+    fn caudas_dos_efeitos_depois_do_clipe_e_cadeia_parada_no_silencio() {
+        // clipe de 0,1 s; eco de 1 s num "delay": o eco soa com o clipe já terminado
+        let mut e = engine_with_dc_clip(0.0, 0.1);
+        let (fx, s) = TestFx::echo(48_000);
+        put(&mut e, 0, 0, fx_kind::DELAY, fx);
+        e.play();
+        let (l, _) = run(&mut e, 72_000);
+        assert!(l[20_000].abs() < 1e-6);
+        assert!((l[50_000] - 0.5 * c()).abs() < 1e-5, "o eco: {}", l[50_000]);
+        // depois do eco e do silêncio de segurança do delay, a cadeia para de rodar
+        run(&mut e, (4.6 * RATE) as usize);
+        let frames = seen(&s).frames;
+        run(&mut e, 4800);
+        assert_eq!(seen(&s).frames, frames);
+        assert!(e.strips[0].idle);
+        // a entrada volta: roda de novo
+        e.seek(0.0);
+        run(&mut e, 128);
+        assert!(seen(&s).frames > frames);
+        // num efeito sem cauda longa, a parada vem logo (50 ms)
+        let mut e = engine_with_dc_clip(0.0, 0.1);
+        let (fx, s) = TestFx::new(1.0);
+        put(&mut e, 0, 0, fx_kind::EQ, fx);
+        e.play();
+        run(&mut e, 4800 + 2400 + 256);
+        let frames = seen(&s).frames;
+        run(&mut e, 4800);
+        assert_eq!(seen(&s).frames, frames);
+        assert!(frames < 4800 + 2400 + 256);
+    }
+
+    #[test]
+    fn nan_de_um_efeito_vira_silencio_e_reinicia_o_efeito() {
+        let mut e = routed(1, &[1]);
+        e.set_output(0, 1);
+        let (mut fx, s) = TestFx::new(1.0);
+        fx.nan_once = true;
+        put(&mut e, 0, 0, fx_kind::EQ, fx);
+        let (l, _) = run(&mut e, 256);
+        assert!(l.iter().all(|v| v.is_finite()));
+        assert!(l[..128].iter().all(|&v| v == 0.0));
+        assert!((l[200] - 0.5 * c() * c()).abs() < 1e-5, "{}", l[200]);
+        assert_eq!(seen(&s).resets, 1);
+    }
+
+    #[test]
+    fn indicador_do_efeito_observado() {
+        let mut e = engine_with_dc_clip(0.0, 1.0);
+        let (mut fx, _) = TestFx::new(1.0);
+        fx.meter = 4.5;
+        put(&mut e, 0, 2, fx_kind::COMPRESSOR, fx);
+        assert_eq!(e.fx_meter(), 0.0);
+        e.watch_fx(0, 2);
+        assert_eq!(e.fx_meter(), 4.5);
+        e.watch_fx(0, 1);
+        assert_eq!(e.fx_meter(), 0.0);
+        e.watch_fx(7, 2);
+        assert_eq!(e.fx_meter(), 0.0);
+        e.watch_fx(0, -1);
+        assert_eq!(e.fx_meter(), 0.0);
+    }
+
+    #[test]
+    fn analisador_da_faixa_e_do_master() {
+        let mut e = engine();
+        e.set_track_count(2);
+        // senoide na faixa 25 de uma FFT de 2048 pontos, na faixa 0
+        let f = 25.0 * RATE / 2048.0;
+        let sine: Vec<f32> = (0..96_000).map(|i| (std::f64::consts::TAU * f * i as f64 / RATE).sin() as f32).collect();
+        e.load_sample(1, Sample::new(vec![sine], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 2.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        let mut out = vec![0.0; 1024];
+        assert_eq!(e.analyzer(&mut out), 0, "nada observado");
+        e.watch_analyzer(0);
+        e.play();
+        run(&mut e, 4096);
+        assert_eq!(e.analyzer(&mut out), 1024);
+        let peak = out.iter().enumerate().fold((0, f32::MIN), |b, (i, &v)| if v > b.1 { (i, v) } else { b });
+        assert_eq!(peak.0, 25);
+        // pós-fader: pan central (−3 dB), mono = média dos canais
+        assert!((peak.1 - 20.0 * c().log10()).abs() < 0.2, "{peak:?}");
+        // a faixa 1 está calada
+        e.watch_analyzer(1);
+        run(&mut e, 4096);
+        e.analyzer(&mut out);
+        assert!(out.iter().all(|&v| v == analyzer::FLOOR_DB));
+        // o master
+        e.watch_analyzer(-1);
+        run(&mut e, 4096);
+        e.analyzer(&mut out);
+        assert!(out[25] > -4.0, "{}", out[25]);
+        e.watch_analyzer(-2);
+        assert_eq!(e.analyzer(&mut out), 0);
+    }
+
+    #[test]
+    fn efeitos_recebem_o_andamento() {
+        struct Bpm(Arc<Mutex<f64>>);
+        impl Effect for Bpm {
+            fn set_param(&mut self, _: u32, _: f32) {}
+            fn process(&mut self, _: &mut [f32], _: &mut [f32]) {}
+            fn reset(&mut self) {}
+            fn set_tempo(&mut self, bpm: f64) {
+                *self.0.lock().unwrap() = bpm;
+            }
+        }
+        let mut e = engine();
+        e.set_tempo(90.0, 4);
+        e.set_track_count(1);
+        let bpm = Arc::new(Mutex::new(0.0));
+        put(&mut e, 0, 0, fx_kind::DELAY, Box::new(Bpm(bpm.clone())));
+        assert_eq!(*bpm.lock().unwrap(), 90.0, "ao nascer");
+        e.set_tempo(140.0, 4);
+        assert_eq!(*bpm.lock().unwrap(), 140.0);
+        let master = Arc::new(Mutex::new(0.0));
+        put(&mut e, -1, 0, fx_kind::DELAY, Box::new(Bpm(master.clone())));
+        e.set_tempo(100.0, 4);
+        assert_eq!(*master.lock().unwrap(), 100.0);
+    }
+
+    #[test]
+    fn tipo_e_envio_antes_da_contagem_valem() {
+        let mut e = routed(1, &[1]);
+        // o app pode mandar o tipo antes do `fx_count` e o envio antes do `sends_count`
+        e.set_fx(0, 2, fx_kind::EQ);
+        assert_eq!(e.strips[0].chain.len(), 3);
+        assert!(e.strips[0].chain.slot(2).is_some_and(|s| s.kind == fx_kind::EQ));
+        e.set_fx_count(0, 3);
+        assert!(e.strips[0].chain.slot(2).is_some_and(|s| s.kind == fx_kind::EQ));
+        // esvaziar um slot que não existe não estica nada; além do máximo é ignorado
+        e.set_fx(0, 5, 0);
+        e.set_fx(0, MAX_SLOTS, fx_kind::EQ);
+        assert_eq!(e.strips[0].chain.len(), 3);
+        e.set_send(0, 1, 1, 0.5, false);
+        e.set_sends_count(0, 2);
+        assert_eq!(e.strips[0].sends.len(), 2);
+        assert_eq!(e.strips[0].sends[1].bus, 1);
+        e.set_send(0, MAX_SENDS, 1, 0.5, false);
+        assert_eq!(e.strips[0].sends.len(), 2);
+        run(&mut e, 128);
+        assert_eq!(e.strips[0].sends[1].dst, 1);
+    }
+
+    #[test]
+    fn efeitos_reais_na_cadeia_nao_quebram_o_motor() {
+        // todos os tipos, em todas as faixas e no master, com parâmetros nos extremos
+        let mut e = Engine::new(RATE);
+        e.set_track_count(3);
+        e.set_track_kind(1, instrument::kind::SYNTH);
+        e.set_track_kind(2, instrument::kind::BUS);
+        e.load_sample(1, Sample::new(vec![(0..96_000).map(|i| ((i as f32) * 0.03).sin() * 0.8).collect()], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 2.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        e.add_note(1, 0.0, 2.0, 60, 1.0);
+        e.set_output(1, 2);
+        e.set_sends_count(0, 1);
+        e.set_send(0, 0, 2, 0.7, false);
+        for t in [-1, 0, 1, 2] {
+            e.set_fx_count(t, 12);
+            for k in 1..=12u32 {
+                e.set_fx(t, k as usize - 1, k);
+                for id in 0..50 {
+                    e.set_fx_param(t, k as usize - 1, id, if id % 2 == 0 { 1e9 } else { -1e9 });
+                }
+            }
+        }
+        e.play();
+        let (l, r) = run(&mut e, 48_000);
+        assert!(l.iter().chain(&r).all(|v| v.is_finite() && v.abs() <= 1.0));
     }
 }
