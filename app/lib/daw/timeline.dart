@@ -410,8 +410,24 @@ class _TrackHeaderState extends State<_TrackHeader> {
   // ícone, menu) esperando um segundo toque
   final _taps = _DoubleTap();
 
+  /// Arraste para reordenar (toque longo + arrastar na vertical: o arraste simples rola a lista).
+  double _dragFrom = 0;
+  int? _dragTo;
+
   DawController get c => widget.c;
   int get index => widget.index;
+
+  /// A faixa sob a altura [y] (da lista de faixas e automações), contando as automações abertas
+  /// como parte da faixa de cima.
+  int _trackAt(double y) {
+    final layout = _Layout.of(c, height);
+    final n = c.doc.tracks.length;
+    for (var j = 0; j < n; j++) {
+      if (y < layout.blockEnd[j]) return j;
+    }
+    return n - 1;
+  }
+
   double get height => widget.height;
   bool get compact => widget.compact;
 
@@ -426,15 +442,32 @@ class _TrackHeaderState extends State<_TrackHeader> {
     final t = c.doc.tracks[index];
     final color = trackColorAt(t.color);
     final selected = c.selectedTrack == index;
+    final dragging = _dragTo != null;
     return GestureDetector(
       onTapUp: (d) {
         c.selectTrack(index);
         if (_taps(d.globalPosition)) _rename(context, t);
       },
+      onLongPressStart: (d) {
+        HapticFeedback.selectionClick();
+        _dragFrom = _Layout.of(c, height).trackTop[index] + d.localPosition.dy;
+        setState(() => _dragTo = index);
+      },
+      onLongPressMoveUpdate: (d) {
+        final to = _trackAt(_dragFrom + d.offsetFromOrigin.dy);
+        if (to != _dragTo) setState(() => _dragTo = to);
+      },
+      onLongPressEnd: (_) {
+        final to = _dragTo;
+        setState(() => _dragTo = null);
+        if (to != null && to != index) c.moveTrack(index, to);
+      },
+      onLongPressCancel: () => setState(() => _dragTo = null),
       child: Container(
         height: height,
+        foregroundDecoration: dragging ? BoxDecoration(border: Border.all(color: color, width: 2)) : null,
         decoration: BoxDecoration(
-          color: selected ? Palette.overlay : Palette.bar,
+          color: dragging ? color.withValues(alpha: 0.18) : (selected ? Palette.overlay : Palette.bar),
           border: const Border(
             right: BorderSide(color: Palette.hairline),
             bottom: BorderSide(color: Palette.hairline),
@@ -455,7 +488,12 @@ class _TrackHeaderState extends State<_TrackHeader> {
                         // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
                         if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
                         Expanded(
-                          child: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge),
+                          child: Text(
+                            dragging ? 'Mover para a posição ${_dragTo! + 1}' : t.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
                         ),
                         _TrackMenu(c: c, index: index, onRename: () => _rename(context, t)),
                       ],
@@ -475,7 +513,17 @@ class _TrackHeaderState extends State<_TrackHeader> {
                           _EffectsChip(c: c, track: index),
                           const SizedBox(width: 4),
                           Expanded(
-                            child: _MiniFader(gain: t.gain, onStart: c.checkpoint, onGain: (g) => c.mutate((_) => t.gain = g)),
+                            child: c.automated(index, AutoKind.volume)
+                                ? ValueListenableBuilder<double>(
+                                    valueListenable: c.beat,
+                                    builder: (_, _, _) => _MiniFader(
+                                      gain: c.liveValue(index, AutoKind.volume),
+                                      automated: c.playing.value,
+                                      onStart: c.checkpoint,
+                                      onGain: (g) => c.mutate((_) => t.gain = g),
+                                    ),
+                                  )
+                                : _MiniFader(gain: t.gain, onStart: c.checkpoint, onGain: (g) => c.mutate((_) => t.gain = g)),
                           ),
                         ],
                       ],
@@ -579,6 +627,12 @@ class _TrackMenu extends StatelessWidget {
             _toggleEffects(c, index);
           case 'rename':
             onRename();
+          case 'up':
+            c.moveTrack(index, index - 1);
+          case 'down':
+            c.moveTrack(index, index + 1);
+          case 'duplicate':
+            c.duplicateTrack(index);
           case 'color':
             final t = c.doc.tracks[index];
             c.edit((_) => t.color = (t.color + 1) % Palette.tracks.length);
@@ -602,6 +656,9 @@ class _TrackMenu extends StatelessWidget {
         if (c.doc.tracks[index].kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
         const PopupMenuItem(value: 'effects', child: Text('Efeitos')),
         const PopupMenuItem(value: 'rename', child: Text('Renomear')),
+        const PopupMenuItem(value: 'duplicate', child: Text('Duplicar a faixa')),
+        PopupMenuItem(value: 'up', enabled: index > 0, child: const Text('Mover para cima')),
+        PopupMenuItem(value: 'down', enabled: index < c.doc.tracks.length - 1, child: const Text('Mover para baixo')),
         const PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
         const PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
       ],
@@ -613,15 +670,20 @@ class _TrackMenu extends StatelessWidget {
 /// histórico a cada passo.
 class _MiniFader extends StatelessWidget {
   final double gain;
+
+  /// Seguindo a automação agora (tocando): cor de automação.
+  final bool automated;
   final VoidCallback onStart;
   final ValueChanged<double> onGain;
-  const _MiniFader({required this.gain, required this.onStart, required this.onGain});
+  const _MiniFader({required this.gain, required this.onStart, required this.onGain, this.automated = false});
 
   @override
   Widget build(BuildContext context) => Tooltip(
     message: '${formatDb(gain)} dB',
     child: SliderTheme(
       data: SliderTheme.of(context).copyWith(
+        activeTrackColor: automated ? automationColor : null,
+        thumbColor: automated ? automationColor : null,
         trackHeight: 2,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
         overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
@@ -776,7 +838,17 @@ class _MasterHeader extends StatelessWidget {
                     if (!compact) ...[
                       const SizedBox(width: 4),
                       Expanded(
-                        child: _MiniFader(gain: c.doc.masterGain, onStart: c.checkpoint, onGain: (g) => c.mutate((d) => d.masterGain = g)),
+                        child: c.automated(-1, AutoKind.volume)
+                            ? ValueListenableBuilder<double>(
+                                valueListenable: c.beat,
+                                builder: (_, _, _) => _MiniFader(
+                                  gain: c.liveValue(-1, AutoKind.volume),
+                                  automated: c.playing.value,
+                                  onStart: c.checkpoint,
+                                  onGain: (g) => c.mutate((d) => d.masterGain = g),
+                                ),
+                              )
+                            : _MiniFader(gain: c.doc.masterGain, onStart: c.checkpoint, onGain: (g) => c.mutate((d) => d.masterGain = g)),
                       ),
                     ],
                   ],

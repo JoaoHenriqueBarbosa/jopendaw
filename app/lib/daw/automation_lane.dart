@@ -2,10 +2,12 @@
 /// embaixo da faixa e a conta da curva (a mesma do motor) com a escala de cada alvo.
 ///
 /// Um ponto guarda batida, valor na unidade do alvo e a curva até o próximo. Entre dois pontos o
-/// valor anda por t^(2^(curva·3)) no espaço do valor (ganho linear, Hz, segundos); antes do
-/// primeiro e depois do último fica parado. O desenho usa a escala do controle do alvo (curva do
-/// fader no volume, a do botão nos parâmetros), então uma reta em Hz aparece curva, como soa.
+/// valor anda por t^(2^(curva·3)) na escala do controle do alvo (curva do fader no volume, a do
+/// botão nos parâmetros; ver `automation_math.dart`): o que se desenha reto soa reto. Antes do
+/// primeiro e depois do último fica parado.
 library;
+
+export 'automation_math.dart' show autoShape, autoValueAt;
 
 import 'dart:math' as math;
 
@@ -15,6 +17,7 @@ import 'package:flutter/material.dart' hide Curve;
 import 'package:flutter/services.dart';
 
 import '../widgets/theme.dart';
+import 'automation_math.dart';
 import 'controller.dart';
 import 'instruments.dart';
 import 'model.dart';
@@ -23,23 +26,6 @@ import 'model.dart';
 const automationLaneHeight = 56.0;
 
 // ---------------------------------------------------------------------- a curva (funções puras)
-
-/// Forma entre dois pontos (a mesma do motor): t^(2^(curva·3)), curva −1..1 (0 reta).
-double autoShape(double t, double curve) {
-  if (t <= 0) return 0;
-  if (t >= 1) return 1;
-  if (curve == 0) return t;
-  return math.pow(t, math.pow(2, curve.clamp(-1.0, 1.0) * 3)).toDouble();
-}
-
-/// Valor da automação numa batida; sem pontos, [fallback] (o valor do alvo sem automação).
-double autoValueAt(List<AutoPoint> points, double beat, double fallback) {
-  if (points.isEmpty) return fallback;
-  if (beat <= points.first.beat) return points.first.value;
-  if (beat >= points.last.beat) return points.last.value;
-  final i = _segmentAt(points, beat);
-  return _segmentValue(points[i], points[i + 1], beat);
-}
 
 /// Índice em que um ponto novo nessa batida entra mantendo a ordem (depois dos que já estão nela).
 int autoInsertIndex(List<AutoPoint> points, double beat) {
@@ -84,12 +70,6 @@ int _segmentAt(List<AutoPoint> points, double beat) {
   return lo;
 }
 
-double _segmentValue(AutoPoint a, AutoPoint b, double beat) {
-  final span = b.beat - a.beat;
-  if (span <= 0) return b.value;
-  return a.value + (b.value - a.value) * autoShape((beat - a.beat) / span, a.curve);
-}
-
 /// Reordena por batida sem trocar a ordem dos pontos na mesma batida (degraus continuam iguais).
 void sortAutoPoints(List<AutoPoint> points) => mergeSort(points, compare: (a, b) => a.beat.compareTo(b.beat));
 
@@ -111,6 +91,9 @@ class AutoScale {
 
   /// O valor que a raia consegue representar (inteiros e opções arredondados, dentro da faixa).
   double fit(double v) => fromNorm(toNorm(v));
+
+  /// A escala como caminho da automação entre dois pontos (a mesma que o motor recebe).
+  AutoWarp get warp => (toNorm: toNorm, fromNorm: fromNorm);
 }
 
 /// Pan em texto: C no centro, E/D e a porcentagem para cada lado.
@@ -272,8 +255,12 @@ class AutomationLaneHeader extends StatelessWidget {
                     // o valor sob o cursor de reprodução, ao vivo (só este texto se refaz a cada quadro)
                     ValueListenableBuilder<double>(
                       valueListenable: c.beat,
-                      builder: (context, beat, _) =>
-                          Text(scale.format(autoValueAt(lane.points, beat, scale.current)), maxLines: 1, overflow: TextOverflow.ellipsis, style: small),
+                      builder: (context, beat, _) => Text(
+                        scale.format(autoValueAt(lane.points, beat, scale.current, warp: scale.warp)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: small,
+                      ),
                     ),
                 ],
               ),
@@ -512,7 +499,7 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
   Offset _handlePos(int i, _Geom g) {
     final a = points[i], b = points[i + 1];
     final mid = (a.beat + b.beat) / 2;
-    return Offset(g.x(mid), g.y(_scale!.toNorm(_segmentValue(a, b, mid))));
+    return Offset(g.x(mid), g.y(_scale!.toNorm(autoSegment(a, b, mid, _scale!.warp))));
   }
 
   int? _handleAt(Offset p) {
@@ -553,9 +540,9 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
     final raw = g.beatAt(p.dx);
     final beat = math.max(0.0, HardwareKeyboard.instance.isAltPressed ? raw : c.snapBeat(raw));
     // perto da linha o ponto nasce em cima dela (a forma não muda); longe, onde se clicou
-    final lineY = g.y(scale.toNorm(autoValueAt(points, raw, scale.current)));
+    final lineY = g.y(scale.toNorm(autoValueAt(points, raw, scale.current, warp: scale.warp)));
     final onLine = (p.dy - lineY).abs() <= (_touch ? 12 : 6);
-    final value = scale.fit(onLine ? autoValueAt(points, beat, scale.current) : scale.fromNorm(g.normAt(p.dy)));
+    final value = scale.fit(onLine ? autoValueAt(points, beat, scale.current, warp: scale.warp) : scale.fromNorm(g.normAt(p.dy)));
     final point = AutoPoint(beat: beat, value: value);
     c.edit((_) => lane.points.insert(autoInsertIndex(lane.points, beat), point));
     setState(() {
@@ -1052,9 +1039,9 @@ class _LanePainter extends CustomPainter {
       }
       final from = math.max(0.0, xa), to = math.min(w, xb);
       for (var x = from; x < to; x += 2) {
-        add(x, _segmentValue(a, b, g.beatAt(x)));
+        add(x, autoSegment(a, b, g.beatAt(x), s.warp));
       }
-      add(to, to == xb ? b.value : _segmentValue(a, b, g.beatAt(to)));
+      add(to, to == xb ? b.value : autoSegment(a, b, g.beatAt(to), s.warp));
     }
     final lx = g.x(last.beat);
     if (lx < w) {
@@ -1086,7 +1073,7 @@ class _LanePainter extends CustomPainter {
       if (xa > w + 20) break;
       if (xb - xa < 18 || (s.toNorm(b.value) - s.toNorm(a.value)).abs() <= 0.02) continue;
       final mid = (a.beat + b.beat) / 2;
-      final c = Offset(g.x(mid), g.y(s.toNorm(_segmentValue(a, b, mid))));
+      final c = Offset(g.x(mid), g.y(s.toNorm(autoSegment(a, b, mid, s.warp))));
       final hot = j == handle;
       canvas.drawCircle(c, hot ? 4 : 2.6, Paint()..color = hot ? color : Palette.ink);
       canvas.drawCircle(
@@ -1139,7 +1126,7 @@ class _LanePainter extends CustomPainter {
       } else if (lh != null && lh + 1 < points.length) {
         final a = points[lh], b = points[lh + 1];
         final mid = (a.beat + b.beat) / 2;
-        at = Offset(g.x(mid), g.y(s.toNorm(_segmentValue(a, b, mid))));
+        at = Offset(g.x(mid), g.y(s.toNorm(autoSegment(a, b, mid, s.warp))));
       }
       if (at != null) _bubble(canvas, size, at, text, style);
     }
@@ -1190,7 +1177,7 @@ class _PlayheadDotPainter extends CustomPainter {
     final beat = c.beat.value;
     final x = g.x(beat);
     if (x < -4 || x > size.width + 4) return;
-    final at = Offset(x, g.y(scale.toNorm(autoValueAt(points, beat, scale.current))));
+    final at = Offset(x, g.y(scale.toNorm(autoValueAt(points, beat, scale.current, warp: scale.warp))));
     canvas.drawCircle(at, 3.5, Paint()..color = Colors.white);
     canvas.drawCircle(
       at,

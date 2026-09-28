@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jopendaw_app/daw/effects.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
 import 'package:jopendaw_app/daw/model.dart';
 
@@ -60,5 +61,33 @@ void main() {
     expect(under.length, 4);
     // a nota da batida 6 continua na batida 6 (4 + 2); a da batida 1 ficou antes do começo
     expect(under.notes.map((n) => under.start + n.start), [1, 6]);
+  });
+
+  test('duplicar a faixa: cópia logo abaixo, ids novos e automação apontando para o efeito da cópia', () {
+    final c = newController();
+    final t = c.doc.tracks[0]..clips.add(audio('a', 0, 1));
+    final fx = c.addEffect(0, EffectKind.reverb);
+    c.addLane(0, AutoTarget(AutoKind.effect, ref: fx.id, param: 0)).points.add(AutoPoint(beat: 0, value: 0.5));
+    c.duplicateTrack(0);
+    expect(c.doc.tracks, hasLength(2));
+    final copy = c.doc.tracks[1];
+    expect(copy.name, '${t.name} (2)');
+    expect(copy.id, isNot(t.id));
+    expect(copy.clips.single.id, isNot('a'));
+    expect(copy.effects.single.id, isNot(fx.id));
+    expect(copy.lanes.single.target.ref, copy.effects.single.id);
+    expect(c.selectedTrack, 1);
+    c.undo();
+    expect(c.doc.tracks, hasLength(1));
+  });
+
+  test('mover faixa: barramento que passa a sair para trás volta ao master', () {
+    final c = newController();
+    final b1 = c.addBusTrack(); // 1
+    final b2 = c.addBusTrack(); // 2
+    c.setOutput(1, b2.id);
+    expect(c.doc.tracks[1].output, b2.id);
+    c.moveTrack(2, 0); // b2 vai para antes de b1: b1 → b2 seria para trás
+    expect(c.doc.tracks.firstWhere((x) => x.id == b1.id).output, isNull);
   });
 }

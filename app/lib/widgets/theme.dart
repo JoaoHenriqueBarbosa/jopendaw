@@ -128,4 +128,8 @@ ThemeData buildTheme() {
 }
 
 /// Cor de faixa pela posição.
+/// Controle que está seguindo uma automação (fader, pan, botões): laranja, longe do ciano da marca
+/// e do âmbar do solo.
+const automationColor = Color(0xFFF08A5D);
+
 Color trackColorAt(int i) => Palette.tracks[i % Palette.tracks.length];

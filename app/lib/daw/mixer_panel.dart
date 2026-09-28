@@ -207,7 +207,15 @@ class _Strip extends StatelessWidget {
                 child: Tooltip(
                   message: 'Volume (duplo clique: 0 dB)',
                   waitDuration: const Duration(milliseconds: 800),
-                  child: Text('${formatDb(gain)} dB', style: small.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                  child: c.automated(index, AutoKind.volume)
+                      ? ValueListenableBuilder<double>(
+                          valueListenable: c.beat,
+                          builder: (_, _, _) => Text(
+                            '${formatDb(c.liveValue(index, AutoKind.volume))} dB',
+                            style: small.copyWith(fontFeatures: const [FontFeature.tabularFigures()], color: c.playing.value ? automationColor : null),
+                          ),
+                        )
+                      : Text('${formatDb(gain)} dB', style: small.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
                 ),
               ),
             ),
@@ -434,6 +442,24 @@ class _FaderState extends State<_Fader> with _DragValue {
               child: LayoutBuilder(
                 builder: (context, box) {
                   _track = math.max(1, box.maxHeight - 2 * _Fader.capHalf);
+                  // com automação e tocando, a tampa segue a curva (arrastar mexe no valor fixo, que
+                  // volta a valer quando para)
+                  if (!active && c.automated(widget.track, AutoKind.volume)) {
+                    return ValueListenableBuilder<double>(
+                      valueListenable: c.beat,
+                      builder: (_, _, _) => SizedBox(
+                        width: 40,
+                        height: box.maxHeight,
+                        child: CustomPaint(
+                          painter: _FaderPainter(
+                            norm: gainToFader(c.liveValue(widget.track, AutoKind.volume)).clamp(0.0, 1.0),
+                            color: c.playing.value ? automationColor : widget.color,
+                            active: false,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
                   return SizedBox(
                     width: 40,
                     height: box.maxHeight,
@@ -580,9 +606,21 @@ class _PanKnobState extends State<_PanKnob> with _DragValue {
               children: [
                 SizedBox.square(
                   dimension: 18,
-                  child: CustomPaint(
-                    painter: _MiniKnobPainter(norm: active ? norm : valueNorm, origin: 0.5, color: widget.color, active: active),
-                  ),
+                  child: !active && c.automated(widget.track, AutoKind.pan)
+                      ? ValueListenableBuilder<double>(
+                          valueListenable: c.beat,
+                          builder: (_, _, _) => CustomPaint(
+                            painter: _MiniKnobPainter(
+                              norm: (c.liveValue(widget.track, AutoKind.pan) + 1) / 2,
+                              origin: 0.5,
+                              color: c.playing.value ? automationColor : widget.color,
+                              active: false,
+                            ),
+                          ),
+                        )
+                      : CustomPaint(
+                          painter: _MiniKnobPainter(norm: active ? norm : valueNorm, origin: 0.5, color: widget.color, active: active),
+                        ),
                 ),
                 const SizedBox(width: 5),
                 SizedBox(

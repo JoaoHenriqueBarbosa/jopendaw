@@ -17,6 +17,7 @@ import '../api/client.dart';
 import '../audio/engine.dart';
 import '../models/project.dart';
 import '../widgets/theme.dart';
+import 'automation_math.dart';
 import 'effects.dart';
 import 'instruments.dart';
 import 'model.dart';
@@ -230,7 +231,7 @@ class _SentChain {
 
 /// Um alvo de automação resolvido para o motor: código de `auto_target`, slot (efeito ou envio,
 /// no índice do motor), id do parâmetro, faixa de valores e o valor atual sem automação.
-typedef _Resolved = ({int code, int slot, int id, double min, double max, double value});
+typedef _Resolved = ({int code, int slot, int id, double min, double max, double value, ParamSpec? spec});
 
 /// Ganho máximo do volume e dos envios: o topo do fader (+6 dB).
 const maxGain = 2.0;
@@ -649,9 +650,9 @@ class DawController extends ChangeNotifier {
         final points = _sortedPoints(l.points);
         if (points.isEmpty) continue;
         out.add(['auto_lane', track, r.code, r.slot, r.id]);
-        for (final p in points) {
-          final curve = p.curve.isFinite ? p.curve.clamp(-1.0, 1.0).toDouble() : 0.0;
-          out.add(['auto_point', lane, math.max(0.0, p.beat), p.value.clamp(r.min, r.max).toDouble(), curve]);
+        for (final (beat, value, curve) in autoEnginePoints(points, _warpOf(r))) {
+          final c = curve.isFinite ? curve.clamp(-1.0, 1.0).toDouble() : 0.0;
+          out.add(['auto_point', lane, math.max(0.0, beat), value.clamp(r.min, r.max).toDouble(), c]);
         }
         lane++;
       }
@@ -662,6 +663,41 @@ class DawController extends ChangeNotifier {
     }
     add(-1, doc.masterLanes);
     return out;
+  }
+
+  /// A faixa (ou o master, −1) tem automação com pontos para volume/pan.
+  bool automated(int track, AutoKind kind) {
+    if (track >= doc.tracks.length) return false;
+    final lanes = track < 0 ? doc.masterLanes : doc.tracks[track].lanes;
+    return lanes.any((l) => l.target.kind == kind && l.points.isNotEmpty);
+  }
+
+  /// O volume ou pan que a faixa tem agora: tocando e com automação, o valor da curva no cursor
+  /// (a mesma conta do motor); parado, o valor fixo, como no motor. Para o fader e o pan
+  /// acompanharem a automação.
+  double liveValue(int track, AutoKind kind) {
+    final master = track < 0;
+    if (!master && track >= doc.tracks.length) return 0;
+    final t = master ? null : doc.tracks[track];
+    final fixed = kind == AutoKind.pan ? (t?.pan ?? doc.masterPan) : (t?.gain ?? doc.masterGain);
+    if (!playing.value) return fixed;
+    final lanes = master ? doc.masterLanes : t!.lanes;
+    for (final l in lanes) {
+      if (l.target.kind != kind || l.points.isEmpty) continue;
+      final r = _resolve(track, l.target);
+      if (r == null) return fixed;
+      return autoValueAt(_sortedPoints(l.points), beat.value, fixed, warp: _warpOf(r)).clamp(r.min, r.max).toDouble();
+    }
+    return fixed;
+  }
+
+  /// A escala em que a automação do alvo anda entre pontos (a mesma da raia): curva do fader no
+  /// volume e nos envios, a do botão nos parâmetros não lineares; null = reta no valor.
+  static AutoWarp? _warpOf(_Resolved r) {
+    if (r.code == 0 || r.code == 4) return (toNorm: gainToFader, fromNorm: faderToGain);
+    final spec = r.spec;
+    if (spec == null || spec.curve == Curve.linear) return null;
+    return (toNorm: spec.toNorm, fromNorm: spec.fromNorm);
   }
 
   /// Pontos válidos em ordem de batida. Estável: dois pontos na mesma batida são um degrau, e a
@@ -687,27 +723,27 @@ class DawController extends ChangeNotifier {
     final t = master ? null : doc.tracks[track];
     switch (target.kind) {
       case AutoKind.volume:
-        return (code: 0, slot: 0, id: 0, min: 0.0, max: maxGain, value: t?.gain ?? doc.masterGain);
+        return (code: 0, slot: 0, id: 0, min: 0.0, max: maxGain, value: t?.gain ?? doc.masterGain, spec: null);
       case AutoKind.pan:
-        return (code: 1, slot: 0, id: 0, min: -1.0, max: 1.0, value: t?.pan ?? doc.masterPan);
+        return (code: 1, slot: 0, id: 0, min: -1.0, max: 1.0, value: t?.pan ?? doc.masterPan, spec: null);
       case AutoKind.instrument:
         if (t == null || !t.kind.isInstrument) return null;
         final p = _spec(t.kind, target.param);
         if (p == null) return null;
-        return (code: 2, slot: 0, id: p.id, min: p.min, max: p.max, value: t.param(p.id));
+        return (code: 2, slot: 0, id: p.id, min: p.min, max: p.max, value: t.param(p.id), spec: p);
       case AutoKind.effect:
         final chain = t?.effects ?? doc.masterEffects;
         final k = chain.indexWhere((s) => s.id == target.ref);
         if (k < 0) return null;
         final p = _fxSpec(chain[k].kind, target.param);
         if (p == null) return null;
-        return (code: 3, slot: k, id: p.id, min: p.min, max: p.max, value: chain[k].param(p.id));
+        return (code: 3, slot: k, id: p.id, min: p.min, max: p.max, value: chain[k].param(p.id), spec: p);
       case AutoKind.send:
         if (t == null) return null;
         final list = sends ?? _validSends(track, _trackIndex());
         final k = list.indexWhere((e) => e.$1.target == target.ref);
         if (k < 0) return null;
-        return (code: 4, slot: k, id: 0, min: 0.0, max: maxGain, value: list[k].$1.level);
+        return (code: 4, slot: k, id: 0, min: 0.0, max: maxGain, value: list[k].$1.level, spec: null);
     }
   }
 
@@ -894,6 +930,50 @@ class DawController extends ChangeNotifier {
       _remapSidechains((old) => old == i ? -1 : (old > i ? old - 1 : old));
       selectedTrack = math.max(0, math.min(selectedTrack, d.tracks.length - 1));
     });
+  }
+
+  /// Duplica a faixa logo abaixo dela: clipes, instrumento, efeitos, envios e automação, com ids
+  /// novos (e as automações de efeito apontando para os efeitos da cópia).
+  void duplicateTrack(int i) {
+    if (i < 0 || i >= doc.tracks.length) return;
+    edit((d) {
+      final src = d.tracks[i];
+      final copy = DawTrack.fromJson(jsonDecode(jsonEncode(src.toJson())))
+        ..id = newId()
+        ..name = _copyName(src.name);
+      final slotIds = <String, String>{};
+      for (final e in copy.effects) {
+        final old = e.id;
+        e.id = newId();
+        slotIds[old] = e.id;
+      }
+      for (final c in copy.clips) {
+        c.id = newId();
+      }
+      for (final m in copy.midi) {
+        m.id = newId();
+      }
+      copy.lanes = [
+        for (final l in copy.lanes)
+          AutoLane(
+            id: newId(),
+            target: l.target.kind == AutoKind.effect ? AutoTarget(AutoKind.effect, ref: slotIds[l.target.ref], param: l.target.param) : l.target,
+            points: l.points,
+            open: l.open,
+          ),
+      ];
+      d.tracks.insert(i + 1, copy);
+      // as faixas depois da cópia desceram uma posição: sidechains acompanham
+      _remapSidechains((old) => old > i ? old + 1 : old);
+      _dropBackwardRoutes();
+      selectedTrack = i + 1;
+    });
+  }
+
+  static String _copyName(String name) {
+    final m = RegExp(r'^(.*) \((\d+)\)$').firstMatch(name);
+    if (m != null) return '${m.group(1)} (${int.parse(m.group(2)!) + 1})';
+    return '$name (2)';
   }
 
   /// Move a faixa [from] para a posição [to]. A ordem das faixas é a ordem do sinal entre

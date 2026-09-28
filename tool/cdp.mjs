@@ -12,7 +12,8 @@
 //   reset <tabId>              → tira a emulação de viewport
 //   run <tabId> passos.json [largura altura]
 //                              → vários passos numa sessão só (com largura/altura, emula o aparelho):
-//     ["click",x,y] ["dbl",x,y] ["rclick",x,y] ["down",x,y] ["up",x,y] ["hover",x,y] ["drag",x1,y1,x2,y2]
+//     ["click",x,y] ["dbl",x,y] ["rclick",x,y] ["down",x,y] ["move",x,y] ["up",x,y] ["hover",x,y] ["drag",x1,y1,x2,y2]
+//     (toque longo + arrasto: down, wait 700, vários move, up)
 //     ["wheel",x,y,dx,dy,mods] ["type","texto"] ["key","a",mods] ["keydown","a"] ["keyup","a"]
 //     ["wait",ms] ["shot","f.png"] ["eval","js"] ["probe"] ["file","nome.wav",...]
 //     mods: 1 alt, 2 ctrl, 4 meta (Cmd), 8 shift. Coordenadas em pixels CSS; o shot sai nessa escala.
@@ -103,6 +104,7 @@ try {
         else if (op === 'wait') await sleep(a[0]);
         else if (op === 'down') { await mouse(c, 'mouseMoved', a[0], a[1], { button: 'none' }); await mouse(c, 'mousePressed', a[0], a[1]); }
         else if (op === 'up') await mouse(c, 'mouseReleased', a[0], a[1]);
+        else if (op === 'move') await mouse(c, 'mouseMoved', a[0], a[1], { buttons: 1 });
         else if (op === 'hover') await mouse(c, 'mouseMoved', a[0], a[1], { button: 'none' });
         else if (op === 'wheel') await c.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: a[0], y: a[1], deltaX: a[2] || 0, deltaY: a[3] || 0, modifiers: a[4] || 0 });
         else if (op === 'file') await c.send('Runtime.evaluate', { awaitPromise: true, expression: `(async () => { const blobs = await Promise.all(${JSON.stringify(a)}.map(async (n) => new File([await (await fetch('/' + n)).blob()], n))); window.__origClick ??= HTMLInputElement.prototype.click; HTMLInputElement.prototype.click = function () { if (this.type === 'file') { const dt = new DataTransfer(); blobs.forEach((b) => dt.items.add(b)); this.files = dt.files; this.dispatchEvent(new Event('change', { bubbles: true })); HTMLInputElement.prototype.click = window.__origClick; return; } return window.__origClick.call(this); }; })()` });

@@ -458,10 +458,19 @@ void main() {
       expect(empty.points, isEmpty);
       expect(sent('auto_clear'), hasLength(1));
       expect(firstIndex('auto_clear'), lessThan(firstIndex('auto_lane')));
-      expect(engine.log!.where((x) => x.first == 'auto_lane' || x.first == 'auto_point').toList(), [
-        ['auto_lane', 1, 3, 1, 1],
-        ['auto_point', 0, 0.0, 200.0, 0.0],
-        ['auto_point', 0, 4.0, 20000.0, 1.0],
+      final auto = engine.log!.where((x) => x.first == 'auto_lane' || x.first == 'auto_point').toList();
+      // o corte (Hz, escala logarítmica) anda na escala do botão: vai ao motor como pontos retos a
+      // cada 1/8 de batida (32 no segmento de 4 batidas, mais o último), limitados à faixa
+      final cut = auto.takeWhile((x) => x.first != 'auto_lane' || identical(x, auto.first)).toList();
+      expect(cut.first, ['auto_lane', 1, 3, 1, 1]);
+      expect(cut.skip(1), hasLength(33));
+      expect(cut[1], ['auto_point', 0, 0.0, 200.0, 0.0]);
+      expect(cut.last, ['auto_point', 0, 4.0, 20000.0, 0.0]);
+      final hz = [for (final x in cut.skip(1)) x[3] as double];
+      for (var i = 1; i < hz.length; i++) {
+        expect(hz[i], greaterThanOrEqualTo(hz[i - 1]));
+      }
+      expect(auto.skip(cut.length).toList(), [
         ['auto_lane', 1, 4, 0, 0], // o envio fantasma não conta
         ['auto_point', 1, 2.0, 0.25, 0.0],
         ['auto_lane', -1, 0, 0, 0],
@@ -502,7 +511,8 @@ void main() {
         ['auto_lane', 0, 0, 0, 0],
         ['auto_point', 0, 1.0, 2.0, 0.0],
         ['auto_lane', 1, 2, 0, 13],
-        ['auto_point', 1, 0.0, 800.0, -0.5],
+        // parâmetro em escala logarítmica: a curva vira pontos retos (num ponto só, nada a dividir)
+        ['auto_point', 1, 0.0, 800.0, 0.0],
       ]);
     });
 
