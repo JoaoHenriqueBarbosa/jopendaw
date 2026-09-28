@@ -17,6 +17,17 @@ extension type _Host._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> idbGet(String key);
   external JSPromise<JSAny?> idbPut(String key, JSAny value);
   external JSPromise<JSAny?> idbDelete(String key);
+  external JSPromise<_MidiAccess> enableMidi();
+  external void setOnMidi(JSFunction cb);
+  external void setOnMidiInputs(JSFunction cb);
+}
+
+/// Resposta do `enableMidi` do host: as entradas, ou o código do erro (`unsupported`, `denied`,
+/// `failed`) com a mensagem do navegador.
+extension type _MidiAccess._(JSObject _) implements JSObject {
+  external JSArray<JSString>? get inputs;
+  external String? get error;
+  external String? get message;
 }
 
 extension type _Decoded._(JSObject _) implements JSObject {
@@ -64,11 +75,45 @@ class AudioEngine {
     );
   }
 
-  /// Mensagens MIDI de entrada (status, dado 1, dado 2).
+  /// Mensagens MIDI de entrada (status, dado 1, dado 2). Só mensagens de canal: relógio e
+  /// active sensing ficam no host.
   void Function(int status, int data1, int data2)? onMidi;
 
-  /// Pede acesso ao MIDI do navegador (Web MIDI); devolve os nomes das entradas.
-  Future<List<String>> enableMidi() => throw UnimplementedError();
+  /// Entradas MIDI conectadas, a cada aparelho que entra ou sai.
+  void Function(List<String> inputs)? onMidiInputs;
+  bool _midiHooked = false;
+
+  /// Pede acesso ao MIDI do navegador (Web MIDI, sem sysex) e passa a ouvir todas as entradas;
+  /// devolve os nomes delas. Sem suporte: [UnsupportedError]; permissão negada: [StateError].
+  Future<List<String>> enableMidi() async {
+    if (!_midiHooked) {
+      _midiHooked = true;
+      _host.setOnMidi(
+        ((JSNumber status, JSNumber data1, JSNumber data2) {
+          onMidi?.call(status.toDartInt, data1.toDartInt, data2.toDartInt);
+        }).toJS,
+      );
+      _host.setOnMidiInputs(
+        ((JSArray<JSString> names) {
+          onMidiInputs?.call(_names(names));
+        }).toJS,
+      );
+    }
+    final r = await _host.enableMidi().toDart;
+    switch (r.error) {
+      case null:
+        final inputs = r.inputs;
+        return inputs == null ? const [] : _names(inputs);
+      case 'unsupported':
+        throw UnsupportedError('Este navegador não dá acesso a MIDI. Use o Chrome ou o Edge, com o jopendaw aberto em https.');
+      case 'denied':
+        throw StateError('O navegador negou o acesso ao MIDI. Libere o MIDI nas permissões do site e tente de novo.');
+      default:
+        throw StateError('Não deu para abrir o MIDI: ${r.message ?? r.error}.');
+    }
+  }
+
+  static List<String> _names(JSArray<JSString> names) => [for (final n in names.toDart) n.toDart];
 
   /// Latência de saída em segundos (base + dispositivo).
   double get latency => _host.latency();

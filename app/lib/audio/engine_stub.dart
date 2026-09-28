@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'engine_types.dart';
 
 /// Fora da web o motor nativo ainda não existe: a tela do projeto avisa em vez de tocar.
@@ -12,15 +14,22 @@ class AudioEngine {
   Future<void> resume() async {}
   Future<DecodedAudio> decode(Uint8List bytes) => Future.error(UnsupportedError('Sem motor de áudio.'));
   void loadSample(int id, DecodedAudio audio) {}
-  void calls(List<List<Object>> list) {}
+  void calls(List<List<Object>> list) => log?.addAll(list);
   void Function(EngineState state)? onState;
   double get latency => 0;
+
+  /// Nos testes: guarda aqui as chamadas que iriam ao motor (null não guarda).
+  @visibleForTesting
+  List<List<Object>>? log;
 
   /// Mensagens MIDI de entrada (status, dado 1, dado 2).
   void Function(int status, int data1, int data2)? onMidi;
 
-  /// Pede acesso ao MIDI; devolve os nomes das entradas.
-  Future<List<String>> enableMidi() async => const [];
+  /// Entradas MIDI conectadas, a cada aparelho que entra ou sai.
+  void Function(List<String> inputs)? onMidiInputs;
+
+  /// Pede acesso ao MIDI; fora do navegador ainda não há.
+  Future<List<String>> enableMidi() => Future.error(UnsupportedError('O MIDI ainda não funciona fora do navegador.'));
 }
 
 /// Guardado local do DAW (documento e áudios).

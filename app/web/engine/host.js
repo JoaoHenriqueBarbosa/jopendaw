@@ -1,5 +1,5 @@
 // Ponte entre o Flutter (lib/audio/engine_web.dart) e o motor no AudioWorklet, mais o guardado
-// local do DAW no IndexedDB (documento do projeto e os áudios importados).
+// local do DAW no IndexedDB (documento do projeto e os áudios importados) e as entradas MIDI.
 (() => {
   let ctx = null;
   let node = null;
@@ -78,6 +78,59 @@
     });
   }
 
+  // ------------------------------------------------------------ MIDI (Web MIDI)
+
+  let midi = null;
+  let midiRequest = null;
+  let onMidi = null;
+  let onMidiInputs = null;
+
+  function midiNames() {
+    const names = [];
+    for (const input of midi.inputs.values()) {
+      if (input.state === 'connected') names.push(input.name || 'Entrada MIDI');
+    }
+    return names;
+  }
+
+  // Só mensagens de canal (nota, controle, pitch bend...): relógio e active sensing chegam
+  // dezenas de vezes por segundo e não interessam ao Dart.
+  function onMidiMessage(e) {
+    const d = e.data;
+    if (!onMidi || !d || d.length === 0 || d[0] < 0x80 || d[0] >= 0xf0) return;
+    onMidi(d[0], d.length > 1 ? d[1] : 0, d.length > 2 ? d[2] : 0);
+  }
+
+  // A propriedade (e não addEventListener) não dobra o ouvinte quando uma entrada volta; atribuir
+  // já abre a porta.
+  function listenAll() {
+    for (const input of midi.inputs.values()) input.onmidimessage = onMidiMessage;
+  }
+
+  // Devolve { inputs } ou { error: 'unsupported' | 'denied' | 'failed', message }: o Dart escreve a
+  // mensagem para o usuário.
+  async function enableMidi() {
+    if (!navigator.requestMIDIAccess) return { error: 'unsupported' };
+    if (!midi) {
+      midiRequest ??= navigator.requestMIDIAccess({ sysex: false });
+      try {
+        midi = await midiRequest;
+      } catch (err) {
+        midiRequest = null; // deixa tentar de novo depois de liberar a permissão
+        const name = err && err.name;
+        const denied = name === 'SecurityError' || name === 'NotAllowedError';
+        return { error: denied ? 'denied' : 'failed', message: String((err && err.message) || err) };
+      }
+      // aparelho entrando ou saindo com a página aberta
+      midi.onstatechange = () => {
+        listenAll();
+        if (onMidiInputs) onMidiInputs(midiNames());
+      };
+    }
+    listenAll();
+    return { inputs: midiNames() };
+  }
+
   window.jopendawEngine = {
     start,
     resume,
@@ -89,5 +142,8 @@
     idbGet: (key) => tx('readonly', (s) => s.get(key)).then((v) => v ?? null),
     idbPut: (key, value) => tx('readwrite', (s) => s.put(value, key)),
     idbDelete: (key) => tx('readwrite', (s) => s.delete(key)),
+    enableMidi,
+    setOnMidi: (cb) => { onMidi = cb; },
+    setOnMidiInputs: (cb) => { onMidiInputs = cb; },
   };
 })();
