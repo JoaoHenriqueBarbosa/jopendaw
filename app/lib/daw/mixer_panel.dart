@@ -1,12 +1,13 @@
 /// O mixer: um canal por faixa e o master fixo à direita. Em cada canal, de cima para baixo: os
-/// inserts (efeitos na ordem do sinal), os envios para barramentos, pan, fader com medidor,
-/// mudo/solo, a saída e o nome com o ícone do tipo. Ocupa a altura que o painel de baixo der;
-/// abaixo do mínimo rola na vertical em vez de espremer.
+/// inserts (efeitos na ordem do sinal), os envios para barramentos, pan, fader com medidor (e o da
+/// entrada, quando armada), armar/monitorar, mudo/solo, a saída e o nome com o ícone do tipo. Ocupa
+/// a altura que o painel de baixo der; abaixo do mínimo rola na vertical em vez de espremer.
 library;
 
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,9 +27,9 @@ const _stripWidth = 92.0;
 /// Folga entre as duas listas.
 const _listGap = 3.0;
 
-/// O que o canal tem de altura fixa abaixo das listas: folga, pan, dB, M/S, saída e nome, com as
-/// folgas entre eles (tem que bater com [_Strip.build]).
-const _fixed = 5 + 20 + 3 + 14 + 3 + 20 + 3 + 20 + 3 + 16.0;
+/// O que o canal tem de altura fixa abaixo das listas: folga, pan, dB, armar/monitorar, M/S, saída
+/// e nome, com as folgas entre eles (tem que bater com [_Strip.build]).
+const _fixed = 5 + 20 + 3 + 14 + 3 + 20 + 3 + 20 + 3 + 20 + 3 + 16.0;
 
 /// A moldura do canal: o respiro da lista (6 + 6), o do canal (5 + 5) e a borda de cor (3).
 const _frame = 12 + 10 + 3.0;
@@ -41,6 +42,16 @@ const _busTint = Color(0xFF8C7CF0);
 
 const _slotText = TextStyle(fontSize: 10.5, height: 1.2);
 const _preColor = Color(0xFFE3B341);
+
+/// Vermelho de gravação (armar, o botão Gravar): mais puro que o salmão do mudo, para os dois não
+/// se confundirem lado a lado no canal.
+const recordColor = Color(0xFFF2433A);
+
+/// Monitorar a entrada: azul, longe do vermelho de armar e do âmbar do solo.
+const _monitorColor = Color(0xFF6BA8F0);
+
+/// Largura do medidor de entrada ao lado do medidor do canal (e a folga antes dele).
+const _inputMeterWidth = 5.0, _inputMeterGap = 3.0;
 
 /// Quantas linhas cabem nas listas de inserts e de envios. É do painel, não do canal: todos os
 /// canais usam as mesmas medidas, e pan, faders e botões ficam alinhados de ponta a ponta.
@@ -149,6 +160,9 @@ class _Strip extends StatelessWidget {
     final color = t == null ? Colors.white : trackColorAt(t.color);
     final selected = t != null && c.selectedTrack == index;
     final gain = t?.gain ?? c.doc.masterGain;
+    // o medidor de entrada só faz sentido onde o que entra é áudio: na faixa de instrumento armada
+    // entram notas, e o nível do microfone ali enganaria
+    final inputMeter = t != null && t.armed && t.kind == TrackKind.audio;
     final small = Theme.of(context).textTheme.labelSmall!.copyWith(fontSize: 10.5, height: 1.2);
     final base = selected ? Palette.overlay : Palette.raised;
     final background = bus ? Color.alphaBlend(_busTint.withValues(alpha: selected ? 0.16 : 0.09), base) : base;
@@ -193,6 +207,20 @@ class _Strip extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: _Fader.capHalf),
                     child: Meter(peaks: c.peaks, index: index, width: 9),
                   ),
+                  // o lugar do medidor de entrada fica reservado em todo canal de faixa: armar não
+                  // pode empurrar o fader de um canal para fora do alinhamento com os vizinhos
+                  if (t != null) ...[
+                    const SizedBox(width: _inputMeterGap),
+                    SizedBox(
+                      width: _inputMeterWidth,
+                      child: inputMeter
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: _Fader.capHalf),
+                              child: InputLevelMeter(level: c.inputLevel),
+                            )
+                          : null,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -218,6 +246,11 @@ class _Strip extends StatelessWidget {
                       : Text('${formatDb(gain)} dB', style: small.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
                 ),
               ),
+            ),
+            const SizedBox(height: 3),
+            SizedBox(
+              height: 20,
+              child: t == null ? null : _RecordRow(c: c, track: index),
             ),
             const SizedBox(height: 3),
             SizedBox(
@@ -278,6 +311,211 @@ class _Strip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------- gravação
+
+/// Armar e monitorar. Nas faixas de áudio os dois; nas de instrumento só armar (o instrumento já
+/// toca ao vivo o que chega do teclado ou do MIDI, não há entrada de áudio para ouvir); barramento
+/// não grava. O lugar do monitorar fica vazio na de instrumento para o armar alinhar entre canais.
+class _RecordRow extends StatelessWidget {
+  final DawController c;
+  final int track;
+  const _RecordRow({required this.c, required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = c.doc.tracks[track];
+    if (!t.kind.hasClips) return const SizedBox.shrink();
+    final audio = t.kind == TrackKind.audio;
+    final armTip = switch ((audio, t.armed)) {
+      (true, false) => 'Armar para gravar: ao gravar (R), o que entra no microfone vira um clipe nesta faixa',
+      (true, true) => 'Armada: grava o que entra no microfone ao gravar (R)\nToque para desarmar',
+      (false, false) => 'Armar para gravar: ao gravar (R), as notas que você tocar (teclado do computador ou MIDI) viram um clipe nesta faixa',
+      (false, true) => 'Armada: grava as notas tocadas ao vivo ao gravar (R)\nToque para desarmar',
+    };
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _IconChip(
+          icon: Icons.fiber_manual_record,
+          label: 'Armar para gravar',
+          on: t.armed,
+          color: recordColor,
+          // desligado o ponto continua vermelho: é o sinal de gravar que todo mundo reconhece
+          offColor: recordColor.withValues(alpha: 0.75),
+          tooltip: armTip,
+          onTap: () => c.setArmed(track, !t.armed),
+        ),
+        const SizedBox(width: 4),
+        if (audio)
+          _IconChip(
+            icon: Icons.headphones,
+            label: 'Monitorar a entrada',
+            on: t.monitor,
+            color: _monitorColor,
+            tooltip: t.monitor
+                ? 'Monitorando: o microfone passa ao vivo pelos efeitos e pelo fader desta faixa\nToque para desligar'
+                : 'Monitorar a entrada: ouvir o microfone ao vivo pelos efeitos e pelo fader desta faixa (use fones, senão microfona)',
+            onTap: () => c.setMonitor(track, !t.monitor),
+          )
+        else
+          const SizedBox(width: _IconChip.width),
+      ],
+    );
+  }
+}
+
+/// Botão de ligar e desligar do tamanho do M/S ([ToggleChip]), com ícone no lugar da letra.
+class _IconChip extends StatelessWidget {
+  final IconData icon;
+  final String label, tooltip;
+  final bool on;
+  final Color color;
+  final Color? offColor;
+  final VoidCallback onTap;
+  const _IconChip({required this.icon, required this.label, required this.on, required this.color, required this.tooltip, required this.onTap, this.offColor});
+
+  static const width = 24.0;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    toggled: on,
+    label: label,
+    child: Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          width: width,
+          height: 20,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: on ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: on ? color : Palette.hairlineStrong),
+          ),
+          child: Icon(icon, size: 12, color: on ? Colors.black : (offColor ?? Colors.white70)),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Pico linear → 0..1 numa escala de −48 a 0 dB (a mesma do [Meter], para os dois lado a lado
+/// dizerem a mesma coisa).
+double _meterLevel(double p) {
+  if (p <= 0) return 0;
+  final db = 20 * math.log(p) / math.ln10;
+  return ((db + 48) / 48).clamp(0.0, 1.0);
+}
+
+/// Medidor do que entra (microfone, interface), antes de qualquer efeito: é por ele que se acerta
+/// o ganho da fonte antes de gravar. Mono ([DawController.inputLevel] é um pico só), vertical ou
+/// deitado, com a luz de saturação no topo, que fica acesa uns segundos para dar tempo de ver.
+class InputLevelMeter extends StatefulWidget {
+  final ValueListenable<double> level;
+  final bool horizontal;
+  const InputLevelMeter({super.key, required this.level, this.horizontal = false});
+
+  @override
+  State<InputLevelMeter> createState() => _InputLevelMeterState();
+}
+
+class _InputLevelMeterState extends State<InputLevelMeter> {
+  double _v = 0;
+  bool _clip = false;
+  Timer? _clipOff;
+
+  /// A partir daqui (−0,1 dBFS) o que entra já está cortado no conversor.
+  static const _clipAt = 0.989;
+
+  @override
+  void initState() {
+    super.initState();
+    // o medidor pode nascer com a entrada já aberta (armou agora, abriu o mixer): começa no nível
+    // atual em vez de esperar o próximo aviso
+    _v = widget.level.value;
+    widget.level.addListener(_onLevel);
+  }
+
+  @override
+  void didUpdateWidget(InputLevelMeter old) {
+    super.didUpdateWidget(old);
+    if (old.level != widget.level) {
+      old.level.removeListener(_onLevel);
+      widget.level.addListener(_onLevel);
+      _v = widget.level.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.level.removeListener(_onLevel);
+    _clipOff?.cancel();
+    super.dispose();
+  }
+
+  void _onLevel() {
+    final p = widget.level.value;
+    if (p >= _clipAt) {
+      _clipOff?.cancel();
+      _clipOff = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _clip = false);
+      });
+      if (!_clip) setState(() => _clip = true);
+    }
+    // sobe na hora e desce devagar; o zero exato (entrada fechada) apaga de uma vez, senão o
+    // medidor ficaria parado no último valor quando o nível para de chegar
+    final v = p <= 0 ? 0.0 : math.max(p, _v * 0.82);
+    if ((v - _v).abs() < 0.001) return;
+    setState(() => _v = v);
+  }
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Nível da entrada (o que chega do microfone, antes dos efeitos)\nVermelho no topo: saturou; baixe o ganho na fonte',
+    waitDuration: const Duration(milliseconds: 600),
+    child: CustomPaint(painter: _InputMeterPainter(_v, _clip, widget.horizontal), size: Size.infinite),
+  );
+}
+
+class _InputMeterPainter extends CustomPainter {
+  final double v;
+  final bool clip, horizontal;
+  _InputMeterPainter(this.v, this.clip, this.horizontal);
+
+  static const _colors = [Palette.success, Palette.success, Color(0xFFE3B341), Palette.danger];
+  static const _stops = [0.0, 0.7, 0.88, 1.0];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // a luz de saturação: uma ponta de 3 px do lado do topo da escala
+    const cap = 3.0, gap = 1.0;
+    final length = (horizontal ? size.width : size.height) - cap - gap;
+    if (length <= 0) return;
+    final thick = horizontal ? size.height : size.width;
+    Rect bar(double from, double len) => horizontal ? Rect.fromLTWH(from, 0, len, thick) : Rect.fromLTWH(0, size.height - from - len, thick, len);
+    final bg = Paint()..color = Colors.white.withValues(alpha: 0.06);
+    canvas.drawRect(bar(0, length), bg);
+    final shader = LinearGradient(
+      begin: horizontal ? Alignment.centerLeft : Alignment.bottomCenter,
+      end: horizontal ? Alignment.centerRight : Alignment.topCenter,
+      colors: _colors,
+      stops: _stops,
+    ).createShader(bar(0, length));
+    final h = _meterLevel(v) * length;
+    if (h > 0) canvas.drawRect(bar(0, h), Paint()..shader = shader);
+    canvas.drawRect(bar(length + gap, cap), clip ? (Paint()..color = recordColor) : bg);
+  }
+
+  @override
+  bool shouldRepaint(_InputMeterPainter o) => o.v != v || o.clip != clip || o.horizontal != horizontal;
+}
+
+// ---------------------------------------------------------------------- controles
 
 /// Gesto dos controles do canal (fader, pan, envios): arrastar na vertical (Shift: fino) ou a roda
 /// em cima dele; um ponto de desfazer por gesto, marcado só quando o valor muda de fato.

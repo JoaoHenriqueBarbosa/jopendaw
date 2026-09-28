@@ -78,9 +78,25 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
 
 /// Transporte, arranjo e o painel de baixo quando aberto. No celular o transporte fica embaixo,
 /// perto do polegar. Público para os testes montarem a tela sem a API.
-class DawStudio extends StatelessWidget {
+class DawStudio extends StatefulWidget {
   final DawController c;
   const DawStudio({super.key, required this.c});
+
+  @override
+  State<DawStudio> createState() => _DawStudioState();
+}
+
+class _DawStudioState extends State<DawStudio> {
+  DawController get c => widget.c;
+
+  /// Falha de uma ação do transporte (gravar, parar a gravação) que o controlador não transformou
+  /// em aviso: aparece junto dos avisos dele, em vez de sumir no console; some na próxima ação que
+  /// dá certo.
+  String? _actionError;
+
+  void _onActionError(String? message) {
+    if (mounted && message != _actionError) setState(() => _actionError = message);
+  }
 
   bool _typing() {
     final f = FocusManager.instance.primaryFocus?.context?.widget;
@@ -101,11 +117,19 @@ class DawStudio extends StatelessWidget {
     final k = e.logicalKey;
     void Function()? action;
     if (k == LogicalKeyboardKey.space) {
-      action = c.togglePlay;
+      action = () => playOrPause(c, _onActionError);
     } else if (k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.home) {
-      action = c.stop;
+      action = () => stopTransport(c, _onActionError);
+    } else if (!mod && k == LogicalKeyboardKey.keyR) {
+      // R não é nota no teclado musical (A W S E D F T G Y H U J K O L P), então grava mesmo com
+      // ele ligado; com Ctrl/Cmd fica para o navegador (recarregar)
+      action = () => toggleRecording(c, _onActionError);
     } else if (k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) {
       action = () => deleteSelectedClip(c);
+    } else if (mod && c.recording && (k == LogicalKeyboardKey.keyZ || k == LogicalKeyboardKey.keyY || k == LogicalKeyboardKey.keyI)) {
+      // desfazer ou importar no meio da gravação poderia apagar ou deslocar a faixa que recebe o
+      // áudio (os botões ficam desligados); a tecla é engolida para o navegador não usá-la
+      action = () {};
     } else if (mod && k == LogicalKeyboardKey.keyZ) {
       action = keys.isShiftPressed ? c.redo : c.undo;
     } else if (mod && k == LogicalKeyboardKey.keyY) {
@@ -145,7 +169,7 @@ class DawStudio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final desktop = isDesktop(context);
-    final transport = TransportBar(c: c, compact: !desktop);
+    final transport = TransportBar(c: c, compact: !desktop, onError: _onActionError);
     // os botões e controles não pegam o foco: senão o espaço aciona o botão clicado por último em
     // vez de tocar/pausar, e as teclas do teclado musical e do editor não chegariam aqui
     return Focus(
@@ -161,6 +185,11 @@ class DawStudio extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.all(8),
                   child: InlineNotice(c.error!, onClose: c.clearError),
+                ),
+              if (_actionError != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: InlineNotice(_actionError!, onClose: () => setState(() => _actionError = null)),
                 ),
               Expanded(
                 // o painel de baixo divide este espaço com o arranjo e precisa saber o tamanho dele

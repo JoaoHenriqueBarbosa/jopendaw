@@ -1,21 +1,87 @@
-/// Barra do transporte e das ferramentas: tocar, parar, posição, andamento, loop, metrônomo,
-/// edição, grade, zoom, os painéis de baixo (mixer, editor, instrumento, efeitos), as entradas de notas (teclado do computador e MIDI)
-/// e importar.
+/// Barra do transporte e das ferramentas: tocar, parar, gravar, posição, andamento, loop,
+/// metrônomo, edição, grade, zoom, os painéis de baixo (mixer, editor, instrumento, efeitos), as
+/// entradas de notas (teclado do computador e MIDI), importar, exportar e as configurações.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../widgets/feedback.dart';
+import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'dock.dart';
+import 'export.dart';
+import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
+import 'settings_dialog.dart';
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
+
+/// Para onde as ações do transporte (botões e atalhos) mandam uma falha que o controlador não
+/// transformou em aviso: a tela mostra inline, em vez de a exceção sumir no console. Null: a ação
+/// deu certo, e o aviso de uma falha anterior já não vale.
+typedef ActionErrorSink = void Function(String? message);
+
+/// Uma falha do gravar, do exportar ou da entrada como a pessoa deve ler: sem o prefixo em inglês
+/// das exceções do Dart ("Bad state:", "Exception:").
+String describeActionError(Object e) {
+  switch (e) {
+    // antes do UnsupportedError: o UnimplementedError também é um
+    case UnimplementedError():
+      return 'Isso ainda não funciona neste aparelho.';
+    case UnsupportedError(:final message?):
+      return sentence(message);
+    case UnsupportedError():
+      return 'Isso não funciona neste aparelho.';
+    case StateError(:final message):
+      return sentence(message);
+  }
+  final text = '$e';
+  const prefix = 'Exception: ';
+  return text.startsWith(prefix) ? sentence(text.substring(prefix.length)) : describeError(e);
+}
+
+/// Roda [action] e devolve o aviso da falha, ou null quando deu certo.
+Future<String?> _attempt(Future<void> Function() action) async {
+  try {
+    await action();
+    return null;
+  } catch (e) {
+    return describeActionError(e);
+  }
+}
+
+/// Liga/desliga a gravação (botão e R). Os problemas esperados (sem microfone, nenhuma faixa
+/// armada) o controlador mostra em `c.error`; o que escapar dele chega em [onError].
+Future<void> toggleRecording(DawController c, ActionErrorSink onError) async => onError(await _attempt(c.toggleRecord));
+
+/// Tocar/pausar (botão e espaço). Gravando, pausar encerra a gravação antes, com os clipes do que
+/// foi gravado até ali: senão a captura seguiria com o transporte parado. Se encerrar já parou o
+/// transporte, não toca de novo. A falha do encerrar não some porque o pausar deu certo.
+Future<void> playOrPause(DawController c, ActionErrorSink onError) async {
+  if (!c.recording) return onError(await _attempt(c.togglePlay));
+  final recordError = await _attempt(c.toggleRecord);
+  final playError = c.playing.value ? await _attempt(c.togglePlay) : null;
+  onError(recordError ?? playError);
+}
+
+/// Parar e voltar (botão, Enter e Home). Gravando, encerra a gravação primeiro: o fim dos clipes é
+/// onde o cursor estava, e o parar leva o cursor de volta ao começo.
+Future<void> stopTransport(DawController c, ActionErrorSink onError) async {
+  final recordError = c.recording ? await _attempt(c.toggleRecord) : null;
+  final stopError = await _attempt(c.stop);
+  onError(recordError ?? stopError);
+}
+
+/// Largura da barra a partir da qual importar e exportar mostram o nome ao lado do ícone (a barra
+/// inteira com os nomes mede uns 1520 px; sem eles, uns 1350).
+const _labelsWidth = 1540.0;
 
 class TransportBar extends StatelessWidget {
   final DawController c;
   final bool compact;
-  const TransportBar({super.key, required this.c, required this.compact});
+  final ActionErrorSink onError;
+  const TransportBar({super.key, required this.c, required this.compact, required this.onError});
 
   @override
   Widget build(BuildContext context) {
@@ -23,29 +89,38 @@ class TransportBar extends StatelessWidget {
       listenable: c,
       builder: (context, _) {
         final d = c.doc;
+        final recording = c.recording;
         final transport = [
-          IconButton(tooltip: 'Parar e voltar (Enter)', onPressed: c.stop, icon: const Icon(Icons.stop)),
+          IconButton(
+            tooltip: recording ? 'Parar a gravação e voltar (Enter)' : 'Parar e voltar (Enter)',
+            onPressed: () => stopTransport(c, onError),
+            icon: const Icon(Icons.stop),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: c.playing,
             builder: (_, playing, _) => IconButton.filled(
-              tooltip: playing ? 'Pausar (espaço)' : 'Tocar (espaço)',
-              onPressed: c.togglePlay,
+              tooltip: recording ? 'Parar a gravação (espaço)' : (playing ? 'Pausar (espaço)' : 'Tocar (espaço)'),
+              onPressed: () => playOrPause(c, onError),
               icon: Icon(playing ? Icons.pause : Icons.play_arrow),
             ),
           ),
-          const SizedBox(width: 8),
+          _RecordButton(c: c, onError: onError),
+          const SizedBox(width: 4),
           _Position(c: c),
           const SizedBox(width: 8),
+          // o andamento não muda no meio de uma gravação: as batidas do que já foi gravado mudariam
+          // de lugar em relação ao áudio que ainda está chegando
           TextButton(
-            onPressed: () => _editTempo(context),
+            onPressed: recording ? null : () => _editTempo(context),
             child: Text('${d.bpm.round()} BPM · ${d.beatsPerBar}/4', style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
           ),
           _Toggle(icon: Icons.repeat, on: d.loopOn, tooltip: 'Loop (L) · arraste na régua para marcar', onTap: c.toggleLoop),
           _Toggle(icon: Icons.av_timer, on: d.metronome, tooltip: 'Metrônomo (C)', onTap: c.toggleMetronome),
         ];
+        // desfazer no meio da gravação poderia apagar ou mover a faixa que está recebendo o áudio
         final tools = [
-          IconButton(tooltip: 'Desfazer (Ctrl+Z)', onPressed: c.canUndo ? c.undo : null, icon: const Icon(Icons.undo)),
-          IconButton(tooltip: 'Refazer (Ctrl+Shift+Z)', onPressed: c.canRedo ? c.redo : null, icon: const Icon(Icons.redo)),
+          IconButton(tooltip: 'Desfazer (Ctrl+Z)', onPressed: c.canUndo && !recording ? c.undo : null, icon: const Icon(Icons.undo)),
+          IconButton(tooltip: 'Refazer (Ctrl+Shift+Z)', onPressed: c.canRedo && !recording ? c.redo : null, icon: const Icon(Icons.redo)),
           IconButton(tooltip: 'Cortar no cursor (S)', onPressed: () => splitClipsAtPlayhead(c), icon: const Icon(Icons.content_cut)),
           IconButton(tooltip: 'Duplicar (Ctrl+D)', onPressed: c.selectedClip == null ? null : () => duplicateSelectedClip(c), icon: const Icon(Icons.copy_all)),
           IconButton(
@@ -100,41 +175,69 @@ class TransportBar extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: SizedBox(width: 1, height: 28, child: ColoredBox(color: Palette.hairline)),
         );
+        // importar e exportar mexem no documento inteiro: nem no meio de outro trabalho nem no de
+        // uma gravação (uma faixa nova no meio mudaria o lugar das armadas)
+        final idle = c.status == null && !recording;
+        void export() => showExportDialog(context, c);
+        // só o ícone no celular e em tela estreita: a barra rola na horizontal, mas o texto
+        // empurraria as configurações para fora da vista num notebook comum
+        List<Widget> files(bool labels) => !labels
+            ? [
+                IconButton.filledTonal(tooltip: 'Importar áudio (Ctrl+I)', onPressed: idle ? c.importAudio : null, icon: const Icon(Icons.file_open_outlined)),
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  tooltip: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',
+                  onPressed: idle ? export : null,
+                  icon: const Icon(Icons.save_alt),
+                ),
+              ]
+            : [
+                FilledButton.tonalIcon(onPressed: idle ? c.importAudio : null, icon: const Icon(Icons.file_open_outlined), label: const Text('Importar')),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',
+                  child: FilledButton.tonalIcon(onPressed: idle ? export : null, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),
+                ),
+              ];
         // largura toda: dentro da coluna da tela a barra encolhia até o conteúdo e ficava centralizada
-        return Container(
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Palette.bar,
-            border: Border.symmetric(horizontal: BorderSide(color: Palette.hairline)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  ...transport,
-                  const SizedBox(width: 4),
-                  divider,
-                  ...tools,
-                  divider,
-                  ...panels,
-                  divider,
-                  ...inputs,
-                  const SizedBox(width: 12),
-                  FilledButton.tonalIcon(
-                    onPressed: c.status == null ? c.importAudio : null,
-                    icon: const Icon(Icons.file_open_outlined),
-                    label: const Text('Importar'),
-                  ),
-                  if (c.status != null) ...[
+        return LayoutBuilder(
+          builder: (context, box) => Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: Palette.bar,
+              border: Border.symmetric(horizontal: BorderSide(color: Palette.hairline)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    ...transport,
+                    const SizedBox(width: 4),
+                    divider,
+                    ...tools,
+                    divider,
+                    ...panels,
+                    divider,
+                    ...inputs,
                     const SizedBox(width: 12),
-                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                    const SizedBox(width: 8),
-                    Text(c.status!, style: Theme.of(context).textTheme.bodySmall),
+                    ...files(!compact && box.maxWidth >= _labelsWidth),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Configurações: entrada de áudio, latência e contagem',
+                      onPressed: () => showSettingsDialog(context, c),
+                      icon: const Icon(Icons.settings_outlined),
+                    ),
+                    if (c.status != null) ...[
+                      const SizedBox(width: 12),
+                      const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                      const SizedBox(width: 8),
+                      Text(c.status!, style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -152,6 +255,132 @@ class TransportBar extends StatelessWidget {
   }
 }
 
+/// Gravar: o círculo vermelho, aceso gravando e piscando no andamento durante a contagem. A seta
+/// ao lado abre as opções (contagem, configurações de gravação).
+class _RecordButton extends StatefulWidget {
+  final DawController c;
+  final ActionErrorSink onError;
+  const _RecordButton({required this.c, required this.onError});
+
+  @override
+  State<_RecordButton> createState() => _RecordButtonState();
+}
+
+enum _RecordMenu { countIn, settings }
+
+class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderStateMixin {
+  /// Um ciclo por batida: aceso na primeira metade, apagado na segunda.
+  late final _blink = AnimationController(vsync: this);
+
+  DawController get c => widget.c;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncBlink();
+  }
+
+  @override
+  void didUpdateWidget(_RecordButton old) {
+    super.didUpdateWidget(old);
+    _syncBlink();
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  /// Pisca só na contagem, no andamento do projeto: o que se vê bate com os cliques que se ouvem.
+  void _syncBlink() {
+    if (c.countingIn) {
+      final beat = Duration(microseconds: (60e6 / c.doc.bpm.clamp(20, 400)).round());
+      if (!_blink.isAnimating || _blink.duration != beat) {
+        _blink.duration = beat;
+        _blink.repeat();
+      }
+    } else if (_blink.isAnimating || _blink.value != 0) {
+      _blink
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  void _menu(_RecordMenu v) {
+    switch (v) {
+      case _RecordMenu.countIn:
+        c.edit((d) => d.countIn = !d.countIn, undoable: false);
+      case _RecordMenu.settings:
+        showSettingsDialog(context, c);
+    }
+  }
+
+  String _tooltip() {
+    if (c.countingIn) return 'Contando o compasso de entrada: toque para cancelar (R)';
+    if (c.recording) return 'Gravando: toque para parar (R)';
+    final armed = c.doc.tracks.where((t) => t.armed && t.kind.hasClips).length;
+    final count = c.doc.countIn ? ', com um compasso de contagem' : '';
+    return switch (armed) {
+      0 => 'Gravar (R): nenhuma faixa armada; arme no mixer (●)',
+      1 => 'Gravar (R) na faixa armada$count',
+      _ => 'Gravar (R) nas $armed faixas armadas$count',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recording = c.recording;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: _tooltip(),
+          child: Semantics(
+            button: true,
+            toggled: recording,
+            label: 'Gravar',
+            child: AnimatedBuilder(
+              animation: _blink,
+              builder: (context, _) {
+                final lit = recording && (!c.countingIn || _blink.value < 0.5);
+                return IconButton(
+                  onPressed: () => toggleRecording(c, widget.onError),
+                  style: IconButton.styleFrom(
+                    backgroundColor: lit ? recordColor : Colors.transparent,
+                    side: BorderSide(color: recording ? recordColor : Colors.transparent),
+                  ),
+                  icon: Icon(Icons.fiber_manual_record, color: lit ? Colors.white : recordColor),
+                );
+              },
+            ),
+          ),
+        ),
+        PopupMenuButton<_RecordMenu>(
+          tooltip: 'Opções de gravação',
+          position: PopupMenuPosition.under,
+          onSelected: _menu,
+          itemBuilder: (_) => [
+            CheckedPopupMenuItem(value: _RecordMenu.countIn, checked: c.doc.countIn, child: const Text('Contagem de um compasso')),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: _RecordMenu.settings,
+              child: Row(
+                children: [
+                  Icon(Icons.settings_outlined, size: 18),
+                  SizedBox(width: 12),
+                  Flexible(child: Text('Configurações de gravação…', overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+            ),
+          ],
+          child: const SizedBox(width: 20, height: 40, child: Icon(Icons.arrow_drop_down, size: 18, color: Colors.white54)),
+        ),
+      ],
+    );
+  }
+}
+
 class _Position extends StatelessWidget {
   final DawController c;
   const _Position({required this.c});
@@ -162,7 +391,10 @@ class _Position extends StatelessWidget {
     return ValueListenableBuilder<double>(
       valueListenable: c.beat,
       builder: (_, beat, _) {
-        final secs = beat * 60 / c.doc.bpm;
+        // antes do zero (a contagem que começa um compasso antes do cursor, se o motor andar por
+        // ali) mostra as batidas que faltam, em vez de um "1.1.1" parado e um tempo "0:-2.00"
+        final before = beat < 0;
+        final secs = beat.abs() * 60 / c.doc.bpm;
         final m = secs ~/ 60, s = secs - m * 60;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -170,9 +402,9 @@ class _Position extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(formatPosition(beat, c.doc.beatsPerBar), style: mono.copyWith(color: Palette.accent)),
+              Text(before ? '−${(-beat).ceil()}' : formatPosition(beat, c.doc.beatsPerBar), style: mono.copyWith(color: before ? recordColor : Palette.accent)),
               Text(
-                '$m:${s.toStringAsFixed(2).padLeft(5, '0')}',
+                '${before ? '−' : ''}$m:${s.toStringAsFixed(2).padLeft(5, '0')}',
                 style: Theme.of(context).textTheme.labelSmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
               ),
             ],
