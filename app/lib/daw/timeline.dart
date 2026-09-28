@@ -7,6 +7,7 @@
 /// alturas de uma conta só ([_Layout]).
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show listEquals;
@@ -15,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/dialogs.dart';
+import '../widgets/feedback.dart';
 import '../widgets/theme.dart';
 import 'automation_lane.dart';
 import 'controller.dart';
@@ -31,6 +33,9 @@ const _addRowHeight = 44.0;
 const _masterColor = Color(0xFFC9D1D9);
 const _automationColor = Palette.accent;
 const _effectsColor = Color(0xFF6BA8F0);
+
+/// Gravar: vermelho de verdade, para não confundir com o salmão do mudo ([Palette.danger]).
+const _recordColor = Color(0xFFF0464B);
 
 /// Cor da faixa, ou a do master (−1).
 Color _trackColor(DawController c, int track) => track < 0 || track >= c.doc.tracks.length ? _masterColor : trackColorAt(c.doc.tracks[track].color);
@@ -276,7 +281,8 @@ class _PlayheadPainter extends CustomPainter {
 
 // ---------------------------------------------------------------------- régua
 
-/// Clicar posiciona o cursor; arrastar desenha a região do loop.
+/// Clicar posiciona o cursor; arrastar desenha a região do loop. Gravando (e na contagem), os dois
+/// ficam travados: mexer no meio desalinharia o que está sendo gravado da posição dele no arranjo.
 class _Ruler extends StatefulWidget {
   final DawController c;
   const _Ruler({required this.c});
@@ -292,38 +298,103 @@ class _RulerState extends State<_Ruler> {
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
+    final locked = c.recording;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapUp: (d) => c.seek(c.snapBeat(_beatAt(d.localPosition.dx))),
-      onHorizontalDragStart: (d) {
-        c.checkpoint();
-        _dragFrom = c.snapBeat(_beatAt(d.localPosition.dx));
-      },
-      onHorizontalDragUpdate: (d) {
-        final to = c.snapBeat(_beatAt(d.localPosition.dx));
-        c.setLoop(_dragFrom!, to);
-      },
-      onHorizontalDragEnd: (_) => _dragFrom = null,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Palette.bar,
-          border: Border(bottom: BorderSide(color: Palette.hairline)),
-        ),
-        child: CustomPaint(
-          painter: _RulerPainter(
-            scroll: c.scrollBeat,
-            ppb: c.pxPerBeat,
-            beatsPerBar: c.doc.beatsPerBar,
-            loopOn: c.doc.loopOn,
-            loopStart: c.doc.loopStart,
-            loopEnd: c.doc.loopEnd,
-            style: Theme.of(context).textTheme.labelSmall!,
+      onTapUp: locked ? null : (d) => c.seek(c.snapBeat(_beatAt(d.localPosition.dx))),
+      onHorizontalDragStart: locked
+          ? null
+          : (d) {
+              c.checkpoint();
+              _dragFrom = c.snapBeat(_beatAt(d.localPosition.dx));
+            },
+      onHorizontalDragUpdate: locked
+          ? null
+          : (d) {
+              final from = _dragFrom;
+              if (from != null) c.setLoop(from, c.snapBeat(_beatAt(d.localPosition.dx)));
+            },
+      onHorizontalDragEnd: locked ? null : (_) => _dragFrom = null,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              color: Palette.bar,
+              border: Border(bottom: BorderSide(color: Palette.hairline)),
+            ),
+            child: CustomPaint(
+              painter: _RulerPainter(
+                scroll: c.scrollBeat,
+                ppb: c.pxPerBeat,
+                beatsPerBar: c.doc.beatsPerBar,
+                loopOn: c.doc.loopOn,
+                loopStart: c.doc.loopStart,
+                loopEnd: c.doc.loopEnd,
+                style: Theme.of(context).textTheme.labelSmall!,
+              ),
+              size: Size.infinite,
+            ),
           ),
-          size: Size.infinite,
-        ),
+          if (c.recording && c.countingIn) IgnorePointer(child: _CountInBadge(c: c)),
+        ],
       ),
     );
   }
+}
+
+/// "Contando…" na régua durante o compasso de contagem, logo à direita do cursor (onde a gravação
+/// vai começar), sem sair da janela.
+class _CountInBadge extends StatelessWidget {
+  final DawController c;
+  const _CountInBadge({required this.c});
+
+  static const _label = 'Contando…';
+  static const _style = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white);
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      // o selo tem a largura do texto; medido aqui (só quando o layout muda) para não sair da janela
+      final tp = TextPainter(
+        text: const TextSpan(text: _label, style: _style),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+      )..layout();
+      final width = tp.width + 8 + 6 + 2 * 8;
+      tp.dispose();
+      return ValueListenableBuilder<double>(
+        valueListenable: c.beat,
+        builder: (context, beat, _) {
+          final x = (beat - c.scrollBeat) * c.pxPerBeat;
+          final left = (x + 10).clamp(4.0, math.max(4.0, box.maxWidth - width - 4)).toDouble();
+          return Stack(
+            children: [
+              Positioned(
+                left: left,
+                top: 5,
+                height: 20,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: _recordColor.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(10)),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.circle, size: 8, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text(_label, maxLines: 1, softWrap: false, style: _style),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
 
 /// De quantas em quantas batidas vale desenhar um número, para não amontoar.
@@ -443,6 +514,10 @@ class _TrackHeaderState extends State<_TrackHeader> {
     final color = trackColorAt(t.color);
     final selected = c.selectedTrack == index;
     final dragging = _dragTo != null;
+    // no celular a linha de baixo é ícone, M, S, gravar e A em botões de 20 px com 2 px entre eles
+    // (108 px): cabe nos 110 que o cabeçalho de 132 deixa com as margens mais curtas
+    final chip = compact ? 20.0 : 24.0;
+    final gap = compact ? 2.0 : 4.0;
     return GestureDetector(
       onTapUp: (d) {
         c.selectTrack(index);
@@ -473,75 +548,249 @@ class _TrackHeaderState extends State<_TrackHeader> {
             bottom: BorderSide(color: Palette.hairline),
           ),
         ),
-        child: Row(
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Container(width: 4, color: color),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+            Row(
+              children: [
+                Container(width: 4, color: color),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(compact ? 6 : 8, 6, compact ? 2 : 4, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
-                        if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
-                        Expanded(
-                          child: Text(
-                            dragging ? 'Mover para a posição ${_dragTo! + 1}' : t.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
+                        Row(
+                          children: [
+                            // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
+                            if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
+                            Expanded(
+                              child: Text(
+                                dragging ? 'Mover para a posição ${_dragTo! + 1}' : t.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                            ),
+                            _TrackMenu(c: c, index: index, onRename: () => _rename(context, t)),
+                          ],
                         ),
-                        _TrackMenu(c: c, index: index, onRename: () => _rename(context, t)),
+                        // efeitos, no celular, ficam no menu e no ícone do barramento
+                        Row(
+                          children: [
+                            if (compact) ...[_KindButton(c: c, index: index, color: color, width: chip), SizedBox(width: gap)],
+                            ToggleChip(
+                              label: 'M',
+                              width: chip,
+                              on: t.mute,
+                              color: Palette.danger,
+                              tooltip: 'Mudo',
+                              onTap: () => c.edit((_) => t.mute = !t.mute),
+                            ),
+                            SizedBox(width: gap),
+                            ToggleChip(
+                              label: 'S',
+                              width: chip,
+                              on: t.solo,
+                              color: const Color(0xFFE3B341),
+                              tooltip: 'Solo',
+                              onTap: () => c.edit((_) => t.solo = !t.solo),
+                            ),
+                            SizedBox(width: gap),
+                            // barramento não grava; o vão deixa A e FX na mesma coluna das outras faixas
+                            if (t.kind == TrackKind.bus) SizedBox(width: chip) else _ArmButton(c: c, track: index, width: chip),
+                            SizedBox(width: gap),
+                            _AutomationButton(c: c, track: index, width: chip),
+                            if (!compact) ...[
+                              const SizedBox(width: 4),
+                              _EffectsChip(c: c, track: index),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: c.automated(index, AutoKind.volume)
+                                    ? ValueListenableBuilder<double>(
+                                        valueListenable: c.beat,
+                                        builder: (_, _, _) => _MiniFader(
+                                          gain: c.liveValue(index, AutoKind.volume),
+                                          automated: c.playing.value,
+                                          onStart: c.checkpoint,
+                                          onGain: (g) => c.mutate((_) => t.gain = g),
+                                        ),
+                                      )
+                                    : _MiniFader(gain: t.gain, onStart: c.checkpoint, onGain: (g) => c.mutate((_) => t.gain = g)),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
-                    // no celular a linha é ícone, M, S e A, com 2 px entre eles: cabe nos 104 px
-                    // que o cabeçalho de 132 deixa; efeitos ficam no menu e no ícone do barramento
-                    Row(
-                      children: [
-                        if (compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 2)],
-                        ToggleChip(label: 'M', on: t.mute, color: Palette.danger, tooltip: 'Mudo', onTap: () => c.edit((_) => t.mute = !t.mute)),
-                        SizedBox(width: compact ? 2 : 4),
-                        ToggleChip(label: 'S', on: t.solo, color: const Color(0xFFE3B341), tooltip: 'Solo', onTap: () => c.edit((_) => t.solo = !t.solo)),
-                        SizedBox(width: compact ? 2 : 4),
-                        _AutomationButton(c: c, track: index),
-                        if (!compact) ...[
-                          const SizedBox(width: 4),
-                          _EffectsChip(c: c, track: index),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: c.automated(index, AutoKind.volume)
-                                ? ValueListenableBuilder<double>(
-                                    valueListenable: c.beat,
-                                    builder: (_, _, _) => _MiniFader(
-                                      gain: c.liveValue(index, AutoKind.volume),
-                                      automated: c.playing.value,
-                                      onStart: c.checkpoint,
-                                      onGain: (g) => c.mutate((_) => t.gain = g),
-                                    ),
-                                  )
-                                : _MiniFader(gain: t.gain, onStart: c.checkpoint, onGain: (g) => c.mutate((_) => t.gain = g)),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Meter(peaks: c.peaks, index: index, width: 6),
+                ),
+                SizedBox(width: compact ? 4 : 6),
+              ],
+            ),
+            // o nível da entrada numa barra fina no rodapé, fora da conta das linhas: é por ele que
+            // se acerta o ganho do microfone antes de gravar
+            if (t.armed && t.kind == TrackKind.audio)
+              Positioned(
+                left: compact ? 10 : 12,
+                right: compact ? 14 : 16,
+                bottom: 2,
+                height: 3,
+                child: _InputMeter(level: c.inputLevel),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Meter(peaks: c.peaks, index: index, width: 6),
-            ),
-            const SizedBox(width: 6),
           ],
         ),
       ),
     );
   }
+}
+
+/// ● de armar a faixa para gravar: contornado em vermelho quando armada, cheio enquanto grava de
+/// fato (depois da contagem). Durante a gravação não muda: o que está sendo gravado foi decidido ao
+/// começar, e trocar no meio deixaria a tela mostrando faixas que não recebem nada.
+class _ArmButton extends StatelessWidget {
+  final DawController c;
+  final int track;
+  final double width;
+  const _ArmButton({required this.c, required this.track, this.width = 24});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = c.doc.tracks[track];
+    final armed = t.armed;
+    final live = armed && c.recording && !c.countingIn;
+    final tooltip = c.recording
+        ? (armed ? 'Gravando nesta faixa' : 'Pare a gravação para armar esta faixa')
+        : armed
+        ? 'Desarmar'
+        : t.kind.isInstrument
+        ? 'Armar para gravar as notas (teclado ou MIDI)'
+        : 'Armar para gravar a entrada de áudio';
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: c.recording ? null : () => c.setArmed(track, !armed),
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          width: width,
+          height: 20,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: live ? _recordColor : (armed ? _recordColor.withValues(alpha: 0.16) : Colors.transparent),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: armed ? _recordColor : Palette.hairlineStrong),
+          ),
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: live ? Colors.white : (armed ? _recordColor : Colors.white54)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pico linear → 0..1 numa escala de −48 a 0 dB (a mesma dos medidores de saída).
+double _meterLevel(double p) {
+  if (p <= 0) return 0;
+  final db = 20 * math.log(p) / math.ln10;
+  return ((db + 48) / 48).clamp(0.0, 1.0);
+}
+
+/// Medidor horizontal da entrada de áudio. Sobe na hora e desce devagar; a queda anda por um
+/// relógio próprio porque o nível só avisa quando muda (silêncio repetido não chega) e o medidor
+/// ficaria parado no meio. Saturou: a ponta fica vermelha por um segundo e meio.
+class _InputMeter extends StatefulWidget {
+  final ValueNotifier<double> level;
+  const _InputMeter({required this.level});
+
+  @override
+  State<_InputMeter> createState() => _InputMeterState();
+}
+
+class _InputMeterState extends State<_InputMeter> {
+  double _v = 0;
+  bool _clip = false;
+  Timer? _fall, _clipHold;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.level.addListener(_onLevel);
+    _v = widget.level.value.clamp(0.0, 2.0);
+  }
+
+  @override
+  void didUpdateWidget(_InputMeter old) {
+    super.didUpdateWidget(old);
+    if (old.level != widget.level) {
+      old.level.removeListener(_onLevel);
+      widget.level.addListener(_onLevel);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.level.removeListener(_onLevel);
+    _fall?.cancel();
+    _clipHold?.cancel();
+    super.dispose();
+  }
+
+  void _onLevel() {
+    final p = widget.level.value.clamp(0.0, 2.0);
+    if (p >= 0.999) {
+      _clipHold?.cancel();
+      _clipHold = Timer(const Duration(milliseconds: 1500), () {
+        if (mounted) setState(() => _clip = false);
+      });
+      if (!_clip) setState(() => _clip = true);
+    }
+    if (p >= _v) {
+      _fall?.cancel();
+      _fall = null;
+      if (p != _v) setState(() => _v = p);
+      return;
+    }
+    _fall ??= Timer.periodic(const Duration(milliseconds: 33), (_) {
+      final target = widget.level.value.clamp(0.0, 2.0);
+      var v = math.max(target, _v * 0.82);
+      if (v - target < 0.001) {
+        v = target;
+        _fall?.cancel();
+        _fall = null;
+      }
+      if (mounted && v != _v) setState(() => _v = v);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(painter: _InputMeterPainter(_meterLevel(_v), _clip), size: Size.infinite);
+}
+
+class _InputMeterPainter extends CustomPainter {
+  final double level;
+  final bool clip;
+  _InputMeterPainter(this.level, this.clip);
+
+  static const _gradient = LinearGradient(colors: [Palette.success, Palette.success, Color(0xFFE3B341), Palette.danger], stops: [0, 0.7, 0.88, 1]);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final full = Offset.zero & size;
+    canvas.drawRect(full, Paint()..color = Colors.white.withValues(alpha: 0.08));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * level, size.height), Paint()..shader = _gradient.createShader(full));
+    if (clip) canvas.drawRect(Rect.fromLTWH(size.width - 4, 0, 4, size.height), Paint()..color = _recordColor);
+  }
+
+  @override
+  bool shouldRepaint(_InputMeterPainter o) => o.level != level || o.clip != clip;
 }
 
 /// Abre (ou fecha) o painel do instrumento da faixa.
@@ -570,7 +819,8 @@ class _KindButton extends StatelessWidget {
   final DawController c;
   final int index;
   final Color color;
-  const _KindButton({required this.c, required this.index, required this.color});
+  final double width;
+  const _KindButton({required this.c, required this.index, required this.color, this.width = 24});
 
   @override
   Widget build(BuildContext context) {
@@ -579,7 +829,11 @@ class _KindButton extends StatelessWidget {
     if (!t.kind.isInstrument && !bus) {
       return Tooltip(
         message: 'Faixa de áudio',
-        child: SizedBox(width: 24, height: 24, child: Icon(t.kind.icon, size: 16, color: color)),
+        child: SizedBox(
+          width: width,
+          height: 24,
+          child: Icon(t.kind.icon, size: 16, color: color),
+        ),
       );
     }
     final open = bus ? c.dock == Dock.effects && c.effectsTrack == index : c.dock == Dock.instrument && c.selectedTrack == index;
@@ -587,7 +841,7 @@ class _KindButton extends StatelessWidget {
         ? (open ? 'Fechar os efeitos' : 'Barramento: abrir os efeitos')
         : (open ? 'Fechar o instrumento (I)' : '${t.kind.label}: abrir o instrumento (I)');
     return SizedBox(
-      width: 24,
+      width: width,
       height: 24,
       child: IconButton(
         padding: EdgeInsets.zero,
@@ -633,6 +887,10 @@ class _TrackMenu extends StatelessWidget {
             c.moveTrack(index, index + 1);
           case 'duplicate':
             c.duplicateTrack(index);
+          case 'monitor':
+            c.setMonitor(index, !c.doc.tracks[index].monitor);
+          case 'bounce':
+            await _bounce(context, c, index);
           case 'color':
             final t = c.doc.tracks[index];
             c.edit((_) => t.color = (t.color + 1) % Palette.tracks.length);
@@ -652,18 +910,134 @@ class _TrackMenu extends StatelessWidget {
             c.removeTrack(index);
         }
       },
-      itemBuilder: (_) => [
-        if (c.doc.tracks[index].kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
-        const PopupMenuItem(value: 'effects', child: Text('Efeitos')),
-        const PopupMenuItem(value: 'rename', child: Text('Renomear')),
-        const PopupMenuItem(value: 'duplicate', child: Text('Duplicar a faixa')),
-        PopupMenuItem(value: 'up', enabled: index > 0, child: const Text('Mover para cima')),
-        PopupMenuItem(value: 'down', enabled: index < c.doc.tracks.length - 1, child: const Text('Mover para baixo')),
-        const PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
-        const PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
-      ],
+      itemBuilder: (context) {
+        final t = c.doc.tracks[index];
+        final why = _cannotBounce(c, t);
+        final caption = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white38);
+        return [
+          if (t.kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
+          const PopupMenuItem(value: 'effects', child: Text('Efeitos')),
+          if (t.kind == TrackKind.audio) CheckedPopupMenuItem(value: 'monitor', checked: t.monitor, child: const Text('Monitorar a entrada')),
+          const PopupMenuItem(value: 'rename', child: Text('Renomear')),
+          const PopupMenuItem(value: 'duplicate', child: Text('Duplicar a faixa')),
+          PopupMenuItem(
+            value: 'bounce',
+            enabled: why == null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Congelar em áudio'),
+                Text(why ?? 'Vira uma faixa de áudio nova; esta fica muda', style: caption),
+              ],
+            ),
+          ),
+          PopupMenuItem(value: 'up', enabled: index > 0, child: const Text('Mover para cima')),
+          PopupMenuItem(value: 'down', enabled: index < c.doc.tracks.length - 1, child: const Text('Mover para baixo')),
+          const PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
+          const PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
+        ];
+      },
     ),
   );
+}
+
+/// Por que a faixa não pode ser congelada agora (null quando pode): barramento só tem o que as
+/// outras mandam, faixa sem clipes (ou só com clipes de notas vazios) renderizaria silêncio, e
+/// durante a gravação o documento ainda vai mudar.
+String? _cannotBounce(DawController c, DawTrack t) {
+  if (t.kind == TrackKind.bus) return 'Barramento não tem som próprio';
+  final empty = t.kind.isInstrument ? t.midi.every((m) => m.notes.isEmpty) : t.clips.isEmpty;
+  if (empty) return 'A faixa está vazia';
+  if (c.recording) return 'Pare a gravação antes';
+  return null;
+}
+
+Future<void> _bounce(BuildContext context, DawController c, int index) async {
+  if (!context.mounted || index >= c.doc.tracks.length || _cannotBounce(c, c.doc.tracks[index]) != null) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _BounceDialog(c: c, track: index, name: c.doc.tracks[index].name),
+  );
+}
+
+/// O erro de uma operação longa como a pessoa deve ler, sem "Bad state:" nem nome de classe.
+String _failureText(Object e, String fallback) => switch (e) {
+  String s => s,
+  StateError(:final message) => message,
+  UnimplementedError() => 'Isso ainda não funciona nesta versão.',
+  UnsupportedError(:final message) => message ?? fallback,
+  _ => '$fallback (${'$e'.replaceFirst('Exception: ', '')})',
+};
+
+/// Progresso do congelamento. O render roda fora de tempo real num motor à parte, então dá para
+/// esperar aqui; não fecha por fora enquanto trabalha (o controlador não tem como cancelar no meio)
+/// e, se falhar, mostra o erro no próprio diálogo.
+class _BounceDialog extends StatefulWidget {
+  final DawController c;
+  final int track;
+  final String name;
+  const _BounceDialog({required this.c, required this.track, required this.name});
+
+  @override
+  State<_BounceDialog> createState() => _BounceDialogState();
+}
+
+class _BounceDialogState extends State<_BounceDialog> {
+  double _progress = 0;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // depois do primeiro quadro: se o controlador falhar na hora, o diálogo já existe para mostrar
+    WidgetsBinding.instance.addPostFrameCallback((_) => _run());
+  }
+
+  Future<void> _run() async {
+    try {
+      await widget.c.bounceTrack(widget.track, onProgress: _onProgress);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() => _error = _failureText(e, 'Não deu para congelar a faixa'));
+    }
+  }
+
+  void _onProgress(double p) {
+    final v = p.isFinite ? p.clamp(0.0, 1.0) : 0.0;
+    // o render avisa a cada bloco; a tela só precisa dos passos que se veem
+    if (!mounted || ((v - _progress).abs() < 0.005 && v < 1)) return;
+    setState(() => _progress = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final error = _error;
+    return PopScope(
+      canPop: error != null,
+      child: AlertDialog(
+        title: Text(error == null ? 'Congelando "${widget.name}"' : 'Não deu para congelar'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: error != null
+              ? InlineNotice(error)
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('A faixa vira áudio com o instrumento e os efeitos, numa faixa nova logo abaixo; esta fica muda.'),
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(value: _progress > 0 ? _progress : null),
+                    const SizedBox(height: 8),
+                    Text(_progress > 0 ? '${(_progress * 100).floor()}%' : 'Preparando…', style: Theme.of(context).textTheme.labelSmall),
+                  ],
+                ),
+        ),
+        actions: error == null ? null : [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar'))],
+      ),
+    );
+  }
 }
 
 /// Fader pequeno dos cabeçalhos (faixa e master): [onStart] marca o desfazer, [onGain] muda sem
@@ -703,7 +1077,19 @@ class ToggleChip extends StatelessWidget {
   final bool on, lit;
   final Color color;
   final VoidCallback onTap;
-  const ToggleChip({super.key, required this.label, required this.on, required this.color, required this.tooltip, required this.onTap, this.lit = false});
+
+  /// Largura (24; 20 nos cabeçalhos do celular, onde a linha tem um botão a mais).
+  final double width;
+  const ToggleChip({
+    super.key,
+    required this.label,
+    required this.on,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+    this.lit = false,
+    this.width = 24,
+  });
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -712,7 +1098,7 @@ class ToggleChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Container(
-        width: 24,
+        width: width,
         height: 20,
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -893,13 +1279,15 @@ class _EffectsChip extends StatelessWidget {
 class _AutomationButton extends StatelessWidget {
   final DawController c;
   final int track;
-  const _AutomationButton({required this.c, required this.track});
+  final double width;
+  const _AutomationButton({required this.c, required this.track, this.width = 24});
 
   @override
   Widget build(BuildContext context) {
     final lanes = automationLanesOf(c, track);
     return ToggleChip(
       label: 'A',
+      width: width,
       on: lanes.any((l) => l.open),
       lit: lanes.isNotEmpty,
       color: _automationColor,
@@ -1089,7 +1477,8 @@ class _LanesState extends State<_Lanes> {
     final lane = row != null && row.kind == _RowKind.track ? row.track : -1;
     final at = _beatAt(d.localPosition.dx);
     if (lane >= 0) c.selectTrack(lane);
-    c.seek(c.snapBeat(at));
+    // gravando, o cursor fica onde está (ver [_Ruler])
+    if (!c.recording) c.seek(c.snapBeat(at));
     if (_taps(d.globalPosition) && lane >= 0 && c.doc.tracks[lane].kind.isInstrument) _createClip(lane, at);
   }
 
@@ -1121,6 +1510,19 @@ class _LanesState extends State<_Lanes> {
     // desmontar no meio do gesto o perderia
     bool shown(String id, double start, double end) => (end > c.scrollBeat && start < visibleEnd) || id == c.selectedClip;
     final hint = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white30);
+    String? hintOf(DawTrack t) {
+      if (t.kind == TrackKind.bus) return 'Barramento: recebe o som das faixas que enviam ou saem para ele';
+      final empty = t.kind.isInstrument ? t.midi.isEmpty : t.clips.isEmpty;
+      if (!empty) return null;
+      // armada e vazia: diz o que a gravação vai pôr ali (gravando, a região vermelha já diz)
+      if (t.armed) {
+        if (c.recording) return null;
+        return t.kind.isInstrument ? 'Armada: ao gravar, as notas tocadas viram um clipe aqui' : 'Armada: ao gravar, o som da entrada vira um clipe aqui';
+      }
+      if (!t.kind.isInstrument) return null;
+      return widget.touch ? 'Toque duas vezes para criar um clipe de notas' : 'Clique duas vezes para criar um clipe de notas';
+    }
+
     return Listener(
       onPointerSignal: _onSignal,
       child: GestureDetector(
@@ -1143,7 +1545,7 @@ class _LanesState extends State<_Lanes> {
                 ),
               ),
               for (var ti = 0; ti < tracks.length; ti++)
-                if ((tracks[ti].kind.isInstrument && tracks[ti].midi.isEmpty) || tracks[ti].kind == TrackKind.bus)
+                if (hintOf(tracks[ti]) case final text?)
                   Positioned(
                     left: 12,
                     right: 12,
@@ -1152,14 +1554,7 @@ class _LanesState extends State<_Lanes> {
                     child: IgnorePointer(
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(
-                          tracks[ti].kind == TrackKind.bus
-                              ? 'Barramento: recebe o som das faixas que enviam ou saem para ele'
-                              : (widget.touch ? 'Toque duas vezes para criar um clipe de notas' : 'Clique duas vezes para criar um clipe de notas'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: hint,
-                        ),
+                        child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: hint),
                       ),
                     ),
                   ),
@@ -1185,6 +1580,22 @@ class _LanesState extends State<_Lanes> {
                       child: _MidiClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
                     ),
               ],
+              // por cima dos clipes (a gravação substitui o que estiver embaixo); montada só enquanto
+              // grava, então o estado dela (onde começou, quantas voltas deu no loop) nasce e morre
+              // com a gravação; a chave a mantém no lugar quando a lista de cima muda
+              if (c.recording)
+                Positioned.fill(
+                  key: const ValueKey('recording'),
+                  child: IgnorePointer(
+                    child: _RecordingOverlay(
+                      c: c,
+                      rows: [
+                        for (var ti = 0; ti < tracks.length; ti++)
+                          if (tracks[ti].armed && tracks[ti].kind != TrackKind.bus) (layout.trackTop[ti], laneHeight),
+                      ],
+                    ),
+                  ),
+                ),
               for (final r in layout.rows)
                 if (r.lane != null)
                   Positioned(
@@ -1262,6 +1673,168 @@ class _GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(_GridPainter o) =>
       o.scroll != scroll || o.ppb != ppb || o.beatsPerBar != beatsPerBar || o.selected != selected || o.laneHeight != laneHeight || !listEquals(o.bands, bands);
+}
+
+// ---------------------------------------------------------------------- gravação
+
+/// A região que está sendo gravada, em vermelho translúcido nas faixas armadas, do começo da
+/// gravação até o cursor. Na contagem ainda não há região (nada entra). Gravando em loop, cada
+/// volta do cursor é uma tomada nova: a passada atual fica forte e o que já foi coberto, fraco.
+///
+/// O controlador não diz onde a gravação começou (só `recording` e `countingIn`), então a região
+/// começa na primeira posição vista depois da contagem; se ela ainda está a menos de meia batida
+/// depois de onde o cursor estava quando a gravação ligou, vale aquela (a posição do motor chega
+/// um quadro atrasada, e a gravação começa no cursor).
+class _RecordingOverlay extends StatefulWidget {
+  final DawController c;
+
+  /// Topo e altura de cada faixa armada.
+  final List<(double, double)> rows;
+  const _RecordingOverlay({required this.c, required this.rows});
+
+  @override
+  State<_RecordingOverlay> createState() => _RecordingOverlayState();
+}
+
+class _RecordingOverlayState extends State<_RecordingOverlay> {
+  /// Cursor quando a gravação ligou (antes da contagem).
+  late double _pressedAt;
+
+  /// Começo da região (null na contagem), última posição vista e a passada atual no loop.
+  double? _from;
+  double _last = 0;
+  int _pass = 1;
+
+  DawController get c => widget.c;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressedAt = c.beat.value;
+    c.beat.addListener(_onBeat);
+  }
+
+  @override
+  void didUpdateWidget(_RecordingOverlay old) {
+    super.didUpdateWidget(old);
+    if (old.c != widget.c) {
+      old.c.beat.removeListener(_onBeat);
+      widget.c.beat.addListener(_onBeat);
+    }
+  }
+
+  @override
+  void dispose() {
+    c.beat.removeListener(_onBeat);
+    super.dispose();
+  }
+
+  void _onBeat() => setState(() {});
+
+  /// Acompanha a posição [b]: começo depois da contagem, voltas do loop e saltos para trás. Pode
+  /// rodar mais de uma vez com a mesma posição (a tela redesenha por outros motivos) sem efeito.
+  void _follow(double b) {
+    if (c.countingIn) {
+      _from = null;
+      _pass = 1;
+      return;
+    }
+    if (_from == null) {
+      _from = b >= _pressedAt && b - _pressedAt < 0.5 ? _pressedAt : b;
+      _last = b;
+      return;
+    }
+    // folga de um vigésimo de batida: tremida da posição do motor não é salto
+    if (b < _last - 0.05) {
+      if (c.doc.loopOn) {
+        _pass++;
+      } else {
+        // voltou sem loop (o cursor foi reposicionado por fora): a região recomeça onde ele está
+        _from = b;
+        _pass = 1;
+      }
+    }
+    _last = b;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = c.beat.value;
+    _follow(b);
+    final from = _from;
+    if (from == null || widget.rows.isEmpty) return const SizedBox.expand();
+    final looped = _pass > 1;
+    return CustomPaint(
+      size: Size.infinite,
+      painter: _RecordingPainter(
+        rows: widget.rows,
+        scroll: c.scrollBeat,
+        ppb: c.pxPerBeat,
+        from: looped ? c.doc.loopStart : from,
+        to: b,
+        covered: looped ? (math.min(from, c.doc.loopStart), c.doc.loopEnd) : null,
+        label: looped ? 'Tomada $_pass' : 'Gravando',
+      ),
+    );
+  }
+}
+
+class _RecordingPainter extends CustomPainter {
+  final List<(double, double)> rows;
+  final double scroll, ppb, from, to;
+
+  /// Já coberto pelas passadas anteriores do loop (em batidas).
+  final (double, double)? covered;
+  final String label;
+
+  _RecordingPainter({
+    required this.rows,
+    required this.scroll,
+    required this.ppb,
+    required this.from,
+    required this.to,
+    required this.covered,
+    required this.label,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double x(double b) => (b - scroll) * ppb;
+    final fill = Paint()..color = _recordColor.withValues(alpha: 0.2);
+    final faint = Paint()..color = _recordColor.withValues(alpha: 0.08);
+    final outline = Paint()
+      ..color = _recordColor.withValues(alpha: 0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final head = Paint()..color = _recordColor;
+    final l = x(from), r = x(to);
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    for (final (top, h) in rows) {
+      final y0 = top + 2, y1 = top + h - 2;
+      if (covered case (final a, final z)) canvas.drawRect(Rect.fromLTRB(x(a), y0, x(z), y1), faint);
+      if (r - l < 0.5) continue;
+      final box = RRect.fromRectAndRadius(Rect.fromLTRB(l, y0, r, y1).deflate(0.5), const Radius.circular(4));
+      canvas.drawRRect(box, fill);
+      canvas.drawRRect(box, outline);
+      // a borda que cresce, junto do cursor
+      canvas.drawRect(Rect.fromLTRB(r - 2, y0, r, y1), head);
+      // o nome acompanha a borda esquerda da janela quando o começo já saiu dela
+      final lx = math.max(l, 0.0) + 6;
+      if (r - lx > tp.width + 6) tp.paint(canvas, Offset(lx, y0 + 3));
+    }
+    tp.dispose();
+  }
+
+  @override
+  bool shouldRepaint(_RecordingPainter o) =>
+      o.scroll != scroll || o.ppb != ppb || o.from != from || o.to != to || o.covered != covered || o.label != label || !listEquals(o.rows, rows);
 }
 
 // ---------------------------------------------------------------------- clipes
@@ -1560,7 +2133,23 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
 
   Future<void> _menu(Offset at) async {
     final c = widget.c;
+    final takes = widget.clip.takes.length;
     final v = await _showMenuAt(context, at, [
+      if (takes > 0) ...[
+        PopupMenuItem(
+          value: 'takes',
+          child: Row(
+            children: [
+              const Icon(Icons.layers_outlined, size: 18),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Tomadas')),
+              Text('$takes', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+              const Icon(Icons.chevron_right, size: 18),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+      ],
       _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
@@ -1569,6 +2158,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     // age sobre este clipe, qualquer que seja a seleção ao fechar o menu
     c.selectClip(widget.clip.id);
     switch (v) {
+      case 'takes':
+        await _takesMenu(at);
       case 'duplicate':
         c.duplicateSelected();
       case 'split':
@@ -1576,6 +2167,38 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       case 'delete':
         c.deleteSelected();
     }
+  }
+
+  /// As tomadas de uma gravação em loop, na ordem das passadas, com a ativa marcada; escolher
+  /// outra troca o áudio do clipe (posição, corte e fades ficam).
+  Future<void> _takesMenu(Offset at) async {
+    final c = widget.c;
+    final clip = widget.clip;
+    if (clip.takes.isEmpty) return;
+    // a ativa pela posição: duas passadas iguais (silêncio) teriam o mesmo hash e as duas marcadas
+    final active = clip.takes.indexOf(clip.sample);
+    final small = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white38, letterSpacing: 0.6);
+    final v = await _showMenuAt(context, at, [
+      PopupMenuItem<String>(enabled: false, height: 28, child: Text('TOMADAS', style: small)),
+      for (final (i, hash) in clip.takes.indexed)
+        PopupMenuItem<String>(
+          value: '$i',
+          height: 40,
+          child: Row(
+            children: [
+              SizedBox(width: 20, child: i == active ? const Icon(Icons.check, size: 16, color: Palette.accent) : null),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Tomada ${i + 1}')),
+              if (c.missing.contains(hash)) ...[const SizedBox(width: 12), Text('fora deste aparelho', style: small)],
+            ],
+          ),
+        ),
+    ]);
+    if (v == null || !mounted) return;
+    final i = int.parse(v);
+    // o clipe pode ter perdido tomadas enquanto o menu estava aberto (desfazer)
+    if (i == active || i >= clip.takes.length) return;
+    c.switchTake(clip.id, clip.takes[i]);
   }
 
   @override
@@ -1589,6 +2212,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     final name = c.doc.samples[clip.sample]?.name ?? 'áudio';
     final bpm = c.doc.bpm;
     final pxPerSec = c.pxPerBeat * bpm / 60;
+    final width = clip.beats(bpm) * c.pxPerBeat;
+    final takes = clip.takes;
     return _ClipGestures(
       hit: _hit,
       onSelect: () => c.selectClip(clip.id),
@@ -1629,13 +2254,28 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
               ),
               Positioned(
                 left: 6,
-                right: 6,
+                // com o selo, a alça do fade de saída (canto de cima à direita) continua livre
+                right: takes.isEmpty ? 6 : 16,
                 top: 1,
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ),
+                    if (takes.isNotEmpty && width >= 60) ...[
+                      const SizedBox(width: 4),
+                      // o nome fica com pelo menos 20 px; o selo encolhe (e corta o texto) antes de estourar
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: math.max(28.0, width - 22 - 24)),
+                        child: _TakesBadge(count: takes.length, active: takes.indexOf(clip.sample), short: width < 150, onTap: _takesMenu),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -1644,6 +2284,51 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       ),
     );
   }
+}
+
+/// Selo "N tomadas" de um clipe gravado em loop (só o número em clipe estreito); tocar abre a
+/// lista para trocar a ativa.
+class _TakesBadge extends StatelessWidget {
+  final int count;
+
+  /// Posição da tomada ativa (−1 se o áudio do clipe não é nenhuma delas).
+  final int active;
+  final bool short;
+  final ValueChanged<Offset> onTap;
+  const _TakesBadge({required this.count, required this.active, required this.short, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: active >= 0 ? 'Tomada ${active + 1} de $count: escolher outra' : '$count tomadas: escolher uma',
+    child: GestureDetector(
+      onTapUp: (d) => onTap(d.globalPosition),
+      child: Container(
+        height: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.layers_outlined, size: 10, color: Colors.white70),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                short ? '$count' : '$count tomadas',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                style: const TextStyle(fontSize: 9.5, height: 1.1, fontWeight: FontWeight.w600, color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------- clipe de notas
