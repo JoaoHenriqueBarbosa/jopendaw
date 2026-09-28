@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:17
+    container_name: jopendaw-pg
+    environment:
+      POSTGRES_USER: jopendaw
+      POSTGRES_PASSWORD: jopendaw
+      POSTGRES_DB: jopendaw
+    ports:
+      - "5432:5432"
+    volumes:
+      - jopendaw-pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://jopendaw:jopendaw@db:5432/jopendaw
+      PORT: "8080"
+      # só para o compose local; em produção os segredos vêm do Dokploy
+      JWT_SECRET: jopendaw-local-somente-desenvolvimento-nao-use-em-producao
+      APP_BASE_URL: http://localhost:8081
+      # jmail rodando no host (repo irmão); a chave é a do app jopendaw nele
+      JMAIL_URL: http://host.docker.internal:8790
+      JMAIL_API_KEY: ${JMAIL_API_KEY:-}
+      MAIL_FROM: no-reply@jopendaw.local
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+
+  web:
+    build: ./app
+    environment:
+      JOPENDAW_API_HOST: api:8080
+    depends_on:
+      - api
+    ports:
+      - "8081:80"
+
+volumes:
+  jopendaw-pgdata:

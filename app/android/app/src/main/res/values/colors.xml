@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- a paleta do app (widgets/theme.dart): fundo e o ciano da marca -->
+    <color name="ink">#0E1013</color>
+    <color name="accent">#35D0C0</color>
+</resources>
