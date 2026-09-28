@@ -7,6 +7,9 @@
 //! Tudo roda na thread de áudio do navegador, uma chamada por vez: o motor global não precisa de
 //! trava.
 
+// O contrato de segurança de todas as funções é o do topo do arquivo: ponteiros vindos de `alloc`.
+#![allow(clippy::missing_safety_doc)]
+
 use std::cell::UnsafeCell;
 
 use jopendaw_engine::{Clip, Engine, Sample};
