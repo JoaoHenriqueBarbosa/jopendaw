@@ -85,9 +85,13 @@ class TransportBar extends StatelessWidget {
           ),
           _Toggle(
             icon: Icons.cable,
-            on: c.midiInputs.isNotEmpty,
-            label: c.midiInputs.isEmpty ? null : '${c.midiInputs.length}',
-            tooltip: c.midiInputs.isEmpty ? 'Entrada MIDI: conectar teclado ou controlador' : 'Entrada MIDI: ${c.midiInputs.join(', ')}',
+            on: c.midiEnabled,
+            label: c.midiInputs.isEmpty ? (c.midiEnabled ? '0' : null) : '${c.midiInputs.length}',
+            tooltip: !c.midiEnabled
+                ? 'Entrada MIDI: ligar teclado ou controlador'
+                : c.midiInputs.isEmpty
+                ? 'MIDI ligado, nenhum aparelho conectado: conecte e ele aparece aqui sozinho'
+                : 'Entrada MIDI: ${c.midiInputs.join(', ')}',
             onTap: c.enableMidiInput,
           ),
         ];
@@ -228,7 +232,8 @@ class _TempoDialog extends StatefulWidget {
 }
 
 class _TempoDialogState extends State<_TempoDialog> {
-  late final _bpm = TextEditingController(text: '${widget.bpm}');
+  // valor todo selecionado: digitar substitui em vez de emendar no número que já estava
+  late final _bpm = TextEditingController(text: '${widget.bpm}')..selection = TextSelection(baseOffset: 0, extentOffset: '${widget.bpm}'.length);
   late int _bpb = widget.beatsPerBar;
   String? _error;
 

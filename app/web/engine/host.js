@@ -12,6 +12,8 @@
   function track(beat, playing, peaks) {
     probe.beat = beat;
     probe.playing = playing;
+    // faixas entraram ou saíram: as posições agora são de outros canais
+    if (peaks.length !== probe.peaks.length) probe.peaks = [];
     for (let i = 0; i < peaks.length; i++) probe.peaks[i] = Math.max(probe.peaks[i] || 0, peaks[i]);
     probe.peaks.length = peaks.length;
   }
@@ -158,6 +160,8 @@
     enableMidi,
     setOnMidi: (cb) => { onMidi = cb; },
     setOnMidiInputs: (cb) => { onMidiInputs = cb; },
+    // mensagem MIDI entrando pelo mesmo caminho de um aparelho (teste e depuração sem hardware)
+    injectMidi: (status, d1, d2) => onMidiMessage({ data: [status, d1, d2] }),
     // posição, tocando, estado do contexto e os picos (esq, dir por faixa; o master por último)
     // desde a leitura anterior, que zera os picos
     probe: () => {

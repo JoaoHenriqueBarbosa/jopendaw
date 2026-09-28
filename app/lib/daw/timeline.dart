@@ -351,8 +351,8 @@ class _TrackHeaderState extends State<_TrackHeader> {
                   children: [
                     Row(
                       children: [
-                        _KindButton(c: c, index: index, color: color),
-                        const SizedBox(width: 4),
+                        // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
+                        if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
                         Expanded(
                           child: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge),
                         ),
@@ -361,6 +361,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
                     ),
                     Row(
                       children: [
+                        if (compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 2)],
                         ToggleChip(label: 'M', on: t.mute, color: Palette.danger, tooltip: 'Mudo', onTap: () => c.edit((_) => t.mute = !t.mute)),
                         const SizedBox(width: 4),
                         ToggleChip(label: 'S', on: t.solo, color: const Color(0xFFE3B341), tooltip: 'Solo', onTap: () => c.edit((_) => t.solo = !t.solo)),
@@ -813,6 +814,9 @@ class _ClipGestures extends StatefulWidget {
   final VoidCallback onSelect;
   final ValueChanged<_Grab> onStart;
   final void Function(_Grab grab, Offset total) onDrag;
+
+  /// Fim (ou cancelamento) do arraste.
+  final VoidCallback? onEnd;
   final VoidCallback? onDoubleTap;
   final ValueChanged<Offset>? onMenu;
   final Widget child;
@@ -823,6 +827,7 @@ class _ClipGestures extends StatefulWidget {
     required this.onStart,
     required this.onDrag,
     required this.child,
+    this.onEnd,
     this.onDoubleTap,
     this.onMenu,
   });
@@ -857,7 +862,9 @@ class _ClipGesturesState extends State<_ClipGestures> {
   }
 
   void _end() {
-    if (_grab != null && mounted) setState(() => _grab = null);
+    final was = _grab;
+    if (was != null && mounted) setState(() => _grab = null);
+    if (was != null) widget.onEnd?.call();
   }
 
   @override
@@ -934,6 +941,17 @@ mixin _DragEdit<T extends StatefulWidget> on State<T> {
     ensureCheckpoint();
     ctl.mutate((_) => fn());
   }
+
+  /// Id do clipe que o gesto mexe.
+  String get editedClipId;
+
+  /// Fim do arraste: se mexeu, o clipe fica por cima dos que agora cobre (no mesmo passo do
+  /// desfazer, o checkpoint já foi feito no começo).
+  void _endDrag() {
+    if (!_dirty) return;
+    _dirty = false;
+    ctl.mutate((_) => ctl.placeOnTop(editedClipId));
+  }
 }
 
 PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {String? shortcut}) => PopupMenuItem(
@@ -972,6 +990,9 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
 
   @override
   DawController get ctl => widget.c;
+
+  @override
+  String get editedClipId => widget.clip.id;
 
   _Grab _hit(Offset p, Size size, double edge) {
     if (p.dy < 14 && p.dx < 14) return _Grab.fadeIn;
@@ -1069,6 +1090,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       onSelect: () => c.selectClip(clip.id),
       onStart: _start,
       onDrag: _drag,
+      onEnd: _endDrag,
       onMenu: _menu,
       child: Container(
         decoration: BoxDecoration(
@@ -1138,6 +1160,9 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
 
   @override
   DawController get ctl => widget.c;
+
+  @override
+  String get editedClipId => widget.clip.id;
 
   _Grab _hit(Offset p, Size size, double edge) {
     if (p.dx < edge) return _Grab.left;
@@ -1249,6 +1274,7 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
       onSelect: () => _selectMidi(c, clip.id, widget.track),
       onStart: _start,
       onDrag: _drag,
+      onEnd: _endDrag,
       onDoubleTap: () => c.openPianoRoll(clip.id),
       onMenu: _menu,
       child: Container(

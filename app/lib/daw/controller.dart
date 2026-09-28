@@ -664,6 +664,83 @@ class DawController extends ChangeNotifier {
     }
   }
 
+  /// O clipe [id] fica por cima: o que ele cobre dos outros clipes da mesma faixa sai (encurta,
+  /// apara o começo, parte em dois ou some), como nos DAWs. Sem isso, clipes sobrepostos tocavam
+  /// somados (áudio dobrado). Não faz checkpoint: vai junto da edição que o chamou.
+  void placeOnTop(String id) {
+    final bpm = doc.bpm;
+    final a = _findClip(id);
+    if (a != null) {
+      final (t, top) = a;
+      final s = top.start, e = top.end(bpm);
+      for (final o in t.clips.toList()) {
+        if (identical(o, top) || o.end(bpm) <= s + 1e-9 || o.start >= e - 1e-9) continue;
+        final oEnd = o.end(bpm);
+        if (o.start >= s - 1e-9 && oEnd <= e + 1e-9) {
+          t.clips.remove(o);
+        } else if (o.start < s && oEnd > e) {
+          final cut = (e - o.start) * 60 / bpm;
+          t.clips.add(
+            AudioClip.fromJson(o.toJson())
+              ..id = newId()
+              ..start = e
+              ..offset = o.offset + cut
+              ..length = o.length - cut
+              ..fadeIn = 0,
+          );
+          o
+            ..length = (s - o.start) * 60 / bpm
+            ..fadeOut = 0;
+        } else if (o.start < s) {
+          o
+            ..length = (s - o.start) * 60 / bpm
+            ..fadeOut = math.min(o.fadeOut, (s - o.start) * 60 / bpm);
+        } else {
+          final cut = (e - o.start) * 60 / bpm;
+          o
+            ..start = e
+            ..offset = o.offset + cut
+            ..length = o.length - cut
+            ..fadeIn = 0;
+        }
+      }
+      return;
+    }
+    final m = findMidiClip(id);
+    if (m == null) return;
+    final (t, top) = m;
+    final s = top.start, e = top.end;
+    for (final o in t.midi.toList()) {
+      if (identical(o, top) || o.end <= s + 1e-9 || o.start >= e - 1e-9) continue;
+      if (o.start >= s - 1e-9 && o.end <= e + 1e-9) {
+        t.midi.remove(o);
+        if (editingClip == o.id) editingClip = null;
+      } else if (o.start < s && o.end > e) {
+        final d = e - o.start;
+        t.midi.add(
+          MidiClip.fromJson(o.toJson())
+            ..id = newId()
+            ..start = e
+            ..length = o.end - e
+            ..notes = [for (final n in o.notes) n.copy()..start = n.start - d],
+        );
+        o.length = s - o.start;
+      } else if (o.start < s) {
+        o.length = s - o.start;
+      } else {
+        // as notas ficam no mesmo lugar absoluto (as de antes do novo começo não tocam mais)
+        final d = e - o.start;
+        o
+          ..start = e
+          ..length = o.length - d;
+        for (final n in o.notes) {
+          n.start -= d;
+        }
+      }
+    }
+    if (editingClip == null && dock == Dock.editor) dock = Dock.none;
+  }
+
   void duplicateSelected() {
     final a = selection;
     if (a != null) {
@@ -674,6 +751,7 @@ class DawController extends ChangeNotifier {
       edit((_) {
         t.clips.add(copy);
         selectedClip = copy.id;
+        placeOnTop(copy.id);
       });
       return;
     }
@@ -686,6 +764,7 @@ class DawController extends ChangeNotifier {
     edit((_) {
       t.midi.add(copy);
       selectedClip = copy.id;
+      placeOnTop(copy.id);
     });
   }
 
