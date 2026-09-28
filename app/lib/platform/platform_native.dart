@@ -75,3 +75,134 @@ void openExternal(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.exte
 String? localRead(String key) => _prefs?.getString(key);
 
 void localWrite(String key, String value) => _prefs?.setString(key, value);
+
+// ------------------------------------------------------------------ áudio no Android (fase 5)
+//
+// O motor toca no próprio aparelho (lib/audio/engine_io.dart), e o que a aba do navegador resolve
+// sozinha aqui é do app: tela acesa, o que fazer ao sair da tela, fone que sai ou entra e a
+// permissão do microfone. O lado do Android está em MainActivity.kt, pelo mesmo canal `_apps`.
+
+bool? _screenOn;
+
+/// Mantém a tela acesa enquanto [on]: ninguém quer a tela apagando no meio de uma tomada, nem
+/// tocar nela a cada meio minuto só para ver o cursor andar. Repetir o valor não vai ao Android,
+/// então dá para chamar a cada estado do motor. Na web não faz nada (platform_web.dart).
+///
+/// O controlador (lib/daw/controller.dart) chama com `s.playing || recording` em
+/// `_onEngineState` e com `false` no `dispose` (a tela do projeto fechando não pode deixar o
+/// aparelho sem apagar).
+void keepScreenOn(bool on) {
+  if (_screenOn == on) return;
+  _screenOn = on;
+  // fora do Android (testes, desktop) não há quem responda; a próxima chamada tenta de novo
+  void failed(Object _) => _screenOn = null;
+  try {
+    _apps.invokeMethod<void>('keepScreenOn', on).catchError(failed);
+  } catch (e) {
+    failed(e);
+  }
+}
+
+/// Um inscrito nos avisos de áudio do Android (identidade própria: dois inscritos com as mesmas
+/// funções são dois).
+class _AudioWatcher {
+  final void Function()? noisy, devices;
+  _AudioWatcher(this.noisy, this.devices);
+}
+
+final _audioWatchers = <_AudioWatcher>[];
+bool _appsListening = false;
+
+/// Avisos do aparelho sobre o áudio do DAW; devolve o que desliga. Na web não há nenhum (a aba
+/// segue tocando em segundo plano, como qualquer player do navegador): lá devolve um desligar vazio.
+///
+/// - [onLeave]: o app saiu da tela (outro app na frente, botão de início, tela desligada). Sem um
+///   serviço em primeiro plano o Android pode matar o processo a qualquer momento depois disso, e
+///   o microfone aberto em segundo plano deixa o aviso de privacidade aceso: o controlador para o
+///   transporte (encerrando a gravação em andamento, que fica salva, como o `stop`), solta as
+///   notas ao vivo e fecha a entrada.
+/// - [onReturn]: voltou para a tela. O controlador chama `AudioEngine.resume()`, que garante a
+///   saída tocando (reabre se o Android a derrubou enquanto o app estava fora), e reabre a entrada
+///   se alguma faixa de áudio ficou armada ou monitorando, como o `open` faz (`_restoreInput`).
+/// - [onNoisy]: o fone (com fio ou Bluetooth) saiu e o som ia passar para o alto-falante: o
+///   controlador para o transporte, como todo app de mídia faz.
+/// - [onDevices]: um aparelho de áudio entrou ou saiu (fone plugado, interface USB). A saída pode
+///   ter trocado de rota e a lista de entradas mudou: o controlador chama `AudioEngine.resume()` e
+///   atualiza as entradas (`refreshInputDevices`).
+///
+/// Um diálogo por cima (o pedido de permissão do microfone, a cortina de notificações, a tela
+/// dividida com outro app) não conta como sair: o app segue à mostra, só sem o foco.
+void Function() watchAudioSession({void Function()? onLeave, void Function()? onReturn, void Function()? onNoisy, void Function()? onDevices}) {
+  bool hidden(AppLifecycleState? s) => s == AppLifecycleState.hidden || s == AppLifecycleState.paused || s == AppLifecycleState.detached;
+  var away = hidden(WidgetsBinding.instance.lifecycleState);
+  final listener = AppLifecycleListener(
+    onStateChange: (s) {
+      final now = hidden(s);
+      if (now == away) return;
+      away = now;
+      (away ? onLeave : onReturn)?.call();
+    },
+  );
+  final watcher = _AudioWatcher(onNoisy, onDevices);
+  _audioWatchers.add(watcher);
+  _listenApps();
+  return () {
+    listener.dispose();
+    _audioWatchers.remove(watcher);
+  };
+}
+
+/// Os avisos que o MainActivity.kt manda pelo canal `_apps`, repassados a cada inscrito.
+void _listenApps() {
+  if (_appsListening) return;
+  _appsListening = true;
+  _apps.setMethodCallHandler((call) async {
+    // cópia: um inscrito pode se desligar no meio do aviso
+    final watchers = List.of(_audioWatchers);
+    switch (call.method) {
+      case 'audioNoisy':
+        for (final w in watchers) {
+          w.noisy?.call();
+        }
+      case 'audioDevices':
+        for (final w in watchers) {
+          w.devices?.call();
+        }
+      default:
+        throw MissingPluginException('jopendaw/apps: ${call.method}');
+    }
+  });
+}
+
+/// A permissão de gravar já foi dada (sem perguntar nada). Fora do Android, `true`.
+Future<bool> microphoneAllowed() async {
+  try {
+    return await _apps.invokeMethod<bool>('microphone') ?? false;
+  } on MissingPluginException {
+    return true;
+  }
+}
+
+/// Garante a permissão do microfone antes de abrir a entrada, pedindo na hora se preciso (o
+/// Android mostra o pedido por cima do app). É do motor (`AudioEngine.startInput` no
+/// engine_io.dart), que só existe fora da web, então não tem par no platform_web.dart: lá quem
+/// pergunta é o navegador. Negada: [StateError] com a mensagem para o usuário, como o
+/// `startInput` da web. Fora do Android (testes, desktop), volta sem pedir.
+Future<void> ensureMicrophone() async {
+  final String? state;
+  try {
+    state = await _apps.invokeMethod<String>('requestMicrophone');
+  } on MissingPluginException {
+    return;
+  }
+  switch (state) {
+    case 'granted':
+      return;
+    case 'blocked':
+      throw StateError(
+        'O acesso ao microfone está bloqueado para o jopendaw. Libere o microfone em Configurações > Apps > jopendaw > Permissões e tente de novo.',
+      );
+    default:
+      throw StateError('O Android negou o acesso ao microfone. Para gravar, tente de novo e permita o acesso.');
+  }
+}

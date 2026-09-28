@@ -31,6 +31,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # testes no emulador ou no aparelho (integration_test/): o motor nativo tocando de verdade
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:
