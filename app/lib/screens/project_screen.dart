@@ -14,7 +14,7 @@ import '../widgets/page.dart';
 import '../widgets/responsive_scaffold.dart';
 
 /// Um projeto aberto no DAW: transporte, arranjo e o painel de baixo (mixer, editor de notas,
-/// instrumento). O áudio roda no aparelho; do servidor vêm só o nome, o andamento e a fórmula de
+/// instrumento, efeitos). O áudio roda no aparelho; do servidor vêm só o nome, o andamento e a fórmula de
 /// compasso.
 class ProjectScreen extends StatefulWidget {
   final String projectId;
@@ -128,6 +128,8 @@ class DawStudio extends StatelessWidget {
       action = () => toggleDock(c, Dock.editor);
     } else if (!mod && k == LogicalKeyboardKey.keyI) {
       action = () => toggleDock(c, Dock.instrument);
+    } else if (!mod && k == LogicalKeyboardKey.keyF) {
+      action = () => toggleDock(c, Dock.effects);
     } else if (k == LogicalKeyboardKey.escape && c.dock != Dock.none) {
       action = () => c.setDock(Dock.none);
     } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.numpadAdd) {

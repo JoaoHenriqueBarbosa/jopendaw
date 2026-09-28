@@ -1,5 +1,5 @@
 /// Barra do transporte e das ferramentas: tocar, parar, posição, andamento, loop, metrônomo,
-/// edição, grade, zoom, os painéis de baixo, as entradas de notas (teclado do computador e MIDI)
+/// edição, grade, zoom, os painéis de baixo (mixer, editor, instrumento, efeitos), as entradas de notas (teclado do computador e MIDI)
 /// e importar.
 library;
 
@@ -70,6 +70,7 @@ class TransportBar extends StatelessWidget {
           _Toggle(icon: Icons.tune, on: c.dock == Dock.mixer, tooltip: 'Mixer (X)', onTap: () => toggleDock(c, Dock.mixer)),
           _Toggle(icon: Icons.edit_note, on: c.dock == Dock.editor, tooltip: 'Editor de notas (E)', onTap: () => toggleDock(c, Dock.editor)),
           _Toggle(icon: dockInstrumentIcon(c), on: c.dock == Dock.instrument, tooltip: 'Instrumento da faixa (I)', onTap: () => toggleDock(c, Dock.instrument)),
+          _Toggle(icon: Icons.auto_fix_high, on: c.dock == Dock.effects, tooltip: 'Efeitos da faixa (F)', onTap: () => toggleDock(c, Dock.effects)),
         ];
         final velocity = (c.keyboardVelocity * 100).round();
         final inputs = [

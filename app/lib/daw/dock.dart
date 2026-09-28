@@ -1,5 +1,5 @@
-/// O painel de baixo da tela do projeto: mixer, editor de notas (piano roll) e instrumento da
-/// faixa, em abas. O que aparece é do controlador (`c.dock`); a altura é deste widget.
+/// O painel de baixo da tela do projeto: mixer, editor de notas (piano roll), instrumento e
+/// efeitos da faixa, em abas. O que aparece é do controlador (`c.dock`); a altura é deste widget.
 library;
 
 import 'dart:math' as math;
@@ -11,6 +11,7 @@ import '../widgets/theme.dart';
 import 'controller.dart';
 import 'effects_panel.dart';
 import 'instrument_panel.dart';
+import 'instruments.dart';
 import 'mixer_panel.dart';
 import 'piano_roll.dart';
 
@@ -23,8 +24,13 @@ void toggleDock(DawController c, Dock d) {
   }
 }
 
-/// Abre o painel. O editor abre no clipe de notas selecionado no arranjo, se houver um.
+/// Abre o painel. O editor abre no clipe de notas selecionado no arranjo, se houver um; os efeitos,
+/// na faixa selecionada (no master quando não há faixa).
 void showDock(DawController c, Dock d) {
+  if (d == Dock.effects) {
+    c.showEffects(c.selectedTrack < c.doc.tracks.length ? c.selectedTrack : -1);
+    return;
+  }
   final sel = c.selectedClip;
   if (d == Dock.editor && sel != null && sel != c.editingClip && c.findMidiClip(sel) != null) {
     c.openPianoRoll(sel);
@@ -172,6 +178,17 @@ class _DockPanelState extends State<DockPanel> {
             selected: c.dock == Dock.instrument,
             onTap: () => showDock(c, Dock.instrument),
           ),
+          _Tab(
+            icon: Icons.auto_fix_high,
+            label: 'Efeitos',
+            tooltip: 'Efeitos da faixa (F)',
+            iconOnly: iconsOnly,
+            selected: c.dock == Dock.effects,
+            // já aberta, não troca o que está à vista (o master aberto pelo mixer, por exemplo)
+            onTap: () {
+              if (c.dock != Dock.effects) showDock(c, Dock.effects);
+            },
+          ),
           const SizedBox(width: 12),
           Expanded(child: _Subject(c: c)),
           if (!widget.compact)
@@ -291,7 +308,7 @@ class _BarButton extends StatelessWidget {
   );
 }
 
-/// Do que o painel está falando: o clipe no editor ou a faixa do instrumento.
+/// Do que o painel está falando: o clipe no editor, a faixa do instrumento ou a dos efeitos.
 class _Subject extends StatelessWidget {
   final DawController c;
   const _Subject({required this.c});
@@ -312,16 +329,24 @@ class _Subject extends StatelessWidget {
         }
       case Dock.effects:
         final i = c.effectsTrack;
-        if (i < 0 || i >= c.doc.tracks.length) {
-          text = 'Master';
+        final master = i < 0 || i >= c.doc.tracks.length;
+        final n = c.effectsOf(master ? -1 : i).length;
+        final count = n == 0 ? 'sem efeitos' : (n == 1 ? '1 efeito' : '$n efeitos');
+        if (master) {
+          text = 'Master · $count';
+          dot = Colors.white;
         } else {
-          text = '${c.doc.tracks[i].name} · efeitos';
+          text = '${c.doc.tracks[i].name} · $count';
           dot = trackColorAt(c.doc.tracks[i].color);
         }
       case Dock.instrument:
         if (c.selectedTrack < c.doc.tracks.length) {
           final t = c.doc.tracks[c.selectedTrack];
-          text = t.kind.isInstrument ? '${t.name} · ${t.kind.label}' : '${t.name} · faixa de áudio, sem instrumento';
+          text = switch (t.kind) {
+            TrackKind.bus => '${t.name} · barramento, sem instrumento',
+            TrackKind.audio => '${t.name} · faixa de áudio, sem instrumento',
+            _ => '${t.name} · ${t.kind.label}',
+          };
           dot = trackColorAt(t.color);
         }
       case Dock.mixer || Dock.none:
