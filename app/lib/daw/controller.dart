@@ -21,6 +21,7 @@ import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
 import 'model.dart';
+import 'templates.dart';
 import 'wav.dart';
 
 /// Resumo de um áudio para desenhar a onda: mínimo e máximo a cada [bucket] quadros.
@@ -494,7 +495,7 @@ class DawController extends ChangeNotifier {
       engineRate = await _engine.start();
       _engine.onState = _onEngineState;
       final saved = await _store.get(_docKey);
-      doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : _fresh();
+      doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : await _fromTemplate();
       // o andamento e a fórmula de compasso moram no servidor; o local segue
       doc.bpm = project.bpm.toDouble();
       doc.beatsPerBar = project.beatsPerBar;
@@ -554,6 +555,15 @@ class DawController extends ChangeNotifier {
       scrollBeat = math.max(0, s.beat - visible * 0.05);
       notifyListeners();
     }
+  }
+
+  /// Primeira abertura: o modelo escolhido ao criar o projeto (guardado no aparelho), ou o vazio.
+  Future<DawDoc> _fromTemplate() async {
+    final key = 'template:${project.id}';
+    final chosen = await _store.get(key);
+    if (chosen is! String) return _fresh();
+    await _store.delete(key);
+    return ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: project.beatsPerBar);
   }
 
   DawDoc _fresh() => DawDoc(
