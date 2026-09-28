@@ -15,6 +15,12 @@ class AudioEngine {
   void calls(List<List<Object>> list) {}
   void Function(EngineState state)? onState;
   double get latency => 0;
+
+  /// Mensagens MIDI de entrada (status, dado 1, dado 2).
+  void Function(int status, int data1, int data2)? onMidi;
+
+  /// Pede acesso ao MIDI; devolve os nomes das entradas.
+  Future<List<String>> enableMidi() async => const [];
 }
 
 /// Guardado local do DAW (documento e áudios).

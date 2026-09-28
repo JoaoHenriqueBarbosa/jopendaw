@@ -7,6 +7,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'instruments.dart';
+
 class AudioClip {
   String id;
 
@@ -51,12 +53,71 @@ class AudioClip {
   double end(double bpm) => start + beats(bpm);
 }
 
+/// Uma nota num clipe MIDI. Início e duração em batidas, contados do início do clipe.
+class MidiNote {
+  int pitch;
+  double start, length;
+
+  /// 0..1.
+  double velocity;
+
+  MidiNote({required this.pitch, required this.start, required this.length, this.velocity = 0.8});
+
+  MidiNote.fromJson(Map<String, dynamic> j)
+    : pitch = j['pitch'],
+      start = (j['start'] as num).toDouble(),
+      length = (j['length'] as num).toDouble(),
+      velocity = (j['velocity'] as num? ?? 0.8).toDouble();
+
+  Map<String, dynamic> toJson() => {'pitch': pitch, 'start': start, 'length': length, 'velocity': velocity};
+
+  double get end => start + length;
+  MidiNote copy() => MidiNote(pitch: pitch, start: start, length: length, velocity: velocity);
+}
+
+/// Clipe de notas numa faixa de instrumento. Posição e duração em batidas; notas além da
+/// duração (ou antes do 0, depois de aparar a esquerda) ficam guardadas mas não tocam.
+class MidiClip {
+  String id, name;
+  double start, length;
+  List<MidiNote> notes;
+
+  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes}) : notes = notes ?? [];
+
+  MidiClip.fromJson(Map<String, dynamic> j)
+    : id = j['id'],
+      name = j['name'] ?? '',
+      start = (j['start'] as num).toDouble(),
+      length = (j['length'] as num).toDouble(),
+      notes = [for (final n in j['notes'] as List) MidiNote.fromJson(n)];
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'start': start,
+    'length': length,
+    'notes': [for (final n in notes) n.toJson()],
+  };
+
+  double get end => start + length;
+}
+
 class DawTrack {
   String id, name;
   int color;
   double gain, pan;
   bool mute, solo;
+  TrackKind kind;
+
+  /// Parâmetros do instrumento (ids de `instruments.dart`); faltando, vale o padrão.
+  Map<int, double> params;
+
+  /// Áudio do sampler (sha-256), quando o tipo é sampler.
+  String? sample;
+
+  /// Clipes de áudio (faixas de áudio) e de notas (faixas de instrumento).
   List<AudioClip> clips;
+  List<MidiClip> midi;
 
   DawTrack({
     required this.id,
@@ -66,8 +127,14 @@ class DawTrack {
     this.pan = 0,
     this.mute = false,
     this.solo = false,
+    this.kind = TrackKind.audio,
+    Map<int, double>? params,
+    this.sample,
     List<AudioClip>? clips,
-  }) : clips = clips ?? [];
+    List<MidiClip>? midi,
+  }) : params = params ?? defaultParams(kind),
+       clips = clips ?? [],
+       midi = midi ?? [];
 
   DawTrack.fromJson(Map<String, dynamic> j)
     : id = j['id'],
@@ -77,7 +144,11 @@ class DawTrack {
       pan = (j['pan'] as num).toDouble(),
       mute = j['mute'],
       solo = j['solo'],
-      clips = [for (final c in j['clips'] as List) AudioClip.fromJson(c)];
+      kind = TrackKind.parse(j['kind']),
+      params = {for (final e in ((j['params'] as Map<String, dynamic>?) ?? {}).entries) int.parse(e.key): (e.value as num).toDouble()},
+      sample = j['sample'],
+      clips = [for (final c in j['clips'] as List) AudioClip.fromJson(c)],
+      midi = [for (final c in (j['midi'] as List?) ?? []) MidiClip.fromJson(c)];
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -87,8 +158,22 @@ class DawTrack {
     'pan': pan,
     'mute': mute,
     'solo': solo,
+    'kind': kind.name,
+    'params': {for (final e in params.entries) '${e.key}': e.value},
+    'sample': sample,
     'clips': [for (final c in clips) c.toJson()],
+    'midi': [for (final c in midi) c.toJson()],
   };
+
+  /// Valor de um parâmetro do instrumento (o padrão da tabela se não foi mexido).
+  double param(int id) {
+    final v = params[id];
+    if (v != null) return v;
+    for (final p in kind.params) {
+      if (p.id == id) return p.def;
+    }
+    return 0;
+  }
 }
 
 /// O que se sabe de um áudio importado sem abrir o arquivo.
@@ -152,7 +237,10 @@ class DawDoc {
   };
 
   /// Fim do último clipe, em batidas.
-  double get contentEnd => tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, c.end(bpm)));
+  double get contentEnd => math.max(
+    tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, c.end(bpm))),
+    tracks.expand((t) => t.midi).fold(0.0, (m, c) => math.max(m, c.end)),
+  );
 }
 
 // ------------------------------------------------------------------ utilidades

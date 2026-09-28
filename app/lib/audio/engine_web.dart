@@ -64,6 +64,12 @@ class AudioEngine {
     );
   }
 
+  /// Mensagens MIDI de entrada (status, dado 1, dado 2).
+  void Function(int status, int data1, int data2)? onMidi;
+
+  /// Pede acesso ao MIDI do navegador (Web MIDI); devolve os nomes das entradas.
+  Future<List<String>> enableMidi() => throw UnimplementedError();
+
   /// Latência de saída em segundos (base + dispositivo).
   double get latency => _host.latency();
 

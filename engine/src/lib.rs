@@ -8,8 +8,13 @@
 //! O tempo da linha do tempo é contado em quadros (amostras por canal) na taxa do motor; posições
 //! do documento chegam em tempos musicais (batidas) e viram quadros pelo andamento.
 
+pub mod drums;
+pub mod dsp;
+pub mod instrument;
 mod metronome;
 mod mixer;
+pub mod sampler;
+pub mod synth;
 
 use std::collections::HashMap;
 
@@ -43,12 +48,20 @@ impl Sample {
         self.channels[0].len()
     }
 
+    pub fn channels(&self) -> usize {
+        self.channels.len()
+    }
+
+    pub fn rate(&self) -> f64 {
+        self.rate
+    }
+
     pub fn duration(&self) -> f64 {
         self.frames() as f64 / self.rate
     }
 
     /// Amostra em `pos` (quadro fracionário) com interpolação linear; fora do áudio é silêncio.
-    fn at(&self, ch: usize, pos: f64) -> f32 {
+    pub fn at(&self, ch: usize, pos: f64) -> f32 {
         let data = &self.channels[ch.min(self.channels.len() - 1)];
         if pos < 0.0 {
             return 0.0;

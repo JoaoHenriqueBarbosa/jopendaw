@@ -9,11 +9,13 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../api/client.dart';
 import '../audio/engine.dart';
 import '../models/project.dart';
 import '../widgets/theme.dart';
+import 'instruments.dart';
 import 'model.dart';
 
 /// Resumo de um áudio para desenhar a onda: mínimo e máximo a cada [bucket] quadros.
@@ -46,6 +48,9 @@ class Waveform {
   /// Buckets por segundo.
   double get perSecond => rate / bucket;
 }
+
+/// O que ocupa o painel de baixo.
+enum Dock { none, mixer, editor, instrument }
 
 /// Grade de encaixe, em batidas (0 = livre).
 enum Snap {
@@ -97,6 +102,24 @@ class DawController extends ChangeNotifier {
   /// Largura visível das raias em pixels (a linha do tempo informa a cada layout).
   double viewWidth = 800;
   bool mixerOpen = false;
+
+  /// Painel de baixo: nenhum, mixer, editor de notas (piano roll) ou instrumento da faixa.
+  Dock dock = Dock.none;
+
+  /// Clipe MIDI aberto no piano roll.
+  String? editingClip;
+
+  /// Teclado do computador tocando notas na faixa selecionada (e oitava base dele).
+  bool keyboardOn = false;
+  int keyboardOctave = 4;
+  double keyboardVelocity = 0.8;
+
+  /// Teclas do editor aberto (o piano roll registra ao montar e limpa ao desmontar). O atalho
+  /// global da tela chama primeiro as notas do teclado, depois este, depois os atalhos gerais.
+  bool Function(KeyEvent e)? editorKeyHandler;
+
+  /// Nomes das entradas MIDI conectadas (Web MIDI); vazio quando não há ou não há permissão.
+  List<String> midiInputs = const [];
 
   final _undo = <String>[];
   final _redo = <String>[];
@@ -476,6 +499,52 @@ class DawController extends ChangeNotifier {
     error = null;
     notifyListeners();
   }
+
+  // ------------------------------------------------------------------ instrumentos e MIDI
+  // (contrato da fase 2: corpos preenchidos na implementação)
+
+  /// Nova faixa de instrumento com o instrumento no padrão; fica selecionada.
+  void addInstrumentTrack(TrackKind kind) => throw UnimplementedError();
+
+  /// Clipe MIDI vazio na faixa, começando em [start] (batidas); padrão: um compasso. Fica
+  /// selecionado e é devolvido.
+  MidiClip createMidiClip(int track, double start, {double? length}) => throw UnimplementedError();
+
+  /// O clipe MIDI (com a faixa) de um id, ou null.
+  (DawTrack, MidiClip)? findMidiClip(String id) => throw UnimplementedError();
+
+  /// O clipe aberto no piano roll.
+  (DawTrack, MidiClip)? get editing => editingClip == null ? null : findMidiClip(editingClip!);
+
+  /// Abre o clipe no piano roll (painel de baixo).
+  void openPianoRoll(String clipId) => throw UnimplementedError();
+
+  void setDock(Dock d) => throw UnimplementedError();
+
+  /// Toca uma nota na hora (prévia do piano roll, teclado, MIDI), na faixa dada ou na selecionada.
+  void noteOn(int pitch, {double velocity = 0.8, int? track}) => throw UnimplementedError();
+  void noteOff(int pitch, {int? track}) => throw UnimplementedError();
+
+  /// Muda um parâmetro do instrumento. Para arrastes: [checkpoint] no começo e `undoable: false`.
+  void setParam(int track, int id, double value, {bool undoable = false}) => throw UnimplementedError();
+
+  /// Aplica um preset (valores que faltam voltam ao padrão).
+  void applyPreset(int track, Map<int, double> values) => throw UnimplementedError();
+
+  /// Escolhe o áudio (sha-256 de um sample do projeto) que o sampler da faixa toca.
+  void setInstrumentSample(int track, String? hash) => throw UnimplementedError();
+
+  /// Quantiza notas de um clipe na grade (batidas). [strength] 0..1; [ends] também as durações.
+  void quantizeNotes(MidiClip clip, Iterable<MidiNote> notes, double grid, {double strength = 1, bool ends = false}) => throw UnimplementedError();
+
+  void toggleKeyboard() => throw UnimplementedError();
+
+  /// Com o teclado do computador ligado, trata a tecla como nota (A W S E D F T G Y H U J K O L P;
+  /// Z/X oitava, C/V velocidade). Devolve true se consumiu a tecla.
+  bool handleNoteKey(KeyEvent e) => throw UnimplementedError();
+
+  /// Pede acesso ao MIDI do navegador e passa a tocar a faixa selecionada com ele.
+  Future<void> enableMidiInput() => throw UnimplementedError();
 
   // ------------------------------------------------------------------ visão
 
