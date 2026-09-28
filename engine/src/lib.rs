@@ -64,6 +64,7 @@
 //! capturas saiam alinhadas com a linha do tempo desde o primeiro quadro.
 
 pub mod analyzer;
+pub mod api;
 pub mod drums;
 pub mod dsp;
 pub mod effect;
