@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../auth/session.dart';
 import '../models/account.dart';
 import '../models/project.dart';
+import 'sync_api.dart';
 
 class ApiException implements Exception {
   final int status;
@@ -27,7 +28,7 @@ class Unauthenticated implements Exception {
 ///
 /// Toda chamada leva o JWT de acesso. Num 401 tenta UMA renovação (dividida entre as chamadas
 /// simultâneas) e repete; se a renovação também falha, a sessão acabou.
-class ApiClient {
+class ApiClient implements SyncApi {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
@@ -49,9 +50,13 @@ class ApiClient {
     if (_session.accessToken != null) 'authorization': 'Bearer ${_session.accessToken}',
   };
 
-  Future<http.Response> _raw(String method, String path, {Object? body, Map<String, String>? q}) {
+  Future<http.Response> _raw(String method, String path, {Object? body, Uint8List? bytes, Map<String, String>? q}) {
     final req = http.Request(method, _u(path, q))..headers.addAll(_headers(json: body != null));
     if (body != null) req.body = jsonEncode(body);
+    if (bytes != null) {
+      req.headers['content-type'] = 'application/octet-stream';
+      req.bodyBytes = bytes;
+    }
     return req.send().then(http.Response.fromStream).timeout(const Duration(seconds: 120));
   }
 
@@ -66,14 +71,14 @@ class ApiClient {
   dynamic _decode(http.Response r) => r.body.isEmpty ? null : jsonDecode(utf8.decode(r.bodyBytes));
 
   /// Faz o pedido renovando o acesso uma vez num 401; sessão morta vira [Unauthenticated].
-  Future<http.Response> _send(String method, String path, {Object? body, Map<String, String>? q}) async {
-    var r = await _raw(method, path, body: body, q: q);
+  Future<http.Response> _send(String method, String path, {Object? body, Uint8List? bytes, Map<String, String>? q}) async {
+    var r = await _raw(method, path, body: body, bytes: bytes, q: q);
     if (r.statusCode == 401 && _session.signedIn) {
       if (!await _refresh()) {
         await _session.signOut(notifyServer: false);
         throw Unauthenticated();
       }
-      r = await _raw(method, path, body: body, q: q);
+      r = await _raw(method, path, body: body, bytes: bytes, q: q);
     }
     if (r.statusCode == 401) throw Unauthenticated();
     return r;
@@ -204,4 +209,49 @@ class ApiClient {
   Future<Project> createProject(String name) async => Project.fromJson(await _json('POST', '/api/projects', {'name': name}));
   Future<Project> patchProject(String id, Map<String, dynamic> patch) async => Project.fromJson(await _json('PATCH', '/api/projects/$id', patch));
   Future<void> deleteProject(String id) => _delete('/api/projects/$id');
+
+  // ---- sincronização e jobs ----
+  @override
+  Future<ServerDoc> projectDoc(String projectId) async {
+    final j = await _get('/api/projects/$projectId/doc') as Map<String, dynamic>;
+    return ServerDoc(j['version'] as int, (j['doc'] as Map?)?.cast<String, dynamic>());
+  }
+
+  @override
+  Future<int> putProjectDoc(String projectId, int baseVersion, Map<String, dynamic> doc) async {
+    final r = await _send('PUT', '/api/projects/$projectId/doc', body: {'base_version': baseVersion, 'doc': doc});
+    if (r.statusCode == 409) {
+      final j = _decode(r) as Map<String, dynamic>;
+      throw DocConflict(ServerDoc(j['version'] as int, (j['doc'] as Map?)?.cast<String, dynamic>()));
+    }
+    if (r.statusCode >= 400) throw _error(r);
+    return (_decode(r) as Map<String, dynamic>)['version'] as int;
+  }
+
+  @override
+  Future<Set<String>> missingSamples(List<String> hashes) async {
+    final j = await _json('POST', '/api/samples/missing', {'hashes': hashes}) as Map<String, dynamic>;
+    return {for (final h in j['missing'] as List) h as String};
+  }
+
+  @override
+  Future<void> putSample(String hash, Uint8List bytes) async {
+    final r = await _send('PUT', '/api/samples/$hash', bytes: bytes);
+    if (r.statusCode >= 400) throw _error(r);
+  }
+
+  @override
+  Future<Uint8List?> getSample(String hash) async {
+    final r = await _send('GET', '/api/samples/$hash');
+    if (r.statusCode == 404) return null;
+    if (r.statusCode >= 400) throw _error(r);
+    return r.bodyBytes;
+  }
+
+  @override
+  Future<SyncJob> createJob(String kind, String sample, [Map<String, dynamic> params = const {}]) async =>
+      SyncJob.fromJson(await _json('POST', '/api/jobs', {'kind': kind, 'sample': sample, 'params': params}) as Map<String, dynamic>);
+
+  @override
+  Future<SyncJob> job(String id) async => SyncJob.fromJson(await _get('/api/jobs/$id') as Map<String, dynamic>);
 }

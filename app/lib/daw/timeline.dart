@@ -22,6 +22,7 @@ import 'automation_lane.dart';
 import 'controller.dart';
 import 'instruments.dart';
 import 'meter.dart';
+import 'midi_convert_dialog.dart';
 import 'model.dart';
 
 const _rulerHeight = 30.0;
@@ -2170,6 +2171,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       ],
       _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
+      _menuItem('to_midi', Icons.piano, 'Converter em notas (MIDI)'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
     ]);
     if (v == null || !mounted) return;
@@ -2178,6 +2180,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     switch (v) {
       case 'takes':
         await _takesMenu(at);
+      case 'to_midi':
+        await showConvertToMidi(context, c, widget.clip.id);
       case 'duplicate':
         c.duplicateSelected();
       case 'split':

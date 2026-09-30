@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 
 import 'dart:typed_data';
 
+import 'package:jopendaw_app/api/sync_api.dart';
 import 'package:jopendaw_app/audio/engine.dart';
 import 'package:jopendaw_app/daw/controller.dart';
 import 'package:jopendaw_app/daw/model.dart';
@@ -203,7 +204,14 @@ class MemoryStore implements LocalStore {
 
 /// Controlador pronto, sem abrir o motor, a 120 bpm em 4/4 e com o motor a 100 Hz: uma batida são
 /// 50 quadros, um compasso 200 (segundos de áudio em poucas centenas de amostras).
-DawController fakeController(FakeEngine engine, {MemoryStore? store, List<DawTrack>? tracks}) {
+DawController fakeController(
+  FakeEngine engine, {
+  MemoryStore? store,
+  List<DawTrack>? tracks,
+  SyncApi? api,
+  bool Function()? canSync,
+  double syncTimeScale = 1,
+}) {
   final c = DawController(
     Project.fromJson({
       'id': 'p',
@@ -217,6 +225,9 @@ DawController fakeController(FakeEngine engine, {MemoryStore? store, List<DawTra
     }),
     engine: engine,
     store: store ?? MemoryStore(),
+    api: api,
+    canSync: canSync,
+    syncTimeScale: syncTimeScale,
   );
   c.doc = DawDoc(
     bpm: 120,

@@ -13,14 +13,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show EditableText, FocusManager;
 
 import '../api/client.dart';
+import '../api/sync_api.dart';
+import '../auth/session.dart';
 import '../audio/engine.dart';
 import '../models/project.dart';
 import '../widgets/theme.dart';
+import 'audio_to_midi.dart';
 import 'automation_math.dart';
 import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
 import 'model.dart';
+import 'sync.dart';
 import 'templates.dart';
 import 'wav.dart';
 
@@ -393,14 +397,51 @@ const maxGain = 2.0;
 /// Nível de um envio novo: −6 dB.
 const defaultSendLevel = 0.5;
 
+/// A ponta do controlador que o serviço de sincronização enxerga.
+class _SyncBridge implements SyncHost {
+  _SyncBridge(this.c);
+  final DawController c;
+
+  @override
+  Map<String, dynamic> docJson() => c.doc.toJson();
+
+  @override
+  Set<String> sampleHashes() => DawController._hashesOf(c.doc);
+
+  @override
+  Future<bool> applyRemote(Map<String, dynamic> doc, {required void Function(int done, int total) progress, required bool Function() canSwap}) =>
+      c._applyRemote(doc, progress, canSwap);
+
+  @override
+  Future<void> fetchMissing() => c._fetchMissing();
+}
+
 class DawController extends ChangeNotifier {
   final Project project;
 
-  /// [engine] e [store] trocam o motor e o guardado local nos testes (padrão: os do aparelho).
-  DawController(this.project, {AudioEngine? engine, LocalStore? store}) : _engine = engine ?? AudioEngine.instance, _store = store ?? LocalStore.instance;
+  /// [engine] e [store] trocam o motor e o guardado local nos testes (padrão: os do aparelho);
+  /// [api] e [canSync] trocam o servidor e a checagem de sessão da sincronização e dos jobs, e
+  /// [syncTimeScale] encurta as esperas dela.
+  DawController(this.project, {AudioEngine? engine, LocalStore? store, SyncApi? api, bool Function()? canSync, this.syncTimeScale = 1})
+    : _engine = engine ?? AudioEngine.instance,
+      _store = store ?? LocalStore.instance,
+      _api = api ?? ApiClient.instance,
+      _canSync = canSync ?? (() => Session.instance.signedIn);
 
   final AudioEngine _engine;
   final LocalStore _store;
+  final SyncApi _api;
+  final bool Function() _canSync;
+  final double syncTimeScale;
+
+  SyncService? _syncService;
+
+  /// Sincronização deste projeto com o servidor (estado na barra do transporte).
+  SyncService get sync =>
+      _syncService ??= SyncService(projectId: project.id, api: _api, store: _store, host: _SyncBridge(this), canSync: _canSync, timeScale: syncTimeScale);
+
+  /// O último documento gravado no aparelho: só o que difere dele conta como mudança a enviar.
+  String? _lastSaved;
 
   late DawDoc doc;
   bool ready = false;
@@ -511,6 +552,8 @@ class DawController extends ChangeNotifier {
       if (_disposed) return;
       ready = true;
       _sync();
+      _lastSaved = jsonEncode(doc.toJson());
+      unawaited(sync.start(localExisted: saved is String));
       // faixa de áudio que ficou armada ou monitorando: a entrada volta aberta, como estava
       if (doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
     } catch (e) {
@@ -623,6 +666,7 @@ class DawController extends ChangeNotifier {
     editorKeyHandler = null;
     _saveTimer?.cancel();
     _save();
+    _syncService?.dispose();
     beat.dispose();
     playing.dispose();
     peaks.dispose();
@@ -1213,7 +1257,139 @@ class DawController extends ChangeNotifier {
 
   Future<void> _save() async {
     if (!ready) return;
-    await _store.put(_docKey, jsonEncode(doc.toJson()));
+    final text = jsonEncode(doc.toJson());
+    if (text != _lastSaved) {
+      _lastSaved = text;
+      // o pendente é marcado antes do documento: se o app morrer entre os dois, sobra um
+      // pendente a mais (inofensivo), nunca uma mudança que ninguém vai enviar
+      await sync.markDirty();
+    }
+    await _store.put(_docKey, text);
+  }
+
+  // ------------------------------------------------------------------ sincronização
+
+  /// Todos os áudios que o documento cita (a lista do documento, mais o que clipes e sampler
+  /// apontam, por garantia).
+  static Set<String> _hashesOf(DawDoc d) => {
+    ...d.samples.keys,
+    for (final t in d.tracks) ...[
+      ?t.sample,
+      for (final c in t.clips) ...[c.sample, ...c.takes],
+    ],
+  };
+
+  /// Pega o áudio no aparelho ou, se não há, no servidor; decodifica e registra. Sem o arquivo em
+  /// lugar nenhum fica em [missing]. Falha de rede lança (quem chama tenta de novo depois).
+  Future<void> _obtainSample(String hash) async {
+    final local = await _store.get('sample:$hash');
+    var bytes = local is Uint8List ? local : null;
+    if (bytes == null) {
+      bytes = await _api.getSample(hash);
+      if (bytes == null) {
+        missing.add(hash);
+        return;
+      }
+      await _store.put('sample:$hash', bytes);
+    }
+    try {
+      _register(hash, await _engine.decode(bytes));
+    } catch (_) {
+      missing.add(hash);
+    }
+  }
+
+  Future<void> _fetchMissing() async {
+    for (final hash in missing.toList()) {
+      if (_disposed) return;
+      await _obtainSample(hash);
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Troca o documento pelo do servidor, baixando antes os áudios (o documento só muda quando está
+  /// tudo à mão). Andamento e compasso ficam os do projeto; o que é preferência deste aparelho
+  /// (metrônomo, contagem, latência, armar e monitorar) também. Devolve false se o usuário
+  /// editou no meio do caminho: aí os dois lados mudaram e quem decide é a pessoa.
+  Future<bool> _applyRemote(Map<String, dynamic> json, void Function(int done, int total) progress, bool Function() canSwap) async {
+    final DawDoc next;
+    try {
+      next = DawDoc.fromJson(json);
+    } catch (_) {
+      throw SyncFailure('A versão do servidor não abre nesta versão do app. Atualize o jopendaw.');
+    }
+    final need = [
+      for (final h in _hashesOf(next))
+        if (!waveforms.containsKey(h)) h,
+    ];
+    progress(0, need.length);
+    for (final (i, hash) in need.indexed) {
+      await _obtainSample(hash);
+      progress(i + 1, need.length);
+    }
+    if (_disposed) return false;
+    if (!canSwap() || _saveTimer?.isActive == true) return false;
+    if (recording) throw StateError('gravando: o projeto novo entra depois');
+    final old = doc;
+    next
+      ..bpm = project.bpm.toDouble()
+      ..beatsPerBar = project.beatsPerBar
+      ..metronome = old.metronome
+      ..countIn = old.countIn
+      ..recLatencyMs = old.recLatencyMs;
+    final live = {for (final t in old.tracks) t.id: t};
+    for (final t in next.tracks) {
+      final now = live[t.id];
+      t
+        ..armed = now?.armed ?? false
+        ..monitor = now?.monitor ?? false;
+    }
+    doc = next;
+    _undo.clear();
+    _redo.clear();
+    if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
+    _prune();
+    _sync();
+    final text = jsonEncode(doc.toJson());
+    _lastSaved = text;
+    await _store.put(_docKey, text);
+    if (!_disposed) notifyListeners();
+    return true;
+  }
+
+  /// Converte o clipe de áudio em notas MIDI pelo servidor e põe uma faixa de sintetizador nova
+  /// com o clipe MIDI sobre o de áudio, num passo do desfazer. Devolve quantas notas entraram.
+  /// Lança [ConversionCancelled] se [isCancelled] disser que sim, e [StateError] ou erro de API
+  /// (com mensagem legível) nos outros problemas.
+  Future<int> convertToMidi(
+    String clipId, {
+    void Function(String stage, double? progress)? onProgress,
+    bool Function()? isCancelled,
+    Duration pollEvery = const Duration(seconds: 1),
+  }) async {
+    final f = _findClip(clipId);
+    if (f == null) throw StateError('O clipe não existe mais.');
+    if (!_canSync()) throw StateError('Entre na sua conta para converter áudio em notas.');
+    final clip = f.$2;
+    onProgress?.call('Enviando o áudio…', null);
+    await sync.uploadSamples([clip.sample]);
+    final r = await runAudioToMidi(_api, clip.sample, onProgress: onProgress, isCancelled: isCancelled, pollEvery: pollEvery);
+    if (_disposed) throw ConversionCancelled();
+    // o clipe pode ter mudado de lugar, de corte ou sumido enquanto o servidor trabalhava
+    final now = _findClip(clipId);
+    if (now == null) throw StateError('O clipe foi apagado durante a conversão.');
+    final audio = now.$2;
+    final notes = notesForClip(r, audio, doc.bpm);
+    if (notes.isEmpty) throw StateError('Não encontrei notas neste áudio.');
+    edit((d) {
+      final n = d.tracks.length;
+      final name = _nextTrackName(d, TrackKind.synth);
+      final midi = MidiClip(id: newId(), name: name, start: audio.start, length: math.max(audio.beats(d.bpm), 0.01), notes: notes);
+      d.tracks.add(DawTrack(id: newId(), name: name, color: n % Palette.tracks.length, kind: TrackKind.synth, midi: [midi]));
+      selectedClip = midi.id;
+      _select(n);
+    });
+    return notes.length;
   }
 
   /// Encaixa na grade atual.

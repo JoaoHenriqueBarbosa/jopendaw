@@ -16,6 +16,7 @@ import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
 import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
+import 'sync_ui.dart';
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
 /// Para onde as ações do transporte (botões e atalhos) mandam uma falha que o controlador não
@@ -232,6 +233,7 @@ class TransportBar extends StatelessWidget {
                       icon: const Icon(Icons.settings_outlined),
                     ),
                     IconButton(tooltip: 'Atalhos do teclado (?)', onPressed: () => showShortcuts(context), icon: const Icon(Icons.keyboard_command_key)),
+                    SyncIndicator(c: c),
                     if (c.status != null) ...[
                       const SizedBox(width: 12),
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
