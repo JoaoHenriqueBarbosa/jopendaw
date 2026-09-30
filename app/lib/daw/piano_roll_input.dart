@@ -650,7 +650,7 @@ extension _Input on _PianoRollState {
       }
     });
     _sound(d, a.pitch, a.velocity);
-    _label = '${_pitchLabel(a.pitch)} · ${formatPosition(clip.start + a.start, c.doc.beatsPerBar)}';
+    _label = '${_pitchLabel(a.pitch)} · ${formatPosition(clip.start + a.start, c.doc.beatsPerBar, meter: c.doc.meter)}';
     _labelAt = (a.start, g.rows.rowOf(a.pitch));
   }
 

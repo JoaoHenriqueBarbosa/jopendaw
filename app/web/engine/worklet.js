@@ -30,9 +30,9 @@ const LEVELS_PER_SEC = 30;
 // altura 256 + controle e o valor no lugar da velocidade, e têm cota própria de 32768.
 const REC_NOTE_FLOATS = 5;
 const REC_NOTES_MAX = REC_NOTE_FLOATS * (16384 + 32768);
-// Chamadas de expressão que um engine.wasm de antes dela não exporta: ignoradas em vez de
-// derrubar o lote inteiro de chamadas.
-const EXPRESSION_CALLS = new Set(['live_bend', 'live_cc', 'cc_add', 'cc_clear']);
+// Chamadas de expressão e de mapa de andamento que um engine.wasm de antes delas não exporta:
+// ignoradas em vez de derrubar o lote inteiro de chamadas.
+const EXPRESSION_CALLS = new Set(['live_bend', 'live_cc', 'cc_add', 'cc_clear', 'tempo_clear', 'tempo_point', 'meter_clear', 'meter_point']);
 // Diferença de posição entre um bloco e o seguinte que conta como salto (seek) e não como
 // arredondamento: um milionésimo de batida é bem menos que um quadro.
 const BEAT_EPS = 1e-6;

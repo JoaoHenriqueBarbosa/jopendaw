@@ -27,6 +27,8 @@ import 'marker.dart';
 import 'meter.dart';
 import 'midi_convert_dialog.dart';
 import 'minimap.dart';
+import 'tempo_lane.dart';
+import 'tempo_map.dart';
 import 'warp_dialog.dart';
 import 'model.dart';
 import 'structure_menu.dart';
@@ -127,36 +129,76 @@ class Timeline extends StatelessWidget {
                               bottom: BorderSide(color: Palette.hairline),
                             ),
                           ),
-                          child: Tooltip(
-                            message: 'Régua em ${c.rulerTime ? 'compassos' : 'minutos e segundos'}: clique para alternar',
-                            child: InkWell(
-                              onTap: c.toggleRulerTime,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        plural(c.doc.tracks.length, 'faixa'),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context).textTheme.labelSmall,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Régua em ${c.rulerTime ? 'compassos' : 'minutos e segundos'}: clique para alternar',
+                                  child: InkWell(
+                                    onTap: c.toggleRulerTime,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              plural(c.doc.tracks.length, 'faixa'),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context).textTheme.labelSmall,
+                                            ),
+                                          ),
+                                          Text(
+                                            c.rulerTime ? 'mm:ss' : 'comp.',
+                                            style: Theme.of(context).textTheme.labelSmall!.copyWith(color: Palette.accent, fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Text(
-                                      c.rulerTime ? 'mm:ss' : 'comp.',
-                                      style: Theme.of(context).textTheme.labelSmall!.copyWith(color: Palette.accent, fontWeight: FontWeight.w700),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
+                              IconButton(
+                                tooltip: c.tempoLaneVisible ? 'Esconder a faixa de andamento' : 'Mostrar a faixa de andamento',
+                                onPressed: c.toggleTempoLane,
+                                isSelected: c.tempoLaneVisible,
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 16,
+                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                padding: EdgeInsets.zero,
+                                style: IconButton.styleFrom(foregroundColor: Colors.white54),
+                                selectedIcon: const Icon(Icons.speed, color: Palette.accent),
+                                icon: const Icon(Icons.speed),
+                              ),
+                            ],
                           ),
                         ),
                         Expanded(child: _Ruler(c: c)),
                       ],
                     ),
                   ),
+                  if (c.tempoLaneVisible)
+                    SizedBox(
+                      height: tempoLaneHeight,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: headerWidth,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            alignment: Alignment.centerLeft,
+                            decoration: const BoxDecoration(
+                              color: Palette.bar,
+                              border: Border(
+                                right: BorderSide(color: Palette.hairline),
+                                bottom: BorderSide(color: Palette.hairline),
+                              ),
+                            ),
+                            child: Text('Andamento', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall),
+                          ),
+                          Expanded(child: TempoLane(c: c)),
+                        ],
+                      ),
+                    ),
                   Expanded(
                     child: Container(
                       color: Palette.ink,
@@ -390,12 +432,12 @@ class _RulerState extends State<_Ruler> {
                 painter: _RulerPainter(
                   scroll: c.scrollBeat,
                   ppb: c.pxPerBeat,
-                  beatsPerBar: c.doc.beatsPerBar,
+                  meter: c.doc.meter,
+                  tempo: c.doc.tempo,
                   loopOn: c.doc.loopOn,
                   loopStart: c.doc.loopStart,
                   loopEnd: c.doc.loopEnd,
                   timeMode: c.rulerTime,
-                  bpm: c.doc.bpm,
                   style: Theme.of(context).textTheme.labelSmall!,
                 ),
                 size: Size.infinite,
@@ -426,7 +468,7 @@ class _HoverLabel extends StatelessWidget {
       builder: (context, b, _) {
         if (b == null) return const SizedBox.shrink();
         final x = (b - c.scrollBeat) * c.pxPerBeat;
-        final text = '${formatPosition(b, c.doc.beatsPerBar)} · ${formatClock(b * 60 / c.doc.bpm, tenths: true)}';
+        final text = '${formatPosition(b, c.doc.beatsPerBar, meter: c.doc.meter)} · ${formatClock(c.doc.secondsAt(b), tenths: true)}';
         final onRight = x < box.maxWidth - 150;
         return Stack(
           children: [
@@ -513,7 +555,7 @@ class _CountInBadge extends StatelessWidget {
 }
 
 /// De quantas em quantas batidas vale desenhar um número, para não amontoar.
-int _barStep(double ppb, int beatsPerBar) {
+int _barStep(double ppb, num beatsPerBar) {
   final barPx = ppb * beatsPerBar;
   var step = 1;
   while (barPx * step < 48) {
@@ -523,20 +565,21 @@ int _barStep(double ppb, int beatsPerBar) {
 }
 
 class _RulerPainter extends CustomPainter {
-  final double scroll, ppb, loopStart, loopEnd, bpm;
-  final int beatsPerBar;
+  final double scroll, ppb, loopStart, loopEnd;
+  final MeterMap meter;
+  final TempoMap tempo;
   final bool loopOn, timeMode;
   final TextStyle style;
 
   _RulerPainter({
     required this.scroll,
     required this.ppb,
-    required this.beatsPerBar,
+    required this.meter,
+    required this.tempo,
     required this.loopOn,
     required this.loopStart,
     required this.loopEnd,
     required this.timeMode,
-    required this.bpm,
     required this.style,
   });
 
@@ -549,17 +592,18 @@ class _RulerPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTRB(lx, 0, rx, size.height), Paint()..color = color.withValues(alpha: loopOn ? 0.22 : 0.08));
       canvas.drawRect(Rect.fromLTRB(lx, size.height - 3, rx, size.height), Paint()..color = color);
     }
-    final step = _barStep(ppb, beatsPerBar);
     final tick = Paint()..color = Colors.white24;
+    final visibleEnd = scroll + size.width / ppb;
     if (timeMode) {
-      // números em segundos: o menor passo "redondo" que deixa ao menos 64 px entre rótulos
-      final pxPerSec = ppb * bpm / 60;
+      // números em segundos: o menor passo "redondo" que deixa ao menos 64 px entre rótulos (o
+      // andamento vigente à esquerda decide; com mapa, os rótulos ficam onde o tempo cai de fato)
+      final pxPerSec = ppb * tempo.bpmAt(scroll) / 60;
       const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
       final every = steps.firstWhere((s) => s * pxPerSec >= 64, orElse: () => steps.last);
-      final from = (scroll * 60 / bpm / every).floor(), to = ((scroll + size.width / ppb) * 60 / bpm / every).ceil();
+      final from = (tempo.secondsAt(scroll) / every).floor(), to = (tempo.secondsAt(visibleEnd) / every).ceil();
       for (var k = from; k <= to; k++) {
         final sec = k * every;
-        final x = (sec * bpm / 60 - scroll) * ppb;
+        final x = (tempo.beatAt(sec.toDouble()) - scroll) * ppb;
         canvas.drawRect(Rect.fromLTWH(x, 8, 1, size.height - 8), tick);
         final tp = TextPainter(
           text: TextSpan(
@@ -571,32 +615,43 @@ class _RulerPainter extends CustomPainter {
         tp.paint(canvas, Offset(x + 4, 4));
       }
       // os compassos ficam como traços curtos embaixo, para não perder a métrica
-      final f = (scroll / beatsPerBar).floor(), l = ((scroll + size.width / ppb) / beatsPerBar).ceil();
-      if (ppb * beatsPerBar >= 8) {
-        for (var bar = f; bar <= l; bar++) {
-          canvas.drawRect(Rect.fromLTWH((bar * beatsPerBar - scroll) * ppb, size.height - 6, 1, 6), tick);
+      if (ppb * meter.barBeatsAt(scroll) >= 8) {
+        for (var bar = meter.barOf(scroll).$1; meter.barStart(bar) <= visibleEnd; bar++) {
+          canvas.drawRect(Rect.fromLTWH((meter.barStart(bar) - scroll) * ppb, size.height - 6, 1, 6), tick);
         }
       }
       return;
     }
-    final first = (scroll / beatsPerBar).floor();
-    final last = ((scroll + size.width / ppb) / beatsPerBar).ceil();
-    for (var bar = first; bar <= last; bar++) {
-      final x = (bar * beatsPerBar - scroll) * ppb;
-      if (bar % step == 0) {
+    final step = _barStep(ppb, meter.barBeatsAt(scroll));
+    for (var bar = meter.barOf(scroll).$1; meter.barStart(bar) <= visibleEnd; bar++) {
+      final at = meter.barStart(bar);
+      final x = (at - scroll) * ppb;
+      if ((bar - 1) % step == 0) {
         canvas.drawRect(Rect.fromLTWH(x, 8, 1, size.height - 8), tick);
         final tp = TextPainter(
           text: TextSpan(
-            text: '${bar + 1}',
+            text: '$bar',
             style: style.copyWith(color: Colors.white70),
           ),
           textDirection: TextDirection.ltr,
         )..layout();
         tp.paint(canvas, Offset(x + 4, 4));
       }
-      if (ppb >= 12) {
-        for (var b = 1; b < beatsPerBar; b++) {
-          final bx = x + b * ppb;
+      final c = meter.changeAt(bar);
+      // a fórmula de compasso aparece onde ela muda
+      if (c.bar == bar && !meter.isSingle) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '${c.numerator}/${c.denominator}',
+            style: style.copyWith(color: Palette.accent, fontSize: 10, fontWeight: FontWeight.w700),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x + 4, 15));
+      }
+      if (ppb * c.unit >= 12) {
+        for (var b = 1; b < c.numerator; b++) {
+          final bx = x + b * c.unit * ppb;
           canvas.drawRect(Rect.fromLTWH(bx, size.height - 8, 1, 8), tick);
         }
       }
@@ -607,12 +662,12 @@ class _RulerPainter extends CustomPainter {
   bool shouldRepaint(_RulerPainter o) =>
       o.scroll != scroll ||
       o.ppb != ppb ||
-      o.beatsPerBar != beatsPerBar ||
+      !identical(o.meter, meter) ||
+      !identical(o.tempo, tempo) ||
       o.loopOn != loopOn ||
       o.loopStart != loopStart ||
       o.loopEnd != loopEnd ||
-      o.timeMode != timeMode ||
-      o.bpm != bpm;
+      o.timeMode != timeMode;
 }
 
 // ---------------------------------------------------------------------- cabeçalhos
@@ -1657,8 +1712,10 @@ class _LanesState extends State<_Lanes> {
   /// em cima dos vizinhos (começa depois do anterior e termina antes do próximo), já no editor.
   void _createClip(int lane, double at) {
     final t = c.doc.tracks[lane];
-    final bar = c.doc.beatsPerBar.toDouble();
-    var start = (math.max(0.0, at) / bar).floor() * bar;
+    final meter = c.doc.meter;
+    final (barNo, _) = meter.barOf(math.max(0.0, at));
+    final bar = meter.barBeats(barNo);
+    var start = meter.barStart(barNo);
     for (final m in t.midi) {
       if (m.start < at && m.end > start) start = math.max(start, m.end);
     }
@@ -1675,8 +1732,8 @@ class _LanesState extends State<_Lanes> {
     final laneHeight = widget.laneHeight;
     final layout = widget.layout;
     final visibleEnd = c.scrollBeat + widget.width / c.pxPerBeat;
-    final bpm = c.doc.bpm;
-    final tracks = c.doc.tracks;
+    final doc = c.doc;
+    final tracks = doc.tracks;
     // o clipe selecionado fica montado mesmo fora da janela: é ele que está sendo arrastado, e
     // desmontar no meio do gesto o perderia
     bool shown(String id, double start, double end) => (end > c.scrollBeat && start < visibleEnd) || id == c.selectedClip;
@@ -1708,7 +1765,7 @@ class _LanesState extends State<_Lanes> {
                   painter: _GridPainter(
                     scroll: c.scrollBeat,
                     ppb: c.pxPerBeat,
-                    beatsPerBar: c.doc.beatsPerBar,
+                    meter: c.doc.meter,
                     bands: [for (final r in layout.rows) (r.top, r.height, _bandOf(r, tracks))],
                     selected: c.selectedTrack < tracks.length ? layout.trackTop[c.selectedTrack] : null,
                     laneHeight: laneHeight,
@@ -1731,12 +1788,12 @@ class _LanesState extends State<_Lanes> {
                   ),
               for (var ti = 0; ti < tracks.length; ti++) ...[
                 for (final clip in tracks[ti].clips)
-                  if (shown(clip.id, clip.start, clip.end(bpm)))
+                  if (shown(clip.id, clip.start, doc.clipEnd(clip)))
                     Positioned(
                       key: ValueKey(clip.id),
                       left: (clip.start - c.scrollBeat) * c.pxPerBeat,
                       top: layout.trackTop[ti] + 2,
-                      width: math.max(4, clip.beats(bpm) * c.pxPerBeat),
+                      width: math.max(4, doc.clipBeats(clip) * c.pxPerBeat),
                       height: laneHeight - 4,
                       child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
                     ),
@@ -1797,14 +1854,14 @@ _Band _bandOf(_Row r, List<DawTrack> tracks) => switch (r.kind) {
 
 class _GridPainter extends CustomPainter {
   final double scroll, ppb, laneHeight;
-  final int beatsPerBar;
+  final MeterMap meter;
 
   /// Topo, altura e tipo de cada linha.
   final List<(double, double, _Band)> bands;
 
   /// Topo da faixa selecionada.
   final double? selected;
-  _GridPainter({required this.scroll, required this.ppb, required this.beatsPerBar, required this.bands, required this.selected, required this.laneHeight});
+  _GridPainter({required this.scroll, required this.ppb, required this.meter, required this.bands, required this.selected, required this.laneHeight});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1828,22 +1885,24 @@ class _GridPainter extends CustomPainter {
     }
     final bar = Paint()..color = Colors.white.withValues(alpha: 0.09);
     final beat = Paint()..color = Colors.white.withValues(alpha: 0.035);
-    final step = _barStep(ppb, beatsPerBar);
-    final first = scroll.floor();
-    final last = (scroll + size.width / ppb).ceil();
-    for (var b = first; b <= last; b++) {
-      final x = (b - scroll) * ppb;
-      if (b % beatsPerBar == 0) {
-        if ((b ~/ beatsPerBar) % step == 0) canvas.drawRect(Rect.fromLTWH(x, 0, 1, size.height), bar);
-      } else if (ppb >= 16) {
-        canvas.drawRect(Rect.fromLTWH(x, 0, 1, size.height), beat);
+    final step = _barStep(ppb, meter.barBeatsAt(scroll));
+    final visibleEnd = scroll + size.width / ppb;
+    for (var barNo = meter.barOf(scroll).$1; meter.barStart(barNo) <= visibleEnd; barNo++) {
+      final at = meter.barStart(barNo);
+      final x = (at - scroll) * ppb;
+      if ((barNo - 1) % step == 0) canvas.drawRect(Rect.fromLTWH(x, 0, 1, size.height), bar);
+      final c = meter.changeAt(barNo);
+      if (ppb * c.unit >= 16) {
+        for (var b = 1; b < c.numerator; b++) {
+          canvas.drawRect(Rect.fromLTWH(x + b * c.unit * ppb, 0, 1, size.height), beat);
+        }
       }
     }
   }
 
   @override
   bool shouldRepaint(_GridPainter o) =>
-      o.scroll != scroll || o.ppb != ppb || o.beatsPerBar != beatsPerBar || o.selected != selected || o.laneHeight != laneHeight || !listEquals(o.bands, bands);
+      o.scroll != scroll || o.ppb != ppb || !identical(o.meter, meter) || o.selected != selected || o.laneHeight != laneHeight || !listEquals(o.bands, bands);
 }
 
 // ---------------------------------------------------------------------- gravação
@@ -2259,9 +2318,9 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
   void _drag(_Grab grab, Offset total) {
     final c = widget.c;
     final clip = widget.clip;
-    final bpm = c.doc.bpm;
     // segundos da origem por batida: com warp o clipe segue o andamento do áudio, não o do projeto
-    final tb = clip.tempoFor(bpm);
+    // (e com mapa de andamento, o vigente na batida do clipe)
+    final tb = c.doc.sourceTempoAt(clip, clip.start);
     final dBeats = total.dx / c.pxPerBeat;
     final dur = c.doc.samples[clip.sample]?.duration ?? (_orig.offset + _orig.length);
     const minLen = 0.01;
@@ -2280,7 +2339,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         var start = _snapDrag(c, _orig.start + dBeats);
         // não passa do começo do áudio nem do fim do clipe
         final minStart = math.max(0.0, _orig.start - _orig.offset * tb / 60);
-        final maxStart = math.max(minStart, _orig.end(bpm) - minLen * tb / 60);
+        final maxStart = math.max(minStart, c.doc.clipEnd(_orig) - minLen * tb / 60);
         start = start.clamp(minStart, maxStart);
         final secs = (start - _orig.start) * 60 / tb;
         if (start != clip.start) {
@@ -2291,7 +2350,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
           });
         }
       case _Grab.right:
-        final end = _snapDrag(c, _orig.end(bpm) + dBeats);
+        final end = _snapDrag(c, c.doc.clipEnd(_orig) + dBeats);
         final len = ((end - _orig.start) * 60 / tb).clamp(minLen, math.max<double>(minLen, dur - _orig.offset));
         if (len != clip.length) change(() => clip.length = len);
       case _Grab.fadeIn:
@@ -2391,9 +2450,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     final selected = c.selectedClip == clip.id;
     final missing = c.missing.contains(clip.sample);
     final name = c.doc.samples[clip.sample]?.name ?? 'áudio';
-    final bpm = c.doc.bpm;
-    final pxPerSec = c.pxPerBeat * clip.tempoFor(bpm) / 60;
-    final width = clip.beats(bpm) * c.pxPerBeat;
+    final pxPerSec = c.pxPerBeat * c.doc.sourceTempoAt(clip, clip.start) / 60;
+    final width = c.doc.clipBeats(clip) * c.pxPerBeat;
     final takes = clip.takes;
     return _ClipGestures(
       hit: _hit,

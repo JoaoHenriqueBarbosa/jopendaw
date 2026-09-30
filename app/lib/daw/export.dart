@@ -123,15 +123,16 @@ class _ExportDialogState extends State<ExportDialog> {
     ExportRange.loop => (_doc.loopStart, _doc.loopEnd),
   };
 
-  double get _spanSeconds => (_span.$2 - _span.$1) * 60 / _doc.bpm;
+  double get _spanSeconds => _doc.tempo.isSingle ? (_span.$2 - _span.$1) * 60 / _doc.bpm : _doc.secondsAt(_span.$2) - _doc.secondsAt(_span.$1);
 
   bool get _empty => _span.$2 - _span.$1 <= _minLoop;
 
   String _bars(double from, double to) {
     final bpb = _doc.beatsPerBar;
-    final a = from ~/ bpb + 1;
+    final m = _doc.meter;
+    final a = m.isSingle ? from ~/ bpb + 1 : m.barOf(from).$1;
     // o fim cai no começo do compasso seguinte: o último compasso inteiro é o anterior
-    final b = ((to - 1e-6) ~/ bpb + 1).clamp(a, 1 << 30);
+    final b = (m.isSingle ? (to - 1e-6) ~/ bpb + 1 : m.barOf(to - 1e-6).$1).clamp(a, 1 << 30);
     return a == b ? 'Compasso $a' : 'Compassos $a a $b';
   }
 

@@ -80,6 +80,9 @@ pub mod record;
 pub mod sampler;
 pub mod stretch;
 pub mod synth;
+pub mod tempo;
+#[cfg(test)]
+mod tempo_tests;
 #[cfg(test)]
 mod testalloc;
 pub mod wavetable;
@@ -94,6 +97,7 @@ use analyzer::Analyzer;
 use instrument::Instrument;
 use mixer::{Scratch, Stereo};
 use record::{Captures, NoteRecorder};
+use tempo::{MeterMap, TempoMap};
 
 /// Maior bloco que instrumentos e efeitos recebem de uma vez (contrato com eles). Também é o maior
 /// bloco do hospedeiro cuja entrada e capturas o motor guarda inteiras.
@@ -294,9 +298,9 @@ impl Lane {
     }
 
     /// Aponta o cursor para a primeira nota que ainda não começou em `pos`.
-    fn cue(&mut self, pos: f64, frames_per_beat: f64, playing: bool) {
-        self.cursor = self.notes.partition_point(|n| event_offset(n.start * frames_per_beat, pos) < 0.0);
-        self.cue_cc(pos, frames_per_beat, playing);
+    fn cue(&mut self, pos: f64, tempo: &TempoMap, playing: bool) {
+        self.cursor = self.notes.partition_point(|n| event_offset(tempo.to_frames(n.start), pos) < 0.0);
+        self.cue_cc(pos, tempo, playing);
     }
 
     /// Solta as notas do sequenciador (seek, volta do loop). As ao vivo continuam.
@@ -306,11 +310,11 @@ impl Lane {
 
     /// Soma o instrumento no bloco que começa em `pos`, disparando e soltando as notas do
     /// sequenciador nos quadros exatos quando o transporte anda. Devolve se renderizou algo.
-    fn render(&mut self, l: &mut [f32], r: &mut [f32], playing: bool, pos: f64, frames_per_beat: f64) -> bool {
+    fn render(&mut self, l: &mut [f32], r: &mut [f32], playing: bool, pos: f64, tempo: &TempoMap) -> bool {
         let Self { instrument, notes, cursor, held, cc, cc_cursor, expr, .. } = self;
         let Some(inst) = instrument.as_mut() else { return false };
         let n = l.len();
-        let offset = |beat: f64| event_offset(beat * frames_per_beat, pos).clamp(0.0, n as f64) as usize;
+        let offset = |beat: f64| event_offset(tempo.to_frames(beat), pos).clamp(0.0, n as f64) as usize;
         // próximo quadro com evento: o fim mais próximo das que soam ou o início da próxima nota
         let next_event = |held: &[Held], cursor: usize, cc_cursor: usize| {
             let off = held.iter().map(|h| offset(h.end)).min().unwrap_or(n);
@@ -493,8 +497,15 @@ fn mix_sends(sends: &mut [Send], bufs: &mut [Stereo], incoming: &mut [bool], up:
 /// O motor. Um por contexto de áudio.
 pub struct Engine {
     rate: f64,
-    bpm: f64,
+    /// Mapa de andamento (batida ↔ quadros) e de compassos (o metrônomo); ver [`tempo`].
+    tempo: TempoMap,
+    meter: MeterMap,
+    /// O `beats_per_bar` do último `tempo`: o compasso a que `meter_clear` volta.
     beats_per_bar: u32,
+    /// Posições musicais a preservar enquanto o app reenvia o mapa (`tempo_clear` + pontos): o
+    /// transporte e o loop em batidas, lidas antes da primeira mudança do lote e reaplicadas a cada
+    /// ponto. Vale até o próximo bloco.
+    anchor: Option<[f64; 3]>,
     playing: bool,
     /// Posição do transporte em quadros.
     pos: f64,
@@ -595,8 +606,10 @@ impl Engine {
     pub fn new(rate: f64) -> Self {
         Self {
             rate,
-            bpm: 120.0,
+            tempo: TempoMap::new(rate, 120.0),
+            meter: MeterMap::new(4),
             beats_per_bar: 4,
+            anchor: None,
             playing: false,
             pos: 0.0,
             loop_on: false,
@@ -656,33 +669,91 @@ impl Engine {
 
     // ---------------------------------------------------------------- andamento e posição
 
-    /// Muda o andamento. As notas e os fins das que soam estão em batidas: seguem o andamento
-    /// novo sem mais nada. Os efeitos sincronizados (delay, tremolo, filtro) recebem o novo.
+    /// Muda o andamento inicial e o compasso (`beats_per_bar`/4, quando não há mapa de compassos).
+    /// As notas e os fins das que soam estão em batidas: seguem o andamento novo sem mais nada. Os
+    /// efeitos sincronizados (delay, tremolo, filtro) recebem o andamento inicial.
     pub fn set_tempo(&mut self, bpm: f64, beats_per_bar: u32) {
         // a posição musical fica onde estava: quem toca no tempo 9 continua no tempo 9
         let beat = self.transport_beat();
         let (ls, le) = (self.frames_to_beats(self.loop_start), self.frames_to_beats(self.loop_end));
-        let old = self.bpm;
-        self.bpm = bpm.clamp(20.0, 999.0);
+        let old = self.tempo.bpm0();
+        self.tempo.set_bpm0(bpm);
         self.beats_per_bar = beats_per_bar.clamp(1, 32);
+        self.meter.set_initial(self.beats_per_bar);
         self.pos = self.beats_to_frames(beat);
         self.loop_start = self.beats_to_frames(ls);
         self.loop_end = self.beats_to_frames(le);
-        // o app manda o andamento a cada sincronização: só repassa quando muda
-        if self.bpm != old {
+        self.tempo_changed(old);
+    }
+
+    /// O app manda o andamento a cada sincronização: os efeitos só recebem quando muda.
+    fn tempo_changed(&mut self, old_bpm0: f64) {
+        let bpm = self.tempo.bpm0();
+        if bpm != old_bpm0 {
             for s in &mut self.strips {
-                s.chain.set_tempo(self.bpm);
+                s.chain.set_tempo(bpm);
             }
-            self.master_fx.set_tempo(self.bpm);
+            self.master_fx.set_tempo(bpm);
         }
     }
 
-    pub fn beats_to_frames(&self, beats: f64) -> f64 {
-        beats * 60.0 / self.bpm * self.rate
+    /// Zera o mapa de andamento para um ponto só (o andamento inicial de agora). A posição
+    /// musical do transporte e do loop se mantém. O app manda `tempo_clear` e os pontos em
+    /// seguida, no mesmo lote.
+    pub fn tempo_clear(&mut self) {
+        self.keep_anchor();
+        let old = self.tempo.bpm0();
+        self.tempo.clear(old);
+        self.reanchor();
     }
 
+    /// Põe um ponto no mapa de andamento (`ramp`: rampa linear até o ponto seguinte; senão salto).
+    /// Fora de ordem entra no lugar, na mesma batida o último vale e a batida 0 é o andamento
+    /// inicial; ver [`tempo::TempoMap::insert`].
+    pub fn tempo_point(&mut self, beat: f64, bpm: f64, ramp: bool) {
+        self.keep_anchor();
+        let old = self.tempo.bpm0();
+        self.tempo.insert(beat, bpm, ramp);
+        self.reanchor();
+        self.tempo_changed(old);
+    }
+
+    /// Volta o mapa de compassos a um compasso só (`beats_per_bar`/4, o do último `tempo`).
+    pub fn meter_clear(&mut self) {
+        self.meter.clear(self.beats_per_bar);
+    }
+
+    /// Mudança de compasso a partir do compasso `bar` (1 = o primeiro): `num`/`den`. O compasso
+    /// muda onde o metrônomo põe o tempo forte e a cada quanto clica; a batida do documento segue
+    /// sendo a semínima (6/8 dura 3 batidas).
+    pub fn meter_point(&mut self, bar: u32, num: u32, den: u32) {
+        self.meter.insert(bar, num, den);
+    }
+
+    /// Guarda a posição musical do transporte e do loop antes de o mapa mudar (uma vez por lote).
+    fn keep_anchor(&mut self) {
+        if self.anchor.is_none() {
+            self.anchor = Some([self.transport_beat(), self.frames_to_beats(self.loop_start), self.frames_to_beats(self.loop_end)]);
+        }
+    }
+
+    /// Refaz as posições em quadros a partir das batidas guardadas, no mapa de agora.
+    fn reanchor(&mut self) {
+        if let Some([beat, ls, le]) = self.anchor {
+            self.pos = self.beats_to_frames(beat);
+            self.loop_start = self.beats_to_frames(ls);
+            self.loop_end = self.beats_to_frames(le);
+        }
+    }
+
+    /// Batida → quadros pelo mapa de andamento.
+    pub fn beats_to_frames(&self, beats: f64) -> f64 {
+        self.tempo.to_frames(beats)
+    }
+
+    /// Quadros → batida pelo mapa de andamento.
     pub fn frames_to_beats(&self, frames: f64) -> f64 {
-        frames / self.rate * self.bpm / 60.0
+        self.tempo.to_beats(frames)
     }
 
     /// Posição do transporte em batidas: a do próximo quadro que sai. Só no render as duas diferem
@@ -734,6 +805,7 @@ impl Engine {
     /// Vai para uma posição; as notas do sequenciador que soavam são soltas.
     pub fn seek(&mut self, beat: f64) {
         let from = self.transport_beat();
+        self.anchor = None;
         self.pos = self.beats_to_frames(beat.max(0.0));
         self.out_delay = 0.0;
         if self.playing {
@@ -748,6 +820,7 @@ impl Engine {
 
     /// Loop entre duas posições em batidas; `end <= start` desliga.
     pub fn set_loop(&mut self, on: bool, start: f64, end: f64) {
+        self.anchor = None;
         self.loop_on = on && end > start;
         self.loop_start = self.beats_to_frames(start.max(0.0));
         self.loop_end = self.beats_to_frames(end.max(0.0));
@@ -796,7 +869,7 @@ impl Engine {
         if n == self.tracks.len() {
             return;
         }
-        let (rate, bpm) = (self.rate, self.bpm);
+        let (rate, bpm) = (self.rate, self.tempo.bpm0());
         self.tracks.resize_with(n, || Track::new(rate));
         self.lanes.resize_with(n, Lane::new);
         self.strips.resize_with(n, || Strip::new(rate, bpm));
@@ -1583,6 +1656,7 @@ impl Engine {
 
     /// Entre um bloco e outro: notas, efeitos que terminaram de sair e o roteamento.
     fn prepare(&mut self) {
+        self.anchor = None;
         self.prepare_notes();
         for s in &mut self.strips {
             s.chain.collect();
@@ -1606,9 +1680,8 @@ impl Engine {
             self.recue = true;
         }
         if self.recue {
-            let fpb = self.beats_to_frames(1.0);
             for lane in &mut self.lanes {
-                lane.cue(self.pos, fpb, self.playing);
+                lane.cue(self.pos, &self.tempo, self.playing);
             }
             self.recue = false;
         }
@@ -1617,10 +1690,9 @@ impl Engine {
     /// Volta do loop: o que o sequenciador segurava é solto no ponto da volta, e as notas do
     /// início do loop disparam no primeiro quadro depois dela.
     fn wrap_notes(&mut self) {
-        let fpb = self.beats_to_frames(1.0);
         for lane in &mut self.lanes {
             lane.release_held();
-            lane.cue(self.pos, fpb, true);
+            lane.cue(self.pos, &self.tempo, true);
         }
     }
 
@@ -1630,7 +1702,6 @@ impl Engine {
         let n = out_l.len();
         self.automate();
         self.solo();
-        let fpb = self.beats_to_frames(1.0);
         // barramentos começam o bloco vazios e acumulam o que chega
         for t in 0..self.tracks.len() {
             if self.lanes[t].kind == instrument::kind::BUS {
@@ -1642,7 +1713,7 @@ impl Engine {
         let mut to_master = false;
         for oi in 0..self.order.len() {
             let t = self.order[oi];
-            let sounded = self.render_track(t, n, fpb, out_l, out_r);
+            let sounded = self.render_track(t, n, out_l, out_r);
             self.sounded[t] = sounded;
             to_master |= sounded && self.strips[t].out_dst < 0;
         }
@@ -1685,7 +1756,7 @@ impl Engine {
             if self.metronome.on {
                 let [gl, gr] = self.master.now_gains();
                 let (cl, cr) = self.scratch.pair(n);
-                self.metronome.render(cl, cr, self.pos, fpb, self.beats_per_bar, self.rate);
+                self.metronome.render(cl, cr, self.pos, &self.tempo, &self.meter, self.rate);
                 for i in 0..n {
                     out_l[i] += cl[i] * gl;
                     out_r[i] += cr[i] * gr;
@@ -1734,15 +1805,15 @@ impl Engine {
 
     /// O som próprio da faixa no buffer dela: clipes, instrumento e, monitorando, a entrada.
     /// Devolve se soou algo.
-    fn render_source(&mut self, t: usize, n: usize, fpb: f64) -> bool {
+    fn render_source(&mut self, t: usize, n: usize) -> bool {
         let buf = &mut self.bufs[t];
         let (bl, br) = (&mut buf.l[..n], &mut buf.r[..n]);
         bl.fill(0.0);
         br.fill(0.0);
         let mut sounded = false;
         if self.playing {
-            sounded = render_clips(&self.clips, &self.samples, t, bl, br, self.pos, self.bpm, self.rate);
-        } else if self.tail > 0 && render_clips(&self.clips, &self.samples, t, bl, br, self.tail_pos, self.bpm, self.rate) {
+            sounded = render_clips(&self.clips, &self.samples, t, bl, br, self.pos, &self.tempo, self.rate);
+        } else if self.tail > 0 && render_clips(&self.clips, &self.samples, t, bl, br, self.tail_pos, &self.tempo, self.rate) {
             sounded = true;
             let len = self.tail_len as f32;
             for (i, (l, r)) in bl.iter_mut().zip(br.iter_mut()).enumerate() {
@@ -1764,13 +1835,13 @@ impl Engine {
             sounded = true;
         }
         // instrumentos tocam parados também (notas ao vivo e caudas)
-        sounded | self.lanes[t].render(bl, br, self.playing, self.pos, fpb)
+        sounded | self.lanes[t].render(bl, br, self.playing, self.pos, &self.tempo)
     }
 
     /// Uma faixa inteira: fonte (ou o que chegou no barramento) → inserts → envios pré-fader →
     /// volume/pan/mudo → envios pós-fader → porta do solo → saída. Devolve se mandou som.
-    fn render_track(&mut self, t: usize, n: usize, fpb: f64, out_l: &mut [f32], out_r: &mut [f32]) -> bool {
-        let mut active = if self.lanes[t].kind == instrument::kind::BUS { self.incoming[t] } else { self.render_source(t, n, fpb) };
+    fn render_track(&mut self, t: usize, n: usize, out_l: &mut [f32], out_r: &mut [f32]) -> bool {
+        let mut active = if self.lanes[t].kind == instrument::kind::BUS { self.incoming[t] } else { self.render_source(t, n) };
         let strip = &mut self.strips[t];
         let buf = &mut self.bufs[t];
         let (bl, br) = (&mut buf.l[..n], &mut buf.r[..n]);
@@ -1866,13 +1937,22 @@ fn silence_through(chain: &mut Chain, buf: &mut Stereo, frames: usize, keys: &[S
 /// Soma os clipes de áudio da faixa `track` no bloco que começa em `pos` (quadros). Devolve se
 /// algum clipe caiu no bloco.
 #[allow(clippy::too_many_arguments)]
-fn render_clips(clips: &[Clip], samples: &HashMap<u32, Arc<Sample>>, track: usize, bl: &mut [f32], br: &mut [f32], pos: f64, bpm: f64, rate: f64) -> bool {
+fn render_clips(
+    clips: &[Clip],
+    samples: &HashMap<u32, Arc<Sample>>,
+    track: usize,
+    bl: &mut [f32],
+    br: &mut [f32],
+    pos: f64,
+    tempo: &TempoMap,
+    rate: f64,
+) -> bool {
     let n = bl.len();
     let (start, end) = (pos, pos + n as f64);
     let mut sounded = false;
     for clip in clips.iter().filter(|c| c.track == track) {
         let Some(sample) = samples.get(&clip.sample) else { continue };
-        let c_start = clip.start * 60.0 / bpm * rate;
+        let c_start = tempo.to_frames(clip.start);
         let c_end = c_start + clip.length * rate;
         if c_end <= start || c_start >= end {
             continue;

@@ -64,6 +64,10 @@ pub fn apply(engine: &mut Engine, name: &str, args: &[f64]) -> Result<Option<f64
 pub enum Call {
     SampleDrop { id: u32 },
     Tempo { bpm: f64, beats_per_bar: u32 },
+    TempoClear,
+    TempoPoint { beat: f64, bpm: f64, ramp: bool },
+    MeterClear,
+    MeterPoint { bar: u32, num: u32, den: u32 },
     Play,
     Stop,
     Seek { beat: f64 },
@@ -141,6 +145,10 @@ const fn sig(name: &'static str, params: &'static [(&'static str, Ty)], ret: Opt
 const CALLS: &[Signature] = &[
     sig("sample_drop", &[("id", U32)], None),
     sig("tempo", &[("bpm", F64), ("tempos por compasso", U32)], None),
+    sig("tempo_clear", &[], None),
+    sig("tempo_point", &[("batida", F64), ("bpm", F64), ("rampa", U32)], None),
+    sig("meter_clear", &[], None),
+    sig("meter_point", &[("compasso", U32), ("numerador", U32), ("denominador", U32)], None),
     sig("play", &[], None),
     sig("stop", &[], None),
     sig("seek", &[("batida", F64)], None),
@@ -329,6 +337,10 @@ impl Call {
         Ok(match sig.name {
             "sample_drop" => Call::SampleDrop { id: a.u32(0) },
             "tempo" => Call::Tempo { bpm: a.f64(0), beats_per_bar: a.u32(1) },
+            "tempo_clear" => Call::TempoClear,
+            "tempo_point" => Call::TempoPoint { beat: a.f64(0), bpm: a.f64(1), ramp: a.flag(2) },
+            "meter_clear" => Call::MeterClear,
+            "meter_point" => Call::MeterPoint { bar: a.u32(0), num: a.u32(1), den: a.u32(2) },
             "play" => Call::Play,
             "stop" => Call::Stop,
             "seek" => Call::Seek { beat: a.f64(0) },
@@ -424,6 +436,10 @@ impl Call {
         match self {
             Call::SampleDrop { id } => e.drop_sample(id),
             Call::Tempo { bpm, beats_per_bar } => e.set_tempo(bpm, beats_per_bar),
+            Call::TempoClear => e.tempo_clear(),
+            Call::TempoPoint { beat, bpm, ramp } => e.tempo_point(beat, bpm, ramp),
+            Call::MeterClear => e.meter_clear(),
+            Call::MeterPoint { bar, num, den } => e.meter_point(bar, num, den),
             Call::Play => e.play(),
             Call::Stop => e.stop(),
             Call::Seek { beat } => e.seek(beat),
@@ -553,6 +569,20 @@ mod tests {
     fn sounding(e: &mut Engine) {
         playing(e);
         run(e, 8);
+    }
+
+    /// Tocando com uma mudança de andamento logo no começo (240 bpm a partir da batida 0,05).
+    fn mapped(e: &mut Engine) {
+        playing(e);
+        e.tempo_point(0.05, 240.0, false);
+    }
+
+    /// Metrônomo ligado, perto do clique da batida 1 (a 0,9), num compasso de 1 tempo.
+    fn metered(e: &mut Engine) {
+        playing(e);
+        e.set_metronome(true, 0.8);
+        e.seek(0.9);
+        e.meter_point(1, 1, 4);
     }
 
     fn utility(e: &mut Engine) {
@@ -791,6 +821,11 @@ mod tests {
             case(playing, "tempo", &[140.0, 3.0], |e| e.set_tempo(140.0, 3), Changes),
             // inteiro fora do u32 dá a volta como no JavaScript: −1 é u32::MAX, que o motor limita
             case(playing, "tempo", &[90.0, -1.0], |e| e.set_tempo(90.0, u32::MAX), Changes),
+            case(mapped, "tempo_clear", &[], |e| e.tempo_clear(), Changes),
+            case(playing, "tempo_point", &[0.05, 240.0, 0.0], |e| e.tempo_point(0.05, 240.0, false), Changes),
+            case(playing, "tempo_point", &[0.0, 60.0, 1.0], |e| e.tempo_point(0.0, 60.0, true), Changes),
+            case(metered, "meter_clear", &[], |e| e.meter_clear(), Changes),
+            case(metered, "meter_point", &[1.0, 4.0, 4.0], |e| e.meter_point(1, 4, 4), Changes),
             case(base, "play", &[], |e| e.play(), Changes),
             case(playing, "stop", &[], |e| e.stop(), Changes),
             case(playing, "seek", &[2.5], |e| e.seek(2.5), Changes),

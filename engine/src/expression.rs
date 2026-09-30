@@ -247,8 +247,8 @@ impl Lane {
 
     /// Reposiciona o cursor dos eventos em `pos` e, com o transporte andando, reconstitui o estado
     /// dos controles que o clipe usa.
-    pub(crate) fn cue_cc(&mut self, pos: f64, frames_per_beat: f64, playing: bool) {
-        self.cc_cursor = self.cc.partition_point(|e| event_offset(e.beat * frames_per_beat, pos) < 0.0);
+    pub(crate) fn cue_cc(&mut self, pos: f64, tempo: &crate::tempo::TempoMap, playing: bool) {
+        self.cc_cursor = self.cc.partition_point(|e| event_offset(tempo.to_frames(e.beat), pos) < 0.0);
         if !playing {
             return;
         }

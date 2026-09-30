@@ -847,7 +847,7 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
       final handle = _mode == _Mode.curve ? (_grab == null ? null : points.indexOf(_grab!)) : (_mode == _Mode.none ? _hoverHandle : null);
       if (focus != null) {
         labelPoint = focus;
-        label = '${formatPosition(focus.beat, c.doc.beatsPerBar)} · ${scale.format(focus.value)}';
+        label = '${formatPosition(focus.beat, c.doc.beatsPerBar, meter: c.doc.meter)} · ${scale.format(focus.value)}';
       } else if (handle != null && handle >= 0 && handle + 1 < points.length) {
         labelHandle = handle;
         final k = (points[handle].curve * 100).round();

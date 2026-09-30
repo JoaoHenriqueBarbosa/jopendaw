@@ -29,6 +29,7 @@ import 'midi_cc.dart';
 import 'midi_file.dart';
 import 'model.dart';
 import 'sync.dart';
+import 'tempo_map.dart';
 import 'templates.dart';
 import 'warp.dart';
 import 'wav.dart';
@@ -203,11 +204,15 @@ List<({double beat, int frame})> recordingPasses({
   bool loopOn = false,
   double loopStart = 0,
   double loopEnd = 0,
+  TempoMap? tempo,
 }) {
   final passes = [(beat: start, frame: 0)];
   final fpb = rate * 60 / bpm;
-  final ls = math.max(0.0, loopStart) * fpb, le = math.max(0.0, loopEnd) * fpb;
-  var pos = math.max(0.0, start) * fpb;
+  // com mapa de andamento as batidas viram quadros pelo mapa (a mesma conta do motor)
+  final map = tempo != null && !tempo.isSingle ? tempo : null;
+  double frames_(double beat) => map == null ? beat * fpb : map.secondsAt(beat) * rate;
+  final ls = frames_(math.max(0.0, loopStart)), le = frames_(math.max(0.0, loopEnd));
+  var pos = frames_(math.max(0.0, start));
   var k = 0;
   // o motor só volta quando a posição está antes do fim (depois dele o loop segue reto)
   if (!loopOn || le <= ls || pos >= le || le - ls < 1) return passes;
@@ -304,6 +309,10 @@ class _SyncCache {
   List<EngineCc>? ccs = const [];
   final master = _SentChain();
   List<List<Object>>? auto;
+
+  /// O mapa de andamento e o de compassos que o motor tem, como texto ('' = um andamento e um
+  /// compasso só): só reenvia quando muda.
+  String tempoSig = '', meterSig = '';
 }
 
 /// Um slot de efeito como o motor o conhece.
@@ -343,7 +352,9 @@ class _Recording {
     required this.skip,
     required this.metronomeTemp,
     this.startFromCapture = false,
-  }) : stopBeat = start;
+    TempoMap? tempo,
+  }) : stopBeat = start,
+       tempo = tempo ?? TempoMap.constant(bpm);
 
   /// Batida onde a gravação vale (o cursor quando ela começou).
   double start;
@@ -352,6 +363,12 @@ class _Recording {
   /// até o primeiro bloco da captura chegar com a batida exata do primeiro quadro dele.
   bool startFromCapture;
   final double bpm, rate;
+
+  /// O mapa de andamento quando a gravação começou (o de um andamento só, sem mapa).
+  final TempoMap tempo;
+
+  /// Quadros entre duas batidas pelo andamento da gravação (exato como antes quando não há mapa).
+  double framesBetween(double from, double to) => tempo.isSingle ? (to - from) * rate * 60 / bpm : (tempo.secondsAt(to) - tempo.secondsAt(from)) * rate;
 
   /// O loop no começo: a volta dele divide as passadas.
   final bool loopOn;
@@ -404,7 +421,12 @@ class _Recording {
   Duration? elapsed;
 
   /// Batidas gravadas depois da contagem, pelo relógio: as notas não dizem em que passada caíram.
-  double get recordedBeats => (elapsed ?? clock.elapsed).inMicroseconds / 1e6 * bpm / 60 - countBeats;
+  double get recordedBeats {
+    final secs = (elapsed ?? clock.elapsed).inMicroseconds / 1e6;
+    if (tempo.isSingle) return secs * bpm / 60 - countBeats;
+    // a contagem toca no andamento de onde estiver; aqui basta o do começo da gravação
+    return tempo.beatAt(tempo.secondsAt(start) + secs - countBeats * 60 / tempo.bpmAt(start)) - start;
+  }
 }
 
 /// Um pedaço de áudio gravado que vira sample: quadros [from, to) da gravação, com [pad] quadros de
@@ -722,6 +744,10 @@ class DawController extends ChangeNotifier {
       _cache.notes = null;
       _cache.ccs = const [];
       _cache.auto = null;
+      // o motor novo tem um andamento e um compasso só
+      _cache
+        ..tempoSig = ''
+        ..meterSig = '';
       _cache.master
         ..count = -1
         ..slots.clear();
@@ -1114,6 +1140,9 @@ class DawController extends ChangeNotifier {
       ['metronome', metronome, 0.5],
       ['clips_clear'],
     ];
+    // o mapa de andamento e o de compassos vêm logo depois do `tempo` (as posições em batidas do
+    // resto convertem por eles); só quando mudam
+    calls.insertAll(1, _tempoMapCalls(c));
     for (var i = 0; i < d.tracks.length; i++) {
       final t = d.tracks[i];
       calls.add(['track', i, t.gain, t.pan, t.mute, t.solo]);
@@ -1569,8 +1598,156 @@ class DawController extends ChangeNotifier {
     edit((d) {
       d.bpm = bpm.toDouble();
       d.beatsPerBar = beatsPerBar;
+      // o ponto da batida 0 do mapa é o andamento inicial, e o compasso 1 n/4 é o `beatsPerBar`
+      if (d.tempoMap.isNotEmpty) d.tempoMap = [d.tempoMap.first.copyWith(bpm: d.bpm), ...d.tempoMap.skip(1)];
+      if (d.meterMap.isNotEmpty && d.meterMap.first.denominator == 4) d.meterMap = [MeterChange(1, beatsPerBar, 4), ...d.meterMap.skip(1)];
     });
     await _mirrorTempo();
+  }
+
+  // ------------------------------------------------------------------ mapa de andamento e de compassos
+
+  /// Segundos da batida 0 até [beat] pelo mapa de andamento (o relógio em segundos usa isto).
+  double secondsAt(double beat) => doc.secondsAt(beat);
+
+  /// O andamento (bpm) na batida, pelo mapa.
+  double bpmAt(double beat) => doc.bpmAt(beat);
+
+  /// As chamadas do mapa de andamento e do de compassos para o motor: vazio enquanto os dois são
+  /// simples e o motor também (o `tempo` já basta); mudou, `tempo_clear`/`meter_clear` e os pontos.
+  List<List<Object>> _tempoMapCalls(_SyncCache c) {
+    final t = doc.tempo, m = doc.meter;
+    final sigT = t.isSingle ? '' : jsonEncode([for (final p in t.points) p.toJson()]);
+    final sigM = m.isSingle ? '' : jsonEncode([for (final x in m.changes) x.toJson()]);
+    final out = <List<Object>>[];
+    if (sigT != c.tempoSig) {
+      c.tempoSig = sigT;
+      out.addAll([
+        ['tempo_clear'],
+        for (final p in t.isSingle ? const <TempoPoint>[] : t.points) ['tempo_point', p.beat, p.bpm, p.ramp ? 1 : 0],
+      ]);
+    }
+    if (sigM != c.meterSig) {
+      c.meterSig = sigM;
+      out.addAll([
+        ['meter_clear'],
+        for (final x in m.isSingle ? const <MeterChange>[] : m.changes) ['meter_point', x.bar, x.numerator, x.denominator],
+      ]);
+    }
+    return out;
+  }
+
+  /// Troca o mapa de andamento inteiro: [points] em qualquer ordem (o ponto da batida 0 é o
+  /// andamento inicial e passa a ser o [DawDoc.bpm]; sem ele, o andamento atual fica). Um ponto só
+  /// (ou lista vazia) apaga as mudanças. É o gancho para o importador de MIDI aplicar o andamento
+  /// do arquivo; é uma edição desfazível e vai ao motor e ao servidor (o espelho do andamento
+  /// inicial).
+  void setTempoMap(List<TempoPoint> points, {bool undoable = true}) {
+    if (_blockedByRecording('mudar o andamento')) return;
+    final norm = normalizeTempoPoints(points, doc.bpm);
+    // o ponto dado na batida 0 manda no andamento inicial
+    final given = points.where((p) => p.beat <= 0 && p.bpm.isFinite).lastOrNull;
+    edit((d) {
+      if (given != null) d.bpm = given.bpm.clamp(minBpm, maxBpm).toDouble();
+      d.tempoMap = norm.isEmpty ? const [] : [norm.first.copyWith(bpm: d.bpm), ...norm.skip(1)];
+    }, undoable: undoable);
+    unawaited(_mirrorTempo());
+  }
+
+  /// Troca o mapa de compassos inteiro: as mudanças `{compasso, num, den}` em qualquer ordem (a do
+  /// compasso 1 é o compasso inicial). Uma só n/4 (ou lista vazia) apaga as mudanças. É o gancho
+  /// para o importador de MIDI aplicar as fórmulas de compasso do arquivo.
+  void setMeterMap(List<MeterChange> changes, {bool undoable = true}) {
+    if (_blockedByRecording('mudar o compasso')) return;
+    final norm = normalizeMeterChanges(changes, doc.beatsPerBar);
+    final first = changes.where((m) => m.bar <= 1).lastOrNull;
+    edit((d) {
+      if (norm.isNotEmpty) {
+        // o campo `beatsPerBar` acompanha o primeiro compasso (em batidas de semínima)
+        d.beatsPerBar = norm.first.barBeats.round().clamp(1, 32);
+      } else if (first != null) {
+        // só o compasso n/4 do início sobrou: é o `beatsPerBar`
+        d.beatsPerBar = first.numerator.clamp(1, 32);
+      }
+      d.meterMap = norm;
+    }, undoable: undoable);
+    unawaited(_mirrorTempo());
+  }
+
+  /// Põe um ponto de andamento na batida (no andamento vigente ali, salvo [bpm]). Na batida de um
+  /// ponto existente, só troca o andamento dele. Devolve a batida do ponto.
+  double addTempoPoint(double beat, {double? bpm, bool ramp = false}) {
+    final b = math.max(0.0, beat);
+    final v = (bpm ?? doc.bpmAt(b)).clamp(minBpm, maxBpm).toDouble();
+    final pts = [...doc.tempo.points];
+    final at = pts.indexWhere((p) => (p.beat - b).abs() < 1e-9);
+    if (at >= 0) {
+      pts[at] = pts[at].copyWith(bpm: v);
+    } else {
+      pts.add(TempoPoint(b, v, ramp: ramp));
+    }
+    setTempoMap(pts);
+    return b;
+  }
+
+  /// Muda o andamento e/ou a batida do ponto [index] do mapa (o da batida 0 não sai do lugar).
+  /// Sem [undoable] é um passo de arraste: quem chama guarda o estado antes com [checkpoint].
+  void moveTempoPoint(int index, {double? beat, double? bpm, bool undoable = true}) {
+    final pts = [...doc.tempo.points];
+    if (index < 0 || index >= pts.length) return;
+    final p = pts[index];
+    var b = index == 0 ? 0.0 : (beat ?? p.beat);
+    if (index > 0) {
+      // não passa por cima dos vizinhos (dois pontos na mesma batida viram um)
+      final lo = pts[index - 1].beat + 1e-3;
+      final hi = index + 1 < pts.length ? pts[index + 1].beat - 1e-3 : double.infinity;
+      b = b.clamp(lo, math.max(lo, hi)).toDouble();
+    }
+    final v = (bpm ?? p.bpm).clamp(minBpm, maxBpm).toDouble();
+    if (b == p.beat && v == p.bpm) return;
+    pts[index] = p.copyWith(beat: b, bpm: v);
+    setTempoMap(pts, undoable: undoable);
+  }
+
+  /// Apaga o ponto de andamento [index] (o da batida 0 é o andamento inicial e fica).
+  void removeTempoPoint(int index) {
+    final pts = [...doc.tempo.points];
+    if (index <= 0 || index >= pts.length) return;
+    pts.removeAt(index);
+    setTempoMap(pts);
+  }
+
+  /// Salto (false) ou rampa linear até o ponto seguinte (true) a partir do ponto [index].
+  void setTempoPointRamp(int index, bool ramp) {
+    final pts = [...doc.tempo.points];
+    if (index < 0 || index >= pts.length || pts[index].ramp == ramp) return;
+    pts[index] = pts[index].copyWith(ramp: ramp);
+    setTempoMap(pts);
+  }
+
+  /// A partir do compasso [bar] (1 = o primeiro) o compasso passa a ser [num]/[den]. Mudar para o
+  /// que já vale ali não faz nada.
+  void setMeterAt(int bar, int num, int den) {
+    final m = doc.meter;
+    final b = math.max(1, bar);
+    final list = [...m.changes];
+    final at = list.indexWhere((x) => x.bar == b);
+    final here = at >= 0 ? list[at] : m.changeAt(b);
+    if (here.numerator == num && here.denominator == den) return;
+    if (at >= 0) {
+      list[at] = MeterChange(b, num, den);
+    } else {
+      list.add(MeterChange(b, num, den));
+    }
+    setMeterMap(list);
+  }
+
+  /// Desfaz a mudança de compasso que começa no compasso [bar] (a do compasso 1 é a inicial).
+  void removeMeterChange(int bar) {
+    final list = [...doc.meter.changes];
+    if (bar <= 1 || !list.any((x) => x.bar == bar)) return;
+    list.removeWhere((x) => x.bar == bar);
+    setMeterMap(list);
   }
 
   // andamento e compasso que o servidor conhece (o projeto carregado, até um PATCH dar certo)
@@ -1817,12 +1994,12 @@ class DawController extends ChangeNotifier {
     final now = _findClip(clipId);
     if (now == null) throw StateError('O clipe foi apagado durante a conversão.');
     final audio = now.$2;
-    final notes = notesForClip(r, audio, doc.bpm);
+    final notes = notesForClip(r, audio, doc.bpmAt(audio.start));
     if (notes.isEmpty) throw StateError('Não encontrei notas neste áudio.');
     edit((d) {
       final n = d.tracks.length;
       final name = _nextTrackName(d, TrackKind.synth);
-      final midi = MidiClip(id: newId(), name: name, start: audio.start, length: math.max(audio.beats(d.bpm), 0.01), notes: notes);
+      final midi = MidiClip(id: newId(), name: name, start: audio.start, length: math.max(d.clipBeats(audio), 0.01), notes: notes);
       d.tracks.add(DawTrack(id: newId(), name: name, color: n % Palette.tracks.length, kind: TrackKind.synth, midi: [midi]));
       selectedClip = midi.id;
       _select(n);
@@ -1832,6 +2009,7 @@ class DawController extends ChangeNotifier {
 
   /// Encaixa na grade atual.
   double snapBeat(double b) {
+    if (snap == Snap.bar && !doc.meter.isSingle) return math.max(0.0, doc.meter.nearestBarStart(b));
     final g = snap == Snap.bar ? doc.beatsPerBar.toDouble() : snap.beats;
     if (g <= 0) return b;
     return (b / g).round() * g;
@@ -2060,20 +2238,20 @@ class DawController extends ChangeNotifier {
   /// apara o começo, parte em dois ou some), como nos DAWs. Sem isso, clipes sobrepostos tocavam
   /// somados (áudio dobrado). Não faz checkpoint: vai junto da edição que o chamou.
   void placeOnTop(String id) {
-    final bpm = doc.bpm;
+    final d = doc;
     final a = _findClip(id);
     if (a != null) {
       final (t, top) = a;
-      final s = top.start, e = top.end(bpm);
+      final s = top.start, e = d.clipEnd(top);
       for (final o in t.clips.toList()) {
-        if (identical(o, top) || o.end(bpm) <= s + 1e-9 || o.start >= e - 1e-9) continue;
-        final oEnd = o.end(bpm);
-        // segundos da origem por batida deste clipe (com warp, o andamento do áudio, não o do projeto)
-        final ob = o.tempoFor(bpm);
+        if (identical(o, top) || d.clipEnd(o) <= s + 1e-9 || o.start >= e - 1e-9) continue;
+        final oEnd = d.clipEnd(o);
+        // segundos da origem entre as batidas (com warp, o andamento do áudio, não o do projeto;
+        // com mapa de andamento, o tempo real entre elas)
         if (o.start >= s - 1e-9 && oEnd <= e + 1e-9) {
           t.clips.remove(o);
         } else if (o.start < s && oEnd > e) {
-          final cut = (e - o.start) * 60 / ob;
+          final cut = d.sourceSeconds(o, o.start, e);
           t.clips.add(
             AudioClip.fromJson(o.toJson())
               ..id = newId()
@@ -2083,14 +2261,15 @@ class DawController extends ChangeNotifier {
               ..fadeIn = 0,
           );
           o
-            ..length = (s - o.start) * 60 / ob
+            ..length = d.sourceSeconds(o, o.start, s)
             ..fadeOut = 0;
         } else if (o.start < s) {
+          final keep = d.sourceSeconds(o, o.start, s);
           o
-            ..length = (s - o.start) * 60 / ob
-            ..fadeOut = math.min(o.fadeOut, (s - o.start) * 60 / ob);
+            ..length = keep
+            ..fadeOut = math.min(o.fadeOut, keep);
         } else {
-          final cut = (e - o.start) * 60 / ob;
+          final cut = d.sourceSeconds(o, o.start, e);
           o
             ..start = e
             ..offset = o.offset + cut
@@ -2145,7 +2324,7 @@ class DawController extends ChangeNotifier {
       final (t, c) = a;
       final copy = AudioClip.fromJson(c.toJson())
         ..id = newId()
-        ..start = c.end(doc.bpm);
+        ..start = doc.clipEnd(c);
       edit((_) {
         t.clips.add(copy);
         selectedClip = copy.id;
@@ -2181,12 +2360,12 @@ class DawController extends ChangeNotifier {
       audio.addAll(t.clips.map((c) => (t, c)));
       midi.addAll(t.midi.map((c) => (t, c)));
     }
-    final audioCuts = audio.where((f) => f.$2.start < at && f.$2.end(doc.bpm) > at).toList();
+    final audioCuts = audio.where((f) => f.$2.start < at && doc.clipEnd(f.$2) > at).toList();
     final midiCuts = midi.where((f) => f.$2.start < at && f.$2.end > at).toList();
     if (audioCuts.isEmpty && midiCuts.isEmpty) return;
     edit((d) {
       for (final (t, c) in audioCuts) {
-        final secs = (at - c.start) * 60 / c.tempoFor(d.bpm);
+        final secs = d.sourceSeconds(c, c.start, at);
         final right = AudioClip.fromJson(c.toJson())
           ..id = newId()
           ..start = at
@@ -2237,7 +2416,7 @@ class DawController extends ChangeNotifier {
         if (ti >= doc.tracks.length ||
             doc.tracks[ti].kind != TrackKind.audio ||
             i > 0 ||
-            _occupied(doc.tracks[ti], start, start + info.duration * doc.bpm / 60)) {
+            _occupied(doc.tracks[ti], start, doc.beatAtSeconds(doc.secondsAt(start) + info.duration))) {
           ti = doc.tracks.length;
           doc.tracks.add(DawTrack(id: newId(), name: _baseName(name), color: ti % Palette.tracks.length));
         }
@@ -2378,7 +2557,7 @@ class DawController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _occupied(DawTrack t, double from, double to) => t.clips.any((c) => c.start < to && c.end(doc.bpm) > from);
+  bool _occupied(DawTrack t, double from, double to) => t.clips.any((c) => c.start < to && doc.clipEnd(c) > from);
 
   static String _baseName(String file) {
     final dot = file.lastIndexOf('.');
@@ -3492,11 +3671,16 @@ class DawController extends ChangeNotifier {
     }
   }
 
+  /// Quadros da contagem de [bar] batidas que começa em [from].
+  static int _countFrames(TempoMap tempo, double bpm, double rate, double bar, double from) =>
+      tempo.isSingle ? (bar * (rate * 60 / bpm)).round() : ((tempo.secondsAt(from + bar) - tempo.secondsAt(math.max(0.0, from))) * rate).round();
+
   void _beginRecording({required Set<String> audioIds, required Set<String> midiIds, required bool audio}) {
     final d = doc;
-    final bar = d.beatsPerBar.toDouble();
     final wasPlaying = playing.value;
     final start = wasPlaying ? _estimatedBeat() : math.max(0.0, beat.value);
+    // a contagem tem o tamanho do compasso do cursor (com mapa de compassos, o dele)
+    final bar = d.meter.isSingle ? d.beatsPerBar.toDouble() : d.meter.barBeatsAt(start);
     final count = !wasPlaying && d.countIn;
     double? zone;
     var from = start;
@@ -3517,7 +3701,6 @@ class DawController extends ChangeNotifier {
     }
     final rate = engineRate;
     final latency = audio ? _engine.latency + _inputLatency + d.recLatencyMs / 1000 : 0.0;
-    final fpb = rate * 60 / d.bpm;
     final r = _Recording(
       start: start,
       bpm: d.bpm,
@@ -3534,9 +3717,10 @@ class DawController extends ChangeNotifier {
       latency: latency.isFinite ? latency : 0,
       // a contagem e a latência saem do começo do que a entrada mandou (latência negativa, da
       // compensação manual, acrescenta silêncio)
-      skip: (count ? (bar * fpb).round() : 0) + (latency.isFinite ? (latency * rate).round() : 0),
+      skip: (count ? _countFrames(d.tempo, d.bpm, rate, bar, zone ?? start - bar) : 0) + (latency.isFinite ? (latency * rate).round() : 0),
       metronomeTemp: count && !d.metronome,
       startFromCapture: wasPlaying,
+      tempo: d.tempo,
     );
     _rec = r;
     recording = true;
@@ -3637,7 +3821,7 @@ class DawController extends ChangeNotifier {
     if (!playing.value || !_stateClock.isRunning) return math.max(0.0, b);
     // estados parados de chegar (aba em segundo plano) não viram um salto grande
     final secs = math.min(_stateClock.elapsedMicroseconds / 1e6, 0.25);
-    var e = b + secs * doc.bpm / 60;
+    var e = doc.tempo.isSingle ? b + secs * doc.bpm / 60 : doc.beatAtSeconds(doc.secondsAt(b) + secs);
     final ls = doc.loopStart, le = doc.loopEnd;
     if (doc.loopOn && le > ls && b < le && e >= le) e = ls + (e - le) % (le - ls);
     return math.max(0.0, e);
@@ -3837,7 +4021,16 @@ class DawController extends ChangeNotifier {
     // menos de 50 ms depois da latência: um toque no gravar e parar, não uma gravação
     if (frames < r.rate * 0.05) return const [];
     final fpb = r.rate * 60 / r.bpm;
-    final passes = recordingPasses(start: r.start, frames: frames, bpm: r.bpm, rate: r.rate, loopOn: r.loopOn, loopStart: r.loopStart, loopEnd: r.loopEnd);
+    final passes = recordingPasses(
+      start: r.start,
+      frames: frames,
+      bpm: r.bpm,
+      rate: r.rate,
+      loopOn: r.loopOn,
+      loopStart: r.loopStart,
+      loopEnd: r.loopEnd,
+      tempo: r.tempo,
+    );
     int endOf(int p) => p + 1 < passes.length ? passes[p + 1].frame : frames;
     var kept = passes.length;
     // a última passada com menos de uma batida é o passo além da volta de quem parou
@@ -3851,23 +4044,28 @@ class DawController extends ChangeNotifier {
     final plans = <_ClipPlan>[];
     final _Piece first;
     if (r.start < r.loopStart) {
-      final head = ((r.loopStart - r.start) * fpb).round();
+      final head = r.framesBetween(r.start, r.loopStart).round();
       plans.add((start: r.start, seconds: head / r.rate, pieces: [(from: 0, to: head, pad: 0)], active: 0));
       first = (from: head, to: endOf(0), pad: 0);
     } else {
-      first = (from: 0, to: endOf(0), pad: ((r.start - r.loopStart) * fpb).round());
+      first = (from: 0, to: endOf(0), pad: r.framesBetween(r.loopStart, r.start).round());
     }
     final pieces = [first, for (var p = 1; p < kept; p++) (from: passes[p].frame, to: endOf(p), pad: 0)];
     // toca a última passada completa: a de quem parou no meio (ou a primeira, que começou no meio
     // do loop) fica guardada como tomada, mas não é a que se quer ouvir de primeira
-    final loopFrames = (r.loopEnd - r.loopStart) * fpb;
+    final loopFrames = r.framesBetween(r.loopStart, r.loopEnd);
     bool complete(_Piece x) => x.pad == 0 && x.to - x.from >= loopFrames * 0.98;
     var active = pieces.length - 1;
     while (active > 0 && !complete(pieces[active])) {
       active--;
     }
     if (!complete(pieces[active])) active = pieces.length - 1;
-    plans.add((start: r.loopStart, seconds: (r.loopEnd - r.loopStart) * 60 / r.bpm, pieces: pieces, active: active));
+    plans.add((
+      start: r.loopStart,
+      seconds: r.tempo.isSingle ? (r.loopEnd - r.loopStart) * 60 / r.bpm : r.tempo.secondsAt(r.loopEnd) - r.tempo.secondsAt(r.loopStart),
+      pieces: pieces,
+      active: active,
+    ));
     return plans;
   }
 
@@ -4174,7 +4372,7 @@ class DawController extends ChangeNotifier {
     // ganho da mixagem em dB, para os stems quando pedirem o mesmo (a mixagem é a primeira saída)
     double? mixGainDb;
     try {
-      final perOutput = ((to - from) * 60 / d.bpm + tail) * rate * 2 * 4;
+      final perOutput = ((d.secondsAt(to) - d.secondsAt(from)) + tail) * rate * 2 * 4;
       final size = math.max(1, (_renderBudget / perOutput).floor());
       final batches = [for (var i = 0; i < outputs.length; i += size) outputs.sublist(i, math.min(outputs.length, i + size))];
       for (var b = 0; b < batches.length; b++) {
@@ -4293,7 +4491,7 @@ class DawController extends ChangeNotifier {
         error = 'A faixa "$label" não soou nada: nada para congelar.';
         return;
       }
-      channels = _trimTail(channels, ((to - from) * 60 / doc.bpm * rate).ceil());
+      channels = _trimTail(channels, ((doc.secondsAt(to) - doc.secondsAt(from)) * rate).ceil());
       if (channels.length == 2 && _same(channels[0], channels[1])) channels = [channels[0]];
       final bytes = encodeWav(channels, rate.round(), ExportFormat.wav32f);
       final hash = await _engine.sha256Hex(bytes);
@@ -4369,7 +4567,7 @@ class DawController extends ChangeNotifier {
     if (t.kind == TrackKind.audio) {
       for (final c in t.clips) {
         from = math.min(from, c.start);
-        to = math.max(to, c.end(doc.bpm));
+        to = math.max(to, doc.clipEnd(c));
       }
     } else {
       for (final c in t.midi) {
@@ -4534,6 +4732,17 @@ class DawController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ligado pelo usuário (null: automático, aparece quando o documento tem mudanças de andamento).
+  bool? _tempoLane;
+
+  /// A faixa de andamento sob a régua está à mostra.
+  bool get tempoLaneVisible => _tempoLane ?? !doc.tempo.isSingle;
+
+  void toggleTempoLane() {
+    _tempoLane = !tempoLaneVisible;
+    notifyListeners();
+  }
+
   /// Enquadra o trecho [from, to] (em batidas) na janela, com uma folga nas pontas.
   void fitRange(double from, double to) {
     final span = math.max(to - from, doc.beatsPerBar.toDouble());
@@ -4552,7 +4761,7 @@ class DawController extends ChangeNotifier {
   /// Intervalo do clipe selecionado (batidas), ou null sem seleção.
   (double, double)? get selectedRange {
     final a = selection;
-    if (a != null) return (a.$2.start, a.$2.end(doc.bpm));
+    if (a != null) return (a.$2.start, doc.clipEnd(a.$2));
     final m = midiSelection;
     if (m != null) return (m.$2.start, m.$2.end);
     return null;

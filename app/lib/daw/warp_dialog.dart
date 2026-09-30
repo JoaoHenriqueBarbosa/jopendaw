@@ -153,7 +153,10 @@ class _WarpDialogState extends State<_WarpDialog> {
                 const SizedBox(height: 4),
                 Text(
                   clip.stretches
-                      ? 'Segue o andamento do projeto (${formatBpm(widget.c.doc.bpm)} BPM): o áudio é esticado sem mudar a altura.'
+                      ? (widget.c.doc.tempo.isSingle
+                            ? 'Segue o andamento do projeto (${formatBpm(widget.c.doc.bpm)} BPM): o áudio é esticado sem mudar a altura.'
+                            : 'O projeto tem mudanças de andamento: o warp estica o áudio para o andamento INICIAL (${formatBpm(widget.c.doc.bpm)} BPM) e ele '
+                                  'toca em velocidade constante, sem acompanhar as mudanças.')
                       : 'Sem warp: o clipe toca na velocidade original.',
                   style: const TextStyle(fontSize: 12, color: Colors.white60),
                 ),

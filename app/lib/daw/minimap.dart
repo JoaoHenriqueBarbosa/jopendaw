@@ -87,7 +87,7 @@ class _MinimapPainter extends CustomPainter {
         final p = Paint()..color = trackColorAt(t.color).withValues(alpha: 0.85);
         final y = top + i * rowH + (rowH - h) / 2;
         for (final clip in t.clips) {
-          canvas.drawRect(Rect.fromLTWH(clip.start * px, y, math.max(1.5, clip.beats(d.bpm) * px), h), p);
+          canvas.drawRect(Rect.fromLTWH(clip.start * px, y, math.max(1.5, d.clipBeats(clip) * px), h), p);
         }
         for (final clip in t.midi) {
           canvas.drawRect(Rect.fromLTWH(clip.start * px, y, math.max(1.5, clip.length * px), h), p);

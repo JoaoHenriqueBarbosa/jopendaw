@@ -10,6 +10,7 @@ import 'dart:math' as math;
 import 'effects.dart';
 import 'instruments.dart';
 import 'sampler_zones.dart';
+import 'tempo_map.dart';
 
 class AudioClip {
   String id;
@@ -98,6 +99,11 @@ class AudioClip {
 
   /// Duração em batidas no andamento dado.
   double beats(double bpm) => length * tempoFor(bpm) / 60;
+
+  /// Segundos reais que o clipe ocupa. Sem warp, a duração do próprio áudio; com warp, esticada
+  /// para o andamento inicial do projeto [bpm0] (com mapa de andamento o warp usa o inicial: um
+  /// clipe esticado não muda de velocidade no meio do caminho, ver `DawDoc.tempo`).
+  double seconds(double bpm0) => stretches ? length * sourceBpm! / bpm0 : length;
   double end(double bpm) => start + beats(bpm);
 }
 
@@ -470,8 +476,19 @@ class Marker {
 class DawDoc {
   static const version = 1;
 
+  /// O andamento inicial (o do ponto da batida 0 do mapa de andamento) e o compasso inicial
+  /// (`beatsPerBar`/4, a menos que o mapa de compassos diga outro).
   double bpm;
   int beatsPerBar;
+
+  /// Mapa de andamento: `[]` sem mudanças (só [bpm]); senão os pontos ordenados, o primeiro na
+  /// batida 0 (o andamento inicial, que espelha [bpm]). Troque a lista inteira ao mudar (o cache de
+  /// [tempo] repara na troca), preferindo [DawController.setTempoMap].
+  List<TempoPoint> tempoMap;
+
+  /// Mapa de compassos: `[]` sem mudanças (só [beatsPerBar]/4); senão as mudanças ordenadas, a
+  /// primeira no compasso 1. Mesma regra de troca da lista.
+  List<MeterChange> meterMap;
   List<DawTrack> tracks;
   Map<String, SampleInfo> samples;
   bool loopOn, metronome;
@@ -495,6 +512,8 @@ class DawDoc {
   DawDoc({
     required this.bpm,
     required this.beatsPerBar,
+    List<TempoPoint>? tempoMap,
+    List<MeterChange>? meterMap,
     List<DawTrack>? tracks,
     Map<String, SampleInfo>? samples,
     this.loopOn = false,
@@ -508,7 +527,9 @@ class DawDoc {
     List<EffectSlot>? masterEffects,
     List<AutoLane>? masterLanes,
     List<Marker>? markers,
-  }) : tracks = tracks ?? [],
+  }) : tempoMap = normalizeTempoPoints(tempoMap ?? const [], bpm),
+       meterMap = normalizeMeterChanges(meterMap ?? const [], beatsPerBar),
+       tracks = tracks ?? [],
        markers = markers ?? [],
        samples = samples ?? {},
        masterEffects = masterEffects ?? [],
@@ -517,6 +538,9 @@ class DawDoc {
   DawDoc.fromJson(Map<String, dynamic> j)
     : bpm = (j['bpm'] as num).toDouble(),
       beatsPerBar = j['beats_per_bar'],
+      // documento sem os campos (versão anterior): sem mapa, um andamento e um compasso só
+      tempoMap = normalizeTempoPoints([for (final x in (j['tempo_map'] as List?) ?? const []) TempoPoint.fromJson(x)], (j['bpm'] as num).toDouble()),
+      meterMap = normalizeMeterChanges([for (final x in (j['meter_map'] as List?) ?? const []) MeterChange.fromJson(x)], j['beats_per_bar'] as int),
       tracks = [for (final t in j['tracks'] as List) DawTrack.fromJson(t)],
       samples = {for (final e in (j['samples'] as Map<String, dynamic>).entries) e.key: SampleInfo.fromJson(e.value)},
       loopOn = j['loop_on'],
@@ -535,6 +559,9 @@ class DawDoc {
     'version': version,
     'bpm': bpm,
     'beats_per_bar': beatsPerBar,
+    // só com mudanças: um documento sem mapa sai igual ao de antes
+    if (!tempo.isSingle) 'tempo_map': [for (final p in tempo.points) p.toJson()],
+    if (!meter.isSingle) 'meter_map': [for (final m in meter.changes) m.toJson()],
     'tracks': [for (final t in tracks) t.toJson()],
     'samples': {for (final e in samples.entries) e.key: e.value.toJson()},
     'loop_on': loopOn,
@@ -550,14 +577,99 @@ class DawDoc {
     'markers': [for (final m in markers) m.toJson()],
   };
 
+  // Os mapas viram objetos de conta sob demanda e ficam guardados enquanto a lista, o tamanho e o
+  // andamento/compasso inicial não mudam.
+  TempoMap? _tempo;
+  List<TempoPoint>? _tempoSrc;
+  int _tempoLen = -1;
+  double _tempoBpm = double.nan;
+  MeterMap? _meter;
+  List<MeterChange>? _meterSrc;
+  int _meterLen = -1;
+  int _meterBpb = -1;
+
+  /// A conversão batida ↔ segundos pelo mapa de andamento ([bpm] manda no ponto da batida 0).
+  ///
+  /// Decisão do warp com mapa de andamento: um clipe com warp é esticado para o andamento INICIAL
+  /// do projeto e toca em tempo real constante, como qualquer áudio; se atravessar mudanças de
+  /// andamento, deixa de acompanhar a grade nelas (a interface avisa no diálogo de warp).
+  TempoMap get tempo {
+    var t = _tempo;
+    if (t == null || !identical(_tempoSrc, tempoMap) || _tempoLen != tempoMap.length || _tempoBpm != bpm) {
+      t = tempoMap.isEmpty ? TempoMap.constant(bpm) : TempoMap(bpm, tempoMap);
+      _tempo = t;
+      _tempoSrc = tempoMap;
+      _tempoLen = tempoMap.length;
+      _tempoBpm = bpm;
+    }
+    return t;
+  }
+
+  /// O mapa de compassos ([beatsPerBar] manda no compasso 1 quando ele é `n/4`).
+  MeterMap get meter {
+    var m = _meter;
+    if (m == null || !identical(_meterSrc, meterMap) || _meterLen != meterMap.length || _meterBpb != beatsPerBar) {
+      final ch = meterMap;
+      // o compasso inicial n/4 é o `beatsPerBar` (o campo que a barra e o servidor conhecem)
+      final fixed = ch.isNotEmpty && ch.first.denominator == 4 && ch.first.numerator != beatsPerBar ? [MeterChange(1, beatsPerBar, 4), ...ch.skip(1)] : ch;
+      m = fixed.isEmpty ? MeterMap.constant(beatsPerBar) : MeterMap(beatsPerBar, fixed);
+      _meter = m;
+      _meterSrc = meterMap;
+      _meterLen = meterMap.length;
+      _meterBpb = beatsPerBar;
+    }
+    return m;
+  }
+
+  /// Segundos da batida 0 até [beat], pelo mapa.
+  double secondsAt(double beat) => tempo.secondsAt(beat);
+
+  /// A batida em que caem os segundos.
+  double beatAtSeconds(double seconds) => tempo.beatAt(seconds);
+
+  /// O andamento (bpm) na batida.
+  double bpmAt(double beat) => tempo.bpmAt(beat);
+
+  /// Duração do clipe de áudio em batidas, no mapa (com um andamento só, a conta de sempre).
+  double clipBeats(AudioClip c) => clipEnd(c) - c.start;
+
+  /// Onde o clipe de áudio termina, em batidas: começa na batida dele e ocupa segundos reais
+  /// constantes ([AudioClip.seconds]).
+  double clipEnd(AudioClip c) {
+    final t = tempo;
+    return t.isSingle ? c.end(bpm) : t.beatAt(t.secondsAt(c.start) + c.seconds(bpm));
+  }
+
+  /// Batidas por minuto que valem para converter entre batidas e os segundos do áudio de origem do
+  /// clipe, na [beat] dele (aproximação local, para arrastes e desenho): sem mapa é o
+  /// [AudioClip.tempoFor] de sempre; com mapa, o andamento vigente ali (com warp, o do áudio
+  /// proporcional ao vigente sobre o inicial).
+  double sourceTempoAt(AudioClip c, double beat) {
+    final t = tempo;
+    if (t.isSingle) return c.tempoFor(bpm);
+    final local = t.bpmAt(beat);
+    return c.stretches ? c.sourceBpm! * local / bpm : local;
+  }
+
+  /// Segundos do áudio de origem (a unidade de `AudioClip.length` e `offset`) que cabem entre duas
+  /// batidas da linha do tempo, para um clipe de áudio: cortes e aparas convertem por aqui. Com um
+  /// andamento só é a conta de sempre; com mapa, o tempo real entre as batidas (com warp, esticado
+  /// para o andamento inicial).
+  double sourceSeconds(AudioClip c, double from, double to) {
+    final t = tempo;
+    if (t.isSingle) return (to - from) * 60 / c.tempoFor(bpm);
+    final real = t.secondsAt(to) - t.secondsAt(from);
+    return c.stretches ? real * bpm / c.sourceBpm! : real;
+  }
+
   /// Fim do último clipe, em batidas.
   double get contentEnd => math.max(
-    tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, c.end(bpm))),
+    tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, clipEnd(c))),
     tracks.expand((t) => t.midi).fold(0.0, (m, c) => math.max(m, c.end)),
   );
 
-  /// Duração do projeto em segundos: o fim do último clipe no andamento atual.
-  double get durationSeconds => contentEnd * 60 / bpm;
+  /// Duração do projeto em segundos: o fim do último clipe pelo mapa de andamento.
+  double get durationSeconds => secondsAt(contentEnd);
 }
 
 /// Segundos → "m:ss" (ou "h:mm:ss"); com [tenths], "m:ss.d".
@@ -594,8 +706,18 @@ String formatDb(double g) {
 }
 
 /// Batida → "compasso.tempo.dezesseis avos", contando do 1 como os DAWs.
-String formatPosition(double beat, int beatsPerBar) {
+///
+/// Com [meter] (o mapa de compassos do documento) o compasso é contado por ele; sem, por
+/// [beatsPerBar] fixo.
+String formatPosition(double beat, int beatsPerBar, {MeterMap? meter}) {
   final b = beat.clamp(0, double.infinity);
+  if (meter != null && !meter.isSingle) {
+    final (bar, inBar) = meter.barOf(b.toDouble());
+    final unit = meter.changeAt(bar).unit;
+    final tick = (inBar / unit + 1e-9).floor();
+    final into = inBar - tick * unit;
+    return '$bar.${tick + 1}.${(into / unit * 4 + 1e-9).floor() + 1}';
+  }
   final bar = b ~/ beatsPerBar + 1;
   final inBar = b - (bar - 1) * beatsPerBar;
   final beatN = inBar.floor() + 1;

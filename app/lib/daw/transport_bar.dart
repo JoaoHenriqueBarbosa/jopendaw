@@ -3,6 +3,8 @@
 /// entradas de notas (teclado do computador e MIDI), importar, exportar e as configurações.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -19,6 +21,8 @@ import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
 import 'structure_menu.dart';
 import 'sync_ui.dart';
+import 'tempo_lane.dart' show showMeterChangeDialog;
+import 'warp_dialog.dart' show formatBpm;
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
 /// Para onde as ações do transporte (botões e atalhos) mandam uma falha que o controlador não
@@ -114,10 +118,7 @@ class TransportBar extends StatelessWidget {
           const SizedBox(width: 8),
           // o andamento não muda no meio de uma gravação: as batidas do que já foi gravado mudariam
           // de lugar em relação ao áudio que ainda está chegando
-          TextButton(
-            onPressed: recording ? null : () => _editTempo(context),
-            child: Text('${d.bpm.round()} BPM · ${d.beatsPerBar}/4', style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
-          ),
+          _TempoButton(c: c, onPressed: recording ? null : () => _editTempo(context)),
           _Toggle(icon: Icons.repeat, on: d.loopOn, tooltip: 'Loop (L) · arraste na régua para marcar', onTap: c.toggleLoop),
           _Toggle(icon: Icons.av_timer, on: d.metronome, tooltip: 'Metrônomo (C)', onTap: c.toggleMetronome),
         ];
@@ -275,9 +276,61 @@ class TransportBar extends StatelessWidget {
   Future<void> _editTempo(BuildContext context) async {
     final r = await showDialog<(int, int)>(
       context: context,
-      builder: (_) => _TempoDialog(bpm: c.doc.bpm.round(), beatsPerBar: c.doc.beatsPerBar),
+      builder: (_) => _TempoDialog(bpm: c.doc.bpm.round(), beatsPerBar: c.doc.beatsPerBar, mapped: !c.doc.tempo.isSingle),
     );
-    if (r != null) await c.setTempo(r.$1, r.$2);
+    if (r == null) return;
+    // (0, 0): o botão "Mudar compasso a partir de…" do diálogo
+    if (r.$1 == 0) {
+      if (context.mounted) await showMeterChangeDialog(context, c);
+      return;
+    }
+    await c.setTempo(r.$1, r.$2);
+  }
+}
+
+/// O andamento e o compasso no cursor: com um andamento só, "120 BPM · 4/4"; com mapa, o vigente na
+/// posição do cursor (com o marcador de mapa) e o compasso dali. Clicar edita o inicial e abre a
+/// mudança de compasso.
+class _TempoButton extends StatelessWidget {
+  final DawController c;
+  final VoidCallback? onPressed;
+  const _TempoButton({required this.c, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
+    final d = c.doc;
+    if (d.tempo.isSingle && d.meter.isSingle) {
+      return TextButton(
+        onPressed: onPressed,
+        child: Text('${d.bpm.round()} BPM · ${d.beatsPerBar}/4', style: style),
+      );
+    }
+    return ValueListenableBuilder<double>(
+      valueListenable: c.beat,
+      builder: (context, beat, _) {
+        final b = math.max(0.0, beat);
+        final bpm = d.bpmAt(b);
+        final m = d.meter.changeAt(d.meter.barOf(b).$1);
+        final ramp = !d.tempo.isSingle && d.tempo.points[d.tempo.indexAt(b)].ramp && d.tempo.indexAt(b) + 1 < d.tempo.points.length;
+        return Tooltip(
+          message: d.tempo.isSingle
+              ? 'Compasso no cursor. Clique para editar o andamento ou mudar o compasso.'
+              : 'Andamento no cursor (mapa com ${d.tempo.points.length} pontos, inicial ${formatBpm(d.bpm)} BPM). Clique para editar o inicial ou mudar o compasso.',
+          child: TextButton(
+            onPressed: onPressed,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!d.tempo.isSingle) const Icon(Icons.show_chart, size: 14, color: Palette.accent),
+                if (!d.tempo.isSingle) const SizedBox(width: 4),
+                Text('${formatBpm(bpm)}${ramp ? '↗' : ''} BPM · ${m.numerator}/${m.denominator}', style: style),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -420,7 +473,7 @@ class _Position extends StatelessWidget {
         // antes do zero (a contagem que começa um compasso antes do cursor, se o motor andar por
         // ali) mostra as batidas que faltam, em vez de um "1.1.1" parado e um tempo "0:-2.00"
         final before = beat < 0;
-        final secs = beat.abs() * 60 / c.doc.bpm;
+        final secs = before ? beat.abs() * 60 / c.doc.bpm : c.doc.secondsAt(beat);
         final m = secs ~/ 60, s = secs - m * 60;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -428,7 +481,10 @@ class _Position extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(before ? '−${(-beat).ceil()}' : formatPosition(beat, c.doc.beatsPerBar), style: mono.copyWith(color: before ? recordColor : Palette.accent)),
+              Text(
+                before ? '−${(-beat).ceil()}' : formatPosition(beat, c.doc.beatsPerBar, meter: c.doc.meter),
+                style: mono.copyWith(color: before ? recordColor : Palette.accent),
+              ),
               Text(
                 '${before ? '−' : ''}$m:${s.toStringAsFixed(2).padLeft(5, '0')}',
                 style: Theme.of(context).textTheme.labelSmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
@@ -485,7 +541,10 @@ class _Toggle extends StatelessWidget {
 
 class _TempoDialog extends StatefulWidget {
   final int bpm, beatsPerBar;
-  const _TempoDialog({required this.bpm, required this.beatsPerBar});
+
+  /// O documento tem mudanças de andamento: o BPM daqui é o inicial.
+  final bool mapped;
+  const _TempoDialog({required this.bpm, required this.beatsPerBar, this.mapped = false});
   @override
   State<_TempoDialog> createState() => _TempoDialogState();
 }
@@ -522,7 +581,7 @@ class _TempoDialogState extends State<_TempoDialog> {
           autofocus: true,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(labelText: 'BPM', errorText: _error),
+          decoration: InputDecoration(labelText: widget.mapped ? 'BPM inicial' : 'BPM', errorText: _error),
           onSubmitted: (_) => _save(),
         ),
         const SizedBox(height: 16),
@@ -531,6 +590,11 @@ class _TempoDialogState extends State<_TempoDialog> {
           decoration: const InputDecoration(labelText: 'Tempos por compasso'),
           items: [for (var i = 1; i <= 12; i++) DropdownMenuItem(value: i, child: Text('$i/4'))],
           onChanged: (v) => setState(() => _bpb = v ?? _bpb),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(onPressed: () => Navigator.pop(context, (0, 0)), child: const Text('Mudar compasso a partir de um compasso…')),
         ),
       ],
     ),

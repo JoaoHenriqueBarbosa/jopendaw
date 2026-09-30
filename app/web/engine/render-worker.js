@@ -95,10 +95,84 @@ function tempoOf(calls) {
   return Math.min(999, Math.max(20, bpm));
 }
 
-// Quadros do trecho e da cauda. O trecho é medido no andamento do documento; a cauda, em segundos.
-function frameCounts(fromBeat, toBeat, tail, bpm, rate) {
+// O mapa de andamento que vale no fim das chamadas: `tempo` (o inicial), `tempo_clear` e
+// `tempo_point(batida, bpm, rampa)`, aplicados em ordem como o motor os aplica. A mesma conta do
+// motor (engine/src/tempo.rs) e de lib/daw/tempo_map.dart: pontos {beat, bpm, ramp} ordenados, o
+// primeiro na batida 0; salto (bpm constante até o ponto seguinte) ou rampa linear em bpm.
+// Devolve { single, bpm0, secondsAt(beat), beatAt(seconds) }.
+function tempoMapOf(calls) {
+  const clamp = (v) => Math.min(999, Math.max(20, v));
+  let bpm0 = 120;
+  let raw = [];
+  for (const c of calls) {
+    if (c[0] === 'tempo' && Number.isFinite(c[1])) bpm0 = clamp(c[1]);
+    else if (c[0] === 'tempo_clear') raw = [];
+    else if (c[0] === 'tempo_point' && Number.isFinite(c[1]) && Number.isFinite(c[2])) {
+      if (c[1] <= 0) bpm0 = clamp(c[2]);
+      raw.push({ beat: Math.max(0, c[1]), bpm: clamp(c[2]), ramp: !!c[3] });
+    }
+  }
+  // ordena; na mesma batida o último vale; a batida 0 sempre existe e é o andamento inicial
+  const byBeat = new Map();
+  for (const p of raw) byBeat.set(p.beat, p);
+  const pts = [...byBeat.values()].sort((a, b) => a.beat - b.beat);
+  if (pts.length === 0 || pts[0].beat !== 0) pts.unshift({ beat: 0, bpm: bpm0, ramp: false });
+  pts[0] = { beat: 0, bpm: bpm0, ramp: pts[0].ramp };
+  if (pts.length === 1) {
+    return { single: true, bpm0, secondsAt: (b) => (b * 60) / bpm0, beatAt: (s) => (s * bpm0) / 60 };
+  }
+  const flat = (a, b) => Math.abs(b - a) <= 1e-9 * a;
+  const segSecs = (i, x) => {
+    const p = pts[i];
+    const q = pts[i + 1];
+    if (q && p.ramp && !flat(p.bpm, q.bpm)) {
+      const len = q.beat - p.beat;
+      return ((60 * len) / (q.bpm - p.bpm)) * Math.log((p.bpm + ((q.bpm - p.bpm) * x) / len) / p.bpm);
+    }
+    return (x * 60) / p.bpm;
+  };
+  const secs = [0];
+  for (let i = 1; i < pts.length; i++) secs.push(secs[i - 1] + segSecs(i - 1, pts[i].beat - pts[i - 1].beat));
+  const last = (arr, ok) => {
+    let lo = 0;
+    let hi = arr.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (ok(arr[mid])) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  return {
+    single: false,
+    bpm0,
+    secondsAt(beat) {
+      if (beat <= 0) return (beat * 60) / pts[0].bpm;
+      const i = last(pts, (p) => p.beat <= beat);
+      return secs[i] + segSecs(i, beat - pts[i].beat);
+    },
+    beatAt(s) {
+      if (s <= 0) return (s * pts[0].bpm) / 60;
+      const i = last(secs, (t) => t <= s);
+      const p = pts[i];
+      const q = pts[i + 1];
+      const x = s - secs[i];
+      if (q && p.ramp && !flat(p.bpm, q.bpm)) {
+        const len = q.beat - p.beat;
+        const k = (q.bpm - p.bpm) / (60 * len);
+        return p.beat + Math.min(len, Math.max(0, (len * p.bpm * Math.expm1(k * x)) / (q.bpm - p.bpm)));
+      }
+      return p.beat + (x * p.bpm) / 60;
+    },
+  };
+}
+
+// Quadros do trecho e da cauda. O trecho é medido no andamento do documento (ou pelo mapa de
+// andamento, `map`, quando ele tem mudanças); a cauda, em segundos.
+function frameCounts(fromBeat, toBeat, tail, bpm, rate, map) {
   const perBeat = (60 / bpm) * rate;
-  const range = Math.max(0, Math.round((toBeat - fromBeat) * perBeat));
+  const seconds = map && !map.single ? map.secondsAt(toBeat) - map.secondsAt(fromBeat) : null;
+  const range = Math.max(0, Math.round(seconds === null ? (toBeat - fromBeat) * perBeat : seconds * rate));
   const tailFrames = Math.max(0, Math.round((Number.isFinite(tail) ? tail : 0) * rate));
   return { range, tail: tailFrames, total: range + tailFrames };
 }
@@ -108,8 +182,9 @@ function frameCounts(fromBeat, toBeat, tail, bpm, rate) {
 // para os valores estáticos como faria um `stop`), mas nada começa depois do fim: clipes e notas
 // que começam ali saem, e os que atravessam terminam no fim (clipe com um fade curto, nota com a
 // soltura normal do instrumento). A cauda fica só com o que já soava: reverb, delay, soltura.
-function prepareCalls(calls, toBeat, bpm) {
+function prepareCalls(calls, toBeat, bpm, map) {
   const secsPerBeat = 60 / bpm;
+  const mapped = map && !map.single ? map : null;
   const out = [];
   for (const c of calls) {
     const name = c[0];
@@ -118,12 +193,13 @@ function prepareCalls(calls, toBeat, bpm) {
       // clip_add(faixa, amostra, início em batidas, offset s, duração s, ganho, fade in s, fade out s)
       const [, track, sample, start, offset, length, gain, fadeIn, fadeOut] = c;
       if (start >= toBeat - EDGE_EPS) continue;
-      const end = start + length / secsPerBeat;
+      // o clipe toca em tempo real constante: com mapa de andamento, o fim vem dos segundos
+      const end = mapped ? mapped.beatAt(mapped.secondsAt(start) + length) : start + length / secsPerBeat;
       if (end <= toBeat) {
         out.push(c);
         continue;
       }
-      const cut = (toBeat - start) * secsPerBeat;
+      const cut = mapped ? mapped.secondsAt(toBeat) - mapped.secondsAt(start) : (toBeat - start) * secsPerBeat;
       // o fade de saída começa onde começava (se o corte cai dentro dele, só fica mais íngreme)
       const removed = length - cut;
       let fade = fadeOut > removed ? fadeOut - removed : 0;
@@ -162,7 +238,8 @@ function renderWith(w, job, onProgress) {
   const { fromBeat, toBeat, tail, rate, outputs } = job;
   const calls = job.calls || [];
   const bpm = tempoOf(calls);
-  const frames = frameCounts(fromBeat, toBeat, tail, bpm, rate);
+  const map = tempoMapOf(calls);
+  const frames = frameCounts(fromBeat, toBeat, tail, bpm, rate, map);
   if (frames.range === 0) throw new RenderError('empty', 'Nada para renderizar: o trecho está vazio.');
   const wantsTracks = outputs.some((o) => o !== -1);
   if (wantsTracks && (typeof w.capture_add !== 'function' || typeof w.captured !== 'function')) {
@@ -213,7 +290,7 @@ function renderWith(w, job, onProgress) {
       if (job.releaseSamples && pass === passes - 1) s.channels = null;
     }
 
-    for (const [name, ...args] of prepareCalls(calls, toBeat, bpm)) {
+    for (const [name, ...args] of prepareCalls(calls, toBeat, bpm, map)) {
       // um motor mais antigo que o app não conhece alguma função nova: o resto do documento vale
       if (typeof w[name] === 'function') w[name](...args);
     }
@@ -347,7 +424,7 @@ function detectWith(w, job) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { stretchWith, detectWith, renderWith, prepareCalls, frameCounts, tempoOf, RenderError, RENDER_BLOCK, CUT_FADE_SECS };
+  module.exports = { stretchWith, detectWith, renderWith, prepareCalls, frameCounts, tempoOf, tempoMapOf, RenderError, RENDER_BLOCK, CUT_FADE_SECS };
 }
 
 // ------------------------------------------------------------------ Worker

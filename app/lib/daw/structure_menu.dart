@@ -65,7 +65,7 @@ class SectionsMenu extends StatelessWidget {
                 const SizedBox(width: 10),
                 Flexible(child: Text(m.name.isEmpty ? 'Marcador' : m.name, overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 12),
-                Text(formatPosition(m.beat, c.doc.beatsPerBar), style: Theme.of(context).textTheme.labelSmall),
+                Text(formatPosition(m.beat, c.doc.beatsPerBar, meter: c.doc.meter), style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
           ),

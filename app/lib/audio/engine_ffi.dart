@@ -66,6 +66,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../daw/tempo_map.dart';
 import 'engine_types.dart';
 
 /// A biblioteca que o `engine/build-android.sh` põe em `jniLibs` (o Android acha pelo nome).
@@ -390,10 +391,36 @@ double renderTempo(List<List<Object>> calls) {
   return bpm.clamp(20.0, 999.0);
 }
 
-/// Quadros do trecho (medido no andamento [bpm]) e da cauda (em segundos), como no render-worker.js.
-({int range, int tail, int total}) renderFrames(double fromBeat, double toBeat, double tailSeconds, double bpm, double rate) {
+/// O mapa de andamento que vale no fim das chamadas: `tempo` (o andamento inicial), `tempo_clear` e
+/// `tempo_point`, aplicados em ordem como o motor os aplica (a última escrita ganha). Sem pontos,
+/// um andamento só ([renderTempo]).
+TempoMap renderTempoMap(List<List<Object>> calls) {
+  var bpm0 = 120.0;
+  var points = <TempoPoint>[];
+  for (final c in calls) {
+    if (c.isEmpty) continue;
+    switch (c.first) {
+      case 'tempo':
+        final v = _num(c, 1);
+        if (v != null && v.isFinite) bpm0 = v.clamp(20.0, 999.0);
+      case 'tempo_clear':
+        points = [];
+      case 'tempo_point':
+        final beat = _num(c, 1), bpm = _num(c, 2), ramp = _num(c, 3);
+        if (beat == null || bpm == null || !beat.isFinite || !bpm.isFinite) continue;
+        if (beat <= 0) bpm0 = bpm.clamp(20.0, 999.0);
+        points.add(TempoPoint(beat, bpm, ramp: (ramp ?? 0) != 0));
+    }
+  }
+  return TempoMap(bpm0, points);
+}
+
+/// Quadros do trecho (medido no andamento [bpm], ou pelo mapa [map]) e da cauda (em segundos),
+/// como no render-worker.js.
+({int range, int tail, int total}) renderFrames(double fromBeat, double toBeat, double tailSeconds, double bpm, double rate, {TempoMap? map}) {
   final perBeat = 60 / bpm * rate;
-  final range = math.max(0, ((toBeat - fromBeat) * perBeat).round());
+  final mapped = map != null && !map.isSingle;
+  final range = math.max(0, (mapped ? (map.secondsAt(toBeat) - map.secondsAt(fromBeat)) * rate : (toBeat - fromBeat) * perBeat).round());
   final tail = math.max(0, ((tailSeconds.isFinite ? tailSeconds : 0) * rate).round());
   return (range: range, tail: tail, total: range + tail);
 }
@@ -402,8 +429,9 @@ double renderTempo(List<List<Object>> calls) {
 /// aparado. O transporte segue na cauda (a automação continua valendo), mas nada começa depois do
 /// fim: clipes e notas que começam ali saem, e os que atravessam terminam no fim (clipe com um fade
 /// curto, nota com a soltura do instrumento). A mesma regra do render-worker.js.
-List<List<Object>> prepareRenderCalls(List<List<Object>> calls, double toBeat, double bpm) {
+List<List<Object>> prepareRenderCalls(List<List<Object>> calls, double toBeat, double bpm, {TempoMap? map}) {
   final secsPerBeat = 60 / bpm;
+  final mapped = map != null && !map.isSingle ? map : null;
   final out = <List<Object>>[];
   for (final c in calls) {
     final name = c.isEmpty ? null : c.first;
@@ -416,12 +444,13 @@ List<List<Object>> prepareRenderCalls(List<List<Object>> calls, double toBeat, d
         continue;
       }
       if (start >= toBeat - _edgeEps) continue;
-      final end = start + length / secsPerBeat;
+      // o clipe toca em tempo real constante: com mapa de andamento, o fim vem dos segundos
+      final end = mapped == null ? start + length / secsPerBeat : mapped.beatAt(mapped.secondsAt(start) + length);
       if (end <= toBeat) {
         out.add(c);
         continue;
       }
-      final cut = (toBeat - start) * secsPerBeat;
+      final cut = mapped == null ? (toBeat - start) * secsPerBeat : mapped.secondsAt(toBeat) - mapped.secondsAt(start);
       // o fade de saída começa onde começava (se o corte cai dentro dele, só fica mais íngreme)
       final removed = length - cut;
       var fade = fadeOut > removed ? fadeOut - removed : 0.0;
@@ -530,7 +559,8 @@ RenderOutcome renderNow(RenderJob job, {required String library, SendPort? progr
   final problem = checkRenderJob(job.fromBeat, job.toBeat, job.tailSeconds, job.rate, job.outputs);
   if (problem != null) return _renderError('failed', problem);
   final bpm = renderTempo(job.calls);
-  final frames = renderFrames(job.fromBeat, job.toBeat, job.tailSeconds, bpm, job.rate);
+  final map = renderTempoMap(job.calls);
+  final frames = renderFrames(job.fromBeat, job.toBeat, job.tailSeconds, bpm, job.rate, map: map);
   if (frames.range == 0) return _renderError('empty', 'Nada para renderizar: o trecho está vazio.');
   final total = frames.total;
   final count = job.outputs.length;
@@ -558,7 +588,7 @@ RenderOutcome renderNow(RenderJob job, {required String library, SendPort? progr
     return _renderError('failed', 'O motor de áudio não carregou para o render: $e');
   }
   final cancel = cancelAddress == 0 ? null : Pointer<Int32>.fromAddress(cancelAddress);
-  final docJson = encodeCalls(prepareRenderCalls(job.calls, job.toBeat, bpm)).json;
+  final docJson = encodeCalls(prepareRenderCalls(job.calls, job.toBeat, bpm, map: map)).json;
   final passes = (count + maxCaptures - 1) ~/ maxCaptures;
   final left = malloc<Float>(renderBlock);
   final right = malloc<Float>(renderBlock);

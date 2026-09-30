@@ -173,7 +173,7 @@ class _FlagState extends State<_Flag> {
       },
       child: Tooltip(
         message:
-            '${m.name.isEmpty ? 'Marcador' : m.name} · ${formatPosition(m.beat, c.doc.beatsPerBar)}\nArraste para mover · duplo clique renomeia · botão direito: menu',
+            '${m.name.isEmpty ? 'Marcador' : m.name} · ${formatPosition(m.beat, c.doc.beatsPerBar, meter: c.doc.meter)}\nArraste para mover · duplo clique renomeia · botão direito: menu',
         waitDuration: const Duration(milliseconds: 600),
         child: Container(
           height: MarkerFlags.flagHeight,

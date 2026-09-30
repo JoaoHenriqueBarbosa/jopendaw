@@ -78,6 +78,26 @@ pub extern "C" fn tempo(bpm: f64, beats_per_bar: u32) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn tempo_clear() {
+    engine().tempo_clear();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn tempo_point(beat: f64, bpm: f64, ramp: u32) {
+    engine().tempo_point(beat, bpm, ramp != 0);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn meter_clear() {
+    engine().meter_clear();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn meter_point(bar: u32, num: u32, den: u32) {
+    engine().meter_point(bar, num, den);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn play() {
     engine().play();
 }
