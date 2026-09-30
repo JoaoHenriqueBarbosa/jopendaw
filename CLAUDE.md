@@ -119,6 +119,7 @@ teste de novo.
   `InlineNotice`, diálogos); erro inline, nunca toast.
 - Produção: nginx do `app` faz proxy de `/api/` para `JOPENDAW_API_HOST`; domínio previsto
   `jopendaw.johnenrique.tech` (ajustar em `api/client.dart`, manifest Android e `assetlinks.json`).
+  Ver "Deploy na VPS" abaixo.
 
 ## Método de desenvolvimento em ciclo contínuo (o que se aprendeu)
 
@@ -202,3 +203,35 @@ mandar parar. Este é o método que funcionou; siga-o ao retomar.
 e em lote; 9 time-stretch/pitch de qualidade e afinação (motor); 10 modelos do usuário, desfazer
 por faixa, multissaída. Fora da lista: macros de ação, colaboração em tempo real, MIDI clock/out,
 separação de stems no servidor, Android em aparelho físico (nunca testado), S3 de produção.
+
+## Deploy na VPS (Dokploy, feito em 2026-09-30)
+
+Runbook geral na skill `vps-deploy` (VPS `72.60.137.244`, Dokploy `dokploy.johnenrique.tech`, registry
+`registry.johnenrique.tech`). O jopendaw está no projeto Dokploy `jopendaw` (env `production`):
+
+- `jopendaw-db` (postgres 17, `postgresId t-7GnjJU_GHn-oNFKT2fY`, host interno `jopendaw-db-ee7aip`);
+  o schema foi aplicado com `ssh root@VPS 'docker exec -i $(docker ps -q -f name=jopendaw-db-ee7aip) psql -U jopendaw -d jopendaw -v ON_ERROR_STOP=1' < server/schema.sql`
+  (mudança de schema = script idempotente de `db/migrations/` no mesmo comando, antes do deploy da API).
+- `jopendaw-api` (`applicationId b9cOKxpJVbLVnA8Kp4Fcw`, imagem `registry.johnenrique.tech/jopendaw-api:1`,
+  volume `jopendaw-data` em `/data`, sem domínio: só o nginx fala com ela).
+- `jopendaw-web` (`applicationId eVn4Dm9-QIGig_TbTPkzu`, imagem `.../jopendaw-web:1`, nginx com
+  `JOPENDAW_API_HOST=jopendaw-api-jhlxtz:8080`, domínio `jopendaw.johnenrique.tech` porta 80 com Let's Encrypt).
+- Env da API (no Dokploy, nunca no git): `DATABASE_URL`, `JWT_SECRET` próprio, `APP_BASE_URL`, `JMAIL_URL=https://jmail.johnenrique.tech`
+  e `JMAIL_API_KEY` (app `jopendaw` criado no jmail de produção, remetente `jopendaw-nao-responda@johnenrique.tech`),
+  `S3_*` (bucket `jopendaw` no MinIO da VPS, `http://compose-generate-redundant-alarm-6tulit-minio-1:9000`, conta de
+  serviço `jopendawapp` restrita a esse bucket), `DATA_DIR=/data`. SEM `GOOGLE_*`/`DISCORD_*` (botões não aparecem:
+  falta registrar os redirects no Google/Discord) e SEM `REVIEW_EMAIL/REVIEW_CODE` (conta de revisão da Play Store).
+
+**Imagens são amd64; o Mac é arm64.** O build do servidor sob emulação QEMU dá SIGSEGV no `cc` (crate `ring`):
+construa a API NA VPS, limitada para não afetar os outros apps:
+`git clone --depth 1 https://github.com/JoaoHenriqueBarbosa/jopendaw.git /tmp/jopendaw-build` e
+`docker build --memory 2500m --memory-swap 2500m --cpu-period 100000 --cpu-quota 100000 --cpu-shares 128 -f server/Dockerfile -t registry.johnenrique.tech/jopendaw-api:1 .`
+(~5 min, em `nohup` porque o ssh estoura), `docker push`, apagar o clone e `docker builder prune -f`.
+A web é só estático: `flutter build web --release`, copiar `app/build/web` para um contexto limpo SEM os `*.wav` de teste
+(o `.dockerignore` do app exclui `build/`), `FROM nginx:1.27-alpine` + `nginx.conf.template`, `docker build --platform linux/amd64`
+no Mac e `docker push`. No colima só há uma plataforma por tag: `docker rmi` a base arm64 antes de puxar a amd64.
+Depois: `POST /api/application.deploy` (API key na skill) para cada app e conferir `applicationStatus` + logs do container.
+
+Pendente do deploy: **registro A `jopendaw.johnenrique.tech → 72.60.137.244` no Hostinger** (manual; o navegador do Claude não
+está logado lá) para o certificado e o domínio valerem; `api/client.dart`/Android/`assetlinks.json` já apontam para esse domínio.
+Verificação sem DNS: `curl -sk --resolve jopendaw.johnenrique.tech:443:72.60.137.244 https://jopendaw.johnenrique.tech/api/me` (401 JSON = proxy ok).
