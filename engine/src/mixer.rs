@@ -1,6 +1,7 @@
 //! Canal do mixer: volume, pan, mudo, solo e o medidor de pico; a cadeia de efeitos (inserts) e
 //! os envios para os barramentos.
 
+use crate::dsp::Delay;
 use crate::effect::{self, Effect};
 
 /// Constante de tempo com que o ganho aplicado persegue o pedido: curta o bastante para parecer
@@ -10,7 +11,7 @@ const SMOOTH_SECS: f64 = 0.005;
 
 /// Duração das transições da cadeia (bypass, efeito entrando, saindo ou trocando de tipo): um
 /// crossfade linear curto, que troca o som sem estalo e sem se ouvir como fade.
-const FADE_SECS: f64 = 0.01;
+pub(crate) const FADE_SECS: f64 = 0.01;
 
 /// Distância em que um ganho suavizado encosta no alvo. Não pode ser menor: em f32, perto de 1, o
 /// passo `(alvo − g) · k` some no arredondamento quando a distância cai abaixo de ~ulp/k (7e-6 a
@@ -242,11 +243,13 @@ pub struct Send {
     /// antes da origem).
     pub(crate) dst: i32,
     now: Option<f32>,
+    /// Atraso que alinha o que chega ao destino com as outras entradas dele (PDC).
+    pub(crate) line: Delay,
 }
 
 impl Default for Send {
     fn default() -> Self {
-        Self { bus: -1, level: 0.0, pre: false, auto_level: None, dst: -1, now: None }
+        Self { bus: -1, level: 0.0, pre: false, auto_level: None, dst: -1, now: None, line: Delay::new() }
     }
 }
 
@@ -298,11 +301,33 @@ pub struct Scratch {
     dry_r: Vec<f32>,
     old_l: Vec<f32>,
     old_r: Vec<f32>,
+    /// A chave de sidechain atrasada, e a cópia atrasada de um envio (PDC).
+    key_l: Vec<f32>,
+    key_r: Vec<f32>,
+    send_l: Vec<f32>,
+    send_r: Vec<f32>,
 }
 
 impl Scratch {
     pub fn new(len: usize) -> Self {
-        Self { dry_l: vec![0.0; len], dry_r: vec![0.0; len], old_l: vec![0.0; len], old_r: vec![0.0; len] }
+        Self {
+            dry_l: vec![0.0; len],
+            dry_r: vec![0.0; len],
+            old_l: vec![0.0; len],
+            old_r: vec![0.0; len],
+            key_l: vec![0.0; len],
+            key_r: vec![0.0; len],
+            send_l: vec![0.0; len],
+            send_r: vec![0.0; len],
+        }
+    }
+
+    /// Cópia de trabalho de `n` quadros de um envio com atraso (o envio lê daqui).
+    pub fn send_copy(&mut self, src_l: &[f32], src_r: &[f32]) -> (&mut [f32], &mut [f32]) {
+        let n = src_l.len().min(src_r.len()).min(self.send_l.len());
+        self.send_l[..n].copy_from_slice(&src_l[..n]);
+        self.send_r[..n].copy_from_slice(&src_r[..n]);
+        (&mut self.send_l[..n], &mut self.send_r[..n])
     }
 
     /// Dois canais zerados de `n` quadros para quem precisa de um bloco temporário (o metrônomo).
@@ -344,11 +369,32 @@ pub struct Slot {
     pub sidechain: i32,
     /// Últimos valores que o app mandou (NaN = nunca), para a automação devolver ao soltar.
     statics: [f32; STATIC_PARAMS],
+    /// Latência do efeito contada pela PDC (quadros); 0 sem efeito ou saindo. Vale também em
+    /// bypass: a cadeia não muda de latência quando o efeito é ligado ou desligado.
+    latency: usize,
+    /// O sinal seco atrasado da latência do efeito: o bypass e o crossfade misturam sinais
+    /// alinhados, e um slot em bypass segue atrasando igual.
+    dry: Delay,
+    /// A chave de sidechain atrasada para chegar alinhada com o sinal do slot.
+    key_delay: Delay,
 }
 
 impl Slot {
     fn empty() -> Self {
-        Self { kind: 0, fx: None, old: None, fade: 1.0, wet: 0.0, bypass: false, dying: false, sidechain: -1, statics: [f32::NAN; STATIC_PARAMS] }
+        Self {
+            kind: 0,
+            fx: None,
+            old: None,
+            fade: 1.0,
+            wet: 0.0,
+            bypass: false,
+            dying: false,
+            sidechain: -1,
+            statics: [f32::NAN; STATIC_PARAMS],
+            latency: 0,
+            dry: Delay::new(),
+            key_delay: Delay::new(),
+        }
     }
 
     fn target(&self) -> f32 {
@@ -393,11 +439,22 @@ pub struct Chain {
     hold: usize,
     /// Alguma transição terminou e há efeito para soltar (entre um bloco e outro, não no meio).
     garbage: bool,
+    /// Duração das transições em quadros (o crossfade dos atrasos da PDC).
+    fade_len: usize,
 }
 
 impl Chain {
     pub fn new(rate: f64) -> Self {
-        Self { slots: Vec::with_capacity(MAX_SLOTS * 2), count: 0, rate, bpm: 120.0, step: (1.0 / (FADE_SECS * rate).max(1.0)) as f32, hold: 0, garbage: false }
+        Self {
+            slots: Vec::with_capacity(MAX_SLOTS * 2),
+            count: 0,
+            rate,
+            bpm: 120.0,
+            step: (1.0 / (FADE_SECS * rate).max(1.0)) as f32,
+            hold: 0,
+            garbage: false,
+            fade_len: (FADE_SECS * rate) as usize,
+        }
     }
 
     /// Slots pedidos.
@@ -548,6 +605,21 @@ impl Chain {
             && let Some(fx) = s.fx.as_mut()
         {
             fx.reset();
+            // um efeito de lookahead recomeçaria mudo (o atraso dele vazio) e o crossfade de volta
+            // abriria um buraco: ele reaprende os últimos quadros de entrada que o atraso do seco
+            // guardou
+            let mut left = s.latency;
+            let (mut bl, mut br) = ([0.0f32; 128], [0.0f32; 128]);
+            while left > 0 {
+                let k = left.min(128);
+                s.dry.history(left - 1, &mut bl[..k], &mut br[..k]);
+                fx.process(&mut bl[..k], &mut br[..k]);
+                left -= k;
+            }
+        }
+        if !on && s.bypass {
+            // a chave que o slot não viu durante o bypass é passado velho
+            s.key_delay.clear();
         }
         s.bypass = on;
     }
@@ -575,9 +647,67 @@ impl Chain {
         self.slot(slot).and_then(|s| s.fx.as_ref()).map_or(0.0, |fx| fx.meter())
     }
 
-    /// Há algo a processar?
+    /// Há algo a processar? (Um slot em bypass com latência ainda atrasa o sinal.)
     pub fn live(&self) -> bool {
-        self.slots.iter().any(|s| !s.idle())
+        self.slots.iter().any(|s| !s.idle() || s.dry.active())
+    }
+
+    /// Lê de novo a latência de cada efeito e a passa aos atrasos do seco (PDC). Roda no comando
+    /// ou entre um bloco e outro, nunca no meio do processamento: os atrasos podem crescer aqui.
+    /// `cap` limita a latência de cada efeito.
+    pub fn refresh_latency(&mut self, cap: usize) {
+        for s in &mut self.slots {
+            s.latency = match &s.fx {
+                Some(fx) if !s.dying => fx.latency().min(cap),
+                _ => 0,
+            };
+            s.dry.set_target(s.latency, self.fade_len);
+        }
+        self.update_hold();
+    }
+
+    /// Latência da cadeia inteira em quadros: a soma dos efeitos, ligados ou em bypass.
+    pub fn latency(&self) -> usize {
+        self.slots.iter().map(|s| s.latency).sum()
+    }
+
+    /// Faixa-chave do slot quando ela vale para a PDC: efeito vivo, chave que não é a própria
+    /// entrada, existe (`n` faixas) e é processada antes (`known`), no mesmo bloco.
+    fn key_track(s: &Slot, own: usize, n: usize, known: &impl Fn(usize) -> bool) -> Option<usize> {
+        let k = usize::try_from(s.sidechain).ok()?;
+        (s.fx.is_some() && !s.dying && k != own && k < n && known(k)).then_some(k)
+    }
+
+    /// Quanto a entrada da cadeia precisa estar atrasada para que nenhuma chave de sidechain (com
+    /// a latência `out[k]` da faixa `k`, a saída dela depois dos inserts) chegue depois do sinal no
+    /// slot que a usa: o maior `out[k]` menos a latência dos slots antes dele.
+    pub fn key_need(&self, own: usize, out: &[usize], known: impl Fn(usize) -> bool) -> usize {
+        let (mut need, mut before) = (0, 0);
+        for s in &self.slots {
+            if let Some(k) = Self::key_track(s, own, out.len(), &known) {
+                need = need.max(out[k].saturating_sub(before));
+            }
+            before += s.latency;
+        }
+        need
+    }
+
+    /// Atrasa cada chave até o sinal do slot: a entrada da cadeia chega com latência `arrive`.
+    pub fn set_key_delays(&mut self, arrive: usize, own: usize, out: &[usize], known: impl Fn(usize) -> bool) {
+        let mut before = 0;
+        for s in &mut self.slots {
+            let d = Self::key_track(s, own, out.len(), &known).map_or(0, |k| (arrive + before).saturating_sub(out[k]));
+            s.key_delay.set_target(d, self.fade_len);
+            before += s.latency;
+        }
+    }
+
+    /// Termina na hora as mudanças de atraso e esvazia os anéis (começo de um render).
+    pub fn snap_delays(&mut self) {
+        for s in &mut self.slots {
+            s.dry.snap();
+            s.key_delay.snap();
+        }
     }
 
     /// Silêncio de saída (quadros) que a cadeia precisa, com a entrada calada, para poder parar.
@@ -587,7 +717,8 @@ impl Chain {
 
     fn update_hold(&mut self) {
         let secs = self.slots.iter().filter(|s| s.fx.is_some()).map(|s| tail_secs(s.kind)).fold(0.0, f64::max);
-        self.hold = (secs * self.rate) as usize;
+        // a latência entra no silêncio exigido: o que está nos atrasos precisa sair antes de parar
+        self.hold = ((secs * self.rate) as usize).max(self.latency());
     }
 
     /// Solta o que as transições terminaram: o efeito antigo de um crossfade, o de um slot
@@ -602,7 +733,8 @@ impl Chain {
             if s.old.is_some() && s.fade >= 1.0 {
                 s.old = None;
             }
-            if s.dying && s.wet == 0.0 && s.old.is_none() {
+            // o slot que sai só some quando o atraso do seco também terminou de descer a zero
+            if s.dying && s.wet == 0.0 && s.old.is_none() && !s.dry.active() {
                 s.fx = None;
             }
             // ainda no meio de uma transição: fica para a próxima
@@ -638,16 +770,32 @@ impl Chain {
         let step = self.step;
         for s in &mut self.slots {
             if s.idle() {
+                // em bypass assentado o sinal só atravessa o atraso da latência do efeito
+                if s.dry.active() {
+                    s.dry.process(l, r);
+                }
                 continue;
             }
             let key = match s.sidechain {
                 k if k >= 0 && k as usize != own => keys.get(k as usize).map(|b| (&b.l[..n], &b.r[..n])),
                 _ => None,
             };
+            let key = match key {
+                Some((kl, kr)) if s.key_delay.active() => {
+                    scratch.key_l[..n].copy_from_slice(kl);
+                    scratch.key_r[..n].copy_from_slice(kr);
+                    s.key_delay.process(&mut scratch.key_l[..n], &mut scratch.key_r[..n]);
+                    Some((&scratch.key_l[..n], &scratch.key_r[..n]))
+                }
+                other => other,
+            };
             let target = s.target();
             let Some(fx) = s.fx.as_mut() else { continue };
             if s.old.is_none() && s.wet == target {
                 // o caso comum: efeito ligado, sem transição
+                if s.dry.active() {
+                    s.dry.record(l, r);
+                }
                 fx.process_keyed(l, r, key);
                 continue;
             }
@@ -655,6 +803,10 @@ impl Chain {
             let (ol, or) = (&mut scratch.old_l[..n], &mut scratch.old_r[..n]);
             dl.copy_from_slice(l);
             dr.copy_from_slice(r);
+            // o seco chega atrasado da latência do efeito, alinhado com a saída dele
+            if s.dry.active() {
+                s.dry.process(dl, dr);
+            }
             let crossfade = match s.old.as_mut() {
                 Some(old) => {
                     ol.copy_from_slice(l);

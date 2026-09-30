@@ -267,12 +267,17 @@ impl Captures {
         (self.count - 1) as i32
     }
 
-    /// Começo do render: as faixas esperam `delay` quadros (o master já sai atrasado disso pelo
-    /// limitador), com o atraso vazio e a leitura zerada.
-    pub(crate) fn arm(&mut self, delay: usize) {
+    /// Começo do render: cada faixa espera `delay_of(faixa)` quadros (o master já sai atrasado do
+    /// que soma o limitador e a PDC; a faixa, do que sobra entre a latência do ponto onde ela é
+    /// capturada e a total), com o atraso vazio e a leitura zerada. O anel cresce aqui se
+    /// preciso: é o preparo do render, não o meio do áudio.
+    pub(crate) fn arm(&mut self, delay_of: impl Fn(i32) -> usize) {
         self.frames = 0;
         for c in &mut self.slots[..self.count] {
-            c.delay = if c.track >= 0 { delay.min(c.ring.l.len()) } else { 0 };
+            c.delay = if c.track >= 0 { delay_of(c.track) } else { 0 };
+            if c.ring.l.len() < c.delay {
+                c.ring = Stereo::new(c.delay);
+            }
             c.ring.l.fill(0.0);
             c.ring.r.fill(0.0);
             c.ring_at = 0;
@@ -401,7 +406,7 @@ mod tests {
         assert_eq!(c.add(-2, 4), -1);
         let m = c.add(-1, 4) as usize;
         let t = c.add(0, 4) as usize;
-        c.arm(4);
+        c.arm(|_| 4);
         c.priming = true;
         let src: Vec<f32> = (1..=8).map(|i| i as f32).collect();
         c.write(m, 0, 4, Some((&src[..4], &src[..4])));

@@ -611,11 +611,16 @@ Os efeitos processam bloco a bloco, sem alocar nem travar no meio do áudio. Alg
 
 | Efeito | Latência | Quando importa |
 |---|---|---|
-| `Limitador` | Igual ao `Lookahead`: padrão 3 ms (144 quadros a 48 kHz), até 10 ms (480 quadros). Zero com `Lookahead` 0. | Faixa com `Limitador` chega até 10 ms depois das demais. Sem importância no master. |
-| `Distorção` | 32 quadros fixos: 0,67 ms a 48 kHz, cerca de 0,73 ms a 44,1 kHz. Nos seis tipos e nas três sobreamostragens. | Distorção paralela **entre faixas**: se você duplica uma faixa e distorce só uma, elas ficam 0,67 ms fora de fase; use o `Mistura` do próprio efeito no lugar. |
+| `Limitador` | Igual ao `Lookahead`: padrão 3 ms (144 quadros a 48 kHz), até 10 ms (480 quadros). Zero com `Lookahead` 0. | O motor alinha as faixas sozinho (compensação de latência, abaixo); o projeto inteiro sai esse tanto depois do cursor. |
+| `Distorção` | 32 quadros fixos: 0,67 ms a 48 kHz, cerca de 0,73 ms a 44,1 kHz. Nos seis tipos e nas três sobreamostragens. | Compensada como as demais: duplicar uma faixa e distorcer só uma não põe as duas fora de fase. |
 | Todos os outros | 0 (o pré-atraso do reverb, o atraso do delay e do chorus fazem parte do som, não são latência). | |
 
-**O motor sabe a latência de cada efeito, mas ainda não compensa** as outras faixas por ela (comentário do código: "sem compensação ainda"). Só o limitador de segurança do master e a captura de gravação usam latência.
+**Compensação de latência (PDC).** O motor soma a latência de cada efeito nas faixas e nos barramentos e atrasa o resto para que tudo chegue junto ao master: uma faixa com `Limitador` não soa mais atrasada em relação às outras, e um envio para um barramento com efeito de latência não faz filtro de pente com a saída direta da mesma faixa. Vale também para o sidechain (a chave chega alinhada com o som). Ligar e desligar o bypass não muda o alinhamento nem estala, porque a latência do efeito conta ligado ou não.
+
+- **Quanto:** a latência do projeto é a maior soma que existe de um lado a outro (uma faixa com `Limitador` de 3 ms: 3 ms para todas). Cada efeito e o total ficam limitados a 1 s. Em números inteiros de quadros: 3 ms a 48 kHz são exatamente 144 quadros; a 44,1 kHz, 132.
+- **Exportar** descarta essa latência no começo: o arquivo sai alinhado com a linha do tempo, tanto a mixagem quanto cada stem.
+- **Ao vivo** o som sai esse tanto depois do cursor (uns poucos ms). Trocar o tipo de um efeito, mudar o `Lookahead` ou mexer no roteamento com o som tocando refaz a compensação com um crossfade de 10 ms.
+- **Ainda não:** a compensação da gravação do app conta só a latência do aparelho, não a dos efeitos; e o volume automatizado age uns ms adiantado em relação ao som de uma faixa com efeito de latência.
 
 Custo de CPU não foi medido para este manual. Por construção, o `Reverb` (rede de 8 linhas com difusores e reflexões) e a `Distorção` em `4×` (processa a taxa quadruplicada) fazem mais conta que os demais. Um efeito em bypass assentado não processa nada (o motor o pula).
 

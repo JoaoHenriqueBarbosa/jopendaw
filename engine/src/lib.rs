@@ -76,6 +76,8 @@ mod limiter;
 pub mod loudness;
 mod metronome;
 pub mod mixer;
+#[cfg(test)]
+mod pdc_tests;
 pub mod record;
 pub mod sampler;
 pub mod stretch;
@@ -94,6 +96,7 @@ pub use metronome::Metronome;
 pub use mixer::{Chain, MAX_SENDS, MAX_SLOTS, STATIC_PARAMS, Send, Track, pan_gains};
 
 use analyzer::Analyzer;
+use dsp::Delay;
 use instrument::Instrument;
 use mixer::{Scratch, Stereo};
 use record::{Captures, NoteRecorder};
@@ -459,13 +462,38 @@ struct Strip {
     is_key: bool,
     /// A chave guardada já foi zerada (a faixa está calada).
     key_silent: bool,
+    /// PDC: atraso da fonte antes dos inserts (só faixas que não são barramento: a fonte precisa
+    /// esperar quando a chave do sidechain dela vem de uma faixa de latência maior) e atraso da
+    /// saída para o destino (master ou barramento).
+    pre: Delay,
+    out_line: Delay,
+    /// PDC: quadros que a faixa segue rodando, com silêncio, depois que a fonte calou: o que está
+    /// nos atrasos ainda precisa sair.
+    flush: usize,
+    /// PDC: a faixa tem som nos atrasos (desde que a fonte começou até esvaziarem). Fria, os
+    /// atrasos estão vazios e uma mudança de latência pendente vale de uma vez, sem crossfade: o
+    /// começo do áudio não pode chegar adiantado nem em fade só porque um efeito foi posto antes.
+    warm: bool,
 }
 
 impl Strip {
     fn new(rate: f64, bpm: f64) -> Self {
         let mut chain = Chain::new(rate);
         chain.set_tempo(bpm);
-        Self { chain, sends: Vec::with_capacity(MAX_SENDS), output: -1, out_dst: -1, idle: false, quiet: 0, is_key: false, key_silent: false }
+        Self {
+            chain,
+            sends: Vec::with_capacity(MAX_SENDS),
+            output: -1,
+            out_dst: -1,
+            idle: false,
+            quiet: 0,
+            is_key: false,
+            key_silent: false,
+            pre: Delay::new(),
+            out_line: Delay::new(),
+            flush: 0,
+            warm: false,
+        }
     }
 }
 
@@ -484,12 +512,31 @@ fn scan(l: &[f32], r: &[f32]) -> (f32, bool) {
 /// pelo solo; um envio para um barramento solado (ou que alimenta um solado) segue mesmo com a
 /// origem calada pelo solo, para o retorno solado soar com tudo o que chega nele.
 #[allow(clippy::too_many_arguments)]
-fn mix_sends(sends: &mut [Send], bufs: &mut [Stereo], incoming: &mut [bool], up: &[bool], audible: bool, src: usize, n: usize, pre: bool, k: f32) {
+fn mix_sends(
+    sends: &mut [Send],
+    bufs: &mut [Stereo],
+    incoming: &mut [bool],
+    up: &[bool],
+    audible: bool,
+    src: usize,
+    n: usize,
+    pre: bool,
+    k: f32,
+    scratch: &mut Scratch,
+) {
     for s in sends.iter_mut().filter(|s| s.pre == pre && s.dst >= 0) {
         let d = s.dst as usize;
         let on = audible || up[d];
         let Ok([from, to]) = bufs.get_disjoint_mut([src, d]) else { continue };
-        s.mix(&from.l[..n], &from.r[..n], &mut to.l[..n], &mut to.r[..n], on, k);
+        if s.line.active() {
+            // PDC: o envio chega ao destino junto com as outras entradas dele. A linha vê todo
+            // bloco, mesmo com o nível em zero (senão guardaria som velho para quando o nível subir)
+            let (dl, dr) = scratch.send_copy(&from.l[..n], &from.r[..n]);
+            s.line.process(dl, dr);
+            s.mix(dl, dr, &mut to.l[..n], &mut to.r[..n], on, k);
+        } else {
+            s.mix(&from.l[..n], &from.r[..n], &mut to.l[..n], &mut to.r[..n], on, k);
+        }
         incoming[d] = true;
     }
 }
@@ -588,6 +635,18 @@ pub struct Engine {
     /// Bloco de rascunho do preparo do render (saída descartada do adiantamento, silêncio para as
     /// cadeias do master).
     spare: Stereo,
+    /// PDC: a latência dos efeitos mudou (ou o roteamento): recalcular os atrasos antes do próximo
+    /// bloco.
+    pdc_dirty: bool,
+    /// PDC: latência com que todas as fontes chegam ao master (a maior entre as faixas que saem
+    /// nele, em quadros) e a da cadeia de inserts do master, depois dele.
+    pdc_total: usize,
+    pdc_master: usize,
+    /// PDC: por faixa, a latência do sinal na entrada da cadeia (`arrive`), na saída dela (`out`) e
+    /// a maior que chega de fora (`inmax`, só barramentos).
+    pdc_arrive: Vec<usize>,
+    pdc_out: Vec<usize>,
+    pdc_inmax: Vec<usize>,
 }
 
 /// Latência do limitador de segurança em quadros, medida por um impulso (o lookahead é detalhe
@@ -660,6 +719,12 @@ impl Engine {
             latency: limiter_latency(rate),
             out_delay: 0.0,
             spare: Stereo::new(CHUNK),
+            pdc_dirty: false,
+            pdc_total: 0,
+            pdc_master: 0,
+            pdc_arrive: Vec::new(),
+            pdc_out: Vec::new(),
+            pdc_inmax: Vec::new(),
         }
     }
 
@@ -880,6 +945,9 @@ impl Engine {
         self.up.resize(n, false);
         self.aud.resize(n, true);
         self.rank.resize(n, usize::MAX);
+        self.pdc_arrive.resize(n, 0);
+        self.pdc_out.resize(n, 0);
+        self.pdc_inmax.resize(n, 0);
         self.order.reserve(n.saturating_sub(self.order.len()));
         self.routing_dirty = true;
     }
@@ -1063,8 +1131,16 @@ impl Engine {
         }
         for s in &mut self.strips {
             s.chain.reset();
+            // o que os atrasos da PDC guardam também é cauda
+            s.pre.snap();
+            s.out_line.snap();
+            for send in &mut s.sends {
+                send.line.snap();
+            }
+            s.chain.snap_delays();
         }
         self.master_fx.reset();
+        self.master_fx.snap_delays();
     }
 
     // ---------------------------------------------------------------- efeitos
@@ -1116,6 +1192,10 @@ impl Engine {
             && c.set_param(slot, id, value, true, !automated)
         {
             self.routing_dirty = true;
+        }
+        // o lookahead do limitador é latência
+        if id == effect::limiter_param::LOOKAHEAD {
+            self.pdc_dirty = true;
         }
     }
 
@@ -1177,6 +1257,7 @@ impl Engine {
     /// algo do roteamento mudou, entre um bloco e outro.
     fn route(&mut self) {
         self.routing_dirty = false;
+        self.pdc_dirty = true;
         let n = self.tracks.len();
         let is_bus = |lanes: &[Lane], t: usize| lanes[t].kind == instrument::kind::BUS;
         // faixas que servem de chave (usa `up` como rascunho: o solo o refaz a cada bloco)
@@ -1246,6 +1327,103 @@ impl Engine {
             for s in &mut strip.sends {
                 s.dst = valid(s.bus);
             }
+        }
+    }
+
+    /// Compensação de latência dos efeitos (PDC). Cada efeito com latência (limitador, distorção)
+    /// atrasa o sinal que passa por ele; sem compensação a faixa com efeito soaria atrasada das
+    /// outras, e envios e retornos somariam versões desalinhadas (filtro de pente). Aqui o grafo
+    /// (faixas → barramentos → master, envios pré e pós, sidechain) ganha atrasos que alinham tudo
+    /// à maior latência:
+    ///
+    /// - `arrive[t]`: latência do sinal na entrada da cadeia de `t`. Uma faixa-fonte nasce em 0; um
+    ///   barramento recebe a maior `out` entre as entradas dele; uma cadeia com sidechain nunca
+    ///   deixa a chave chegar depois do sinal do slot que a usa (aí a fonte espera: `pre`).
+    /// - `out[t] = arrive[t]` mais a latência dos inserts.
+    /// - Cada aresta (saída ou envio) de `t` para `d` ganha o atraso `arrive[d] − out[t]`, então
+    ///   todas as entradas de um nó chegam juntas. Os atrasos são todos ≥ 0 e a latência total é
+    ///   a chegada ao master: a maior de todas.
+    /// - A chave do sidechain é atrasada até o sinal do slot que a usa.
+    ///
+    /// Roda entre um bloco e outro quando o roteamento ou uma latência mudou (efeito posto,
+    /// trocado, tirado, lookahead novo): é aí que os atrasos podem crescer (alocar). Bypass não
+    /// muda nada: a latência do efeito conta ligado ou não. Os atrasos mudam por crossfade curto.
+    /// Uma faixa que só chega em outro barramento (ciclo de sidechain) não conta a chave.
+    fn pdc_update(&mut self) {
+        self.pdc_dirty = false;
+        let n = self.tracks.len();
+        let cap = self.rate as usize;
+        let fade = (mixer::FADE_SECS * self.rate) as usize;
+        for s in &mut self.strips {
+            s.chain.refresh_latency(cap);
+        }
+        self.master_fx.refresh_latency(cap);
+        self.pdc_inmax[..n].fill(0);
+        let mut master_in = 0;
+        for oi in 0..self.order.len() {
+            let t = self.order[oi];
+            let rank = &self.rank;
+            let known = |k: usize| rank[k] < rank[t];
+            let strip = &self.strips[t];
+            let base = if self.lanes[t].kind == instrument::kind::BUS { self.pdc_inmax[t] } else { 0 };
+            let arrive = base.max(strip.chain.key_need(t, &self.pdc_out[..n], known)).min(cap);
+            let out = (arrive + strip.chain.latency()).min(cap);
+            self.pdc_arrive[t] = arrive;
+            self.pdc_out[t] = out;
+            if strip.out_dst >= 0 {
+                let d = strip.out_dst as usize;
+                self.pdc_inmax[d] = self.pdc_inmax[d].max(out);
+            } else {
+                master_in = master_in.max(out);
+            }
+            for s in strip.sends.iter().filter(|s| s.dst >= 0) {
+                let d = s.dst as usize;
+                self.pdc_inmax[d] = self.pdc_inmax[d].max(out);
+            }
+        }
+        let arrive_master = master_in.max(self.master_fx.key_need(usize::MAX, &self.pdc_out[..n], |_| true)).min(cap);
+        self.pdc_total = arrive_master;
+        self.pdc_master = self.master_fx.latency();
+        for t in 0..n {
+            let (arrive, out) = (self.pdc_arrive[t], self.pdc_out[t]);
+            let rank = &self.rank;
+            let known = |k: usize| rank[k] < rank[t];
+            let bus = self.lanes[t].kind == instrument::kind::BUS;
+            let strip = &mut self.strips[t];
+            strip.pre.set_target(if bus { 0 } else { arrive }, fade);
+            let to = if strip.out_dst >= 0 { self.pdc_arrive[strip.out_dst as usize] } else { arrive_master };
+            strip.out_line.set_target(to.saturating_sub(out), fade);
+            for s in &mut strip.sends {
+                let to = if s.dst >= 0 { self.pdc_arrive[s.dst as usize] } else { out };
+                s.line.set_target(to.saturating_sub(out), fade);
+            }
+            strip.chain.set_key_delays(arrive, t, &self.pdc_out[..n], known);
+        }
+        self.master_fx.set_key_delays(arrive_master, usize::MAX, &self.pdc_out[..n], |_| true);
+    }
+
+    /// Latência total do motor em quadros: a com que todas as fontes chegam ao master (PDC), mais a
+    /// cadeia de inserts do master e o limitador de segurança. É quanto o som sai depois do que o
+    /// transporte toca, e quanto o começo de um render offline descarta.
+    pub fn latency_frames(&mut self) -> usize {
+        self.refresh();
+        self.pdc_total + self.pdc_master + if self.limiter_on { self.latency } else { 0 }
+    }
+
+    /// Só a parte da PDC (efeitos de faixas e barramentos), em quadros.
+    pub fn pdc_latency(&mut self) -> usize {
+        self.refresh();
+        self.pdc_total
+    }
+
+    /// Põe em dia o roteamento e a PDC (o `process` faz isso a cada bloco; quem consulta a latência
+    /// logo depois de um comando também).
+    fn refresh(&mut self) {
+        if self.routing_dirty {
+            self.route();
+        }
+        if self.pdc_dirty {
+            self.pdc_update();
         }
     }
 
@@ -1562,6 +1740,18 @@ impl Engine {
     fn start_render(&mut self) {
         self.captures.pending = false;
         self.clock = 0;
+        // PDC: os atrasos começam vazios e já no valor certo (o render não tem passado)
+        for s in &mut self.strips {
+            s.pre.snap();
+            s.out_line.snap();
+            s.flush = 0;
+            s.warm = false;
+            for send in &mut s.sends {
+                send.line.snap();
+            }
+            s.chain.snap_delays();
+        }
+        self.master_fx.snap_delays();
         let warm = ((WARMUP_SECS * self.rate) as usize).max(CHUNK);
         for t in 0..self.tracks.len() {
             let (strip, buf) = (&mut self.strips[t], &mut self.bufs[t]);
@@ -1584,8 +1774,14 @@ impl Engine {
                 s.settle(audible || (s.dst >= 0 && self.up[s.dst as usize]));
             }
         }
-        let delay = if self.limiter_on { self.latency } else { 0 };
-        self.captures.arm(delay);
+        // o transporte anda à frente do que sai: o limitador do master, a cadeia dele e a PDC
+        let delay = self.latency_frames();
+        let (strips, arrive, total) = (&self.strips, &self.pdc_arrive, self.pdc_total);
+        // uma faixa é capturada depois do fader e da saída dela: com a latência do destino
+        self.captures.arm(|track| match strips.get(track as usize) {
+            Some(s) => delay.saturating_sub(if s.out_dst >= 0 { arrive[s.out_dst as usize] } else { total }),
+            None => delay,
+        });
         if delay > 0 {
             // o render não tem entrada; a de um bloco entregue fica para o bloco de verdade
             let input = std::mem::replace(&mut self.input_len, 0);
@@ -1662,9 +1858,7 @@ impl Engine {
             s.chain.collect();
         }
         self.master_fx.collect();
-        if self.routing_dirty {
-            self.route();
-        }
+        self.refresh();
     }
 
     /// Reordena as notas mexidas e reposiciona os cursores, entre um bloco e outro.
@@ -1724,6 +1918,10 @@ impl Engine {
         // master: cadeia dele, volume, limitador (inserts antes do fader, como nas faixas: um
         // fade do master não é desfeito por um compressor ou limitador da cadeia)
         if self.master_fx.live() && (to_master || !self.master_idle) {
+            if self.master_idle {
+                // acordando: os atrasos estão vazios, uma mudança de latência pendente vale já
+                self.master_fx.snap_delays();
+            }
             self.master_fx.process(out_l, out_r, &self.keys, usize::MAX, &mut self.scratch);
             let (peak, finite) = scan(out_l, out_r);
             if !finite {
@@ -1845,6 +2043,30 @@ impl Engine {
         let strip = &mut self.strips[t];
         let buf = &mut self.bufs[t];
         let (bl, br) = (&mut buf.l[..n], &mut buf.r[..n]);
+        // PDC: com a fonte calada ainda há som nos atrasos (o da fonte, os das linhas de saída e
+        // envio): a faixa segue rodando com silêncio até esvaziá-los
+        if active {
+            strip.flush = self.pdc_total;
+            if !strip.warm {
+                strip.warm = true;
+                strip.pre.snap();
+                strip.out_line.snap();
+                for s in &mut strip.sends {
+                    s.line.snap();
+                }
+                strip.chain.snap_delays();
+            }
+        } else if strip.flush > 0 {
+            bl.fill(0.0);
+            br.fill(0.0);
+            strip.flush = strip.flush.saturating_sub(n);
+            active = true;
+        } else {
+            strip.warm = false;
+        }
+        if active && strip.pre.active() {
+            strip.pre.process(bl, br);
+        }
         // os inserts rodam também com a entrada calada, enquanto houver cauda (reverb, delay)
         if strip.chain.live() && (active || !strip.idle) {
             strip.chain.process(bl, br, &self.keys, t, &mut self.scratch);
@@ -1896,12 +2118,17 @@ impl Engine {
             return false;
         }
         let k = self.smooth;
-        mix_sends(&mut strip.sends, &mut self.bufs, &mut self.incoming, &self.up, audible, t, n, true, k);
+        mix_sends(&mut strip.sends, &mut self.bufs, &mut self.incoming, &self.up, audible, t, n, true, k, &mut self.scratch);
         {
             let buf = &mut self.bufs[t];
             track.fader(&mut buf.l[..n], &mut buf.r[..n]);
         }
-        mix_sends(&mut strip.sends, &mut self.bufs, &mut self.incoming, &self.up, audible, t, n, false, k);
+        mix_sends(&mut strip.sends, &mut self.bufs, &mut self.incoming, &self.up, audible, t, n, false, k, &mut self.scratch);
+        if strip.out_line.active() {
+            // PDC: a saída chega ao destino alinhada com as outras entradas dele
+            let buf = &mut self.bufs[t];
+            strip.out_line.process(&mut buf.l[..n], &mut buf.r[..n]);
+        }
         let d = strip.out_dst;
         if d >= 0 {
             let Ok([from, to]) = self.bufs.get_disjoint_mut([t, d as usize]) else { return false };

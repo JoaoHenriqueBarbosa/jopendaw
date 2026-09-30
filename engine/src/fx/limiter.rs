@@ -316,8 +316,10 @@ impl Effect for Limiter {
         self.fresh = true;
     }
 
+    /// O lookahead pedido (não o em uso): a PDC lê a latência no comando que mudou o parâmetro, e
+    /// o atraso em uso só troca dentro do `process`, com a saída abaixada.
     fn latency(&self) -> usize {
-        self.len
+        self.want
     }
 
     fn meter(&self) -> f32 {

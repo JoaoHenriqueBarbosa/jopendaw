@@ -341,9 +341,191 @@ impl Svf {
     }
 }
 
+/// Linha de atraso estéreo de tomada móvel, a peça da compensação de latência (PDC). O atraso
+/// pedido (`target`) é alcançado por um crossfade curto entre a tomada antiga e a nova: mudar a
+/// latência com som passando não estala nem pula. Com atraso zero (e nenhuma mudança em curso) a
+/// linha está parada e quem a usa pula todas as chamadas: o caminho sem latência não muda em nada.
+///
+/// A memória cresce só em [`Delay::set_target`], que roda no comando (ou entre um bloco e outro),
+/// nunca no meio do processamento.
+#[derive(Clone, Debug, Default)]
+pub struct Delay {
+    l: Vec<f32>,
+    r: Vec<f32>,
+    /// Próxima posição de escrita.
+    pos: usize,
+    /// Tomada em uso e tomada pedida, em quadros.
+    cur: usize,
+    target: usize,
+    /// Quadros já andados do crossfade `cur` → `target` e a duração dele.
+    fade: usize,
+    fade_len: usize,
+}
+
+impl Delay {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pede o atraso `frames`, com o crossfade de `fade_len` quadros (pelo menos 1). Aumentar a
+    /// capacidade preserva o histórico. Um crossfade ainda no meio termina na hora (raro: duas
+    /// mudanças de latência em menos de 10 ms).
+    pub fn set_target(&mut self, frames: usize, fade_len: usize) {
+        if frames == self.target {
+            return;
+        }
+        if !self.active() {
+            // parada: o anel guarda o que sobrou de antes, que não é passado deste sinal
+            self.l.fill(0.0);
+            self.r.fill(0.0);
+            self.pos = 0;
+        }
+        if self.l.len() < frames + 1 {
+            self.grow(frames + 1);
+        }
+        self.cur = self.target;
+        self.target = frames;
+        self.fade = 0;
+        self.fade_len = fade_len.max(1);
+    }
+
+    /// Cresce o anel para `len` quadros sem perder o histórico: o mais antigo (na posição de
+    /// escrita) vai para o começo da parte final do anel novo, e a escrita recomeça em 0.
+    fn grow(&mut self, len: usize) {
+        let old = self.l.len();
+        let (mut l, mut r) = (vec![0.0; len], vec![0.0; len]);
+        for k in 0..old {
+            let src = (self.pos + k) % old;
+            l[len - old + k] = self.l[src];
+            r[len - old + k] = self.r[src];
+        }
+        self.l = l;
+        self.r = r;
+        self.pos = 0;
+    }
+
+    /// O atraso pedido, em quadros.
+    pub fn target(&self) -> usize {
+        self.target
+    }
+
+    /// Há atraso (ou mudança) em curso: a linha precisa ver todo bloco.
+    pub fn active(&self) -> bool {
+        self.cur > 0 || self.target > 0
+    }
+
+    /// A tomada já chegou ao atraso pedido.
+    pub fn settled(&self) -> bool {
+        self.cur == self.target
+    }
+
+    /// Termina o crossfade na hora e esvazia o histórico (começo de um render).
+    pub fn snap(&mut self) {
+        self.cur = self.target;
+        self.fade = 0;
+        self.l.fill(0.0);
+        self.r.fill(0.0);
+        self.pos = 0;
+    }
+
+    /// Esquece o histórico (o efeito voltou de um bypass), mantendo o atraso.
+    pub fn clear(&mut self) {
+        self.l.fill(0.0);
+        self.r.fill(0.0);
+    }
+
+    fn tap(&self, d: usize) -> usize {
+        let len = self.l.len();
+        // `pos` já avançou uma casa: o quadro de agora está em pos − 1
+        (self.pos + len - 1 - d) % len
+    }
+
+    /// Copia o histórico gravado: `l[i]` é o quadro de `back − i` quadros atrás (o mais antigo
+    /// primeiro; `back` = 0 é o último gravado). O que a linha nunca gravou vem zerado.
+    pub fn history(&self, back: usize, l: &mut [f32], r: &mut [f32]) {
+        let len = self.l.len();
+        for (i, (a, b)) in l.iter_mut().zip(r.iter_mut()).enumerate() {
+            match back.checked_sub(i) {
+                Some(d) if d < len => {
+                    let at = self.tap(d);
+                    (*a, *b) = (self.l[at], self.r[at]);
+                }
+                _ => (*a, *b) = (0.0, 0.0),
+            }
+        }
+    }
+
+    /// Só grava o bloco (o atraso não é lido agora).
+    pub fn record(&mut self, l: &[f32], r: &[f32]) {
+        let len = self.l.len();
+        if len == 0 {
+            return;
+        }
+        for (a, b) in l.iter().zip(r) {
+            self.l[self.pos] = *a;
+            self.r[self.pos] = *b;
+            self.pos = if self.pos + 1 == len { 0 } else { self.pos + 1 };
+        }
+    }
+
+    /// Grava o bloco e o devolve atrasado, no lugar.
+    pub fn process(&mut self, l: &mut [f32], r: &mut [f32]) {
+        let len = self.l.len();
+        if len == 0 {
+            return;
+        }
+        for (a, b) in l.iter_mut().zip(r.iter_mut()) {
+            self.l[self.pos] = *a;
+            self.r[self.pos] = *b;
+            self.pos = if self.pos + 1 == len { 0 } else { self.pos + 1 };
+            let i = self.tap(self.cur);
+            let (mut ol, mut or) = (self.l[i], self.r[i]);
+            if self.cur != self.target {
+                let j = self.tap(self.target);
+                let t = self.fade as f32 / self.fade_len as f32;
+                ol += (self.l[j] - ol) * t;
+                or += (self.r[j] - or) * t;
+                self.fade += 1;
+                if self.fade >= self.fade_len {
+                    self.cur = self.target;
+                    self.fade = 0;
+                }
+            }
+            *a = ol;
+            *b = or;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn delay_atrasa_o_pedido_e_troca_sem_pular() {
+        let mut d = Delay::new();
+        d.set_target(5, 1);
+        let src: Vec<f32> = (1..=20).map(|i| i as f32).collect();
+        let (mut l, mut r) = (src.clone(), src.clone());
+        d.process(&mut l, &mut r);
+        // o crossfade de 1 quadro consome o primeiro; dali em diante são 5 quadros de atraso
+        assert_eq!(l[0], 1.0);
+        assert!(l[1..5].iter().all(|&v| v == 0.0), "{l:?}");
+        assert_eq!(&l[5..], &src[..15]);
+        // crescer no meio preserva o histórico
+        d.set_target(9, 1);
+        let (mut l, mut r) = (vec![0.0; 10], vec![0.0; 10]);
+        d.process(&mut l, &mut r);
+        assert_eq!(l[0], 16.0, "{l:?}");
+        // (o anel só tinha 6 quadros: o que era mais velho que isso não existe para a tomada nova)
+        assert_eq!((l[1], l[2], l[3], l[8], l[9]), (0.0, 0.0, 15.0, 20.0, 0.0), "{l:?}");
+        // voltar a zero devolve a entrada
+        d.set_target(0, 4);
+        let (mut l, mut r) = (vec![7.0; 8], vec![7.0; 8]);
+        d.process(&mut l, &mut r);
+        assert_eq!(l[7], 7.0);
+        assert!(!d.active());
+    }
 
     #[test]
     fn adsr_percorre_os_estagios() {

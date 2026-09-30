@@ -23,7 +23,10 @@ pub trait Effect: Send {
     fn set_tempo(&mut self, _bpm: f64) {}
     /// Esquece o estado (linhas de atraso, envelopes): pânico e troca de projeto.
     fn reset(&mut self);
-    /// Atraso que o efeito introduz, em quadros (lookahead). Sem compensação ainda: documentado.
+    /// Atraso que o efeito introduz, em quadros (lookahead, filtros de fase linear). O motor o
+    /// compensa (PDC, ver `Engine::pdc_update`): o efeito não faz nada além de declará-lo. Deve ser
+    /// a latência que os parâmetros já mandados terão depois de assentar (o valor pedido, não o em
+    /// transição), constante enquanto o parâmetro não muda, e não pode depender do sinal.
     fn latency(&self) -> usize {
         0
     }
