@@ -35,7 +35,8 @@ abstract class SyncHost {
   /// Tenta baixar os áudios que o documento cita e este aparelho não tem.
   Future<void> fetchMissing();
 
-  /// Não dá para trocar o documento agora (gravando): o pull periódico espera.
+  /// Não dá para trocar o documento agora (gravando, tocando ou com um gesto em andamento): o pull
+  /// periódico espera.
   bool get busyEditing => false;
 }
 
@@ -193,7 +194,7 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
       final s = await api.projectDoc(projectId);
       final doc = s.doc;
       if (_disposed || gen != _gen || _dirty || conflict != null || doc == null || s.version <= _version) return false;
-      final applied = await host.applyRemote(doc, progress: _progress, canSwap: () => gen == _gen && !_dirty);
+      final applied = await host.applyRemote(doc, progress: _progress, canSwap: () => gen == _gen && !_dirty && !host.busyEditing);
       if (!applied) return false;
       _version = s.version;
       await _persist();

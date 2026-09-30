@@ -249,6 +249,12 @@ class MemoryStore implements LocalStore {
 
   @override
   Future<void> delete(String key) async => data.remove(key);
+
+  @override
+  Future<List<String>> keys(String prefix) async => [
+    for (final k in data.keys)
+      if (k.startsWith(prefix)) k,
+  ];
 }
 
 /// Controlador pronto, sem abrir o motor, a 120 bpm em 4/4 e com o motor a 100 Hz: uma batida são

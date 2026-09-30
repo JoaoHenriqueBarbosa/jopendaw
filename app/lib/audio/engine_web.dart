@@ -21,6 +21,7 @@ extension type _Host._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> idbGet(String key);
   external JSPromise<JSAny?> idbPut(String key, JSAny value);
   external JSPromise<JSAny?> idbDelete(String key);
+  external JSPromise<JSArray<JSString>> idbKeys(String prefix);
   external JSPromise<_MidiAccess> enableMidi();
   external void setOnMidi(JSFunction cb);
   external void setOnMidiInputs(JSFunction cb);
@@ -515,4 +516,7 @@ class LocalStore {
   }
 
   Future<void> delete(String key) => _host.idbDelete(key).toDart;
+
+  /// As chaves guardadas que começam com [prefix].
+  Future<List<String>> keys(String prefix) async => [for (final k in (await _host.idbKeys(prefix).toDart).toDart) k.toDart];
 }

@@ -187,6 +187,9 @@ class LocalStore {
   Future<void> delete(String key) async {
     await _files?.delete(key);
   }
+
+  /// As chaves guardadas que começam com [prefix].
+  Future<List<String>> keys(String prefix) async => await _files?.keys(prefix) ?? const [];
 }
 
 /// Guardado chave → valor em arquivos de um diretório: textos (`.txt`, UTF-8) e bytes (`.bin`).
@@ -284,6 +287,44 @@ class FileStore {
     await _deleteIfExists(File('$base.txt'));
     await _deleteIfExists(File('$base.bin'));
   });
+
+  /// Inverso de [fileName]: a chave de um nome de arquivo (sem extensão); null se o nome não vem de
+  /// uma chave que dê para recuperar (chave longa demais, que virou hash).
+  static String? keyOfFileName(String name) {
+    if (name == '%') return '';
+    if (name.startsWith('%h-')) return null;
+    final bytes = <int>[];
+    for (var i = 0; i < name.length; i++) {
+      if (name[i] == '%') {
+        final v = i + 3 <= name.length ? int.tryParse(name.substring(i + 1, i + 3), radix: 16) : null;
+        if (v == null) return null;
+        bytes.add(v);
+        i += 2;
+      } else {
+        bytes.add(name.codeUnitAt(i));
+      }
+    }
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// As chaves guardadas que começam com [prefix] (as de nome longo demais, que viram hash, não
+  /// entram: as de documento são curtas).
+  Future<List<String>> keys(String prefix) async {
+    final d = await _directory;
+    final found = <String>{};
+    await for (final f in d.list()) {
+      if (f is! File) continue;
+      final name = f.uri.pathSegments.last;
+      if (!name.endsWith('.txt') && !name.endsWith('.bin')) continue;
+      final key = keyOfFileName(name.substring(0, name.length - 4));
+      if (key != null && key.startsWith(prefix)) found.add(key);
+    }
+    return found.toList();
+  }
 
   static Future<void> _deleteIfExists(File f) async {
     try {

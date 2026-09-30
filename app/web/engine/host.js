@@ -34,7 +34,7 @@
   // estados com o áudio rodando viram um aviso ao app (`onEngineFailed`), que oferece reiniciar.
   let onEngineFailed = null;
   let failed = false;
-  // o worklet manda um estado a cada ~46 ms; sem nenhum por tanto tempo, com o contexto rodando, ele morreu
+  // o worklet manda um estado a cada 6 blocos de 128 quadros (~16 ms a 48 kHz); sem nenhum por tanto tempo, com o contexto rodando, ele morreu
   const STALL_MS = 4000;
   const WATCH_MS = 1000;
   let lastStateAt = 0;
@@ -589,6 +589,8 @@
     idbGet: (key) => tx('readonly', (s) => s.get(key)).then((v) => v ?? null),
     idbPut: (key, value) => tx('readwrite', (s) => s.put(value, key)),
     idbDelete: (key) => tx('readwrite', (s) => s.delete(key)),
+    idbKeys: (prefix) =>
+      tx('readonly', (s) => s.getAllKeys()).then((ks) => (ks || []).filter((k) => typeof k === 'string' && k.startsWith(prefix))),
     enableMidi,
     setOnMidi: (cb) => { onMidi = cb; },
     setOnMidiInputs: (cb) => { onMidiInputs = cb; },

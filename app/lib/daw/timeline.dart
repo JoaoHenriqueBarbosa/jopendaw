@@ -2864,6 +2864,8 @@ class _WavePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = wave;
     if (w == null) return;
+    // com ganho alto a onda passa da altura: corta na área dela (senão invade o nome do clipe)
+    canvas.clipRect(Offset.zero & size);
     final mid = size.height / 2;
     final amp = size.height / 2 * 0.95 * gain;
     final paint = Paint()

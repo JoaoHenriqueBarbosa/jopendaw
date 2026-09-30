@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../api/client.dart';
 import '../daw/controller.dart';
+import '../daw/warp_dialog.dart' show formatBpm;
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/marker.dart';
@@ -85,8 +86,7 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
 /// enquanto ele não abriu.
 String projectSubtitle(Project p, DawDoc? doc) {
   final bpm = doc?.bpm ?? p.bpm.toDouble();
-  final text = bpm % 1 == 0 ? bpm.toStringAsFixed(0) : bpm.toStringAsFixed(1);
-  return '$text BPM · ${doc?.beatsPerBar ?? p.beatsPerBar}/${p.beatUnit}';
+  return '${formatBpm(bpm)} BPM · ${doc?.beatsPerBar ?? p.beatsPerBar}/${p.beatUnit}';
 }
 
 /// Transporte, arranjo e o painel de baixo quando aberto. No celular o transporte fica embaixo,
@@ -188,9 +188,9 @@ class _DawStudioState extends State<DawStudio> {
       if (ctx != null) action = () => showShortcuts(ctx);
     } else if (k == LogicalKeyboardKey.escape && c.dock != Dock.none) {
       action = () => c.setDock(Dock.none);
-    } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.numpadAdd) {
+    } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.add || k == LogicalKeyboardKey.numpadAdd || e.character == '+') {
       action = () => c.zoom(1.25);
-    } else if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract) {
+    } else if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract || e.character == '-') {
       action = () => c.zoom(0.8);
     }
     if (action == null) return KeyEventResult.ignored;
@@ -221,6 +221,11 @@ class _DawStudioState extends State<DawStudio> {
                     actionLabel: c.audioRestarting ? 'Reiniciando…' : 'Reiniciar o áudio',
                     onAction: c.audioRestarting ? null : () => unawaited(c.restartAudio()),
                   ),
+                ),
+              if (c.remoteNotice != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: InlineNotice(c.remoteNotice!, error: false, onClose: c.clearRemoteNotice),
                 ),
               if (c.error != null)
                 Padding(

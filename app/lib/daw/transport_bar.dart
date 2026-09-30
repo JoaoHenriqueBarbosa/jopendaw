@@ -303,7 +303,7 @@ class _TempoButton extends StatelessWidget {
     if (d.tempo.isSingle && d.meter.isSingle) {
       return TextButton(
         onPressed: onPressed,
-        child: Text('${d.bpm.round()} BPM · ${d.beatsPerBar}/4', style: style),
+        child: Text('${formatBpm(d.bpm)} BPM · ${d.beatsPerBar}/4', style: style),
       );
     }
     return ValueListenableBuilder<double>(

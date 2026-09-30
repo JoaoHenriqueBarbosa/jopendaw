@@ -69,7 +69,7 @@ int32_t jd_calls(const uint8_t *json, size_t len) {
   return (len > 0 && json[0] == '[') ? 0 : -1;
 }
 
-void jd_sample_load(intptr_t id, const float *l, const float *r, size_t frames, double rate) {
+void jd_sample_load(uint32_t id, const float *l, const float *r, size_t frames, double rate) {
   (void)rate;
   g_sample_id = id;
   g_sample_frames = frames;
@@ -78,7 +78,7 @@ void jd_sample_load(intptr_t id, const float *l, const float *r, size_t frames, 
   for (size_t i = 0; i < frames; i++) g_sample_sum += l[i] + (r ? r[i] : 0);
 }
 
-void jd_sample_drop(intptr_t id) { (void)id; }
+void jd_sample_drop(uint32_t id) { (void)id; }
 
 // [batida, tocando, fxMeter, n, picos...] em f64, como o jd_state do Rust
 int32_t jd_state(double *out, size_t max) {
@@ -113,31 +113,31 @@ typedef struct {
   uint8_t *data;
 } decoded;
 
-intptr_t jd_decode(const uint8_t *bytes, size_t len) {
+uint64_t jd_decode(const uint8_t *bytes, size_t len) {
   if (len < 5 || memcmp(bytes, "FAKE", 4) != 0) return 0;
   decoded *d = malloc(sizeof(decoded));
   d->frames = len - 4;
   d->data = malloc(d->frames);
   memcpy(d->data, bytes + 4, d->frames);
   g_live++;
-  return (intptr_t)d;
+  return (uint64_t)(uintptr_t)d;
 }
 
-// canais em u32: o Dart lê células de 64 bits zeradas
-void jd_decoded_info(intptr_t h, uint64_t *frames, uint32_t *channels, double *rate) {
-  decoded *d = (decoded *)h;
+// como o Rust: handles u64 (em 32 bits ocupam um par de registradores), frames i64 e canais i32
+void jd_decoded_info(uint64_t h, int64_t *frames, int32_t *channels, double *rate) {
+  decoded *d = (decoded *)(uintptr_t)h;
   *frames = d->frames;
   *channels = 3;
   *rate = 44100;
 }
 
-void jd_decoded_copy(intptr_t h, size_t channel, float *out) {
-  decoded *d = (decoded *)h;
+void jd_decoded_copy(uint64_t h, int32_t channel, float *out) {
+  decoded *d = (decoded *)(uintptr_t)h;
   for (size_t i = 0; i < d->frames; i++) out[i] = (float)d->data[i] / 100.0f * (float)(channel + 1);
 }
 
-void jd_decoded_free(intptr_t h) {
-  decoded *d = (decoded *)h;
+void jd_decoded_free(uint64_t h) {
+  decoded *d = (decoded *)(uintptr_t)h;
   free(d->data);
   free(d);
   g_live--;
@@ -211,16 +211,16 @@ typedef struct {
   size_t last;  // tamanho do último bloco
 } offline;
 
-intptr_t jd_offline_new(double rate) {
+uint64_t jd_offline_new(double rate) {
   offline *o = calloc(1, sizeof(offline));
   o->rate = rate;
   g_live++;
-  return (intptr_t)o;
+  return (uint64_t)(uintptr_t)o;
 }
 
 // entende só capture_clear e capture_add, o que o teste precisa
-void jd_offline_calls(intptr_t h, const uint8_t *json, size_t len) {
-  offline *o = (offline *)h;
+void jd_offline_calls(uint64_t h, const uint8_t *json, size_t len) {
+  offline *o = (offline *)(uintptr_t)h;
   char *s = malloc(len + 1);
   memcpy(s, json, len);
   s[len] = 0;
@@ -233,20 +233,20 @@ void jd_offline_calls(intptr_t h, const uint8_t *json, size_t len) {
   free(s);
 }
 
-void jd_offline_sample(intptr_t h, intptr_t id, const float *l, const float *r, size_t frames, double rate) {
+void jd_offline_sample(uint64_t h, uint32_t id, const float *l, const float *r, size_t frames, double rate) {
   (void)h, (void)id, (void)l, (void)r, (void)frames, (void)rate;
   g_offline_samples++;
 }
 
-void jd_offline_process(intptr_t h, size_t frames) {
-  offline *o = (offline *)h;
+void jd_offline_process(uint64_t h, size_t frames) {
+  offline *o = (offline *)(uintptr_t)h;
   o->pos += o->last;
   o->last = frames;
   if (g_slow_us > 0) usleep(g_slow_us);
 }
 
-void jd_offline_captured(intptr_t h, intptr_t index, float *l, float *r, size_t n) {
-  offline *o = (offline *)h;
+void jd_offline_captured(uint64_t h, int32_t index, float *l, float *r, size_t n) {
+  offline *o = (offline *)(uintptr_t)h;
   for (size_t i = 0; i < n; i++) {
     int valid = index >= 0 && index < o->count && i < o->last;
     l[i] = valid ? (float)o->tracks[index] : 0;
@@ -254,7 +254,7 @@ void jd_offline_captured(intptr_t h, intptr_t index, float *l, float *r, size_t 
   }
 }
 
-void jd_offline_free(intptr_t h) {
-  free((offline *)h);
+void jd_offline_free(uint64_t h) {
+  free((offline *)(uintptr_t)h);
   g_live--;
 }

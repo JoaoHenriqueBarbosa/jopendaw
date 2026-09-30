@@ -1,12 +1,10 @@
 package tech.johnenrique.jopendaw
 
-import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -28,17 +26,13 @@ import io.flutter.plugin.common.MethodChannel
  *
  * - `openIn(url, package)`: abre um link num app específico (o do Discord, para entrar);
  * - `keepScreenOn(bool)`: tela acesa enquanto toca ou grava;
- * - `microphone()` / `requestMicrophone()`: a permissão de gravar, com a diferença entre negada
- *   (dá para pedir de novo) e bloqueada (só nas configurações);
  *
+ * (a permissão do microfone é pedida pelo `permission_handler` em `startInput` do engine_ffi.dart)
  * e avisa o Dart, pelo mesmo canal, de `audioNoisy` (o fone saiu: o som ia para o alto-falante) e
  * de `audioDevices` (um aparelho de áudio entrou ou saiu).
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
-
-    /** Respostas esperando o pedido de microfone que está na tela (um pedido responde a todas). */
-    private val micWaiting = mutableListOf<MethodChannel.Result>()
 
     /** Aparelhos de áudio da última vez que olhamos (null antes da primeira). */
     private var knownDevices: Set<Int>? = null
@@ -79,8 +73,6 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "openIn" -> openIn(call, result)
                 "keepScreenOn" -> keepScreenOn(call.arguments == true, result)
-                "microphone" -> result.success(micGranted())
-                "requestMicrophone" -> requestMicrophone(result)
                 else -> result.notImplemented()
             }
         }
@@ -89,8 +81,6 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         channel?.setMethodCallHandler(null)
         channel = null
-        // quem esperava o pedido de microfone não pode ficar pendurado com a tela indo embora
-        answerMic("denied")
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
@@ -144,38 +134,6 @@ class MainActivity : FlutterActivity() {
         result.success(null)
     }
 
-    private fun micGranted() = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-
-    /** Responde `granted`, `denied` (dá para pedir de novo) ou `blocked` (só nas configurações). */
-    private fun requestMicrophone(result: MethodChannel.Result) {
-        if (micGranted()) return result.success("granted")
-        micWaiting.add(result)
-        // um pedido já na tela responde também a quem chegar enquanto isso
-        if (micWaiting.size == 1) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MIC_REQUEST)
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != MIC_REQUEST) return
-        val state =
-            when {
-                grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED -> "granted"
-                // pedido interrompido (a tela foi recriada no meio): ninguém recusou
-                grantResults.isEmpty() -> "denied"
-                // Recusado, e o Android ainda aceita perguntar. Sem isso, a pessoa marcou "não
-                // perguntar de novo" ou recusou duas vezes (Android 11+): o pedido nem aparece mais.
-                shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) -> "denied"
-                else -> "blocked"
-            }
-        answerMic(state)
-    }
-
-    private fun answerMic(state: String) {
-        val waiting = micWaiting.toList()
-        micWaiting.clear()
-        for (r in waiting) r.success(state)
-    }
-
     private fun devicesChanged() {
         val now = audio.getDevices(AudioManager.GET_DEVICES_ALL).map { it.id }.toSet()
         val before = knownDevices
@@ -184,8 +142,6 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
-        private const val MIC_REQUEST = 0x4a44
-
         /**
          * Carrega o motor nativo pelo System.loadLibrary antes de o Dart abri-lo (o DynamicLibrary.open
          * do engine_ffi.dart acha a mesma cópia, já carregada). Só por este caminho o Android chama o

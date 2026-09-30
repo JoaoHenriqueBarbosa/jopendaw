@@ -36,12 +36,6 @@ void main() {
     keepScreenOn(false);
   });
 
-  testWidgets('a permissão do microfone é consultada sem perguntar nada', (tester) async {
-    final direct = await _apps.invokeMethod<bool>('microphone');
-    expect(direct, isNotNull);
-    expect(await microphoneAllowed(), direct);
-  });
-
   testWidgets('sair da tela e voltar avisam uma vez cada; um diálogo por cima não conta', (tester) async {
     var leaves = 0, returns = 0;
     final off = watchAudioSession(onLeave: () => leaves++, onReturn: () => returns++);

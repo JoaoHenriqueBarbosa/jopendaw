@@ -128,7 +128,7 @@ bool _appsListening = false;
 ///   controlador para o transporte, como todo app de mídia faz.
 /// - [onDevices]: um aparelho de áudio entrou ou saiu (fone plugado, interface USB). A saída pode
 ///   ter trocado de rota e a lista de entradas mudou: o controlador chama `AudioEngine.resume()` e
-///   atualiza as entradas (`refreshInputDevices`).
+///   relê a lista de entradas (sem abrir o microfone).
 ///
 /// Um diálogo por cima (o pedido de permissão do microfone, a cortina de notificações, a tela
 /// dividida com outro app) não conta como sair: o app segue à mostra, só sem o foco.
@@ -172,37 +172,4 @@ void _listenApps() {
         throw MissingPluginException('jopendaw/apps: ${call.method}');
     }
   });
-}
-
-/// A permissão de gravar já foi dada (sem perguntar nada). Fora do Android, `true`.
-Future<bool> microphoneAllowed() async {
-  try {
-    return await _apps.invokeMethod<bool>('microphone') ?? false;
-  } on MissingPluginException {
-    return true;
-  }
-}
-
-/// Garante a permissão do microfone antes de abrir a entrada, pedindo na hora se preciso (o
-/// Android mostra o pedido por cima do app). É do motor (`AudioEngine.startInput` no
-/// engine_io.dart), que só existe fora da web, então não tem par no platform_web.dart: lá quem
-/// pergunta é o navegador. Negada: [StateError] com a mensagem para o usuário, como o
-/// `startInput` da web. Fora do Android (testes, desktop), volta sem pedir.
-Future<void> ensureMicrophone() async {
-  final String? state;
-  try {
-    state = await _apps.invokeMethod<String>('requestMicrophone');
-  } on MissingPluginException {
-    return;
-  }
-  switch (state) {
-    case 'granted':
-      return;
-    case 'blocked':
-      throw StateError(
-        'O acesso ao microfone está bloqueado para o jopendaw. Libere o microfone em Configurações > Apps > jopendaw > Permissões e tente de novo.',
-      );
-    default:
-      throw StateError('O Android negou o acesso ao microfone. Para gravar, tente de novo e permita o acesso.');
-  }
 }

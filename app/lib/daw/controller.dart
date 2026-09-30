@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show GestureBinding, PointerCancelEvent, PointerDownEvent, PointerEvent, PointerUpEvent;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show EditableText, FocusManager;
 
@@ -471,7 +472,7 @@ class _SyncBridge implements SyncHost {
   Future<void> fetchMissing() => c._fetchMissing();
 
   @override
-  bool get busyEditing => c.recording;
+  bool get busyEditing => c.recording || c.playing.value || c._pointersDown > 0;
 }
 
 class DawController extends ChangeNotifier {
@@ -663,6 +664,12 @@ class DawController extends ChangeNotifier {
       _engine.onLoudness = _onLoudness;
       _engine.onEngineFailed = _onEngineFailed;
       try {
+        GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointer);
+        _pointerRouted = true;
+      } on Object {
+        // sem binding (teste de unidade): não acompanha o ponteiro
+      }
+      try {
         _unwatchAudio = watchAudioSession(onLeave: _onAppLeave, onReturn: _onAppReturn, onNoisy: _onAudioNoisy, onDevices: _onAudioDevices);
       } on Object catch (e) {
         // fora de um app Flutter (um teste sem binding): sem os avisos do aparelho
@@ -719,9 +726,38 @@ class DawController extends ChangeNotifier {
   /// [restartAudio] em andamento.
   bool audioRestarting = false;
 
+  /// Aviso discreto de que o projeto foi trocado pelo de outro aparelho (a tela mostra e a pessoa
+  /// dispensa com [clearRemoteNotice]).
+  String? remoteNotice;
+
+  void clearRemoteNotice() {
+    if (remoteNotice == null) return;
+    remoteNotice = null;
+    notifyListeners();
+  }
+
+  /// Quantos dedos/botões do ponteiro estão apertados: um gesto (arraste) em andamento não pode
+  /// ver o documento trocado debaixo dele.
+  int _pointersDown = 0;
+  bool _pointerRouted = false;
+  final _pointerIds = <int>{};
+
+  void _onPointer(PointerEvent e) {
+    if (e is PointerDownEvent) {
+      _pointerIds.add(e.pointer);
+    } else if (e is PointerUpEvent || e is PointerCancelEvent) {
+      _pointerIds.remove(e.pointer);
+    }
+    _pointersDown = _pointerIds.length;
+  }
+
   void _onEngineFailed(String message) {
     if (_disposed) return;
-    audioFailure = 'O motor de áudio parou de responder e o som ficou mudo. O projeto não foi perdido: reinicie o áudio para continuar.';
+    debugPrint('motor de áudio caiu: $message');
+    final detail = message.trim();
+    audioFailure =
+        'O motor de áudio parou de responder e o som ficou mudo. O projeto não foi perdido: reinicie o áudio para continuar.'
+        '${detail.isEmpty ? '' : '\nDetalhe: ${detail.length > 240 ? '${detail.substring(0, 240)}…' : detail}'}';
     playing.value = false;
     notifyListeners();
   }
@@ -790,17 +826,31 @@ class DawController extends ChangeNotifier {
   void _onAppLeave() {
     if (_disposed) return;
     _pauseForSystem();
-    if (_inputOpen && !recording) {
-      _inputOpen = false;
-      inputLevel.value = 0;
-      _quietly(_engine.stopInput);
+    // Gravando, o `_finishRecording` (já em andamento) ainda espera a latência da entrada e recolhe o
+    // que ela tem: fechar a entrada agora cortaria o fim da gravação. Ele fecha depois.
+    if (_rec != null) {
+      _closeInputAfterRecording = true;
+    } else {
+      _closeInputForLeave();
     }
+  }
+
+  /// O app saiu da tela durante o fim de uma gravação: a entrada fecha quando ela termina.
+  bool _closeInputAfterRecording = false;
+
+  void _closeInputForLeave() {
+    _closeInputAfterRecording = false;
+    if (!_inputOpen || recording) return;
+    _inputOpen = false;
+    inputLevel.value = 0;
+    _quietly(_engine.stopInput);
   }
 
   /// Voltou para a tela: garante a saída tocando (reabre se o Android a derrubou) e reabre a
   /// entrada se alguma faixa de áudio ficou armada ou monitorando, como o `open`.
   void _onAppReturn() {
     if (_disposed || !ready) return;
+    _closeInputAfterRecording = false;
     unawaited(_engine.resume());
     if (!_inputOpen && doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
   }
@@ -813,10 +863,13 @@ class DawController extends ChangeNotifier {
   }
 
   /// Um aparelho de áudio entrou ou saiu (fone plugado, interface USB): a saída pode ter trocado
-  /// de rota, e o motor reabre no aparelho novo.
+  /// de rota: garante a saída aberta ([AudioEngine.resume]) e relê a lista de entradas (sem abrir
+  /// o microfone, que só abre para armar ou gravar; o [refreshInputDevices] abre e por isso não é
+  /// chamado daqui). Se a entrada escolhida sumiu, a lista já volta para a padrão e avisa.
   void _onAudioDevices() {
     if (_disposed || !ready) return;
     unawaited(_engine.resume());
+    unawaited(_listInputs());
   }
 
   /// Pausa (sem voltar o cursor) por causa do sistema. Gravando, encerra a gravação.
@@ -954,6 +1007,7 @@ class DawController extends ChangeNotifier {
     if (_engine.onState == _onEngineState) _engine.onState = null;
     if (_engine.onLoudness == _onLoudness) _engine.onLoudness = null;
     if (_engine.onEngineFailed == _onEngineFailed) _engine.onEngineFailed = null;
+    if (_pointerRouted) GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointer);
     _unwatchAudio?.call();
     _unwatchAudio = null;
     _keepAwake(false);
@@ -1957,9 +2011,13 @@ class DawController extends ChangeNotifier {
         ..armed = now?.armed ?? false
         ..monitor = now?.monitor ?? false;
     }
+    // o servidor tem o mesmo projeto deste aparelho (a versão só subiu): nada a trocar, e o
+    // desfazer fica
+    if (jsonEquals(jsonDecode(jsonEncode(next.toJson())), jsonDecode(jsonEncode(old.toJson())))) return true;
     doc = next;
     _undo.clear();
     _redo.clear();
+    remoteNotice = 'Projeto atualizado de outro aparelho. Desfazer não disponível para o que veio de lá.';
     if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
     _prune();
     _sync();
@@ -3889,7 +3947,11 @@ class DawController extends ChangeNotifier {
       _recBusy = false;
       status = null;
       if (!_disposed) {
-        _releaseInputIfIdle();
+        if (_closeInputAfterRecording) {
+          _closeInputForLeave();
+        } else {
+          _releaseInputIfIdle();
+        }
         notifyListeners();
       }
     }

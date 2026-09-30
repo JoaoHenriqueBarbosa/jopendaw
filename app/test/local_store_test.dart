@@ -39,6 +39,14 @@ void main() {
       expect(names.length, keys.length);
     });
 
+    test('o nome volta à chave (só as de hash se perdem)', () {
+      for (final k in ['doc:3f2a-9_b', 'sample:ABC', 'ç', '../fora', '', 'a b', '%', 'doc:%41']) {
+        expect(FileStore.keyOfFileName(FileStore.fileName(k)), k);
+      }
+      expect(FileStore.keyOfFileName(FileStore.fileName('x' * 300)), isNull);
+      expect(FileStore.keyOfFileName('%ZZ'), isNull);
+    });
+
     test('chave longa vira o sha-256 dela (nome curto, ainda único)', () {
       final a = FileStore.fileName('x' * 300), b = FileStore.fileName('${'x' * 299}y');
       expect(a, startsWith('%h-'));
@@ -89,6 +97,17 @@ void main() {
       expect(await store.get('doc:p'), 'versão 19');
       await Future.wait(writes);
       expect(await store.get('doc:p'), 'versão 19');
+    });
+
+    test('keys lista as chaves com o prefixo, de texto e de bytes', () async {
+      await store.put('doc:a', 'x');
+      await store.put('doc:B', Uint8List(1));
+      await store.put('sync:a', 'x');
+      await store.put('sample:${'f' * 64}', Uint8List(1));
+      expect((await store.keys('doc:'))..sort(), ['doc:B', 'doc:a']);
+      await store.delete('doc:a');
+      expect(await store.keys('doc:'), ['doc:B']);
+      expect(await store.keys('nada:'), isEmpty);
     });
 
     test('chave com barra ou pontos não sai do diretório', () async {

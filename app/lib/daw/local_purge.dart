@@ -9,7 +9,8 @@ import 'model.dart';
 
 /// Apaga do aparelho o documento (`doc:<id>`), o estado de sincronização (`sync:<id>`), o modelo
 /// pendente (`template:<id>`) e os áudios que só este projeto citava. Um áudio que o documento
-/// local de qualquer projeto de [otherProjectIds] ainda cita fica. Nunca lança: o que não deu para
+/// local de qualquer outro projeto ainda cita fica: os de [otherProjectIds] e todo `doc:*` que o
+/// guardado listar. Nunca lança: o que não deu para
 /// apagar sobra como lixo inofensivo. Devolve quantos áudios foram apagados.
 ///
 /// Os sons derivados do warp (`warp:<chave>`) não entram: o guardado não lista chaves, e eles se
@@ -19,7 +20,15 @@ Future<int> purgeLocalProject(LocalStore store, String projectId, Iterable<Strin
   try {
     final hashes = await _docHashes(store, projectId);
     final kept = <String>{};
-    for (final id in otherProjectIds) {
+    // todos os documentos guardados neste aparelho, não só os da lista carregada (ela pode estar
+    // velha, vir de outra conta ou faltar projeto que só existe aqui)
+    final ids = {...otherProjectIds};
+    try {
+      for (final k in await store.keys('doc:')) {
+        ids.add(k.substring(4));
+      }
+    } catch (_) {}
+    for (final id in ids) {
       if (id != projectId) kept.addAll(await _docHashes(store, id));
     }
     for (final key in ['doc:$projectId', 'sync:$projectId', 'template:$projectId']) {

@@ -91,7 +91,8 @@ pub const ERR_BAD_JSON: i32 = -2;
 pub const ERR_BUSY: i32 = -3;
 /// Ponteiro nulo, tamanho ou taxa inválidos, handle inexistente.
 pub const ERR_BAD_ARG: i32 = -4;
-/// Falha interna (pânico pego); se foi na thread de áudio, o motor fica mudo até reiniciar o app.
+/// Falha interna (pânico pego); se foi na thread de áudio, o motor fica mudo até o próximo `jd_start`, que o recria vazio
+/// (o `Reiniciar o áudio` do app).
 pub const ERR_PANIC: i32 = -5;
 /// Sem AAudio (Android 7) ou fora do Android.
 pub const ERR_UNSUPPORTED: i32 = -6;

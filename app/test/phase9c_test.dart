@@ -126,7 +126,7 @@ void main() {
         'updated_at': '2026-01-01T00:00:00Z',
       });
       expect(projectSubtitle(p, null), '120 BPM · 4/4');
-      expect(projectSubtitle(p, DawDoc(bpm: 97.5, beatsPerBar: 3, tracks: [])), '97.5 BPM · 3/4');
+      expect(projectSubtitle(p, DawDoc(bpm: 97.5, beatsPerBar: 3, tracks: [])), '97,5 BPM · 3/4');
     });
   });
 
@@ -194,6 +194,53 @@ void main() {
       expect(c.sync.phase, SyncPhase.synced);
       // sem versão nova, nada acontece
       expect(await c.sync.pullNow(), isFalse);
+      c.dispose();
+    });
+
+    test('pull avisa da troca, zera o desfazer e espera o transporte tocar ou um gesto acabar', () async {
+      final api = FakeSyncApi()
+        ..version = 1
+        ..doc = docWith();
+      final c = await opened(
+        api,
+        MemoryStore()
+          ..data['doc:p'] = jsonEncode(docWith())
+          ..data['sync:p'] = jsonEncode({'version': 1, 'dirty': false}),
+      );
+      c.checkpoint();
+      expect(c.canUndo, isTrue);
+      api.version = 2;
+      api.doc = docWith(track: 'Do outro aparelho');
+      c.playing.value = true;
+      expect(await c.sync.pullNow(), isFalse, reason: 'tocando: não troca o documento debaixo do som');
+      expect(c.doc.tracks.first.name, 'Local');
+      c.playing.value = false;
+      expect(await c.sync.pullNow(), isTrue);
+      expect(c.remoteNotice, contains('Projeto atualizado de outro aparelho'));
+      expect(c.remoteNotice, contains('Desfazer não disponível'));
+      expect(c.canUndo, isFalse);
+      c.clearRemoteNotice();
+      expect(c.remoteNotice, isNull);
+      c.dispose();
+    });
+
+    test('pull de um documento igual ao local adota a versão sem avisar nem zerar o desfazer', () async {
+      final api = FakeSyncApi()
+        ..version = 1
+        ..doc = docWith();
+      final c = await opened(
+        api,
+        MemoryStore()
+          ..data['doc:p'] = jsonEncode(docWith())
+          ..data['sync:p'] = jsonEncode({'version': 1, 'dirty': false}),
+      );
+      c.checkpoint();
+      api.version = 2;
+      api.doc = docWith();
+      expect(await c.sync.pullNow(), isTrue);
+      expect(c.sync.knownVersion, 2);
+      expect(c.remoteNotice, isNull);
+      expect(c.canUndo, isTrue);
       c.dispose();
     });
 
@@ -357,9 +404,11 @@ void main() {
       for (final h in ['x', 'y', 'z']) {
         store.data['sample:$h'] = Uint8List(1);
       }
+      // 'c' só existe no aparelho (fora da lista): os áudios dele também ficam
+      store.data['doc:c'] = jsonEncode(docOf(['z']).toJson());
       final removed = await purgeLocalProject(store, 'a', ['a', 'b']);
       expect(removed, 1);
-      expect(store.data.keys.toSet(), {'doc:b', 'sample:y', 'sample:z'});
+      expect(store.data.keys.toSet(), {'doc:b', 'doc:c', 'sample:y', 'sample:z'});
     });
 
     test('ganho do clipe: desfazível, vai ao motor e ao documento; dB de −40 a +12', () async {

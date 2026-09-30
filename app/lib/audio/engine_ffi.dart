@@ -6,34 +6,36 @@
 /// indicador do efeito, espectro) vem por polling a ~60 Hz, como o worklet mandaria; o que é pesado
 /// (decodificar, renderizar, sha-256 de arquivo grande) roda num isolate para a tela não travar.
 ///
-/// Contrato binário assumido (C ABI). Argumentos inteiros vão como `intptr_t`, que serve para `u32`, `i32` e
-/// `usize` do lado do Rust (o chamado só olha os bits do tipo dele); já os RETORNOS `i32` são lidos
-/// como `Int32` (o registrador de retorno tem lixo nos 32 bits altos e um −1 viraria 4294967295); handles são do tamanho de
-/// ponteiro (0 = falhou); áudio é f32; taxas, batidas e latências são f64:
+/// Contrato binário assumido (C ABI). Cada argumento tem o tipo exato do Rust: `usize` é `IntPtr`, os
+/// ids `u32` e os índices `i32` são `Uint32`/`Int32`, e os handles `u64` são `Uint64` (em armeabi-v7a, de
+/// 32 bits, um `u64` ocupa um par de registradores alinhado: declarar `IntPtr` desalinharia todos os
+/// argumentos seguintes). Os RETORNOS `i32` são lidos como `Int32` (o registrador de retorno tem lixo
+/// nos 32 bits altos e um −1 viraria 4294967295); handle 0 = falhou; áudio é f32; taxas, batidas e
+/// latências são f64. No dart2js `Uint64` não existe: este arquivo é só do Android.
 ///
 ///     f64    jd_start()                                   taxa da saída (≤ 0: não abriu)
 ///     void   jd_stop()
 ///     i32    jd_calls(u8* json, usize len)                0 ok, < 0 erro
-///     void   jd_sample_load(id, f32* l, f32* r, usize frames, f64 rate)   r nulo = mono; copia
-///     void   jd_sample_drop(id)
+///     void   jd_sample_load(u32 id, f32* l, f32* r, usize frames, f64 rate)   r nulo = mono; copia
+///     void   jd_sample_drop(u32 id)
 ///     i32    jd_state(f64* out, usize max)                [batida, tocando, fxMeter, n, picos...]; n valores ou < 0
 ///     i32    jd_spectrum(f32* out, usize n)                faixas em dB; 0 sem nada observado
 ///     handle jd_decode(u8* bytes, usize len)
-///     void   jd_decoded_info(handle, *frames, *channels, f64* rate)   inteiros de até 64 bits
-///     void   jd_decoded_copy(handle, usize channel, f32* out)          `frames` floats
+///     void   jd_decoded_info(handle, i64* frames, i32* channels, f64* rate)
+///     void   jd_decoded_copy(handle, i32 channel, f32* out)          `frames` floats
 ///     void   jd_decoded_free(handle)
 ///     handle jd_stretch(f32* l, f32* r, usize frames, f64 rate, f64 ratio, f64 semitones)   como jd_decode
 ///     i32    jd_detect_bpm(f32* l, f32* r, usize frames, f64 rate, f64* bpm, f64* confidence)
 ///     f64    jd_input_start(i32 device)                   latência de entrada (s); < 0 erro; −1 = padrão
 ///     void   jd_input_stop()
 ///     i32    jd_input_devices(u8* out, usize max)         tamanho do JSON (maior que max: não coube)
-///     void   jd_capture(on)
+///     void   jd_capture(i32 on)
 ///     i32    jd_recorded(f32* l, f32* r, usize max, f64* out_beat)     quadros; batida do primeiro
 ///     f32    jd_input_level()                             pico desde a leitura; < 0: a entrada caiu
 ///     i32    jd_rec_notes(f32* out, usize max)            grupos de 5 floats, como o rec_notes do wasm
 ///     handle jd_offline_new(f64 rate)
 ///     void   jd_offline_calls(handle, u8* json, usize len)
-///     void   jd_offline_sample(handle, id, f32* l, f32* r, usize frames, f64 rate)
+///     void   jd_offline_sample(handle, u32 id, f32* l, f32* r, usize frames, f64 rate)
 ///     void   jd_offline_process(handle, usize frames)     até 4096 quadros
 ///     void   jd_offline_captured(handle, i32 index, f32* l, f32* r, usize n)
 ///     void   jd_offline_free(handle)
@@ -119,23 +121,23 @@ final class EngineLib {
   late final stop = _lib.lookupFunction<Void Function(), void Function()>('jd_stop');
   late final calls = _lib.lookupFunction<Int32 Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_calls');
   late final sampleLoad = _lib
-      .lookupFunction<Void Function(IntPtr, Pointer<Float>, Pointer<Float>, IntPtr, Double), void Function(int, Pointer<Float>, Pointer<Float>, int, double)>(
+      .lookupFunction<Void Function(Uint32, Pointer<Float>, Pointer<Float>, IntPtr, Double), void Function(int, Pointer<Float>, Pointer<Float>, int, double)>(
         'jd_sample_load',
       );
-  late final sampleDrop = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_sample_drop');
+  late final sampleDrop = _lib.lookupFunction<Void Function(Uint32), void Function(int)>('jd_sample_drop');
   late final state = _lib.lookupFunction<Int32 Function(Pointer<Double>, IntPtr), int Function(Pointer<Double>, int)>('jd_state');
   late final spectrum = _lib.lookupFunction<Int32 Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_spectrum');
-  late final decode = _lib.lookupFunction<IntPtr Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_decode');
+  late final decode = _lib.lookupFunction<Uint64 Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_decode');
   late final decodedInfo = _lib
       .lookupFunction<
-        Void Function(IntPtr, Pointer<Uint64>, Pointer<Uint64>, Pointer<Double>),
-        void Function(int, Pointer<Uint64>, Pointer<Uint64>, Pointer<Double>)
+        Void Function(Uint64, Pointer<Int64>, Pointer<Int32>, Pointer<Double>),
+        void Function(int, Pointer<Int64>, Pointer<Int32>, Pointer<Double>)
       >('jd_decoded_info');
-  late final decodedCopy = _lib.lookupFunction<Void Function(IntPtr, IntPtr, Pointer<Float>), void Function(int, int, Pointer<Float>)>('jd_decoded_copy');
-  late final decodedFree = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_decoded_free');
+  late final decodedCopy = _lib.lookupFunction<Void Function(Uint64, Int32, Pointer<Float>), void Function(int, int, Pointer<Float>)>('jd_decoded_copy');
+  late final decodedFree = _lib.lookupFunction<Void Function(Uint64), void Function(int)>('jd_decoded_free');
   late final stretch = _lib
       .lookupFunction<
-        IntPtr Function(Pointer<Float>, Pointer<Float>, IntPtr, Double, Double, Double),
+        Uint64 Function(Pointer<Float>, Pointer<Float>, IntPtr, Double, Double, Double),
         int Function(Pointer<Float>, Pointer<Float>, int, double, double, double)
       >('jd_stretch');
   late final detectBpm = _lib
@@ -143,10 +145,10 @@ final class EngineLib {
         Int32 Function(Pointer<Float>, Pointer<Float>, IntPtr, Double, Pointer<Double>, Pointer<Double>),
         int Function(Pointer<Float>, Pointer<Float>, int, double, Pointer<Double>, Pointer<Double>)
       >('jd_detect_bpm');
-  late final inputStart = _lib.lookupFunction<Double Function(IntPtr), double Function(int)>('jd_input_start');
+  late final inputStart = _lib.lookupFunction<Double Function(Int32), double Function(int)>('jd_input_start');
   late final inputStop = _lib.lookupFunction<Void Function(), void Function()>('jd_input_stop');
   late final inputDevices = _lib.lookupFunction<Int32 Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_input_devices');
-  late final capture = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_capture');
+  late final capture = _lib.lookupFunction<Void Function(Int32), void Function(int)>('jd_capture');
   late final recorded = _lib
       .lookupFunction<
         Int32 Function(Pointer<Float>, Pointer<Float>, IntPtr, Pointer<Double>),
@@ -154,19 +156,19 @@ final class EngineLib {
       >('jd_recorded');
   late final inputLevel = _lib.lookupFunction<Float Function(), double Function()>('jd_input_level');
   late final recNotes = _lib.lookupFunction<Int32 Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_rec_notes');
-  late final offlineNew = _lib.lookupFunction<IntPtr Function(Double), int Function(double)>('jd_offline_new');
-  late final offlineCalls = _lib.lookupFunction<Void Function(IntPtr, Pointer<Uint8>, IntPtr), void Function(int, Pointer<Uint8>, int)>('jd_offline_calls');
+  late final offlineNew = _lib.lookupFunction<Uint64 Function(Double), int Function(double)>('jd_offline_new');
+  late final offlineCalls = _lib.lookupFunction<Void Function(Uint64, Pointer<Uint8>, IntPtr), void Function(int, Pointer<Uint8>, int)>('jd_offline_calls');
   late final offlineSample = _lib
       .lookupFunction<
-        Void Function(IntPtr, IntPtr, Pointer<Float>, Pointer<Float>, IntPtr, Double),
+        Void Function(Uint64, Uint32, Pointer<Float>, Pointer<Float>, IntPtr, Double),
         void Function(int, int, Pointer<Float>, Pointer<Float>, int, double)
       >('jd_offline_sample');
-  late final offlineProcess = _lib.lookupFunction<Void Function(IntPtr, IntPtr), void Function(int, int)>('jd_offline_process');
+  late final offlineProcess = _lib.lookupFunction<Void Function(Uint64, IntPtr), void Function(int, int)>('jd_offline_process');
   late final offlineCaptured = _lib
-      .lookupFunction<Void Function(IntPtr, IntPtr, Pointer<Float>, Pointer<Float>, IntPtr), void Function(int, int, Pointer<Float>, Pointer<Float>, int)>(
+      .lookupFunction<Void Function(Uint64, Int32, Pointer<Float>, Pointer<Float>, IntPtr), void Function(int, int, Pointer<Float>, Pointer<Float>, int)>(
         'jd_offline_captured',
       );
-  late final offlineFree = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_offline_free');
+  late final offlineFree = _lib.lookupFunction<Void Function(Uint64), void Function(int)>('jd_offline_free');
   late final latency = _lib.lookupFunction<Double Function(), double Function()>('jd_latency');
   late final loudness = _lib.lookupFunction<Double Function(Int32), double Function(int)>('jd_loudness');
 }
@@ -662,9 +664,8 @@ DecodedAudio decodeNow(Uint8List bytes, String library) {
   final lib = EngineLib.open(library);
   final handle = _withNativeBytes(bytes, lib.decode);
   if (handle == 0) throw const FormatException(_undecodable);
-  // células de 64 bits zeradas: um u32 ou um usize escrito nelas se lê igual em little-endian
-  final framesCell = calloc<Uint64>();
-  final channelsCell = calloc<Uint64>();
+  final framesCell = calloc<Int64>();
+  final channelsCell = calloc<Int32>();
   final rateCell = calloc<Double>();
   try {
     lib.decodedInfo(handle, framesCell, channelsCell, rateCell);
@@ -707,8 +708,8 @@ DecodedAudio stretchNow(DecodedAudio a, double ratio, double semitones, String l
   final frames = r == null ? l.length : math.min(l.length, r.length);
   final handle = _withNativeFloats(l, frames, (pl) => _withNativeFloats(r, frames, (pr) => lib.stretch(pl, pr, frames, a.rate, ratio, semitones)));
   if (handle == 0) throw StateError('Não deu para processar este áudio (memória ou parâmetros inválidos).');
-  final framesCell = calloc<Uint64>();
-  final channelsCell = calloc<Uint64>();
+  final framesCell = calloc<Int64>();
+  final channelsCell = calloc<Int32>();
   final rateCell = calloc<Double>();
   try {
     lib.decodedInfo(handle, framesCell, channelsCell, rateCell);
@@ -819,8 +820,21 @@ final class FfiEngine {
     return rate;
   }
 
-  /// No navegador destrava o áudio depois de um gesto; aqui a saída já toca desde o [start].
-  Future<void> resume() async {}
+  /// Garante a saída aberta: o `jd_start` de um motor já ligado só reabre a saída se ela caiu (a
+  /// rota mudou, o app voltou do segundo plano) e não faz nada se está tocando. O supervisor do lado
+  /// Rust também faz isso a cada 250 ms; aqui é o caminho imediato, sem esperar a rodada dele. Com
+  /// o motor caído ([_failed]) não chama: o `jd_start` recriaria o motor vazio por baixo do
+  /// documento, e quem decide isso é o [restart].
+  Future<void> resume() async {
+    final lib = _lib;
+    if (lib == null || _rate == null || _failed) return;
+    try {
+      final rate = lib.start();
+      if (!rate.isFinite || rate <= 0) debugPrint('motor de áudio: não reabriu a saída (código ${rate.toInt()}); o supervisor tenta de novo');
+    } on Object catch (e) {
+      debugPrint('motor de áudio: $e');
+    }
+  }
 
   void calls(List<List<Object>> list) {
     for (final c in list) {

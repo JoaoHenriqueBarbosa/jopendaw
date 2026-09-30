@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Gravar pela entrada de áudio (microfone ou interface USB). O pedido aparece na hora de abrir
-         a entrada (ensureMicrophone em lib/platform/platform_native.dart), não ao abrir o app. -->
+         a entrada (permission_handler, em startInput do lib/audio/engine_ffi.dart), não ao abrir o app. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Sem microfone o app ainda toca, compõe e exporta: a permissão acima não pode tirar da loja
          os aparelhos sem ele (o Android deduz dela um microfone obrigatório). -->
