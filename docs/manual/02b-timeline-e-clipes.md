@@ -39,6 +39,10 @@ A grade de fundo das raias mostra uma linha por compasso (mais forte) e, com 16 
 
 Até aqui o projeto tinha um andamento só. Agora o andamento pode mudar no meio da música (o **mapa de andamento**) e o compasso também (o **mapa de compassos**). Toda posição do projeto (clipes, notas, automação, marcadores, loop) continua contada em **batidas**; o mapa só decide quanto tempo real dura cada batida. Por isso notas, automação e clipes de notas acompanham as mudanças sozinhos. A batida do projeto é a semínima.
 
+![Faixa Andamento sob a régua com dois pontos: 120 BPM no começo e 88 BPM a partir do compasso 3; o botão de andamento da barra mostra o BPM vigente no cursor com o ícone de tendência.](../img/mapa-de-andamento.jpg)
+
+*Faixa Andamento sob a régua com dois pontos: 120 BPM no começo e 88 BPM a partir do compasso 3; o botão de andamento da barra mostra o BPM vigente no cursor com o ícone de tendência.*
+
 **Onde fica.** A faixa `Andamento` (22 px) fica logo abaixo da régua, com o rótulo `Andamento` na coluna dos cabeçalhos. Ligue com o botão de velocímetro no canto esquerdo da régua (ver tabela da régua).
 
 **O desenho.** Uma linha na cor da marca mostra o BPM ao longo da música, com um número (o BPM do ponto, `120`, `92,5`) ao lado de cada ponto e uma bolinha em cada ponto quando há mudanças. Trecho em **salto**: linha horizontal no BPM do ponto e degrau vertical no ponto seguinte. Trecho em **rampa**: reta diagonal do BPM de um ponto ao BPM do seguinte. A escala vertical vai do menor ao maior BPM dos pontos (no mínimo 20 BPM de faixa, centrada). Sem mudanças a linha fica apagada e aparece o texto `Duplo clique adiciona uma mudança de andamento`.

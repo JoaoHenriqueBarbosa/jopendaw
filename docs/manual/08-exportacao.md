@@ -2,9 +2,9 @@
 
 > Como transformar o projeto em arquivos WAV (a música inteira e, se quiser, uma faixa por arquivo), como levar a mixagem a um volume-alvo em LUFS (streaming, podcast, rádio e TV) e como congelar uma faixa em áudio para aliviar o projeto ou fixar um som.
 
-![Diálogo Exportar áudio: intervalo, formato, taxa, Stems, Normalizar, Normalizar o loudness e Cauda.](../img/exportar-audio.jpg)
+![Diálogo Exportar áudio: intervalo, formato, taxa, Stems, Normalizar, Normalizar o loudness e Cauda; no pé, os botões Projeto inteiro (.jopendaw)…, Notas em MIDI (.mid)…, Cancelar e Exportar.](../img/exportar-audio.jpg)
 
-*Diálogo Exportar áudio: intervalo, formato, taxa, Stems, Normalizar, Normalizar o loudness e Cauda.*
+*Diálogo Exportar áudio: intervalo, formato, taxa, Stems, Normalizar, Normalizar o loudness e Cauda; no pé, os botões Projeto inteiro (.jopendaw)…, Notas em MIDI (.mid)…, Cancelar e Exportar.*
 
 ![Com Normalizar o loudness ligado aparecem os alvos (Streaming, Podcast, Broadcast, Personalizado) e o teto de true peak.](../img/exportar-loudness.jpg)
 
@@ -187,6 +187,10 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 ## Notas em MIDI (.mid)
 
 O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir a melodia em outro programa ou guardá-la como texto musical. Vem do botão `Notas em MIDI (.mid)…` da janela **Exportar áudio**. Para o caminho de volta (importar um `.mid`), veja [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid).
+
+![Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Repare que o texto informa só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.](../img/exportar-midi.jpg)
+
+*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Repare que o texto informa só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.*
 
 ### Janela Exportar MIDI (.mid)
 
