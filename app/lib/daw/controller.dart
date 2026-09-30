@@ -271,6 +271,9 @@ class _SentTrack {
   final TrackKind kind;
   final params = <int, double>{};
   int sample = 0;
+
+  /// As chamadas de zonas do sampler que o motor já recebeu (só o sampler tem).
+  List<List<Object>> zones = const [];
   final fx = _SentChain();
 
   /// Envios como o motor os conhece: (índice do barramento, nível, pré-fader), só os válidos.
@@ -711,6 +714,34 @@ class DawController extends ChangeNotifier {
   /// Os áudios decodificados, pelo id do motor.
   final _decoded = <int, DecodedAudio>{};
 
+  /// O áudio decodificado de um sample do projeto (null se não está neste aparelho).
+  DecodedAudio? decodedAudio(String hash) {
+    final id = _sampleIds[hash];
+    return id == null ? null : _decoded[id];
+  }
+
+  /// Importa um áudio para o projeto sem pôr clipe no arranjo nem escolhê-lo como áudio de
+  /// faixa (as zonas do sampler o citam); devolve o sha-256, ou null se não abriu (o erro fica em
+  /// [error]).
+  Future<String?> importSampleFile(String name, Uint8List bytes) async {
+    status = 'Importando $name…';
+    notifyListeners();
+    try {
+      final hash = await _ingest(name, bytes);
+      if (_disposed) return null;
+      status = null;
+      _scheduleSave();
+      notifyListeners();
+      return hash;
+    } catch (e) {
+      if (_disposed) return null;
+      status = null;
+      error = 'Não deu para abrir $name: é um formato de áudio que este navegador decodifica?';
+      notifyListeners();
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -937,6 +968,7 @@ class DawController extends ChangeNotifier {
           calls.add(['instrument_sample', i, sample]);
           s.sample = sample;
         }
+        _syncZones(calls, i, t, s);
       }
     }
     if (sent.length > d.tracks.length) sent.length = d.tracks.length;
@@ -965,6 +997,16 @@ class DawController extends ChangeNotifier {
       c.notes = notes;
     }
     return calls;
+  }
+
+  /// Zonas do sampler no motor: mandadas de novo por inteiro (limpar e acrescentar) sempre que a
+  /// lista de chamadas muda (uma zona editada, o áudio de uma zona que acabou de carregar).
+  void _syncZones(List<List<Object>> calls, int i, DawTrack t, _SentTrack s) {
+    final zc = [for (final z in t.zones) z.engineCall(i, _sampleIds[z.sample] ?? 0)];
+    if (_sameCalls(zc, s.zones)) return;
+    calls.add(['zones_clear', i]);
+    calls.addAll(zc);
+    s.zones = zc;
   }
 
   /// A entrada soa nas faixas de áudio que monitoram. Só vai o que mudou em cada índice do motor:
@@ -1432,6 +1474,7 @@ class DawController extends ChangeNotifier {
     ...d.samples.keys,
     for (final t in d.tracks) ...[
       ?t.sample,
+      for (final z in t.zones) z.sample,
       for (final c in t.clips) ...[c.sample, ...c.takes],
     ],
   };
@@ -3916,6 +3959,8 @@ class DawController extends ChangeNotifier {
       if (t.kind == TrackKind.audio)
         for (final c in t.clips) c.sample,
       if (t.kind == TrackKind.sampler && t.sample != null) t.sample!,
+      if (t.kind == TrackKind.sampler)
+        for (final z in t.zones) z.sample,
     ],
   };
 

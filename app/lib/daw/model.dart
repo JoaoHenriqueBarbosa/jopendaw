@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'effects.dart';
 import 'instruments.dart';
+import 'sampler_zones.dart';
 
 class AudioClip {
   String id;
@@ -293,6 +294,9 @@ class DawTrack {
   /// Áudio do sampler (sha-256), quando o tipo é sampler.
   String? sample;
 
+  /// Zonas do sampler (multi-sample); vazia = o sampler de um áudio só (`sample`).
+  List<SamplerZone> zones;
+
   /// Armada para gravar (áudio da entrada nas de áudio, notas nas de instrumento) e monitorando a
   /// entrada (o som do microfone passa pela cadeia da faixa ao vivo).
   bool armed, monitor;
@@ -320,6 +324,7 @@ class DawTrack {
     this.kind = TrackKind.audio,
     Map<int, double>? params,
     this.sample,
+    List<SamplerZone>? zones,
     this.armed = false,
     this.monitor = false,
     List<AudioClip>? clips,
@@ -329,6 +334,7 @@ class DawTrack {
     this.output,
     List<AutoLane>? lanes,
   }) : params = params ?? defaultParams(kind),
+       zones = zones ?? [],
        clips = clips ?? [],
        midi = midi ?? [],
        effects = effects ?? [],
@@ -346,6 +352,7 @@ class DawTrack {
       kind = TrackKind.parse(j['kind']),
       params = {for (final e in ((j['params'] as Map<String, dynamic>?) ?? {}).entries) int.parse(e.key): (e.value as num).toDouble()},
       sample = j['sample'],
+      zones = [for (final z in (j['zones'] as List?) ?? const []) SamplerZone.fromJson(z as Map<String, dynamic>)],
       armed = j['armed'] ?? false,
       monitor = j['monitor'] ?? false,
       clips = [for (final c in j['clips'] as List) AudioClip.fromJson(c)],
@@ -366,6 +373,8 @@ class DawTrack {
     'kind': kind.name,
     'params': {for (final e in params.entries) '${e.key}': e.value},
     'sample': sample,
+    // sem zonas o documento fica byte a byte como antes
+    if (zones.isNotEmpty) 'zones': [for (final z in zones) z.toJson()],
     'armed': armed,
     'monitor': monitor,
     'clips': [for (final c in clips) c.toJson()],

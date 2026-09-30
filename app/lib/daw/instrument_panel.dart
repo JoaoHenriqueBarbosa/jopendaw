@@ -20,6 +20,7 @@ import 'instruments.dart';
 import 'knob.dart';
 import 'model.dart';
 import 'presets.dart';
+import 'sampler_zones_panel.dart';
 import 'wavetable_shape.dart';
 
 class InstrumentPanel extends StatefulWidget {
@@ -769,6 +770,12 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
         controls: [for (final p in byGroup['Envelope']!) x.knob(p, dimmed: oneShot && p.id == SamplerId.release)],
       ),
       _Section('Geral', controls: [for (final p in byGroup['Geral']!) x.knob(p)]),
+      _Section(
+        'Zonas',
+        width: 640,
+        fullWidth: true,
+        body: SamplerZonesPanel(key: ValueKey('zonas-${t.id}'), c: c, track: x.ti, color: x.color, compact: !x.desktop),
+      ),
     ];
   }
 
