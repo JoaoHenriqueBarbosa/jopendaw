@@ -15,6 +15,7 @@ import '../widgets/theme.dart';
 import 'controller.dart';
 import 'mixer_panel.dart' show InputLevelMeter;
 import 'model.dart';
+import 'shortcuts_dialog.dart' show showShortcuts;
 import 'transport_bar.dart' show describeActionError;
 
 /// Curso do ajuste de latência (ms). Negativo cobre o navegador que informa latência a mais.
@@ -383,7 +384,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
           },
         ),
       ),
-      actions: [FilledButton(onPressed: _close, child: const Text('Fechar'))],
+      actions: [
+        // em janelas estreitas a barra do transporte não tem o botão dos atalhos
+        TextButton.icon(
+          onPressed: () => showShortcuts(context),
+          icon: const Icon(Icons.keyboard_command_key, size: 18),
+          label: const Text('Atalhos do teclado'),
+        ),
+        FilledButton(onPressed: _close, child: const Text('Fechar')),
+      ],
     );
   }
 }

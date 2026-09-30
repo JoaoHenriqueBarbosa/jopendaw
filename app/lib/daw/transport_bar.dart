@@ -169,7 +169,8 @@ class TransportBar extends StatelessWidget {
           _Toggle(icon: Icons.my_location, on: c.follow, tooltip: 'Seguir o cursor na reprodução', onTap: c.toggleFollow),
           ViewMenu(c: c),
           SectionsMenu(c: c),
-          DurationLabel(c: c),
+          // o tempo total fica só em janelas largas: em 1512 px ele empurrava a engrenagem e os atalhos para fora
+          if (MediaQuery.sizeOf(context).width >= 1640) DurationLabel(c: c),
         ];
         final panels = [
           _Toggle(icon: Icons.tune, on: c.dock == Dock.mixer, tooltip: 'Mixer (X)', onTap: () => toggleDock(c, Dock.mixer)),
@@ -269,7 +270,9 @@ class TransportBar extends StatelessWidget {
                       onPressed: () => showSettingsDialog(context, c),
                       icon: const Icon(Icons.settings_outlined),
                     ),
-                    IconButton(tooltip: 'Atalhos do teclado (?)', onPressed: () => showShortcuts(context), icon: const Icon(Icons.keyboard_command_key)),
+                    // em janelas estreitas os atalhos ficam na tecla ? e nas Configurações: o botão não cabe
+                    if (MediaQuery.sizeOf(context).width >= 1640)
+                      IconButton(tooltip: 'Atalhos do teclado (?)', onPressed: () => showShortcuts(context), icon: const Icon(Icons.keyboard_command_key)),
                     if (c.status != null) ...[
                       const SizedBox(width: 12),
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
