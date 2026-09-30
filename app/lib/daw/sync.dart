@@ -34,6 +34,29 @@ abstract class SyncHost {
 
   /// Tenta baixar os áudios que o documento cita e este aparelho não tem.
   Future<void> fetchMissing();
+
+  /// Não dá para trocar o documento agora (gravando): o pull periódico espera.
+  bool get busyEditing => false;
+}
+
+/// Igualdade estrutural de dois JSONs (números por valor, chaves sem ordem): o servidor guarda o
+/// documento como JSONB, que reordena as chaves.
+bool jsonEquals(Object? a, Object? b) {
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k) || !jsonEquals(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!jsonEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
 }
 
 /// Falha que repetir não resolve (documento do servidor ilegível, cota estourada).
@@ -74,6 +97,9 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
   static const debounce = Duration(seconds: 3);
   static const maxBackoff = Duration(minutes: 2);
 
+  /// De quanto em quanto tempo traz, sem nada pendente aqui, o que outro aparelho mudou.
+  static const pullEvery = Duration(seconds: 30);
+
   SyncPhase phase = SyncPhase.off;
 
   /// Arquivos enviados/baixados e o total, enquanto [phase] é `syncing` com áudios a mover.
@@ -95,7 +121,7 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
   int _gen = 0;
   bool _pulled = false, _busy = false, _again = false, _disposed = false, _observing = false;
   int _failures = 0;
-  Timer? _timer;
+  Timer? _timer, _pullTimer;
   final _serverHas = <String>{};
 
   String get _key => 'sync:$projectId';
@@ -141,13 +167,44 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
       // aqui (sem edição) não pode virar "mudança pendente" na abertura seguinte
       await _persist();
     }
+    if (!_disposed) _pullTimer = Timer.periodic(pullEvery * timeScale, (_) => unawaited(pullNow()));
     await syncNow();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && (phase == SyncPhase.offline || phase == SyncPhase.error || _dirty || !_pulled)) {
+    if (state != AppLifecycleState.resumed) return;
+    if (phase == SyncPhase.offline || phase == SyncPhase.error || _dirty || !_pulled) {
       unawaited(syncNow());
+    } else {
+      unawaited(pullNow());
+    }
+  }
+
+  /// Pull leve: só olha se o servidor tem versão mais nova e, se tiver e nada local está pendente,
+  /// troca o documento. Fica calado (sem ícone piscando, sem erro) quando não dá para fazer, e
+  /// nunca sobrescreve trabalho local: se a pessoa editar no meio, o envio seguinte cai no
+  /// conflito de sempre. Devolve se trocou o documento.
+  Future<bool> pullNow() async {
+    if (_disposed || !canSync() || !_pulled || _busy || _dirty || conflict != null || phase == SyncPhase.off || host.busyEditing) return false;
+    _busy = true;
+    try {
+      final gen = _gen;
+      final s = await api.projectDoc(projectId);
+      final doc = s.doc;
+      if (_disposed || gen != _gen || _dirty || conflict != null || doc == null || s.version <= _version) return false;
+      final applied = await host.applyRemote(doc, progress: _progress, canSwap: () => gen == _gen && !_dirty);
+      if (!applied) return false;
+      _version = s.version;
+      await _persist();
+      filesDone = filesTotal = 0;
+      _notify();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _busy = false;
+      if (_again && !_disposed) unawaited(syncNow());
     }
   }
 
@@ -203,8 +260,16 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
       }
       _failures = 0;
     } on DocConflict catch (e) {
-      conflict = e.server;
-      _set(SyncPhase.conflict);
+      if (_sameAsLocal(e.server)) {
+        // o envio chegou, só a resposta se perdeu: o servidor já tem exatamente este documento
+        await _adopt(e.server);
+        _failures = 0;
+        _set(_dirty ? SyncPhase.syncing : SyncPhase.synced);
+        if (_dirty) _again = true;
+      } else {
+        conflict = e.server;
+        _set(SyncPhase.conflict);
+      }
     } on Unauthenticated {
       // sessão acabou: o app volta ao login; o que está pendente segue guardado
       _set(SyncPhase.off);
@@ -234,21 +299,25 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _pull() async {
     final s = await api.projectDoc(projectId);
     if (s.version > _version && s.doc != null) {
-      if (_dirty) {
+      if (_sameAsLocal(s)) {
+        // o servidor já tem exatamente este documento (um envio cuja resposta se perdeu)
+        await _adopt(s);
+      } else if (_dirty) {
         conflict = s;
         _set(SyncPhase.conflict);
         return;
+      } else {
+        final gen = _gen;
+        final applied = await host.applyRemote(s.doc!, progress: _progress, canSwap: () => gen == _gen);
+        if (!applied) {
+          // o usuário editou enquanto os áudios desciam: agora há os dois lados
+          conflict = s;
+          _set(SyncPhase.conflict);
+          return;
+        }
+        _version = s.version;
+        await _persist();
       }
-      final gen = _gen;
-      final applied = await host.applyRemote(s.doc!, progress: _progress, canSwap: () => gen == _gen);
-      if (!applied) {
-        // o usuário editou enquanto os áudios desciam: agora há os dois lados
-        conflict = s;
-        _set(SyncPhase.conflict);
-        return;
-      }
-      _version = s.version;
-      await _persist();
     } else if (s.version < _version) {
       // o servidor voltou atrás (restauração): o local é a verdade e vai por cima
       _version = s.version;
@@ -261,6 +330,17 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (_) {
       // áudio que não baixou continua marcado como faltando; não atrapalha o resto
     }
+  }
+
+  /// O documento do servidor é estruturalmente o mesmo que o deste aparelho.
+  bool _sameAsLocal(ServerDoc s) => s.doc != null && jsonEquals(s.doc, host.docJson());
+
+  /// Adota a versão do servidor como a conhecida, sem mexer no documento (ele já é igual).
+  Future<void> _adopt(ServerDoc s) async {
+    _version = s.version;
+    _dirty = false;
+    _gen++;
+    await _persist();
   }
 
   void _progress(int done, int total) {
@@ -341,7 +421,18 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
     if (doc != null) {
       _set(SyncPhase.syncing);
       try {
-        await host.applyRemote(doc, progress: _progress, canSwap: () => true);
+        // o documento não troca com um salvamento local pendente (edição dos últimos 400 ms):
+        // a pessoa já escolheu o servidor, então espera o salvamento passar e tenta de novo
+        var applied = false;
+        for (var i = 0; i < 4 && !applied; i++) {
+          if (i > 0) await Future<void>.delayed(const Duration(milliseconds: 450));
+          if (_disposed) return;
+          applied = await host.applyRemote(doc, progress: _progress, canSwap: () => true);
+        }
+        if (!applied) {
+          _set(SyncPhase.conflict, 'Você editou agora há pouco e o projeto não pôde ser trocado. Tente de novo.');
+          return;
+        }
       } catch (e) {
         // não conseguiu (sem rede, por exemplo): o conflito segue de pé para tentar de novo
         _set(SyncPhase.conflict, e is SyncFailure ? e.message : 'Não deu para baixar a versão do servidor agora.');
@@ -394,6 +485,7 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _pullTimer?.cancel();
     if (_observing) WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

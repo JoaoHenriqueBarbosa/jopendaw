@@ -56,16 +56,23 @@ class ConvertedNotes {
 /// As notas de [r] como notas de um clipe MIDI que cobre o mesmo trecho do clipe de áudio [clip]:
 /// o clipe de áudio toca a partir de `offset` segundos do arquivo por `length` segundos, então só
 /// valem as notas (ou pedaços delas) dentro dessa janela, e o zero do clipe MIDI é o `offset`.
-/// Segundos viram batidas pelo andamento [bpm].
+///
+/// Segundos do áudio viram batidas pelo mesmo tempo com que o clipe toca ([AudioClip.tempoFor]:
+/// com warp, o andamento do próprio áudio; sem, o do projeto [bpm]), então as notas ficam
+/// alinhadas com o clipe qualquer que seja o andamento do projeto. A transposição do clipe soma à
+/// altura (arredondada ao semitom, dentro de 0..127) e, invertido, o clipe toca a janela de trás
+/// para a frente: o que era o fim dela vira o começo, e as notas espelham junto.
 List<MidiNote> notesForClip(ConvertedNotes r, AudioClip clip, double bpm) {
   final from = clip.offset, to = clip.offset + clip.length;
-  final toBeats = bpm / 60;
+  final toBeats = clip.tempoFor(bpm) / 60;
+  final shift = clip.pitch.round();
   final out = <MidiNote>[];
   for (final n in r.notes) {
     final s = math.max(n.start, from), e = math.min(n.start + n.length, to);
     // fora da janela, ou sobrou menos que uma fração de milissegundo
     if (e - s < 1e-4) continue;
-    out.add(MidiNote(pitch: n.pitch, start: (s - from) * toBeats, length: (e - s) * toBeats, velocity: n.velocity));
+    final begin = clip.reverse ? to - e : s - from;
+    out.add(MidiNote(pitch: (n.pitch + shift).clamp(0, 127), start: begin * toBeats, length: (e - s) * toBeats, velocity: n.velocity));
   }
   out.sort((a, b) => a.start != b.start ? a.start.compareTo(b.start) : a.pitch.compareTo(b.pitch));
   return out;

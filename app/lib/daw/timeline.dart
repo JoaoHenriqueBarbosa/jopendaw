@@ -19,6 +19,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/feedback.dart';
 import '../widgets/theme.dart';
 import 'automation_lane.dart';
+import 'clip_gain_dialog.dart';
 import 'controller.dart';
 import 'instruments.dart';
 import 'marker.dart';
@@ -2322,6 +2323,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
+      _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
       _menuItem('to_midi', Icons.piano, 'Converter em notas (MIDI)'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
     ]);
@@ -2333,6 +2335,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         await _takesMenu(at);
       case 'warp':
         await showWarpDialog(context, c, widget.clip.id);
+      case 'gain':
+        await showClipGainDialog(context, c, widget.clip.id);
       case 'to_midi':
         await showConvertToMidi(context, c, widget.clip.id);
       case 'duplicate':

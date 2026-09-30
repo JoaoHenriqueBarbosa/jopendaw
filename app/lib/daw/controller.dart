@@ -419,6 +419,9 @@ typedef _RecNote = ({int pitch, double start, double end, double velocity});
 /// Um evento de controle gravado (bend, modulação, pedal), em batidas absolutas.
 typedef _RecCc = ({int cc, double beat, double value});
 
+/// Ganho máximo do clipe de áudio: +12 dB.
+final maxClipGain = math.pow(10, 12 / 20).toDouble();
+
 /// Ganho máximo do volume e dos envios: o topo do fader (+6 dB).
 const maxGain = 2.0;
 
@@ -442,6 +445,9 @@ class _SyncBridge implements SyncHost {
 
   @override
   Future<void> fetchMissing() => c._fetchMissing();
+
+  @override
+  bool get busyEditing => c.recording;
 }
 
 class DawController extends ChangeNotifier {
@@ -450,12 +456,21 @@ class DawController extends ChangeNotifier {
   /// [engine] e [store] trocam o motor e o guardado local nos testes (padrão: os do aparelho);
   /// [api] e [canSync] trocam o servidor e a checagem de sessão da sincronização e dos jobs, e
   /// [syncTimeScale] encurta as esperas dela.
-  DawController(this.project, {AudioEngine? engine, LocalStore? store, SyncApi? api, bool Function()? canSync, this.syncTimeScale = 1})
-    : _engine = engine ?? AudioEngine.instance,
-      _store = store ?? LocalStore.instance,
-      _api = api ?? ApiClient.instance,
-      _canSync = canSync ?? (() => Session.instance.signedIn);
+  DawController(
+    this.project, {
+    AudioEngine? engine,
+    LocalStore? store,
+    SyncApi? api,
+    bool Function()? canSync,
+    this.syncTimeScale = 1,
+    Future<void> Function(String id, Map<String, dynamic> patch)? patchProject,
+  }) : _engine = engine ?? AudioEngine.instance,
+       _patchProject = patchProject ?? ((id, patch) => ApiClient.instance.patchProject(id, patch)),
+       _store = store ?? LocalStore.instance,
+       _api = api ?? ApiClient.instance,
+       _canSync = canSync ?? (() => Session.instance.signedIn);
 
+  final Future<void> Function(String id, Map<String, dynamic> patch) _patchProject;
   final AudioEngine _engine;
   final LocalStore _store;
   final SyncApi _api;
@@ -611,10 +626,9 @@ class DawController extends ChangeNotifier {
       _engine.onState = _onEngineState;
       _engine.onLoudness = _onLoudness;
       final saved = await _store.get(_docKey);
+      // o andamento e o compasso são do documento (o servidor só os espelha, ver [_mirrorTempo]):
+      // só um documento novo parte dos do projeto
       doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : await _fromTemplate();
-      // o andamento e a fórmula de compasso moram no servidor; o local segue
-      doc.bpm = project.bpm.toDouble();
-      doc.beatsPerBar = project.beatsPerBar;
       for (final hash in doc.samples.keys.toList()) {
         await _loadSample(hash);
       }
@@ -645,6 +659,8 @@ class DawController extends ChangeNotifier {
       ready = true;
       _sync();
       _lastSaved = jsonEncode(doc.toJson());
+      sync.addListener(_onSyncPhase);
+      unawaited(_mirrorTempo());
       // faixa de áudio que ficou armada ou monitorando: a entrada volta aberta, como estava
       if (doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
     } catch (e) {
@@ -902,6 +918,16 @@ class DawController extends ChangeNotifier {
       if (pitch != null) c.pitch = pitch.clamp(-24.0, 24.0);
       if (reverse != null) c.reverse = reverse;
     });
+  }
+
+  /// Ganho do clipe de áudio (linear, 0..[maxClipGain]). Sem [undoable] é um passo de arraste: quem
+  /// chama guarda o estado antes com [checkpoint].
+  void setClipGain(String clipId, double gain, {bool undoable = true}) {
+    final f = _findClip(clipId);
+    if (f == null) return;
+    final g = gain.isFinite ? gain.clamp(0.0, maxClipGain) : 1.0;
+    if (f.$2.gain == g) return;
+    edit((_) => f.$2.gain = g, undoable: undoable);
   }
 
   /// Nos testes: espera os sons do warp que o documento pede.
@@ -1400,8 +1426,48 @@ class DawController extends ChangeNotifier {
       d.bpm = bpm.toDouble();
       d.beatsPerBar = beatsPerBar;
     });
-    await ApiClient.instance.patchProject(project.id, {'bpm': bpm, 'beats_per_bar': beatsPerBar});
+    await _mirrorTempo();
   }
+
+  // andamento e compasso que o servidor conhece (o projeto carregado, até um PATCH dar certo)
+  late (int, int) _mirroredTempo = (project.bpm, project.beatsPerBar);
+  bool _mirroring = false, _mirrorAgain = false;
+
+  /// O andamento e o compasso do documento são a verdade; o servidor guarda um espelho para a lista
+  /// de projetos. O PATCH é o melhor esforço: sem rede ele não falha para quem chamou, fica
+  /// pendente e sai de novo no próximo salvamento (desfazer e refazer incluídos), na abertura, ao
+  /// aplicar uma versão do servidor e quando a sincronização volta a dar certo.
+  Future<void> _mirrorTempo() async {
+    if (_mirroring) {
+      _mirrorAgain = true;
+      return;
+    }
+    _mirroring = true;
+    try {
+      do {
+        _mirrorAgain = false;
+        if (_disposed || !ready || !_canSync()) return;
+        final want = (doc.bpm.round().clamp(20, 400), doc.beatsPerBar);
+        if (want == _mirroredTempo) return;
+        try {
+          await _patchProject(project.id, {'bpm': want.$1, 'beats_per_bar': want.$2});
+          _mirroredTempo = want;
+        } catch (_) {
+          return;
+        }
+      } while (_mirrorAgain);
+    } finally {
+      _mirroring = false;
+    }
+  }
+
+  void _onSyncPhase() {
+    if (sync.phase == SyncPhase.synced) unawaited(_mirrorTempo());
+  }
+
+  /// O andamento espelhado ainda não chegou ao servidor (nos testes).
+  @visibleForTesting
+  bool get tempoPending => (doc.bpm.round().clamp(20, 400), doc.beatsPerBar) != _mirroredTempo;
 
   // ------------------------------------------------------------------ edição
 
@@ -1487,6 +1553,7 @@ class DawController extends ChangeNotifier {
       // o pendente é marcado antes do documento: se o app morrer entre os dois, sobra um
       // pendente a mais (inofensivo), nunca uma mudança que ninguém vai enviar
       await sync.markDirty();
+      unawaited(_mirrorTempo());
     }
     await _store.put(_docKey, text);
   }
@@ -1495,6 +1562,8 @@ class DawController extends ChangeNotifier {
 
   /// Todos os áudios que o documento cita (a lista do documento, mais o que clipes e sampler
   /// apontam, por garantia).
+  static Set<String> hashesOf(DawDoc d) => _hashesOf(d);
+
   static Set<String> _hashesOf(DawDoc d) => {
     ...d.samples.keys,
     for (final t in d.tracks) ...[
@@ -1533,7 +1602,7 @@ class DawController extends ChangeNotifier {
   }
 
   /// Troca o documento pelo do servidor, baixando antes os áudios (o documento só muda quando está
-  /// tudo à mão). Andamento e compasso ficam os do projeto; o que é preferência deste aparelho
+  /// tudo à mão). Andamento e compasso vêm com o documento; o que é preferência deste aparelho
   /// (metrônomo, contagem, latência, armar e monitorar) também. Devolve false se o usuário
   /// editou no meio do caminho: aí os dois lados mudaram e quem decide é a pessoa.
   Future<bool> _applyRemote(Map<String, dynamic> json, void Function(int done, int total) progress, bool Function() canSwap) async {
@@ -1557,8 +1626,6 @@ class DawController extends ChangeNotifier {
     if (recording) throw StateError('gravando: o projeto novo entra depois');
     final old = doc;
     next
-      ..bpm = project.bpm.toDouble()
-      ..beatsPerBar = project.beatsPerBar
       ..metronome = old.metronome
       ..countIn = old.countIn
       ..recLatencyMs = old.recLatencyMs;
@@ -1579,6 +1646,7 @@ class DawController extends ChangeNotifier {
     _lastSaved = text;
     await _store.put(_docKey, text);
     if (!_disposed) notifyListeners();
+    unawaited(_mirrorTempo());
     return true;
   }
 

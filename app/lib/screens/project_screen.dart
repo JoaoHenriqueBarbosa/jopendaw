@@ -7,6 +7,7 @@ import '../daw/controller.dart';
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/marker.dart';
+import '../daw/model.dart' show DawDoc;
 import '../daw/timeline.dart';
 import '../daw/transport_bar.dart';
 import '../models/project.dart';
@@ -58,24 +59,31 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
   Widget build(BuildContext context) {
     final p = _project;
     final daw = _daw;
-    return PageScaffold(
-      icon: Icons.graphic_eq,
-      title: p?.name ?? 'Projeto',
-      subtitle: p == null ? null : '${p.bpm} BPM · ${p.meter}',
-      showBack: true,
-      body: daw == null
-          ? (error != null ? ErrorState(error: error!, onRetry: reload) : const LoadingState())
-          : ListenableBuilder(
-              listenable: daw,
-              builder: (context, _) {
-                if (!daw.ready) {
-                  return daw.error != null ? InlineNotice(daw.error!) : const LoadingState();
-                }
-                return DawStudio(c: daw);
-              },
-            ),
+    // o subtítulo segue o documento vivo (o andamento muda no transporte e no desfazer); o do
+    // servidor é só um espelho e pode estar atrasado
+    return ListenableBuilder(
+      listenable: Listenable.merge([?daw]),
+      builder: (context, _) => PageScaffold(
+        icon: Icons.graphic_eq,
+        title: p?.name ?? 'Projeto',
+        subtitle: p == null ? null : projectSubtitle(p, daw != null && daw.ready ? daw.doc : null),
+        showBack: true,
+        body: daw == null
+            ? (error != null ? ErrorState(error: error!, onRetry: reload) : const LoadingState())
+            : !daw.ready
+            ? (daw.error != null ? InlineNotice(daw.error!) : const LoadingState())
+            : DawStudio(c: daw),
+      ),
     );
   }
+}
+
+/// "120 BPM · 4/4": o andamento e o compasso do documento aberto, ou os do projeto no servidor
+/// enquanto ele não abriu.
+String projectSubtitle(Project p, DawDoc? doc) {
+  final bpm = doc?.bpm ?? p.bpm.toDouble();
+  final text = bpm % 1 == 0 ? bpm.toStringAsFixed(0) : bpm.toStringAsFixed(1);
+  return '$text BPM · ${doc?.beatsPerBar ?? p.beatsPerBar}/${p.beatUnit}';
 }
 
 /// Transporte, arranjo e o painel de baixo quando aberto. No celular o transporte fica embaixo,

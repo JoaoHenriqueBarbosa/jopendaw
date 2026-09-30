@@ -74,7 +74,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('abrir', () {
-    test('servidor mais novo e nada pendente: aplica, baixa os áudios e mantém o andamento do projeto', () async {
+    test('servidor mais novo e nada pendente: aplica, baixa os áudios e adota o andamento dele', () async {
       final bytes = wav(0.3), h = hashOf(bytes);
       final api = FakeSyncApi()
         ..version = 2
@@ -84,7 +84,7 @@ void main() {
       final c = await opened(api, store);
 
       expect(trackName(c), 'Servidor');
-      expect(c.doc.bpm, 120, reason: 'o andamento mora no projeto, não no documento do servidor');
+      expect(c.doc.bpm, 90, reason: 'o andamento é do documento: vale o da versão do servidor (o PATCH do projeto é só espelho)');
       expect(c.missing, isEmpty);
       expect(c.waveforms, contains(h));
       expect(store.data['sample:$h'], isA<Uint8List>());

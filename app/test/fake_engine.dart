@@ -244,6 +244,7 @@ DawController fakeController(
   SyncApi? api,
   bool Function()? canSync,
   double syncTimeScale = 1,
+  Future<void> Function(String id, Map<String, dynamic> patch)? patchProject,
 }) {
   final c = DawController(
     Project.fromJson({
@@ -261,6 +262,7 @@ DawController fakeController(
     api: api,
     canSync: canSync,
     syncTimeScale: syncTimeScale,
+    patchProject: patchProject,
   );
   c.doc = DawDoc(
     bpm: 120,

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/client.dart';
 import '../audio/engine.dart';
+import '../daw/local_purge.dart';
 import '../daw/project_file.dart' show ProjectFileException;
 import '../daw/project_file_ui.dart';
 import '../daw/templates.dart';
@@ -88,7 +89,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
 
   Future<void> _delete(Project p) async {
     if (!await confirmDelete(context, title: 'Apagar "${p.name}"?', content: 'O projeto some para sempre, com tudo o que estiver nele.')) return;
-    await run(() => _api.deleteProject(p.id), done: 'Projeto apagado.');
+    final others = [for (final o in _projects ?? const <Project>[]) o.id];
+    await run(() async {
+      await _api.deleteProject(p.id);
+      // some do aparelho também (documento, estado de sincronização e áudios que só ele usava)
+      await purgeLocalProject(LocalStore.instance, p.id, others);
+    }, done: 'Projeto apagado.');
   }
 
   @override

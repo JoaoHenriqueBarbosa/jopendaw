@@ -24,8 +24,9 @@ class Unauthenticated implements Exception {
 }
 
 /// Cliente HTTP da API. Na web usa a mesma origem (o nginx, ou o servidor Rust em
-/// desenvolvimento); no `flutter run` e no app Android, a API de produção. `--dart-define=API_BASE=`
-/// aponta outra.
+/// desenvolvimento, em qualquer porta de localhost); no app Android, a API de produção.
+/// `--dart-define=API_BASE=` aponta outra (num `flutter run -d chrome`, que serve o app numa porta
+/// sem API, é obrigatório).
 ///
 /// Toda chamada leva o JWT de acesso. Num 401 tenta UMA renovação (dividida entre as chamadas
 /// simultâneas) e repete; se a renovação também falha, a sessão acabou.
@@ -35,10 +36,16 @@ class ApiClient implements SyncApi {
 
   static const _production = 'https://jopendaw.johnenrique.tech';
   static const _override = String.fromEnvironment('API_BASE');
-  final String base = _override.isNotEmpty
-      ? _override
-      : kIsWeb && (Uri.base.port == 8080 || Uri.base.host != 'localhost')
-      ? Uri.base.origin
+  final String base = baseFor(override: _override, web: kIsWeb, page: Uri.base);
+
+  /// A base da API: [override] (`API_BASE`) se houver; na web, a origem da página (o servidor
+  /// Rust em :8080, o nginx do compose em :8081 ou a produção, sempre com `/api` no mesmo host);
+  /// fora da web, a produção.
+  @visibleForTesting
+  static String baseFor({required String override, required bool web, required Uri page}) => override.isNotEmpty
+      ? override
+      : web
+      ? page.origin
       : _production;
 
   Session get _session => Session.instance;
