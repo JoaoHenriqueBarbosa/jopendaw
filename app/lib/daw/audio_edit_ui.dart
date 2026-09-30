@@ -12,6 +12,7 @@ import '../widgets/feedback.dart';
 import 'audio_edit.dart';
 import 'clip_gain_dialog.dart' show formatClipGainDb;
 import 'controller.dart';
+import 'keymap.dart' show shortcutHint;
 import 'model.dart';
 
 /// O submenu com as quatro ações, aberto em [at] (o ponto do toque ou do clique direito).
@@ -103,7 +104,7 @@ class _EditShell extends StatelessWidget {
                 ? [
                     InlineNotice(done!, error: false),
                     const SizedBox(height: 8),
-                    const Text('Dá para desfazer numa vez só (Ctrl+Z).', style: TextStyle(fontSize: 12, color: Colors.white54)),
+                    Text('Dá para desfazer numa vez só${shortcutHint('edit.undo')}.', style: const TextStyle(fontSize: 12, color: Colors.white54)),
                   ]
                 : children,
           ),
@@ -323,7 +324,17 @@ class _SplitState extends State<SplitTransientsDialog> {
     final s = _s;
     _cuts = s.error != null
         ? const []
-        : detectCuts(s.range!, s.clip!, widget.c.doc, mode: _mode, sensitivity: _sensitivity, count: _count, grid: _grid, minGap: _minGap);
+        // a distância mínima é do detector de transientes: fatias iguais e grade cortam onde foi pedido
+        : detectCuts(
+            s.range!,
+            s.clip!,
+            widget.c.doc,
+            mode: _mode,
+            sensitivity: _sensitivity,
+            count: _count,
+            grid: _grid,
+            minGap: _mode == CutMode.transients ? _minGap : 0,
+          );
   }
 
   void _set(VoidCallback f) => setState(() {
@@ -349,7 +360,7 @@ class _SplitState extends State<SplitTransientsDialog> {
     return _EditShell(
       title: 'Dividir por transientes',
       done: _done,
-      onApply: s.error == null && _cuts.isNotEmpty ? _apply : null,
+      onApply: s.error == null && _cuts.isNotEmpty && n <= maxEditPieces ? _apply : null,
       applyLabel: 'Dividir',
       children: [
         if (s.error != null)
@@ -406,7 +417,7 @@ class _SplitState extends State<SplitTransientsDialog> {
                       ? 'Nenhum transiente achado: tente mais sensibilidade, fatias iguais ou a grade.'
                       : 'Nenhum corte cai dentro do clipe.')
                 : n > maxEditPieces
-                ? 'Fatias demais ($n; o máximo é $maxEditPieces). Diminua a sensibilidade.'
+                ? 'Fatias demais ($n; o máximo é $maxEditPieces). ${_mode == CutMode.transients ? 'Diminua a sensibilidade.' : _mode == CutMode.equal ? 'Use menos fatias.' : 'Use uma grade maior.'}'
                 : '$n fatias, com emendas de 2 ms que não mudam o som.',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
@@ -560,7 +571,7 @@ class _NormalizeState extends State<NormalizeClipDialog> {
   }
 
   Future<void> _apply() async {
-    final r = await widget.c.normalizeClip(widget.clipId, _mode, _target);
+    final r = await widget.c.normalizeClip(widget.clipId, _mode, _target, measured: _measures[_mode]);
     if (!mounted) return;
     setState(() {
       if (r.ok) {
@@ -748,7 +759,7 @@ class _QuantizeState extends State<QuantizeSlicesDialog> {
                 ? 'Nenhum transiente achado: não há o que quantizar. Aumente a sensibilidade.'
                 : plan.slices.length > maxEditPieces
                 ? 'Fatias demais (${plan.slices.length}; o máximo é $maxEditPieces). Diminua a sensibilidade.'
-                : '${plan.slices.length} fatias, ${plan.moved} movidas (até ${_pt(plan.maxShiftMs)} ms). As setas mostram para onde cada uma vai.',
+                : '${plan.slices.length} fatias, ${plan.moved} ${plan.moved == 1 ? 'movida' : 'movidas'} (até ${_pt(plan.maxShiftMs)} ms). As setas mostram para onde cada uma vai.',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: InlineNotice(_error!)),

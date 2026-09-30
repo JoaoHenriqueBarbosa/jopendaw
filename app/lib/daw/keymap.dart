@@ -734,7 +734,9 @@ class Keymap extends ChangeNotifier {
       final dropped = _mergeStored(r.custom);
       if (dropped > 0) {
         final n = dropped == 1 ? 'Um atalho guardado foi descartado' : '$dropped atalhos guardados foram descartados';
-        loadNotice = '$n porque você já os usou em outra ação nesta sessão, antes de o carregamento terminar.';
+        final why = '$n porque você já os usou em outra ação nesta sessão, antes de o carregamento terminar.';
+        // o aviso de arquivo ilegível ou de versão futura continua valendo: os dois avisos andam juntos
+        loadNotice = loadNotice == null ? why : '$loadNotice $why';
       }
       _index.clear();
     }

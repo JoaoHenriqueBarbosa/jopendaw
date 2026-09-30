@@ -689,3 +689,46 @@ fn trocar_o_tipo_no_reenvio_recomeca_o_estado() {
     // macro 1 unipolar, +0,5 do curso 0..2 sobre a base 1 (meio): 1,0 + 1,0 = 2
     assert!((gains(&mut e, 1)[0] - 2.0).abs() < 1e-4);
 }
+
+/// O estado do LFO (fase e alisamento) mora no ÍNDICE do modulador: quem é reenviado no mesmo índice segue
+/// de onde estava, e quem ocupa o índice de outro que saiu herda a fase dele. Por isso o app mantém um índice
+/// estável por modulador (apagar o 1 de dois LFOs reenvia o 2 no índice 1, não no 0).
+#[test]
+fn a_fase_do_lfo_e_por_indice_do_modulador() {
+    // dois LFOs livres: 1 Hz no índice 0 e 3 Hz no índice 1, ambos no volume
+    fn send(e: &mut Engine, index: usize, hz: f32) {
+        e.mod_source(0, index, kind::LFO, hz, false, 1.0, 0.0, true, shape::SINE, 10.0, 100.0, 0.0);
+        e.mod_dest(0, index, 0, at::VOLUME, 0, 0, 0.5, 0.0, 2.0, scale::LINEAR);
+    }
+    // referência: só o LFO de 3 Hz, no índice 1, rodando desde o começo
+    let mut solo = engine();
+    solo.play();
+    send(&mut solo, 1, 3.0);
+    gains(&mut solo, 37);
+    let want = gains(&mut solo, 10);
+
+    // apagar o primeiro e reenviar o de 3 Hz no MESMO índice (1): segue a fase própria, igual à referência
+    let mut stable = engine();
+    stable.play();
+    send(&mut stable, 0, 1.0);
+    send(&mut stable, 1, 3.0);
+    gains(&mut stable, 37);
+    stable.mod_clear();
+    send(&mut stable, 1, 3.0);
+    let got = gains(&mut stable, 10);
+    for (g, w) in got.iter().zip(&want) {
+        assert!((g - w).abs() < 1e-3, "a fase própria se perdeu: {g} contra {w}");
+    }
+
+    // reenviar o de 3 Hz no índice 0 (o que o app fazia pela posição na lista) herda a fase do que saiu
+    let mut shifted = engine();
+    shifted.play();
+    send(&mut shifted, 0, 1.0);
+    send(&mut shifted, 1, 3.0);
+    gains(&mut shifted, 37);
+    shifted.mod_clear();
+    send(&mut shifted, 0, 3.0);
+    let inherited = gains(&mut shifted, 10);
+    let worst = inherited.iter().zip(&want).map(|(g, w)| (g - w).abs()).fold(0.0f32, f32::max);
+    assert!(worst > 0.05, "esperava a fase herdada do índice 0 (diferença {worst})");
+}

@@ -186,6 +186,13 @@ List<KnobMenuAction> midiLearnActions(DawController c, int track, AutoTarget tar
   ];
 }
 
+/// As entradas do menu de contexto de fader/pan ([showMidiLearnMenu]) pelo nome, para a dica do controle: sai das
+/// mesmas ações do menu (quem tem "Modular…" ou "Remover mapeamento" a cita; quem não tem, não).
+String midiLearnMenuHint(DawController c, int track, AutoTarget target) => [
+  for (final a in midiLearnActions(c, track, target)) a.label.replaceAll(RegExp(r' \(.*\)$'), ''),
+  'Mapeamentos MIDI…',
+].join(', ');
+
 /// O menu de contexto do controle na posição [at] (coordenadas da tela).
 Future<void> showMidiLearnMenu(BuildContext context, DawController c, int track, AutoTarget target, Offset at) async {
   final l = c.midiLearn;

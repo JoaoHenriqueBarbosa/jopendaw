@@ -83,6 +83,14 @@ class _KeymapEditorState extends State<KeymapEditor> {
   bool _noteError = false;
 
   @override
+  void initState() {
+    super.initState();
+    // a importação foi desta sessão e o instantâneo de antes mora no Keymap, não nesta tela: reabrir a tela
+    // depois de importar ainda oferece "Desfazer importação"
+    if (km.canUndoImport) _note = 'Você importou atalhos nesta sessão. Dá para desfazer a importação.';
+  }
+
+  @override
   void dispose() {
     _focus.dispose();
     _search.dispose();
@@ -239,7 +247,7 @@ class _KeymapEditorState extends State<KeymapEditor> {
     final what = n == 1 ? '1 atalho será trocado' : '$n atalhos serão trocados';
     final now = plan.replacing == 0
         ? 'Você não tem personalizações agora.'
-        : 'As suas ${plan.replacing == 1 ? '1 personalização atual serão descartadas' : '${plan.replacing} personalizações atuais serão descartadas'}.';
+        : (plan.replacing == 1 ? 'A sua personalização atual será descartada.' : 'As suas ${plan.replacing} personalizações atuais serão descartadas.');
     final warn = plan.warnings.isEmpty
         ? ''
         : '\n\n${plan.warnings.length} ${plan.warnings.length == 1 ? 'aviso' : 'avisos'} (o que não vale no arquivo é descartado).';

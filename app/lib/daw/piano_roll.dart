@@ -522,7 +522,7 @@ class _PianoRollState extends State<PianoRoll> {
                   ),
                   Tooltip(
                     message:
-                        'Quantizar $target na grade (Q) · força ${(_Prefs.strength * 100).round()}%'
+                        'Quantizar $target na grade${shortcutHint('pr.quantize')} · força ${(_Prefs.strength * 100).round()}%'
                         '${_Prefs.ends ? ' · durações também' : ''}',
                     child: TextButton.icon(
                       onPressed: count == 0 ? null : _quantize,
@@ -630,7 +630,7 @@ class _PianoRollState extends State<PianoRoll> {
     // o documento pode ter sido trocado enquanto o diálogo estava aberto
     final found = c.findMidiClip(clip.id);
     if (found == null) return;
-    c.edit((_) => found.$2.name = name.trim());
+    c.editAs('Renomear clipe', (_) => found.$2.name = name.trim());
     _active = true;
   }
 

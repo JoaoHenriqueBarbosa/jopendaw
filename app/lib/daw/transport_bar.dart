@@ -153,7 +153,7 @@ class TransportBar extends StatelessWidget {
             icon: const Icon(Icons.copy_all),
           ),
           IconButton(
-            tooltip: 'Apagar o clipe (Delete)',
+            tooltip: 'Apagar o clipe${shortcutHint('edit.delete')}',
             onPressed: c.selectedClip == null ? null : () => deleteSelectedClip(c),
             icon: const Icon(Icons.delete_outline),
           ),

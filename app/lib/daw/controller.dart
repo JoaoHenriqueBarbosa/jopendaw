@@ -1393,12 +1393,12 @@ class DawController extends ChangeNotifier {
 
   /// Ganho do clipe de áudio (linear, 0..[maxClipGain]). Sem [undoable] é um passo de arraste: quem
   /// chama guarda o estado antes com [checkpoint].
-  void setClipGain(String clipId, double gain, {bool undoable = true}) {
+  void setClipGain(String clipId, double gain, {bool undoable = true, String label = 'Ganho do clipe'}) {
     final f = _findClip(clipId);
     if (f == null) return;
     final g = gain.isFinite ? gain.clamp(0.0, maxClipGain) : 1.0;
     if (f.$2.gain == g) return;
-    editAs('Ganho do clipe', (_) => f.$2.gain = g, undoable: undoable);
+    editAs(label, (_) => f.$2.gain = g, undoable: undoable);
   }
 
   /// Nos testes: espera os sons do warp que o documento pede.
@@ -1728,14 +1728,34 @@ class DawController extends ChangeNotifier {
     return out;
   }
 
+  /// O índice do motor de cada modulador, por faixa (id da faixa; '' = master) e id do modulador (ver [_modulationCalls]).
+  final Map<String, Map<String, int>> _modSlots = {};
+
   /// A modulação inteira como chamadas (`mod_source` + `mod_dest`), das faixas e do master. Só vão
-  /// os moduladores com algum destino que existe; o índice do modulador e o do destino são os da
-  /// lista do documento (a que o motor limita a [maxModSources] e [maxModDests]).
+  /// os moduladores com algum destino que existe; o índice do destino é o da lista do documento e o do
+  /// modulador é o que ele recebeu ao aparecer (estável, ver [_modSlots]); o motor limita a [maxModSources] e
+  /// [maxModDests].
   List<List<Object>> _modulationCalls(List<List<(Send, int)>> sends) {
     final out = <List<Object>>[];
     void add(int track, TrackModulation m) {
-      for (var si = 0; si < m.sources.length && si < maxModSources; si++) {
-        final src = m.sources[si];
+      // o motor guarda a fase do LFO e o nível do seguidor POR ÍNDICE: apagar o modulador 1 de dois faria o 2
+      // virar o índice 0 e herdar a fase do que saiu. Cada modulador mantém o índice que recebeu enquanto existir.
+      final slots = _modSlots.putIfAbsent(track < 0 ? '' : doc.tracks[track].id, () => {});
+      final shown = m.sources.take(maxModSources).toList();
+      // a chave é o id (um id repetido, de um documento estranho, ganha o índice na chave para não dividir o modulador)
+      final keys = <String>[
+        for (var i = 0; i < shown.length; i++)
+          shown.indexWhere((x) => x.id == shown[i].id) == i ? shown[i].id : '${shown[i].id}#$i',
+      ];
+      slots.removeWhere((key, _) => !keys.contains(key));
+      for (final key in keys) {
+        if (slots.containsKey(key)) continue;
+        final used = slots.values.toSet();
+        slots[key] = [for (var k = 0; k < maxModSources; k++) k].firstWhere((k) => !used.contains(k));
+      }
+      for (var li = 0; li < shown.length; li++) {
+        final src = shown[li];
+        final si = slots[keys[li]]!;
         final dests = <List<Object>>[];
         for (var di = 0; di < src.dests.length && di < maxModDests; di++) {
           final d = src.dests[di];
@@ -2202,7 +2222,10 @@ class DawController extends ChangeNotifier {
     if (_blockedByRecording('mudar o andamento')) return;
     final v = bpm.isFinite ? bpm.toDouble().clamp(minBpm, maxBpm).toDouble() : doc.bpm;
     final bpb = beatsPerBar.clamp(1, 32);
-    editAs('Região do loop', (d) {
+    // o nome do passo diz o que mudou de fato: só o compasso, só o andamento ou os dois
+    final meterChanged = !keepMeter && bpb != doc.beatsPerBar;
+    final bpmChanged = v != doc.bpm;
+    editAs(meterChanged ? (bpmChanged ? 'Mudar andamento e compasso' : 'Mudar compasso') : 'Mudar andamento', (d) {
       d.bpm = v;
       // o ponto da batida 0 do mapa é o andamento inicial
       if (d.tempoMap.isNotEmpty) d.tempoMap = [d.tempoMap.first.copyWith(bpm: d.bpm), ...d.tempoMap.skip(1)];
@@ -2521,7 +2544,13 @@ class DawController extends ChangeNotifier {
     projectId: project.id,
     currentJson: () => jsonEncode(doc.toJson()),
     clock: () => clock(),
-    hasContent: () => doc.tracks.any((t) => t.clips.isNotEmpty || t.midi.isNotEmpty),
+    // vale guardar um projeto com mais que a faixa de áudio vazia de quando nasce: clipes e notas, mas também
+    // faixas a mais, instrumento, efeito ou áudio de sampler já montados (ainda sem clipe)
+    hasContent: () =>
+        doc.tracks.length > 1 ||
+        doc.tracks.any(
+          (t) => t.clips.isNotEmpty || t.midi.isNotEmpty || t.kind != TrackKind.audio || t.effects.isNotEmpty || t.sample != null || t.zones.isNotEmpty,
+        ),
   );
 
   /// Restaura o documento de uma versão como UM passo do histórico (desfazer volta ao que era antes). Carrega no motor os

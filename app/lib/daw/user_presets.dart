@@ -287,6 +287,11 @@ class UserPresets extends ChangeNotifier {
   /// O arquivo local é de uma versão mais nova (ou não deu para lê-lo): nada é gravado por cima dele.
   bool _readOnly = false;
 
+  /// O motivo do [_readOnly] é que o guardado nem abriu (a leitura falhou), e não um arquivo de versão mais nova:
+  /// aí restaurar das cópias é permitido (o que voltar é gravado por cima do que não dava para ler) e o modo só
+  /// leitura acaba. O arquivo de versão mais nova nunca é sobrescrito.
+  bool _readFailed = false;
+
   /// Existe uma cópia do arquivo que não deu para ler (`userpresets.bak`): dá para tentar
   /// recuperar os presets dela ([restoreFromBackup]).
   bool hasBackup = false;
@@ -325,6 +330,7 @@ class UserPresets extends ChangeNotifier {
     } catch (_) {
       // não dá para saber o que há lá: não grava por cima
       _readOnly = true;
+      _readFailed = true;
       loadNotice = 'Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.';
       // o arquivo principal não abriu, mas pode haver cópias de outra vez: oferece restaurar
       hasBackup = await _anyBackup();
@@ -383,7 +389,7 @@ class UserPresets extends ChangeNotifier {
   /// (o que se restaurasse não seria gravado). As cópias continuam lá.
   Future<PresetRestore> restoreFromBackup() async {
     await load();
-    if (_readOnly) throw PresetFormatException('Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.');
+    if (_readOnly && !_readFailed) throw PresetFormatException('Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.');
     var raws = <String>[];
     try {
       raws = await _backups();
@@ -409,6 +415,9 @@ class UserPresets extends ChangeNotifier {
       restored++;
     }
     if (restored > 0) {
+      // o guardado que não abria volta a valer: o que foi restaurado é gravado (se a gravação falhar, [saveError] avisa)
+      _readOnly = false;
+      _readFailed = false;
       loadNotice = null;
       _changed();
     }

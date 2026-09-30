@@ -5,11 +5,18 @@
 /// fades); o arquivo de áudio nunca é tocado e o desfazer volta a edição inteira num passo só.
 ///
 /// As emendas entre fatias vizinhas (dividir e quantizar) são *crossfades* de [microFade]: a fatia
-/// seguinte começa [microFade] antes do corte, com fade de entrada linear, e a anterior termina no
-/// corte com fade de saída linear do mesmo tamanho. Como as duas tocam o mesmo trecho do mesmo
-/// áudio, os ganhos lineares somam 1: o som em sequência é idêntico ao do clipe original (sem
-/// buraco nem estalo). Só as fatias que mudam de lugar (quantização) trocam esse crossfade por um
-/// fade de entrada/saída simples.
+/// seguinte começa [microFade] antes do corte, com fade de entrada em curva S, e a anterior termina
+/// no corte com fade de saída em curva S do mesmo tamanho. Como as duas tocam o mesmo trecho do mesmo
+/// áudio (sinais correlacionados), o que tem de somar 1 é a *amplitude*: a curva S do motor
+/// (`(1−cos πx)/2`, [FadeShape.sCurve]) espelhada soma exatamente 1 em cada instante, então o som em
+/// sequência é idêntico ao do clipe original (sem buraco, sem afundar e sem estalo). A curva padrão
+/// do motor (`x²`, [FadeShape.linear]) somaria só 0,5 no meio (−6 dB) e não serve aqui.
+///
+/// Quem perde o crossfade, conforme `buildSlices`: a primeira fatia mantém o fade de entrada do
+/// clipe e a última o de saída (nas pontas não há vizinha); a fatia que a seguinte corta por cima
+/// (quantização) troca a emenda por um fade de saída simples (seco de [microFade] com "manter juntas",
+/// ou o rabo de 10 ms sem ele), e onde há lacuna ou sobreposição curta demais para cortar as fatias
+/// são outras partes do áudio, então o fade é só o de entrada/saída de cada uma.
 ///
 /// A edição por fatias trabalha no áudio original: clipes com warp, transposição ou inversão são
 /// recusados com uma mensagem clara (a fatia cairia fora do lugar no som esticado). Só a
@@ -31,6 +38,9 @@ import 'sampler_zones.dart' show slicePoints;
 
 /// O fade de emenda entre fatias (2 ms): curto para não mexer no som, longo para não estalar.
 const microFade = 0.002;
+
+/// A curva das emendas: a única do motor cujo par entrada/saída soma amplitude 1 (ver o topo).
+const _seamShape = FadeShape.sCurve;
 
 /// O máximo de clipes que uma edição cria de uma vez (protege o documento de uma sensibilidade
 /// exagerada num áudio longo).
@@ -272,8 +282,8 @@ List<AudioClip> buildSlices(AudioClip orig, DawDoc doc, List<SliceSpec> slices, 
         ..length = length
         ..fadeIn = fin
         ..fadeOut = fout
-        ..fadeInShape = first ? orig.fadeInShape : FadeShape.linear
-        ..fadeOutShape = tailIsOrig && !trimmedHere ? orig.fadeOutShape : FadeShape.linear
+        ..fadeInShape = first ? orig.fadeInShape : _seamShape
+        ..fadeOutShape = tailIsOrig && !trimmedHere ? orig.fadeOutShape : (trimmedHere ? FadeShape.linear : _seamShape)
         ..autoFadeIn = first ? orig.autoFadeIn : null
         ..autoFadeOut = tailIsOrig && !trimmedHere ? orig.autoFadeOut : null,
     );
@@ -605,8 +615,8 @@ extension AudioEditing on DawController {
     return (track: t, clip: clip, range: range, error: null);
   }
 
-  void _replaceClip(DawTrack t, AudioClip orig, List<AudioClip> pieces) {
-    edit((_) {
+  void _replaceClip(DawTrack t, AudioClip orig, List<AudioClip> pieces, String label) {
+    editAs(label, (_) {
       final i = t.clips.indexWhere((c) => c.id == orig.id);
       if (i >= 0) t.clips.removeAt(i);
       t.clips.insertAll(i < 0 ? t.clips.length : i, pieces);
@@ -626,7 +636,7 @@ extension AudioEditing on DawController {
     }
     final report = SliceBuildReport();
     final pieces = buildSlices(clip, doc, specsForCuts(clip, doc, valid), report: report);
-    _replaceClip(tg.track!, clip, pieces);
+    _replaceClip(tg.track!, clip, pieces, 'Dividir clipe');
     final extra = report.fadeShortened ? ' O fade original do clipe foi encurtado para caber na fatia.' : '';
     return AudioEditResult(true, 'Dividido em ${pieces.length} fatias, com emendas de 2 ms sem mudar o som.$extra', [for (final p in pieces) p.id]);
   }
@@ -646,20 +656,29 @@ extension AudioEditing on DawController {
     }
     final pieces = buildKept(clip, doc, plan, s.fade);
     if (pieces.isEmpty) return const AudioEditResult(false, 'Nenhum trecho sobrou.');
-    _replaceClip(tg.track!, clip, pieces);
+    _replaceClip(tg.track!, clip, pieces, 'Remover silêncio');
     return AudioEditResult(true, silenceSummary(plan), [for (final p in pieces) p.id]);
   }
 
   /// Normaliza o ganho do clipe (mede o trecho que ele toca). Vale também para clipe com warp.
-  Future<AudioEditResult> normalizeClip(String clipId, NormalizeMode mode, double targetDb) async {
+  ///
+  /// [measured] é a medida que o diálogo já fez (ver [measureForNormalize]): com ela o clipe não é
+  /// medido de novo (o LUFS de um clipe longo custa).
+  Future<AudioEditResult> normalizeClip(String clipId, NormalizeMode mode, double targetDb, {NormalizeMeasure? measured}) async {
     final tg = audioEditTarget(clipId, needSlices: false);
     if (tg.error != null) return AudioEditResult(false, tg.error!);
-    final r = await planNormalize(tg.range!, mode, targetDb);
-    if (r.plan == null) return AudioEditResult(false, r.error!);
+    final NormalizePlan plan;
+    if (measured != null) {
+      plan = normalizePlanFor(mode, targetDb, measured);
+    } else {
+      final r = await planNormalize(tg.range!, mode, targetDb);
+      if (r.plan == null) return AudioEditResult(false, r.error!);
+      plan = r.plan!;
+    }
     final id = tg.clip!.id;
     if (audioClip(id) == null) return const AudioEditResult(false, 'O clipe não existe mais.');
-    setClipGain(id, r.plan!.gain);
-    return AudioEditResult(true, normalizeSummary(r.plan!), [id]);
+    setClipGain(id, plan.gain, label: 'Normalizar clipe');
+    return AudioEditResult(true, normalizeSummary(plan), [id]);
   }
 
   /// Quantiza as fatias do clipe (ver [planQuantize]).
@@ -674,7 +693,7 @@ extension AudioEditing on DawController {
     }
     final report = SliceBuildReport();
     final pieces = buildSlices(clip, doc, plan.slices, keepTogether: s.keepTogether, report: report);
-    _replaceClip(tg.track!, clip, pieces);
+    _replaceClip(tg.track!, clip, pieces, 'Quantizar por fatias');
     return AudioEditResult(true, quantizeSummary(plan, report), [for (final p in pieces) p.id]);
   }
 }

@@ -85,10 +85,12 @@ class HistoryStepButton extends StatelessWidget {
     return Listener(
       // botão direito do mouse (o de toque usa a pressão longa logo abaixo)
       onPointerDown: (e) {
-        if (e.buttons == kSecondaryButton) showHistoryMenu(context, c, e.position);
+        // botão desligado (nada a desfazer/refazer, ou gravando) não abre menu: o Histórico inerte só confundia
+        // (ele continua no menu Visão)
+        if (enabled && e.buttons == kSecondaryButton) showHistoryMenu(context, c, e.position);
       },
       child: GestureDetector(
-        onLongPressStart: (d) => showHistoryMenu(context, c, d.globalPosition),
+        onLongPressStart: enabled ? (d) => showHistoryMenu(context, c, d.globalPosition) : null,
         // o tooltip só aparece com o mouse em cima: a pressão longa do toque é do menu
         child: Tooltip(
           message: redo ? redoTooltipText(c) : undoTooltipText(c),

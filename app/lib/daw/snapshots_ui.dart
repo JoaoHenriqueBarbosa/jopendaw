@@ -16,6 +16,9 @@ import '../widgets/theme.dart';
 import 'controller.dart';
 import 'snapshots.dart';
 
+/// O tamanho máximo do nome de uma versão (o campo do diálogo e o nome padrão que se sugere).
+const versionNameMax = 80;
+
 /// Cria o projeto novo a partir do documento de uma versão (trocável nos testes).
 typedef DuplicateVersion = Future<Project> Function(Map<String, dynamic> doc, String name);
 
@@ -107,7 +110,7 @@ class _VersionNameDialogState extends State<_VersionNameDialog> {
             key: const ValueKey('version-name'),
             controller: _name,
             autofocus: true,
-            maxLength: 80,
+            maxLength: versionNameMax,
             decoration: InputDecoration(labelText: 'Nome', errorText: _error),
             onChanged: (_) => setState(() => _error = null),
             onSubmitted: (_) => widget.askNote ? null : _submit(),
@@ -135,7 +138,7 @@ class _VersionNameDialogState extends State<_VersionNameDialog> {
 
 /// "Salvar versão…" pelo menu: pede o nome e guarda. Devolve a mensagem para mostrar (ou null se cancelou).
 Future<String?> saveVersionFlow(BuildContext context, DawController c, {void Function(String message)? onMessage}) async {
-  final r = await promptVersion(context, title: 'Salvar versão', action: 'Salvar', initialName: 'Versão ${formatStamp(c.clock())}');
+  final r = await promptVersion(context, title: 'Salvar versão', action: 'Salvar', initialName: 'Versão ${formatStamp(c.clock())}'.characters.take(versionNameMax).toString());
   if (r == null) return null;
   final message = await saveVersionNow(c, r.name, r.note);
   onMessage?.call(message);
@@ -221,7 +224,7 @@ class _VersionsDialogState extends State<VersionsDialog> {
   }
 
   Future<void> _save() async {
-    final r = await promptVersion(context, title: 'Salvar versão', action: 'Salvar', initialName: 'Versão ${formatStamp(c.clock())}');
+    final r = await promptVersion(context, title: 'Salvar versão', action: 'Salvar', initialName: 'Versão ${formatStamp(c.clock())}'.characters.take(versionNameMax).toString());
     if (r == null) return;
     await _run(() async {
       final m = await saveVersionNow(c, r.name, r.note);
@@ -329,7 +332,7 @@ class _VersionsDialogState extends State<VersionsDialog> {
       context,
       title: 'Duplicar como projeto novo',
       action: 'Criar projeto',
-      initialName: '${c.project.name} — ${s.name}',
+      initialName: '${c.project.name} — ${s.name}'.characters.take(versionNameMax).toString(),
       askNote: false,
     );
     if (r == null) return;
@@ -526,7 +529,7 @@ class _VersionsDialogState extends State<VersionsDialog> {
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'rename', child: Text('Renomear…')),
-                    PopupMenuItem(value: 'duplicate', child: Text('Duplicar como novo projeto…')),
+                    PopupMenuItem(value: 'duplicate', child: Text('Duplicar como projeto novo…')),
                     PopupMenuItem(value: 'delete', child: Text('Apagar…')),
                   ],
                 ),

@@ -64,7 +64,7 @@ class _ClipGainDialogState extends State<ClipGainDialog> {
               max: clipGainMaxDb,
               divisions: ((clipGainMaxDb - clipGainMinDb) * 2).round(),
               value: _db,
-              onChangeStart: (_) => widget.c.checkpoint(),
+              onChangeStart: (_) => widget.c.checkpoint('Ganho do clipe'),
               onChanged: _apply,
             ),
             const Text('Só este clipe; o volume da faixa continua à parte.', style: TextStyle(fontSize: 12, color: Colors.white54)),

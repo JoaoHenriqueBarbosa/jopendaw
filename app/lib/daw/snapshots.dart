@@ -37,6 +37,9 @@ const autoMinuteChoices = [5, 10, 15, 30, 60];
 
 const noVersionsMessage = 'Este aparelho ainda não tem versões deste projeto. As versões ficam só no aparelho onde foram salvas e não vêm da nuvem.';
 
+/// Liga o relógio de parede das versões automáticas (ver [VersionKeeper.noteEdit]). Só os testes desligam.
+bool versionClockTimers = true;
+
 const _format = 'jopendaw-version';
 const _formatVersion = 1;
 const _prefsKey = 'versions-prefs';
@@ -54,7 +57,7 @@ class Snapshot {
   final DateTime createdAt;
   final int tracks, clips;
 
-  /// Tamanho do arquivo guardado (caracteres do texto).
+  /// Tamanho do arquivo guardado, em bytes UTF-8 (o que ele ocupa de fato; com acentos passa dos caracteres).
   final int bytes;
   const Snapshot({
     required this.id,
@@ -109,7 +112,8 @@ class VersionsPrefs {
   static VersionsPrefs fromJson(Object? j) {
     if (j is! Map) return const VersionsPrefs();
     final m = j['minutes'];
-    return VersionsPrefs(auto: j['auto'] is bool ? j['auto'] as bool : true, minutes: m is int && m >= 1 && m <= 24 * 60 ? m : defaultAutoMinutes);
+    // só o que a tela oferece (5, 10, 15, 30, 60): um arquivo com outro valor voltaria a um intervalo que a pessoa não escolheu
+    return VersionsPrefs(auto: j['auto'] is bool ? j['auto'] as bool : true, minutes: m is int && autoMinuteChoices.contains(m) ? m : defaultAutoMinutes);
   }
 }
 
@@ -138,7 +142,7 @@ class VersionsPrefs {
       createdAt: created,
       tracks: j['tracks'] is int ? j['tracks'] as int : counts.$1,
       clips: j['clips'] is int ? j['clips'] as int : counts.$2,
-      bytes: text.length,
+      bytes: utf8.encode(text).length,
     );
     return (meta: meta, doc: docMap, docJson: jsonEncode(docMap));
   } catch (_) {
@@ -280,9 +284,12 @@ class VersionKeeper {
     });
     await store.put(snapshotKey(projectId, id), envelope);
     _baseline = now;
+    _dirty = false;
+    _timer?.cancel();
+    _timer = null;
     if (auto) await _pruneAuto();
     _ping();
-    return Snapshot(id: id, seq: seq, name: name, note: note, auto: auto, createdAt: now.toUtc(), tracks: tracks, clips: clips, bytes: envelope.length);
+    return Snapshot(id: id, seq: seq, name: name, note: note, auto: auto, createdAt: now.toUtc(), tracks: tracks, clips: clips, bytes: utf8.encode(envelope).length);
   });
 
   Future<bool> _sameAsCurrent(String id, String text) async {
@@ -371,6 +378,10 @@ class VersionKeeper {
   Future<void> setPrefs(VersionsPrefs p) async {
     _prefs = p;
     _prefsLoaded = true;
+    // o prazo novo vale já: o relógio em curso é refeito na próxima edição
+    _timer?.cancel();
+    _timer = null;
+    if (!p.auto) _dirty = false;
     try {
       await store.put(_prefsKey, jsonEncode(p.toJson()));
     } catch (_) {}
@@ -384,12 +395,33 @@ class VersionKeeper {
   /// Uma edição aconteceu (chamado a cada mudança do documento; barato). Passados os minutos configurados desde o
   /// começo da edição, guarda uma versão automática do estado de agora.
   void noteEdit() {
-    if (!_prefs.auto) return;
+    if (!_prefs.auto || changes.isClosed) return;
     final now = clock();
     final base = _baseline ??= now;
-    if (_autoBusy || now.difference(base) < Duration(minutes: _prefs.minutes)) return;
+    _dirty = true;
+    // o relógio de parede: a pessoa que edita uma vez e fica parada (ou edita sem parar, sem pausa para o
+    // próximo aviso) também ganha a versão, sem depender de uma edição depois do prazo
+    if (versionClockTimers) _timer ??= Timer(Duration(minutes: _prefs.minutes), _onTimer);
+    if (now.difference(base) < Duration(minutes: _prefs.minutes)) return;
+    _autoSave();
+  }
+
+  Timer? _timer;
+  bool _dirty = false;
+
+  void _onTimer() {
+    _timer = null;
+    if (!_prefs.auto || !_dirty) return;
+    _autoSave();
+  }
+
+  void _autoSave() {
+    if (_autoBusy) return;
     _autoBusy = true;
-    _baseline = now;
+    _baseline = clock();
+    _dirty = false;
+    _timer?.cancel();
+    _timer = null;
     unawaited(save(name: 'Versão automática', auto: true).then((_) {}, onError: (_) {}).whenComplete(() => _autoBusy = false));
   }
 
@@ -408,7 +440,11 @@ class VersionKeeper {
     }
   }
 
-  void dispose() => changes.close();
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    changes.close();
+  }
 }
 
 // ============================================================================ comparar

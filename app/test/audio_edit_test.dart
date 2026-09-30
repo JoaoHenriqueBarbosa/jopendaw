@@ -77,8 +77,8 @@ double onsetOf(DawController c, double t) {
 
 String docJson(DawController c) => jsonEncode(c.doc.toJson());
 
-/// Toca os clipes como o motor: cada um lê o áudio de `offset` por `length`, com os fades lineares
-/// e o ganho, e tudo soma.
+/// Toca os clipes como o motor: cada um lê o áudio de `offset` por `length`, com os fades na curva
+/// que o clipe escolheu (`FadeShape.gain`, o espelho de `fade_curve` do motor) e o ganho, e tudo soma.
 Float32List render(DawController c, List<AudioClip> clips, Float32List src, int frames) {
   final out = Float32List(frames);
   for (final k in clips) {
@@ -89,8 +89,8 @@ Float32List render(DawController c, List<AudioClip> clips, Float32List src, int 
       final o = n0 + t, s = s0 + t;
       if (o < 0 || o >= frames || s < 0 || s >= src.length) continue;
       var w = k.gain;
-      if (k.fadeIn > 0 && t < k.fadeIn * rate) w *= t / (k.fadeIn * rate);
-      if (k.fadeOut > 0 && len - t < k.fadeOut * rate) w *= (len - t) / (k.fadeOut * rate);
+      if (k.fadeIn > 0 && t < k.fadeIn * rate) w *= k.fadeInShape.gain(t / (k.fadeIn * rate));
+      if (k.fadeOut > 0 && len - t < k.fadeOut * rate) w *= k.fadeOutShape.gain((len - t) / (k.fadeOut * rate));
       out[o] += (w * src[s]).toDouble();
     }
   }
@@ -150,6 +150,103 @@ void main() {
       final g = detectCuts(t.range!, t.clip!, c.doc, mode: CutMode.grid, grid: EditGrid.quarter, minGap: 0);
       expect(g, hasLength(4));
       expect(g.first, closeTo(0.5 + 0.125, 1e-9), reason: 'a batida 1 cai 0,125 s depois do começo do clipe');
+      c.dispose();
+    });
+  });
+
+  group('achados da fase 18 (lote 21)', () {
+    test('a emenda de 2 ms não afunda: com a curva real do motor a soma é 1 (constante renderizada fica em 1)', () async {
+      final x = Float32List.fromList(List.filled(2 * rate, 0.5));
+      final (c, _) = await setup(x);
+      expect(c.splitClipAt('c1', [0.5, 1.0, 1.5]).ok, isTrue);
+      final p = clipsOf(c)..sort((a, b) => a.start.compareTo(b.start));
+      for (var i = 1; i < p.length; i++) {
+        expect(p[i].fadeInShape, FadeShape.sCurve);
+        expect(p[i - 1].fadeOutShape, FadeShape.sCurve);
+      }
+      final out = render(c, p, x, x.length);
+      // em volta de cada emenda o nível não cai (com x² cairia a 0,25 do valor: -6 dB)
+      for (final cut in [0.5, 1.0, 1.5]) {
+        for (var i = ((cut - 0.003) * rate).round(); i < ((cut + 0.003) * rate).round(); i++) {
+          expect(out[i], closeTo(0.5, 1e-4), reason: 'amostra $i perto do corte $cut');
+        }
+      }
+      // a curva antiga (x²) somava só 0,5 no meio da emenda: é o que o teste pega
+      expect(FadeShape.linear.gain(0.5) + FadeShape.linear.gain(0.5), closeTo(0.5, 1e-12));
+      expect(FadeShape.sCurve.gain(0.3) + FadeShape.sCurve.gain(0.7), closeTo(1, 1e-12));
+      c.dispose();
+    });
+
+    test('a quantização também emenda em curva S quando as fatias se encostam', () async {
+      final x = drums([0.25, 0.5, 0.75, 1.0], seconds: 1.4);
+      final (c, _) = await setup(x);
+      expect(c.quantizeClipSlices('c1', const QuantizeSettings(grid: EditGrid.eighth, strength: 0, keepTogether: true)).ok, isTrue);
+      final p = clipsOf(c)..sort((a, b) => a.start.compareTo(b.start));
+      expect(p.length, greaterThan(2));
+      expect(p[1].fadeInShape, FadeShape.sCurve);
+      expect(p[0].fadeOutShape, FadeShape.sCurve);
+      c.dispose();
+    });
+
+    test('cada ação de áudio tem o nome no histórico', () async {
+      final x = drums(hits);
+      var (c, _) = await setup(x);
+      expect(c.splitClipAt('c1', detectCuts(c.audioEditTarget('c1').range!, clipsOf(c).single, c.doc)).ok, isTrue);
+      expect(c.historyRows.first.title, 'Dividir clipe');
+      c.dispose();
+
+      (c, _) = await setup(noiseBursts([(0.5, 0.8), (1.5, 1.9)], 2.5));
+      expect(c.stripClipSilence('c1', const SilenceSettings()).ok, isTrue);
+      expect(c.historyRows.first.title, 'Remover silêncio');
+      c.dispose();
+
+      (c, _) = await setup(tone(1));
+      expect((await c.normalizeClip('c1', NormalizeMode.peak, -3)).ok, isTrue);
+      expect(c.historyRows.first.title, 'Normalizar clipe');
+      c.dispose();
+
+      (c, _) = await setup(drums([0.02, 0.27, 0.485, 0.78], seconds: 1.2));
+      expect(c.quantizeClipSlices('c1', const QuantizeSettings(grid: EditGrid.eighth)).ok, isTrue);
+      expect(c.historyRows.first.title, 'Quantizar por fatias');
+      c.dispose();
+    });
+
+    test('normalizar reaproveita a medida do diálogo (não mede de novo)', () async {
+      final (c, _) = await setup(tone(1));
+      // uma medida falsa: se o controlador medisse de novo, o ganho seria o do áudio (-6 dB de pico -> -1 dB)
+      const fake = (measuredDb: -20.0, peakDb: -20.0);
+      final r = await c.normalizeClip('c1', NormalizeMode.peak, -10, measured: fake);
+      expect(r.ok, isTrue, reason: r.message);
+      expect(clipsOf(c).single.gain, closeTo(math.pow(10, 10 / 20), 1e-6));
+      c.dispose();
+    });
+
+    test('fatias iguais e grade não passam pela distância mínima; transientes sim', () async {
+      final (c, _) = await setup(tone(2));
+      final t = c.audioEditTarget('c1');
+      final g = detectCuts(t.range!, t.clip!, c.doc, mode: CutMode.grid, grid: EditGrid.thirtySecond, minGap: 0);
+      expect(g, hasLength(31));
+      // a 1/32 e 120 bpm a grade é de 62,5 ms: acima de 0,05 s ela sobrevive ao filtro padrão; com
+      // 0,5 s de distância mínima ela perderia quase tudo, e o diálogo não pode mandar esse valor
+      expect(detectCuts(t.range!, t.clip!, c.doc, mode: CutMode.grid, grid: EditGrid.thirtySecond, minGap: 0.5), hasLength(4));
+      c.dispose();
+    });
+
+    test('na grade o corte cai na linha: a fatia começa 2 ms antes só pelo crossfade e o ataque toca na linha', () async {
+      final x = drums([0.25, 0.5, 0.75, 1.0], seconds: 1.4);
+      final (c, _) = await setup(x);
+      final t = c.audioEditTarget('c1');
+      final cuts = detectCuts(t.range!, t.clip!, c.doc, mode: CutMode.grid, grid: EditGrid.eighth);
+      expect(c.splitClipAt('c1', cuts).ok, isTrue);
+      final p = clipsOf(c)..sort((a, b) => a.start.compareTo(b.start));
+      for (var i = 1; i < p.length; i++) {
+        // o começo nominal (depois da cabeça do crossfade) está exatamente na linha da grade
+        expect(c.doc.secondsAt(p[i].start) + p[i].fadeIn, closeTo(cuts[i - 1], 1e-9));
+        expect(p[i].offset + p[i].fadeIn, closeTo(cuts[i - 1], 1e-9));
+      }
+      for (final hit in [0.25, 0.5, 0.75, 1.0]) {
+        expect(onsetOf(c, hit), closeTo(hit, 1e-9));
+      }
       c.dispose();
     });
   });

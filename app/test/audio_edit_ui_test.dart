@@ -176,4 +176,47 @@ void main() {
     expect(find.text('Remover silêncio'), findsOneWidget);
     expect(c.doc.tracks[0].clips.single, isA<AudioClip>());
   });
+
+  group('achados do lote 21', () {
+    uiTest('dividir: mais de 500 fatias desabilita o botão e avisa, como as outras ações', (t) async {
+      await setView(t, 360, 640);
+      final (c, _) = await project(t, x: core.tone(60));
+      await host(t, c, (ctx) => showSplitTransientsDialog(ctx, c, 'c1'));
+      await t.tap(find.text('Na grade'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('1/32'));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Fatias demais'), findsOneWidget);
+      expect(find.textContaining('grade maior'), findsOneWidget);
+      final btn = t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Dividir'));
+      expect(btn.onPressed, isNull);
+      await t.tap(find.text('1/8'));
+      await t.pumpAndSettle();
+      expect(t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Dividir')).onPressed, isNotNull);
+    });
+
+    uiTest('a grade e as fatias iguais não mostram nem aplicam a distância mínima', (t) async {
+      await setView(t, 360, 640);
+      final (c, _) = await project(t, x: core.tone(2));
+      await host(t, c, (ctx) => showSplitTransientsDialog(ctx, c, 'c1'));
+      expect(find.byKey(const Key('split-mingap')), findsOneWidget);
+      await t.tap(find.text('Na grade'));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('split-mingap')), findsNothing);
+      await t.tap(find.text('1/32'));
+      await t.pumpAndSettle();
+      // 1/32 a 120 bpm em 2 s: 31 cortes, 32 fatias (o padrão de 50 ms de distância não corta nenhum)
+      expect(find.textContaining('32 fatias'), findsOneWidget);
+    });
+
+    uiTest('a dica de desfazer do aviso final usa o atalho atual', (t) async {
+      await setView(t, 360, 640);
+      final (c, _) = await project(t);
+      await host(t, c, (ctx) => showNormalizeClipDialog(ctx, c, 'c1'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Normalizar'));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Dá para desfazer numa vez só ('), findsOneWidget);
+    });
+  });
 }

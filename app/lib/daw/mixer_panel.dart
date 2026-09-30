@@ -753,7 +753,8 @@ class _FaderState extends State<_Fader> with _DragValue {
       onDecrease: () => _step(-1),
       child: Tooltip(
         message:
-            'Volume: ${formatDb(gain)} dB\nArraste (Shift: fino) ou use a roda · duplo clique: 0 dB\nBotão direito ou toque longo: Aprender MIDI, Modular…',
+            'Volume: ${formatDb(gain)} dB\nArraste (Shift: fino) ou use a roda · duplo clique: 0 dB\n'
+            'Botão direito ou toque longo: ${midiLearnMenuHint(c, widget.track, const AutoTarget(AutoKind.volume))}',
         waitDuration: const Duration(milliseconds: 900),
         child: MouseRegion(
           cursor: SystemMouseCursors.resizeUpDown,
@@ -921,7 +922,9 @@ class _PanKnobState extends State<_PanKnob> with _DragValue {
   Widget build(BuildContext context) {
     final pan = _pan;
     return Tooltip(
-      message: 'Pan: ${_label(pan)}\nArraste na vertical ou use a roda · duplo clique: centro\nBotão direito ou toque longo: Aprender MIDI, Modular…',
+      message:
+          'Pan: ${_label(pan)}\nArraste na vertical ou use a roda · duplo clique: centro\n'
+          'Botão direito ou toque longo: ${midiLearnMenuHint(c, widget.track, const AutoTarget(AutoKind.pan))}',
       waitDuration: const Duration(milliseconds: 800),
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeUpDown,
@@ -1479,7 +1482,8 @@ class _SendRowState extends State<_SendRow> with _DragValue {
     final tip = s == null
         ? (_full ? '${DawController.sendLimitHint}: remova um envio para criar este' : 'Enviar para $name: toque para criar (pós-fader) ou arraste para dosar')
         : 'Envio para $name: ${formatDb(s.level)} dB, ${s.pre ? 'pré' : 'pós'}-fader\n'
-              'Arraste ou use a roda · duplo clique: 0 dB · botão direito ou toque longo: pré/pós, Modular… e remover';
+              'Arraste ou use a roda · duplo clique: 0 dB · botão direito ou toque longo: pré/pós'
+              '${c.canModulate(widget.track, AutoTarget(AutoKind.send, ref: widget.bus.id)) ? ', Modular…' : ''} e remover';
     return Tooltip(
       message: tip,
       waitDuration: const Duration(milliseconds: 800),

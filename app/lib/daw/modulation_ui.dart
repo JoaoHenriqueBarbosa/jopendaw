@@ -299,7 +299,7 @@ class _SourceCard extends StatelessWidget {
     size: size,
     color: modulationColor,
     format: format,
-    onChangeStart: (_) => c.checkpoint(),
+    onChangeStart: (_) => c.checkpoint('Mudar modulação'),
     onChanged: (v) => _edit((s) => set(s, v), undoable: false),
   );
 
@@ -464,7 +464,7 @@ class _DestRow extends StatelessWidget {
                 min: -1,
                 max: 1,
                 activeColor: modulationColor,
-                onChangeStart: (_) => c.checkpoint(),
+                onChangeStart: (_) => c.checkpoint('Mudar quantidade da modulação'),
                 onChanged: (v) => c.editModulation(track, (m) {
                   final d = m.byId(sourceId)?.dests;
                   if (d != null && index < d.length) d[index].amount = v;

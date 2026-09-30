@@ -1,6 +1,8 @@
 // Fase 18 (C): histórico de desfazer com nomes e versões nomeadas do projeto (instantâneos locais).
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/controller.dart';
@@ -659,7 +661,7 @@ void main() {
         // duplicar como projeto novo
         await tapV(t, find.byKey(ValueKey('version-menu-$id')));
         await t.pumpAndSettle();
-        await t.tap(find.text('Duplicar como novo projeto…'));
+        await t.tap(find.text('Duplicar como projeto novo…'));
         await t.pumpAndSettle();
         await t.tap(find.byKey(const ValueKey('version-confirm')));
         await t.pumpAndSettle();
@@ -732,6 +734,124 @@ void main() {
       expect(find.text('Histórico'), findsOneWidget);
       final ex = t.takeException();
       if (ex != null) fail(ex.toString() + (ex is FlutterError ? ex.diagnostics.map((d) => d.toDescription()).join('\n') : ''));
+    });
+  });
+  group('achados do lote 21', () {
+    test('o passo de mudar andamento/compasso tem o nome certo, também pelo tap tempo', () async {
+      await c.setTempo(100, 4);
+      expect(c.nextUndo!.title, 'Mudar andamento');
+      await c.setTempo(100, 3);
+      expect(c.nextUndo!.title, 'Mudar compasso');
+      await c.setTempo(90, 5);
+      expect(c.nextUndo!.title, 'Mudar andamento e compasso');
+      await c.setTempo(80, 0, keepMeter: true);
+      expect(c.nextUndo!.title, 'Mudar andamento');
+      expect(c.historyRows.any((r) => r.title == 'Região do loop'), isFalse);
+    });
+
+    test('nenhum caminho do app grava um passo sem nome (checkpoint() vazio, edit sem label com undo)', () {
+      final bad = <String>[];
+      for (final f in Directory('lib').listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart'))) {
+        final lines = f.readAsLinesSync();
+        for (var i = 0; i < lines.length; i++) {
+          final l = lines[i];
+          if (l.trimLeft().startsWith('//')) continue;
+          if (RegExp(r'checkpoint\(\s*\)').hasMatch(l)) bad.add('${f.path}:${i + 1}: $l');
+          // c.edit((...) sem `undoable: false` na chamada (até oito linhas) e sem label
+          if (RegExp(r'\b(c|ctl|widget\.c)\.edit\(').hasMatch(l)) {
+            final call = lines.skip(i).take(8).join('\n');
+            if (!call.contains('undoable: false') && !call.contains('label:')) bad.add('${f.path}:${i + 1}: $l');
+          }
+        }
+      }
+      expect(bad, isEmpty, reason: bad.join('\n'));
+    });
+
+    test('a preferência só aceita os intervalos que a tela oferece', () {
+      for (final m in autoMinuteChoices) {
+        expect(VersionsPrefs.fromJson({'auto': true, 'minutes': m}).minutes, m);
+      }
+      for (final m in [0, 1, 7, 61, 1440, 100000, -5, 15.5, '30', null]) {
+        expect(VersionsPrefs.fromJson({'auto': true, 'minutes': m}).minutes, defaultAutoMinutes, reason: '$m');
+      }
+    });
+
+    test('o alerta de 50 MB soma bytes UTF-8, não caracteres', () async {
+      c.addMarker(beat: 1);
+      final s = await c.versions.save(name: 'Acentuada ção 音楽 áéíóú', note: 'ñ');
+      final raw = store.data['snapshots:p:${s!.id}']! as String;
+      expect(raw.length, lessThan(utf8.encode(raw).length));
+      expect(s.bytes, utf8.encode(raw).length);
+      expect((await c.versions.list()).totalBytes, utf8.encode(raw).length);
+    });
+
+    test('ao abrir vale também sem clipes, se já há mais faixas ou um instrumento', () async {
+      await c.versions.onOpen();
+      expect((await c.versions.list()).items, isEmpty, reason: 'só a faixa de áudio vazia do início: nada');
+      c.addInstrumentTrack(TrackKind.synth); // sem clipe nem nota
+      expect(c.doc.tracks.every((t) => t.clips.isEmpty && t.midi.isEmpty), isTrue);
+      await c.versions.onOpen();
+      final items = (await c.versions.list()).items;
+      expect(items, hasLength(1));
+      expect(items.single.name, 'Ao abrir o projeto');
+    });
+
+    testWidgets('a versão automática sai por relógio mesmo sem uma edição depois do prazo', (t) async {
+      versionClockTimers = true;
+      addTearDown(() => versionClockTimers = false);
+      c.addTrack(); // a última edição do período: daqui em diante a pessoa só olha
+      expect((await c.versions.list()).items, isEmpty);
+      await t.pump(const Duration(minutes: 14));
+      await c.versions.delete('nada'); // barreira: espera o que estiver na fila
+      expect((await c.versions.list()).items, isEmpty, reason: '14 min: cedo demais');
+      await t.pump(const Duration(minutes: 2));
+      await c.versions.delete('nada');
+      final items = (await c.versions.list()).items;
+      expect(items, hasLength(1));
+      expect(items.single.auto, isTrue);
+      expect(items.single.name, 'Versão automática');
+      // sem edição nova, o relógio não guarda outra
+      await t.pump(const Duration(minutes: 40));
+      await c.versions.delete('nada');
+      expect((await c.versions.list()).items, hasLength(1));
+    });
+
+    testWidgets('botão direito e pressão longa no Desfazer desligado não abrem o menu', (t) async {
+      t.view.physicalSize = const Size(800, 600);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: c,
+              builder: (_, _) => HistoryStepButton(c: c, redo: false),
+            ),
+          ),
+        ),
+      );
+      expect(c.canUndo, isFalse);
+      await t.longPress(find.byKey(const ValueKey('undo-button')));
+      await t.pumpAndSettle();
+      expect(find.text('Versões…'), findsNothing);
+      final g = await t.startGesture(t.getCenter(find.byKey(const ValueKey('undo-button'))), kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+      await g.up();
+      await t.pumpAndSettle();
+      expect(find.text('Versões…'), findsNothing);
+      // ligado (há o que desfazer), o botão direito abre
+      c.addTrack();
+      await t.pump();
+      final g2 = await t.startGesture(t.getCenter(find.byKey(const ValueKey('undo-button'))), kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+      await g2.up();
+      await t.pumpAndSettle();
+      expect(find.text('Versões…'), findsOneWidget);
+    });
+
+    test('o nome padrão da versão e o da cópia cabem no campo de 80 caracteres', () {
+      expect(versionNameMax, 80);
+      final long = '${'projeto ' * 20} — ${'v' * 100}';
+      expect(long.characters.take(versionNameMax).toString().characters.length, 80);
     });
   });
 }
