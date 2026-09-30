@@ -6,6 +6,10 @@
 
 *Aba Mixer durante a reprodução: uma coluna por faixa, o barramento Reverb e o Master à direita, com o medidor de loudness.*
 
+![O mixer com a pasta Ritmo: a barra Grupo sobre os canais da pasta e das duas filhas; o menu de saída de Bateria e Baixo mostra Ritmo em vez de Master.](../img/pasta-mixer.jpg)
+
+*O mixer com a pasta Ritmo: a barra Grupo sobre os canais da pasta e das duas filhas; o menu de saída de Bateria e Baixo mostra Ritmo em vez de Master.*
+
 ## Onde fica
 
 - **Computador:** botão com ícone de controles deslizantes na barra superior (tooltip `Mixer (X)`), aba `Mixer` no painel de baixo, ou a tecla `X`. `Esc` fecha o painel.

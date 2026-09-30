@@ -2,6 +2,22 @@
 
 > Uma pasta reúne faixas de áudio e de instrumento sob um barramento de grupo: um volume, um mudo, um solo e uma cadeia de efeitos para o conjunto (a bateria inteira, o coro), e uma linha que recolhe as faixas quando o projeto fica grande. Use para tratar várias faixas como uma só e para navegar num arranjo comprido.
 
+![O menu de três pontos de uma faixa: o item Agrupar em pasta… fica logo depois de Mover para baixo.](../img/pasta-menu-faixa.jpg)
+
+*O menu de três pontos de uma faixa: o item Agrupar em pasta… fica logo depois de Mover para baixo.*
+
+![Diálogo Agrupar em pasta: o nome da pasta, as faixas que entram (aqui Bateria e Baixo, 2 de 3) e o botão Todas; o texto lembra que a pasta é um barramento.](../img/pasta-agrupar-dialogo.jpg)
+
+*Diálogo Agrupar em pasta: o nome da pasta, as faixas que entram (aqui Bateria e Baixo, 2 de 3) e o botão Todas; o texto lembra que a pasta é um barramento.*
+
+![A pasta Ritmo expandida: a linha da pasta (seta, ícone de pasta, M, S, Nº de faixas e volume) e as faixas filhas recuadas, com uma tira da cor da pasta.](../img/pasta-expandida.jpg)
+
+*A pasta Ritmo expandida: a linha da pasta (seta, ícone de pasta, M, S, Nº de faixas e volume) e as faixas filhas recuadas, com uma tira da cor da pasta.*
+
+![A mesma pasta recolhida: as faixas filhas somem e seus clipes aparecem como faixas finas dentro da linha da pasta; o som continua saindo pelo grupo.](../img/pasta-recolhida.jpg)
+
+*A mesma pasta recolhida: as faixas filhas somem e seus clipes aparecem como faixas finas dentro da linha da pasta; o som continua saindo pelo grupo.*
+
 Situação de teste deste capítulo: o comportamento vem da leitura do código (`app/lib/daw/track_groups.dart`, `track_groups_ui.dart`, `timeline.dart`, `mixer_panel.dart`) e de 34 testes automáticos (`app/test/track_groups_test.dart`). O exemplo `Ritmo` (bateria e baixo, `2 faixas`) é o relato da sessão de código. Nada aqui foi ouvido por quem escreve: os pontos de som estão marcados `(testado só por testes automáticos)` ou `(não confirmado)`.
 
 ## Onde fica
