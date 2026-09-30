@@ -34,7 +34,8 @@ Os instrumentos também nascem pelo botão `Nova faixa` da coluna de faixas do a
 | Seta direita, tooltip `Próximo (preset)` (na bateria, `Próximo (kit)`) | Aplica o próximo preset, dando a volta do último para o primeiro | Sem preset atual, parte do começo | A largura do seletor é fixa para o botão não andar a cada nome |
 | Ícone de teclado, tooltip `Tocar com o teclado do computador` (ligado: `Teclado do computador tocando (A a L; Z/X muda a oitava)`) | Liga e desliga o teclado do computador | Desligado ao abrir | É o mesmo interruptor do botão da barra superior e de `Ctrl+K` |
 | Ícone USB, tooltip `Tocar com um teclado MIDI` (conectado: `MIDI: nome do aparelho`) | Pede acesso ao MIDI do aparelho e liga a entrada | Fica colorido quando há aparelho conectado | O navegador pede permissão na primeira vez |
-| Setas `Oitava abaixo` e `Oitava acima`, com o teclado entre elas | Teclado da tela; só cabe no cabeçalho com o painel a partir de 1000 px de largura | 25 teclas | Abaixo de 1000 px o teclado desce para uma faixa própria, no pé do painel |
+| Duas rodas verticais, à esquerda de `Oitava abaixo` (tooltips `Pitch bend (solta e volta ao centro)` e `Modulação (vibrato)`) | Rodas de expressão do teclado da tela; ver [Rodas de pitch bend e de modulação](#rodas-de-pitch-bend-e-de-modulação) | 38 px de altura no cabeçalho | Não aparecem na bateria |
+| Setas `Oitava abaixo` e `Oitava acima`, com o teclado entre elas | Teclado da tela; só cabe no cabeçalho com o painel a partir de 1000 px de largura | 25 teclas | Abaixo de 1000 px o teclado desce para uma faixa própria, no pé do painel (as rodas descem junto) |
 
 ### Cabeçalho (celular, painel com menos de 800 px)
 
@@ -61,6 +62,36 @@ Não há ícone de teclado do computador no cabeçalho do celular; o botão equi
 O teclado fica no cabeçalho quando o painel tem 1000 px ou mais. Abaixo disso, ele vai para uma faixa embaixo dos controles, desde que o painel tenha altura para isso (cerca de 224 px no computador e 236 px no celular); se o painel for mais baixo, o teclado some para os controles caberem. No celular, o ícone de piano esconde ou mostra essa faixa. Aumente a altura do painel arrastando a alça ou com `Maximizar o painel`.
 
 A nota tocada pela tela fica ligada à faixa em que você apertou a tecla: se a seleção mudar com o dedo ainda na tecla, a nota solta na faixa certa.
+
+### Rodas de pitch bend e de modulação
+
+Ao lado esquerdo do teclado da tela, tanto no cabeçalho (painel com 1000 px ou mais) quanto na faixa de baixo do painel (computador com painel mais estreito e celular), ficam duas rodas verticais de 24 px de largura, uma ao lado da outra. Elas não têm texto na tela: a identificação é o tooltip (no computador) e o rótulo de acessibilidade. **A bateria não tem as rodas** (não tem afinação nem pedal).
+
+| Roda (tooltip) | O que faz | Valores | Como usar |
+|---|---|---|---|
+| `Pitch bend (solta e volta ao centro)` | Sobe ou desce a afinação de **todas** as notas que estão soando e das próximas, na faixa do painel | De -1 (embaixo) a +1 (em cima), com o zero no meio da roda (marcado por um traço). Vale o `Alcance do bend` do instrumento: padrão ±2 semitons. Passos de 1/64 | Clique ou toque na roda e arraste na vertical: o cursor da roda vai para onde está o dedo. **É de mola:** ao soltar, volta ao centro numa curva curta de 140 ms (não num pulo) |
+| `Modulação (vibrato)` | Liga um vibrato (oscilação de afinação) de 5,5 Hz; quanto mais alta a roda, mais fundo | De 0 (embaixo) a 1 (em cima), passos de 1/127. Profundidade máxima: o knob `Vibrato da roda` (padrão ±1 semitom) | Arraste na vertical. **Não tem mola:** fica onde você a deixou, como nos teclados de verdade. Para desligar, leve-a até embaixo |
+
+- Enquanto a roda está fora do repouso, a moldura e o cursor dela ficam na cor da faixa.
+- Se o painel fecha com uma roda fora do zero, o app a devolve ao repouso: o vibrato não fica ligado "por trás" do painel fechado. O mesmo vale ao trocar de aba ou de faixa, já que o painel é recriado (não confirmado na tela).
+- Com uma gravação em andamento, o que você faz nas rodas é gravado junto das notas se a faixa do painel está armada (ver [Gravação](03c-gravacao.md)).
+- O mesmo bend e a mesma modulação chegam de um teclado MIDI (mensagem de pitch bend e `CC 1`). O pedal de sustain só existe no MIDI (`CC 64`): o teclado da tela não tem pedal.
+
+#### Alcance do bend e vibrato da roda, por instrumento
+
+Os knobs ficam no cartão `GERAL`, junto dos outros controles gerais do instrumento (`Vozes`, `Velocidade`, `Volume`...). Como são knobs comuns, aparecem também no menu de alvos da automação (não confirmado).
+
+| Instrumento | `Alcance do bend` | `Vibrato da roda` | Resposta às rodas |
+|---|---|---|---|
+| Sintetizador ([04a](04a-sintetizador.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato |
+| FM ([04d](04d-fm.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato (os quatro operadores sobem juntos, então o timbre se mantém) (não confirmado ao ouvido) |
+| Wavetable ([04e](04e-wavetable.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato |
+| Sampler ([04c](04c-sampler.md)) | 0 a 24 st, inteiro, padrão 2 st | não tem knob | Bend e vibrato; o vibrato do sampler tem profundidade fixa de 1 st (o motor usa o valor padrão) |
+| Bateria ([04b](04b-bateria.md)) | não tem | não tem | Ignora rodas e pedal |
+
+`Vibrato da roda` é diferente do `Vibrato` do LFO (cartão `LFO`, 0 a 12 st): o do LFO é constante e independente das rodas; o da roda só existe enquanto a roda de modulação estiver levantada (ou houver pontos de modulação no clipe) e tem frequência fixa de 5,5 Hz. Os dois somam.
+
+Fora o vibrato do LFO, o bend e o vibrato da roda mexem só na afinação: não abrem filtro nem mudam volume.
 
 ### Cartões de controles
 
@@ -161,7 +192,9 @@ Não existe, no painel, botão para salvar um timbre próprio como preset: a lis
 
 - [04a Sintetizador](04a-sintetizador.md), [04b Bateria](04b-bateria.md), [04c Sampler](04c-sampler.md), [04d FM](04d-fm.md), [04e Wavetable](04e-wavetable.md): os controles de cada instrumento.
 - [05 Piano roll](05-piano-roll.md): as notas do clipe tocam o instrumento; a prévia das notas ao editar usa este mesmo instrumento.
-- [03c Gravação](03c-gravacao.md): gravar notas ao vivo com o teclado da tela, o do computador ou o MIDI.
+- [03c Gravação](03c-gravacao.md): gravar notas ao vivo com o teclado da tela, o do computador ou o MIDI, junto de bend, modulação e pedal.
+- [05 Piano roll, faixa de controle](05-piano-roll.md#faixa-de-controle): editar depois os pontos de bend, modulação e sustain gravados (ou desenhá-los).
+- [Expressão MIDI na prática](../guias/expressao-midi-na-pratica.md): receitas com as rodas, o alcance do bend e o pedal.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md): os efeitos da faixa ficam na aba `Efeitos`, não neste painel.
 - [07 Automação](07-automacao.md): qualquer knob do painel pode ser automatizado; os knobs laranja mostram a curva tocando.
 - [06 Mixer](06-mixer.md): volume, pan e envios da faixa; o `Volume` do instrumento é outro controle, dentro do instrumento.
@@ -177,6 +210,7 @@ Não existe, no painel, botão para salvar um timbre próprio como preset: a lis
 - **Sem teclado físico nos knobs.** Só mouse, toque ou leitor de tela.
 - **Vozes.** O sintetizador, o FM, o wavetable e o sampler têm no máximo 16 vozes; passando disso, a voz mais antiga sai em um fade curto (alguns milissegundos), sem estalo.
 - **MIDI.** No navegador, o MIDI depende do suporte e da permissão do navegador. Se falhar, uma mensagem de erro aparece na tela (`Este navegador não dá acesso a MIDI.` ou o motivo).
+- **Rodas fora do painel.** A roda de modulação não é salva com o projeto nem sobrevive ao painel: fechar o painel, trocar de aba ou de faixa a devolve a zero. O bend não guarda nada (é de mola). Para um vibrato que faça parte da música, desenhe os pontos na faixa `Modulação` do piano roll.
 - **Teclado da tela some em painel baixo.** No computador não há botão para esconder o teclado; se ele sumiu, o painel está baixo demais: aumente a altura.
 
 ## Atalhos

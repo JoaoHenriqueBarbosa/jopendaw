@@ -2,7 +2,11 @@
 
 > Onde as notas de um clipe MIDI são escritas, movidas, apagadas e ajustadas em altura, tempo, duração e velocidade; use para compor melodias, acordes, baixos e batidas com o mouse ou com o dedo.
 
-Este capítulo cobre o editor em si: barra de ferramentas, grade, teclado lateral, régua, painel de velocidade, seleção, cópia, teclas e zoom. O menu **Ferramentas** (acordes, arpejador, humanizar, escalar o tempo e o resto) tem capítulo próprio: [Ferramentas MIDI](05b-ferramentas-midi.md).
+![Editor de notas com um clipe de bateria: uma linha por peça, grade 1/16 e o painel de velocidade embaixo.](../img/editor-bateria.jpg)
+
+*Editor de notas com um clipe de bateria: uma linha por peça, grade 1/16 e o painel de velocidade embaixo.*
+
+Este capítulo cobre o editor em si: barra de ferramentas, grade, teclado lateral, régua, painel de velocidade, faixa de controle (pitch bend, modulação e sustain), seleção, cópia, teclas e zoom. O menu **Ferramentas** (acordes, arpejador, humanizar, escalar o tempo e o resto) tem capítulo próprio: [Ferramentas MIDI](05b-ferramentas-midi.md).
 
 Nos exemplos, "compasso" quer dizer compasso de 4 tempos; o valor real vem do projeto (`beatsPerBar`), e os atalhos "1 compasso" seguem ele.
 
@@ -31,13 +35,13 @@ O editor mostra um clipe por vez. A borda de cima da barra de ferramentas fica n
 | `Nota: …` (tooltip `Duração da nota nova`) | Escolhe a duração da nota criada por clique | `Seguir a grade` (padrão, rótulo `Nota: grade`), `Última usada` (rótulo `Nota: última`, mostra a duração entre parênteses no menu), `1/32`, `1/16`, `1/8`, `1/4`, `1/2`, `1/1` | `Última usada` repete a duração da última nota que você criou, esticou ou agarrou (começa em 1 tempo) |
 | `Quantizar` (tooltip `Quantizar a seleção na grade (Q) · força 100%`; sem seleção diz `todas as notas`; com durações ligadas acrescenta `· durações também`) | Puxa o início das notas para a grade | Desligado se o clipe não tem notas. Usa a grade do editor (1/16 se `Livre`) | Conta a grade a partir do início do arranjo, então as notas caem na grade da música mesmo com o clipe fora do compasso |
 | Seta ao lado de `Quantizar` (tooltip `Opções da quantização`) | Menu com `Força` e `Quantizar as durações também` | Força `100%` (padrão), `75%`, `50%`, `25%`; durações desligado por padrão | Força 50% anda só metade do caminho até a grade: mantém a "pegada" |
-| Gráfico de barras (tooltip `Ocultar a faixa de velocidade` / `Mostrar a faixa de velocidade`) | Liga e desliga o painel de velocidade embaixo da grade | Ligado por padrão | Desligando, a grade ganha a altura dele |
+| Gráfico de barras (tooltip `Ocultar a faixa de velocidade e controles` / `Mostrar a faixa de velocidade e controles`) | Liga e desliga a faixa embaixo da grade, que mostra a velocidade ou um controle (pitch bend, modulação, sustain; ver [Faixa de controle](#faixa-de-controle)) | Ligado por padrão | Desligando, a grade ganha a altura dela |
 | Alto-falante (tooltip `Não tocar as notas ao editar` / `Tocar as notas ao editar`) | Liga e desliga o som de prévia ao criar, mover, transpor e tocar as teclas | Ligado por padrão | O teclado lateral toca mesmo com a prévia desligada |
 | `Enquadrar as notas` (ícone de tela cheia) | Ajusta o zoom horizontal para caber o clipe e as notas que passam dele, e a altura das linhas para caber as notas | Zoom horizontal entre 24 e 320 px por tempo (64 a 320 no toque) | Bom depois de colar ou de escalar o tempo |
 | `?` (ícone de ajuda; toque para abrir) | Mostra um resumo dos gestos por 12 segundos | Texto fixo | O resumo é o mesmo destas tabelas |
 | Contador (`3 notas`, `1 nota`, `2 de 5 selecionadas`, `1 de 5 selecionada`) | Total de notas ou quantas estão selecionadas | Só leitura | Serve para conferir o que uma ferramenta vai afetar |
 
-As escolhas de grade, duração de nota, ferramenta, força da quantização, faixa de velocidade, prévia sonora, fantasmas, "prender na escala" e "acorde no clique" valem para a sessão toda (de um clipe para outro) e voltam ao padrão quando a página é recarregada. A escala do clipe, ao contrário, é gravada dentro do clipe.
+As escolhas de grade, duração de nota, ferramenta, força da quantização, faixa de velocidade, qual faixa de controle está à mostra, `Linha reta`, prévia sonora, fantasmas, "prender na escala" e "acorde no clique" valem para a sessão toda (de um clipe para outro) e voltam ao padrão quando a página é recarregada. A escala do clipe e os pontos de pitch bend, modulação e sustain, ao contrário, são gravados dentro do clipe.
 
 ### Grade de notas: mouse e toque
 
@@ -100,6 +104,62 @@ Fica embaixo da grade e alinha com ela no tempo. Cada nota é um "pirulito": has
 | Arrastar no vazio do painel | "Pinta" velocidades por onde o ponteiro passa | Age nas selecionadas ou, sem seleção, em todas; interpola entre um evento e outro, então um arraste rápido faz uma rampa sem falhas | Para uma rampa exata entre duas notas, use `Rampa de velocidade` |
 | Cor da nota | Velocidade fraca: escura e apagada; forte: clara e viva | | Dá para ver a dinâmica na própria grade |
 
+### Faixa de controle
+
+A faixa de baixo da grade (a mesma de 72 px, 84 no toque, que mostra a velocidade) tem quatro "visões": `Velocidade`, `Pitch bend`, `Modulação` e `Sustain`. As três últimas editam os **eventos de controle do clipe**: pontos (batida, valor) que o motor toca junto das notas, no instante exato, com o instrumento da faixa. Servem para desenhar um bend de guitarra ou de solo, um vibrato que entra devagar (roda de modulação) e o pedal de um piano. Também são o lugar onde aparece o que você gravou ao vivo com as rodas do teclado ou com um controlador MIDI (ver [Gravação](03c-gravacao.md)).
+
+#### Escolher a visão
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Canto esquerdo da faixa (tooltip `Faixa de controle: velocidade, pitch bend, modulação e sustain`) | Abre o menu para trocar a visão | Padrão `Velocidade` | Toque ou clique no rótulo. A escolha vale para a sessão, de um clipe para outro, e volta a `Velocidade` ao recarregar |
+| Rótulo do canto | Diz o que a faixa mostra e, nas três de controle, quantos pontos o clipe tem dela | `Vel.` (`Velocidade` na bateria); `Bend`, `Mod.`, `Pedal` (na bateria, com o teclado mais largo: `Pitch bend`, `Modulação`, `Sustain`); embaixo `N pontos` ou `1 ponto` | Só leitura |
+| Item `Velocidade`, `Pitch bend`, `Modulação`, `Sustain` (com marca na visão atual) | Troca a visão | | `Velocidade` é o painel de sempre (ver acima) |
+| Item `Linha reta (ou Shift)` (caixa de marcar) | Liga a ferramenta reta (ver abaixo) | Desligado por padrão | Só aparece nas três visões de controle |
+| Item `Limpar pitch bend`, `Limpar modulação` ou `Limpar sustain` | Apaga todos os pontos daquele controle no clipe | Apagado (cinza) quando não há ponto; uma edição só no `Ctrl+Z` | Apaga o clipe inteiro, não só o trecho visível |
+
+#### Valores e como a curva aparece
+
+| Visão | Valor de cada ponto | Desenho da faixa | Balão enquanto você desenha |
+|---|---|---|---|
+| `Pitch bend` | De -1 a +1, onde ±1 é o `Alcance do bend` do instrumento (padrão ±2 semitons; 0 a 24, ver [Painel de instrumento](04-painel-de-instrumento.md#rodas-de-pitch-bend-e-de-modulação)). O meio da faixa é o centro (sem bend) | Linha mais clara no zero e guias em ±50% | Semitons com sinal, por exemplo `+1.00 st`, `-0.50 st` (valor × alcance da faixa; 2 se o instrumento não tem o parâmetro) |
+| `Modulação` | De 0 a 100% (0 a 127 no MIDI), 0 embaixo | Guias em 25%, 50%, 75% e 100% | `NN%` |
+| `Sustain` | Só dois estados: solto (embaixo da faixa) e embaixo (em cima) | Guias como a modulação | `Pedal embaixo` ou `Pedal solto` |
+
+- O valor do ponto segue a altura do ponteiro em passos de 1/127 (a resolução do MIDI). No `Pitch bend` o centro "atrai": soltar a menos de 3% do alcance (0,03 de -1 a 1) do meio dá zero exato, para voltar ao afinado sem precisar de pontaria.
+- A curva é desenhada em **degraus**: cada ponto vale até o próximo (é assim que o motor toca; o próprio motor suaviza o bend em poucos milissegundos, então não se ouve escada). Por isso o lápis põe um ponto por passo da grade, e para o bend voltar ao centro é preciso um ponto em zero.
+- Cada ponto é uma bolinha na cor da faixa com aro branco (a que você está arrastando fica maior e branca); a área sob a curva é preenchida em tom fraco. A parte antes do início e depois do fim do clipe é escurecida: pontos ali ficam guardados, mas não tocam.
+- A batida de cada ponto encaixa na grade do editor (`Alt` no gesto desliga; com a grade `Livre` não há encaixe) e fica sempre entre 0 e o fim do clipe. O passo entre os pontos do lápis é o passo da grade (1/16 se `Livre`).
+- Ao chegar ao fim do clipe, o que estiver fora do repouso volta a ele: o bend ao centro, a modulação a zero, o pedal solto. O pedal que fica embaixo não segura as notas do resto do projeto.
+
+#### Ferramentas (mouse)
+
+Não há botões de ferramenta: elas são gestos na faixa (o cursor vira uma mira). As ferramentas `Lápis` e `Seleção` da barra do editor só valem para as notas.
+
+| Ferramenta | Gesto | O que faz | Detalhe |
+|---|---|---|---|
+| Lápis | Arrastar no vazio (`Pitch bend` e `Modulação`) | Desenha a curva por onde o ponteiro passa | Um ponto por passo da grade entre uma posição e a seguinte; pontos que já estavam no trecho percorrido são substituídos. Um clique sem arrastar cria um ponto só |
+| Reta | `Shift` + arrastar no vazio, ou `Linha reta (ou Shift)` marcado no menu | Traça uma reta entre o ponto onde você apertou e onde está o ponteiro | A reta é refeita a cada movimento a partir do que havia antes; dá para arrastar para a esquerda. Substitui os pontos do trecho e mantém o valor que valia depois dele |
+| Mover | Arrastar um ponto | Muda a batida (encaixa na grade) e o valor | Tolerância de 8 px em volta do ponto (16 no toque); pega o mais próximo. No `Sustain`, arrastar o ponto acima do meio da faixa o deixa "embaixo" e abaixo do meio, "solto" |
+| Apagar | Clique com o botão direito num ponto, `Alt` + clique num ponto, ou segurar o ponteiro parado sobre o ponto por 0,55 s | Apaga o ponto | Cada apagamento é um passo no `Ctrl+Z` |
+| Pedal pintado | Arrastar no vazio da visão `Sustain` | Pinta um trecho com o pedal embaixo (ou solto) | Ver abaixo |
+
+**Pedal pintado.** No `Sustain` o lápis não desenha curva: arrastar de uma batida a outra pinta um trecho. Se onde você apertou o pedal estava solto, pinta "embaixo": um ponto de descida no começo do trecho e, no fim dele, um ponto que devolve o pedal ao estado que ele tinha ali antes (solto, por exemplo). Se estava embaixo, pinta "solto" (um ponto de subida no começo) e o pedal volta a descer no fim do trecho. Os pontos de pedal que estavam dentro do trecho pintado são substituídos. Um clique sem arrastar põe um ponto só: sobre um trecho solto, o pedal desce ali e fica embaixo até o próximo ponto (ou o fim do clipe); sobre um trecho embaixo, ele sobe ali. No `Sustain`, `Shift` e `Linha reta (ou Shift)` não mudam nada (o item aparece no menu, mas o gesto é sempre a pintura).
+
+Um gesto inteiro (arrastar, desenhar, pintar) é **uma edição só** no histórico; um gesto que termina onde começou não deixa nada nele.
+
+#### Toque (celular)
+
+| Gesto | O que faz | Detalhe |
+|---|---|---|
+| Tocar e arrastar um dedo no vazio | Lápis (ou reta, com `Linha reta (ou Shift)` marcado no menu; sem teclado, o menu é o único jeito de traçar reta) | O toque já cria um ponto; os seguintes só entram depois de 8 px de movimento |
+| Arrastar um ponto | Move | Tolerância de 16 px |
+| Segurar o dedo parado sobre um ponto por 0,55 s | Apaga | Não apaga se o dedo se mexer |
+
+#### Depois de gravar
+
+O que se toca ao vivo entra no clipe como pontos dessas mesmas visões, já "afinado" para não lotar o clipe (no máximo um ponto a cada 1/48 de batida por controle). Abra o clipe, escolha a visão e edite como qualquer ponto: mova, apague, redesenhe um trecho com o lápis por cima ou use `Limpar` e recomece. `Ferramentas > Escalar o tempo` e `Inverter no tempo` levam os pontos junto ([Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas)).
+
 ### Zoom e rolagem
 
 | Gesto | O que faz | Valores | Dica |
@@ -142,6 +202,20 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 2. Arraste as bolinhas das notas que devem soar mais forte ou mais fraca; com várias selecionadas, a mudança é relativa.
 3. Para um crescendo, escolha a primeira e a última nota (suas velocidades) e use `Ferramentas > Seleção > Rampa de velocidade`.
 
+**Desenhar um bend de duas notas (ou de um solo)**
+
+1. Escolha um instrumento com afinação (`Sintetizador`, `FM`, `Wavetable` ou `Sampler`); a `Bateria` ignora o bend.
+2. No canto esquerdo da faixa de baixo, escolha `Pitch bend`.
+3. Arraste com o lápis por baixo da nota, de uma batida antes do fim dela até o fim, subindo do meio da faixa até o topo: o balão mostra `+2.00 st` no topo com o alcance padrão.
+4. Ponha um ponto no centro (clique perto do meio da faixa) depois do fim da nota, para o bend voltar a zero.
+5. Toque: para bends maiores (uma oitava, por exemplo), suba o `Alcance do bend` do instrumento para 12 no cartão `GERAL`.
+
+**Segurar acordes com o pedal**
+
+1. Escolha a visão `Sustain`.
+2. Arraste do começo de cada acorde até um passo da grade antes do acorde seguinte: cada arraste pinta um trecho de pedal embaixo.
+3. Ouça: as notas que terminam dentro de um trecho continuam soando até o pedal subir (vale para todos os instrumentos, menos a bateria). É na subida do pedal que o acorde anterior é solto e entra a soltura do instrumento.
+
 **Repetir um trecho**
 
 1. Selecione as notas do compasso.
@@ -154,7 +228,10 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 - [Ferramentas MIDI](05b-ferramentas-midi.md): acordes, arpejador, humanizar, legato, escalar o tempo e limpeza das notas; todas usam a seleção do editor.
 - [Melodia e harmonia com as ferramentas](../guias/melodia-e-harmonia-com-as-ferramentas.md): receitas que juntam escala, acorde no clique, arpejo, humanizar e quantizar.
 - Instrumentos e faixas: o som que sai é o do instrumento da faixa do clipe; a prévia ao editar usa esse mesmo instrumento.
-- Gravação: notas tocadas no teclado do computador ou MIDI e gravadas viram notas de um clipe que se edita aqui (ver capítulo de gravação).
+- Gravação: notas tocadas no teclado do computador ou MIDI e gravadas viram notas de um clipe que se edita aqui (ver capítulo de gravação). Pitch bend, modulação e pedal tocados junto entram no mesmo clipe, na faixa de controle: [Gravação](03c-gravacao.md).
+- [Painel de instrumento](04-painel-de-instrumento.md): as rodas de bend e de modulação do teclado da tela e o `Alcance do bend` de cada instrumento.
+- [Expressão MIDI na prática](../guias/expressao-midi-na-pratica.md): solo com bend e vibrato, pedal em acordes, bend desenhado e gravação com teclado MIDI.
+- [Expressão MIDI (técnico)](../dev/04-expressao-midi.md): como os pontos chegam ao motor.
 
 ## Limites e pegadinhas
 
@@ -162,9 +239,13 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 - **Não há loop do clipe** dentro do editor; o clipe toca uma vez do começo ao fim que você definiu.
 - As preferências do editor (grade, ferramenta etc.) não são salvas com o projeto; a escala do clipe e as notas são.
 - Com o **teclado musical do computador ligado** (`Ctrl+K`), as letras `A W S E D F T G Y H U J K O L P` tocam notas antes de virarem atalhos: `K`, `J`, `Shift+H` e `Shift+L` não dividem, unem, humanizam nem fazem legato. `Q` e as setas seguem funcionando.
-- As teclas de edição só valem depois de um clique dentro do editor. Com o editor ativo, `Delete` nunca apaga o clipe, só notas (sem seleção não faz nada).
+- As teclas de edição valem assim que o editor abre (ele nasce ativo) e deixam de valer quando você clica fora dele; um clique de volta dentro do editor o reativa. Com o editor ativo, `Delete` nunca apaga o clipe, só notas (sem seleção não faz nada).
 - Segurar uma seta ou uma tecla repetida é uma edição só no histórico; o histórico guarda os últimos 200 passos.
 - Transpor com as setas, `Inverter na altura` e `Inserir acorde` não passam pela escala: mesmo com `Prender na escala` ligado podem gerar notas fora dela. O encaixe age em criar, mover de linha e colar.
+- **Controles são do clipe, não das notas.** Colar (`Ctrl+V`), duplicar (`Ctrl+D`), recortar e apagar notas, `Quantizar`, `Humanizar`, `Legato` e `Dividir no cursor` não movem, copiam nem cortam os pontos de bend, modulação e pedal. Só `Escalar o tempo` e `Inverter no tempo` (e, na linha do tempo, cortar, duplicar, mover e aparar o clipe) os levam junto; ver [Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas).
+- As ferramentas do menu `Ferramentas` ficam apagadas num clipe sem notas, mesmo que ele tenha pontos de controle.
+- A faixa de controle não olha a seleção de notas: `Limpar` apaga o controle do clipe todo.
+- Em faixa de **bateria** a faixa de controle aceita pontos, mas a bateria ignora bend, modulação e pedal: nada muda no som.
 - Em faixa de bateria: sem botão `Escala`, sem acordes e sem `Inverter na altura`; `Shift+↑/↓` move uma linha (não uma oitava); as linhas são peças, não semitons. Alturas sem peça aparecem como `sem peça` e não soam.
 - A quantização usa a grade do editor, não a do arranjo.
 - Colar sem cursor dentro do clipe põe as notas no começo da parte visível; colar de novo no mesmo ponto põe a cópia logo depois da anterior. A área de transferência de notas vale para a sessão e funciona entre clipes, mas não sobrevive ao recarregar a página.
@@ -193,6 +274,9 @@ Valem com o editor ativo (último lugar clicado) e sem estar digitando num campo
 | `Shift+←` / `Shift+→` | Move a seleção 1 compasso |
 | `Alt` (segurado ao arrastar) | Tira o encaixe da grade |
 | `Alt` (segurado ao começar a arrastar uma nota) | Duplica em vez de mover |
+| `Shift` + arrastar na faixa de controle | Traça uma reta em vez de desenhar com o lápis (`Pitch bend` e `Modulação`) |
+| `Alt` + clique num ponto da faixa de controle | Apaga o ponto |
+| `Alt` (segurado ao arrastar na faixa de controle) | Tira o encaixe da grade nas batidas |
 | `Shift` / `Ctrl` + arrastar no vazio | Seleção por retângulo (`Shift` soma) |
 | `Shift` + clique numa nota | Soma ou tira da seleção |
 | `Ctrl` + roda | Zoom horizontal |

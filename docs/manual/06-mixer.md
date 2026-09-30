@@ -2,6 +2,10 @@
 
 > O painel onde cada faixa vira um canal (volume, pan, mudo, solo, envios, saída) e onde o master fecha a mistura; use para acertar níveis, montar retornos de reverb e agrupar faixas.
 
+![Aba Mixer durante a reprodução: uma coluna por faixa, o barramento Reverb e o Master à direita, com o medidor de loudness.](../img/mixer.jpg)
+
+*Aba Mixer durante a reprodução: uma coluna por faixa, o barramento Reverb e o Master à direita, com o medidor de loudness.*
+
 ## Onde fica
 
 - **Computador:** botão com ícone de controles deslizantes na barra superior (tooltip `Mixer (X)`), aba `Mixer` no painel de baixo, ou a tecla `X`. `Esc` fecha o painel.
@@ -9,7 +13,7 @@
 - O painel mostra um canal por faixa, na ordem da lista de faixas, e o **Master** fixo à direita, separado por uma linha. Com muitas faixas a lista de canais rola na horizontal; o Master não sai do lugar. Se o painel de baixo ficar baixo demais, o mixer rola na vertical em vez de espremer o fader (o fader tem no mínimo 72 px de curso).
 - Tocar no fundo de um canal seleciona a faixa (o fundo clareia); o mesmo vale na linha do tempo.
 
-De cima para baixo, cada canal de faixa tem: lista de efeitos (inserts), lista de envios, pan, fader com medidor, leitura em dB, armar/monitorar, `M`/`S`, saída e nome. O canal do Master não tem envios, armar, `M`/`S` nem nome editável; ele usa o espaço dos envios para a lista de efeitos dele.
+De cima para baixo, cada canal de faixa tem: lista de efeitos (inserts), lista de envios, pan, fader com medidor, leitura em dB, armar/monitorar, `M`/`S`, saída e nome. O canal do Master não tem envios, armar, `M`/`S` nem nome editável; ele usa o espaço dos envios para a lista de efeitos dele e o espaço do armar e do `M`/`S` para a leitura de loudness (`M`, `S`, `I`, `TP` e `Zerar`; ver Master, abaixo). Atenção: no canal do Master, `M` e `S` são **momentâneo** e **curto prazo**, não mudo e solo.
 
 Os barramentos aparecem com um fundo violeta discreto, para não se confundirem com faixas de som.
 
@@ -92,6 +96,8 @@ Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo a
 | Pan do master | **Balanço**, não pan: só atenua o lado oposto; o centro fica em 0 dB. | Mesma leitura `C`, `E..`, `D..`. Padrão `C`. | |
 | Fader do master e leitura em dB | Volume final da mistura. | −∞ a +6 dB, padrão 0 dB. Automatizável. | |
 | Medidor do master | Pico esquerdo e direito **depois do limitador**. | Nunca passa de −0,3 dB quando o limitador age. | |
+| Leitura de loudness do master: `M`, `S`, `I`, `TP` | Volume percebido da mistura (norma BS.1770-4 / EBU R128), medido depois do limitador. `M` = momentâneo (últimos 400 ms), `S` = curto prazo (3 s), `I` = integrado desde o último `Zerar` (em negrito), `TP` = true peak máximo. Tooltip: `Loudness do master (EBU R128)`. | `M`, `S` e `I` em LUFS (`−14,2`); `TP` em dBTP. `—` sem medida. `TP` acima de −1 dBTP fica vermelho. No canal do Master (92 px de largura) as leituras ficam em duas linhas, `M` `S` em cima e `I` `TP` embaixo, com `Zerar` à direita, logo abaixo; o texto encolhe para caber. | Detalhes, janelas, gates e valores de referência em [06b](06b-analisador-e-medidores.md). O `I` de referência para streaming é −14 LUFS. |
+| `Zerar` (tooltip `Zerar a medida de loudness`) | Apaga o integrado, os máximos e o true peak; a medição recomeça. | Não é salvo com o projeto. | Toque antes de tocar a música do começo ao fim para conferir. |
 | `Saída` (tooltip `O master sai no áudio do aparelho, depois do limitador de segurança`) | Só informa: o master vai para a saída de áudio do aparelho. Não é botão. | | |
 | Nome `Master` | Fixo. | | |
 
@@ -140,6 +146,12 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 2. Repita nas outras faixas do grupo, escolhendo o mesmo barramento.
 3. No canal do barramento, acerte o fader do grupo e ponha efeitos de grupo (ex.: `Compressor`).
 
+**Ler o loudness do master**
+1. No canal `Master`, toque em `Zerar` (a leitura volta a `—`).
+2. Toque a música do começo ao fim. O `M` e o `S` andam com a música; o `I` (negrito) vai se acertando.
+3. No fim, leia o `I` e o `TP`. Para streaming, o `I` deve chegar perto de −14 e o `TP` ficar abaixo de −1 dBTP.
+4. Se o `TP` ficou vermelho, baixe o fader do master (ou o `Teto` do `Limitador` do master), toque em `Zerar` e meça de novo.
+
 **Ouvir só uma faixa**
 1. Toque em `S` no canal. As outras calam; o retorno de reverb dela continua.
 2. Toque de novo em `S` para voltar.
@@ -150,19 +162,20 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 
 ## Combina com
 
-- [06b Analisador e medidores](06b-analisador-e-medidores.md): como ler os medidores e o espectro.
+- [06b Analisador e medidores](06b-analisador-e-medidores.md): como ler os medidores, o loudness do master (`M`, `S`, `I`, `TP`) e o espectro.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md) e [06d Referência dos efeitos](06d-efeitos-referencia.md): o que colocar nos inserts, nos barramentos e no master.
 - [07 Automação](07-automacao.md): mover volume, pan, envios e parâmetros no tempo; fader, pan e knobs seguem a automação enquanto toca.
-- [08 Exportação](08-exportacao.md): o arquivo sai depois do limitador do master; "Congelar em áudio" leva volume, pan, saída e envios para a faixa nova.
+- [08 Exportação](08-exportacao.md): o arquivo sai depois do limitador do master (`Normalizar o loudness` leva a mixagem ao alvo de LUFS); "Congelar em áudio" leva volume, pan, saída e envios para a faixa nova.
 - [03c Gravação](03c-gravacao.md): armar e monitorar.
 - [Guia: mixagem e automação](../guias/mixagem-e-automacao.md): mix do zero, retorno de reverb, fades.
+- [Guia: loudness e master](../guias/loudness-e-master.md): levar o master a −14, −16 ou −23 LUFS sem estourar, e conferir o arquivo.
 
 ## Limites e pegadinhas
 
 - **Limitador de segurança do master** (ver seção própria abaixo): sempre ligado, sem controle na tela e sem medidor de redução. O medidor do master mostra o sinal *depois* dele.
 - **Acima de 0 dB nas faixas não estala.** O motor trabalha em ponto flutuante: o som de uma faixa (ou de um barramento) pode passar de 0 dBFS e voltar sem distorcer, desde que a soma no master seja domada. Quem ataca o excesso é o limitador do master, e só no fim.
 - **Pan por faixa perde 3 dB no centro.** É uma lei de potência constante: no centro cada lado sai com −3 dB em relação a uma faixa toda para um lado. A leitura em dB do fader não inclui isso. O pan do master é diferente (balanço, centro em 0 dB).
-- **Pico, não volume percebido.** Os medidores mostram o pico de amostra, não RMS nem LUFS.
+- **Barras são pico; o volume percebido é a leitura do master.** As barras de cada canal mostram o pico de amostra, não RMS nem LUFS. O loudness (`M`, `S`, `I`) e o true peak (`TP`) só existem no canal do Master, e o `I` acumula desde o último `Zerar`.
 - **Envio pré-fader continua com a faixa muda.** É a definição de pré-fader; se o reverb some quando você silencia a faixa, o envio é pós-fader.
 - **Envios e solo:** com outra faixa em solo, os envios das faixas que não estão em solo são cortados (menos os que vão para um barramento solado).
 - **Só faixas de áudio monitoram.** A entrada soma antes dos efeitos e o monitoramento tem a latência do aparelho.

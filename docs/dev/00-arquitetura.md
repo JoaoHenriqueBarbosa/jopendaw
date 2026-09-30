@@ -46,10 +46,12 @@ Tudo o que dá para processar no aparelho é processado lá; o backend fica com 
 
 | O quê | Onde mora primeiro | O servidor faz |
 |---|---|---|
-| Documento do projeto (faixas, clipes, notas, mixagem, automação) | Guardado local: IndexedDB na web, arquivos no Android, chave `doc:<id>` (`app/lib/daw/controller.dart:580`) | Guarda uma cópia versionada em `project_docs` (JSONB). |
-| Áudios importados ou gravados | Guardado local, chave `sample:<sha-256>` (`controller.dart:1438`) | Guarda os bytes por hash e conta a cota da conta. |
+| Documento do projeto (faixas, clipes, notas, controles MIDI, zonas do sampler, mixagem, automação) | Guardado local: IndexedDB na web, arquivos no Android, chave `doc:<id>` (`_docKey` em `app/lib/daw/controller.dart`) | Guarda uma cópia versionada em `project_docs` (JSONB). |
+| Áudios importados ou gravados | Guardado local, chave `sample:<sha-256>` (`DawController._obtainSample`) | Guarda os bytes por hash e conta a cota da conta. |
 | Estado de sincronização | Guardado local, chave `sync:<id>` (`app/lib/daw/sync.dart:377`) | Nada. |
 | Áudio derivado do warp (esticado/transposto/invertido) | Cache local, chave `warp:<chave>` (`app/lib/daw/warp.dart:155`) | Nunca vai ao servidor (`model.dart`: "o som derivado nunca entra no documento nem no servidor"). |
+| Projeto em arquivo (`.jopendaw`: zip com `project.json`, `manifest.json` e `samples/<sha-256>.<ext>`) | Montado e lido no aparelho (`app/lib/daw/project_file.dart`); importar cria um projeto novo com ids refeitos | Não conhece o formato: ao abrir o projeto importado ele entra pela sincronização normal (documento local sem `sync:<id>` conta como pendente). |
+| Medição de loudness (LUFS, true peak) e normalização na exportação | Motor (`engine/src/loudness.rs`, lido no master) e Dart puro (`app/lib/daw/loudness.dart`, sobre o áudio já renderizado) | Nada. |
 | Render (exportar, congelar, stems), decodificação, warp, detecção de BPM | No aparelho (Worker na web, thread/isolate no Android) | Nada. |
 | Áudio → MIDI (YIN) e conversão FLAC | Não roda local | Job na fila (`server/src/routes/jobs.rs`). Em `app/lib` só se cria o job `audio_to_midi` (`app/lib/daw/audio_to_midi.dart:73`); o `flac` existe na API, mas o app não o pede. |
 
@@ -91,6 +93,8 @@ jopendaw/
 │   │   ├── synth.rs       sintetizador subtrativo (tipo 1)
 │   │   ├── drums.rs       bateria sintetizada, 12 peças (tipo 2)
 │   │   ├── sampler.rs     sampler (tipo 3)
+│   │   ├── sampler_zones.rs, sampler_zones_tests.rs   zonas do sampler (multi-sample, camadas,
+│   │   │                  round-robin, loop) e fatiamento de loops; submódulo de sampler.rs
 │   │   ├── fm.rs          FM de 4 operadores, 8 algoritmos (tipo 5)
 │   │   ├── wavetable.rs   wavetable, 3 séries de 8 tabelas (tipo 6)
 │   │   ├── effect.rs      trait Effect, Chain (cadeia de inserts) e ids de parâmetros
@@ -99,6 +103,9 @@ jopendaw/
 │   │   ├── dsp.rs         blocos de DSP compartilhados
 │   │   ├── analyzer.rs    analisador de espectro (FFT sob demanda)
 │   │   ├── limiter.rs     limitador de segurança do master
+│   │   ├── expression.rs, expression_tests.rs   expressão MIDI: pitch bend, roda de modulação e pedal
+│   │   │                  de sustain (eventos de controle do clipe, estado reconstituído no salto)
+│   │   ├── loudness.rs    medidor de loudness do master (BS.1770-4 / EBU R128: M, S, I, LRA, true peak)
 │   │   ├── stretch.rs     warp offline (WSOLA + pitch) e detecção de BPM
 │   │   ├── record.rs      notas tocadas ao vivo e capturas de saída (render)
 │   │   ├── metronome.rs   clique do metrônomo
@@ -122,7 +129,11 @@ jopendaw/
 │   │   │                  piano_roll*.dart, instrument_panel.dart, effects_panel.dart,
 │   │   │                  instruments.dart e effects.dart (tabelas de parâmetros = contrato com o motor),
 │   │   │                  presets.dart, fx_presets.dart, automation_*.dart, warp*.dart, export*.dart,
-│   │   │                  sync.dart e sync_ui.dart, midi_tools.dart, templates.dart, wav.dart, ...
+│   │   │                  sync.dart e sync_ui.dart, midi_tools.dart, templates.dart, wav.dart,
+│   │   │                  loudness.dart e loudness_panel.dart (medição e normalização),
+│   │   │                  project_file*.dart (arquivo .jopendaw),
+│   │   │                  midi_cc.dart, expression_wheels.dart, piano_roll_cc.dart (expressão MIDI),
+│   │   │                  sampler_zones*.dart e slice_dialog.dart (zonas do sampler), ...
 │   │   ├── models/        account.dart, project.dart (espelham o servidor)
 │   │   ├── platform/      o que é só web ou só Android (única parte que importa package:web)
 │   │   ├── screens/       login, link (magic link), projetos, projeto, conta
@@ -183,7 +194,7 @@ Domínio no SeaORM, contas em sqlx: `AppState` guarda `db: DatabaseConnection` e
 3. `tokio::spawn(jobs::worker(...))` e a faxina horária (`auth::cleanup`, `oauth::cleanup`, `storage::cleanup` de blobs sem registro após 1 h).
 4. `serve()`: `Router` da API; se `JOPENDAW_STATIC` (padrão `../app/build/web`) existir como diretório, publica o build do Flutter na raiz com fallback para `index.html`; CORS permissivo (a autenticação vai no cabeçalho `Authorization`, não em cookie); `Cache-Control: no-cache` por padrão nos estáticos.
 
-Em produção o frontend tem container próprio (nginx, `app/Dockerfile` + `nginx.conf.template`), o diretório estático não existe no container da API e o nginx faz proxy de `/api/` (e de `/api/ws`, ainda sem rota no servidor) para `JOPENDAW_API_HOST`.
+Em produção o frontend tem container próprio (nginx, `app/Dockerfile` + `nginx.conf.template`), o diretório estático não existe no container da API e o nginx faz proxy de `/api/` (e de `/api/ws`, ainda sem rota no servidor) para `JOPENDAW_API_HOST`. O `location /api/` aceita corpos de até 600 MB e não guarda o corpo antes de repassar (`client_max_body_size 600m`, `proxy_request_buffering off`; desde `0c0593e`, antes valia o padrão de 1 MB do nginx), o que deixa passar os tetos da própria API: 512 MB por áudio e 8 MB por documento. A imagem da API (`server/Dockerfile`, contexto na raiz) copia também `engine/` para o cargo carregar o workspace.
 
 ### Do gesto ao som (web)
 
@@ -288,11 +299,12 @@ O mapa completo está em [03-build-teste-e-depuracao.md](03-build-teste-e-depura
 
 ## Armadilhas conhecidas
 
-- **Motor velho no Android.** Mudou algo em `engine/`: recompile e commite `engine.wasm` e os três `.so` juntos, ou o Android fica com o motor antigo (e mudo, se o `apply` for novo).
+- **Motor velho no Android.** Mudou algo em `engine/`: recompile e commite `engine.wasm` e os três `.so` juntos, ou o Android fica com o motor antigo (e mudo, se o `apply` for novo). **Caso real da fase 8, resolvido em `357b6fc`:** de `dca27bc` a `b7e802e` (loudness, zonas do sampler, expressão MIDI) os commits mexeram em `engine/` sem recompilar os binários (o corpo do `dca27bc` avisa; nos outros o `git show --stat` não lista `engine.wasm` nem `.so`), e o `engine.wasm` e os três `.so` ficaram em `f1cfbaa` (fase 7) por umas horas, sem conhecer `loudness_reset`, `loudness`, `zones_clear`, `zone_add`, `live_bend`, `live_cc`, `cc_add` e `cc_clear`; o commit de integração `357b6fc` recompilou tudo (e a lista `want` do `engine/build-android.sh` passou a conferir também `jd_loudness`, `jd_stretch` e `jd_detect_bpm`).
 - **Comentário desatualizado:** `engine/src/lib.rs` (cabeçalho) diz "o Oboe no Android"; o motor usa AAudio carregado por `dlopen` (`engine/android/src/platform/aaudio.rs`). Não confie nesse trecho.
 - **`README.md` da raiz desatualizado** (ver acima).
 - **CI:** não há `.github/` nem outro pipeline no repositório; nada roda os testes sozinho (não confirmado se existe CI fora do repositório).
 - **Cache de estáticos.** Os arquivos do build do Flutter não têm hash no nome (`main.dart.js`, `host.js`, `engine.wasm`); por isso o servidor de desenvolvimento manda `no-cache`, o nginx usa `expires -1` e `sw.js` vai sempre à rede primeiro. Depois de um rebuild, o navegador de teste ainda pode servir host/wasm velhos (ver o passo a passo de limpeza em [03-build-teste-e-depuracao.md](03-build-teste-e-depuracao.md)).
 - **Duas abas no mesmo projeto** geram conflito de sincronização legítimo ("mudou em outro aparelho").
 - **Motor só no navegador e no Android.** Em outros sistemas (`flutter test` no computador, desktop) `AudioEngine.supported` é falso e as chamadas ficam só em `AudioEngine.log` quando um teste pede (`engine_io.dart`).
+- **Imagem Docker do servidor e o workspace.** O `server/Dockerfile` precisa dos manifestos de todos os membros do workspace (`engine`, `engine/wasm`, `engine/android`): resolvido em `0c0593e` com `COPY engine engine`. Se um membro novo entrar em `Cargo.toml`, o Dockerfile precisa copiá-lo também, senão o build da imagem quebra de novo com "failed to load manifest for workspace member". Detalhes em [11-servidor.md](11-servidor.md).
 - **Sem compensação de latência de efeitos** (PDC): efeitos com lookahead (limitador, sobreamostragem da distorção) atrasam a faixa sem compensação; está declarado no cabeçalho de `engine/src/lib.rs` ("Latência de efeito (lookahead) ainda não é compensada").

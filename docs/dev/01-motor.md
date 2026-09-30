@@ -47,13 +47,15 @@ O tempo é contado em quadros (amostras por canal) na taxa do motor; o documento
 | `engine/src/instrument.rs` | Contrato `Instrument`, tipos de faixa (`kind`), `create`, e os ids de parâmetro dos cinco instrumentos. | `trait Instrument` (`:16`), `kind` (`:36`), `create` (`:51`), `synth_param` (`:68`), `drum_param` (`:133`), `sampler_param` (`:183`), `fm_param` (`:202`), `wavetable_param` (`:248`), `contract` (`:317`, só teste) |
 | `engine/src/synth.rs` | Sintetizador subtrativo (tipo 1): 2 osciladores com polyBLEP/BLAMP, sub, ruído, uníssono de até 7, SVF, 2 envelopes, LFO, glide, mono/legato. 16 vozes + 4 de folga. | `Synth` (`:455`), `SPECS` (`:65`, faixa/padrão por id) |
 | `engine/src/drums.rs` | Bateria sintetizada (tipo 2): 12 peças geradas na hora, 3 vozes por peça, chimbal fechado corta o aberto. | `Drums`, `drum_param::piece_for` |
-| `engine/src/sampler.rs` | Sampler (tipo 3): lê um `Arc<Sample>` afinado pela nota, Hermite de 4 pontos, passa-baixa Butterworth de 4ª ordem quando lê acima da altura original. 16 vozes + 4 de folga. | `Sampler` (`:285`), `VOICES = 16` (`:25`) |
+| `engine/src/sampler.rs` | Sampler (tipo 3): lê um `Arc<Sample>` afinado pela nota, Hermite de 4 pontos, passa-baixa Butterworth de 4ª ordem quando lê acima da altura original. 16 vozes + 4 de folga. Sem zonas toca um áudio único; com zonas delega o disparo a `sampler_zones.rs`. | `Sampler` (`:313`), `VOICES = 16` (`:32`), `SLOTS` (`:34`) |
+| `engine/src/sampler_zones.rs` | Submódulo de `sampler.rs` (`#[path]`, enxerga os campos privados dele): zonas do sampler (multi-sample, camadas de velocidade, round-robin, loop, trecho) e fatiamento de loops. Ver "Zonas do sampler e fatiamento". Testes em `sampler_zones_tests.rs` (42). | `ZoneDef` (`:39`), `Zone`, `Span` (`:120`), `Sampler::note_on_zones` (`:240`), `slice_points` (`:321`), `slice_zones` (`:435`), `MAX_ZONES = 128`, `MAX_SLICES = 96` |
 | `engine/src/fm.rs` | FM de 4 operadores, 8 algoritmos (tipo 5), limite de banda por regra de Carson. | `Fm` (`:374`), `ALGORITHMS` (`:143`) |
 | `engine/src/wavetable.rs` | Wavetable (tipo 6): 2 osciladores, 3 séries de 8 tabelas, 9 níveis de mip-map, tabelas numa `OnceLock` compartilhada. | `Wavetable`, `Tables` |
 | `engine/src/effect.rs` | Contrato `Effect`, tipos de efeito (`kind`), `create`, ids de parâmetro dos 12 efeitos e os alvos de automação. | `trait Effect` (`:12`), `kind` (`:37`), `create` (`:53`), `NOTE_BEATS` (`:73`), `*_param` (`:89`–`:305`), `auto_target` (`:306`) |
 | `engine/src/fx/*.rs` | Implementação dos 12 efeitos: `eq`, `compressor`, `gate`, `limiter`, `utility`, `reverb`, `delay`, `chorus`, `phaser`, `tremolo`, `distortion`, `filter`. | `fx/mod.rs` só declara os módulos |
 | `engine/src/dsp.rs` | Peças compartilhadas: `Adsr`, `Smoothed`, `Rng`, `poly_blep`/`poly_blamp`, `sin_turns`, `fast_tanh`, `Svf`. | `Adsr` (`:11`), `Smoothed` (`:125`), `Svf` |
 | `engine/src/limiter.rs` | Limitador de segurança do master (privado): lookahead 1,5 ms, teto 0,966 (−0,3 dBFS), release 80 ms. Não é o efeito `fx/limiter.rs`. | `Limiter` (`:19`), constantes `:13`–`:17` |
+| `engine/src/loudness.rs` | Medidor de loudness do master (BS.1770-4 / EBU R128): K-weighting para qualquer taxa, momentâneo (400 ms), curto prazo (3 s), integrado com gates de −70 LUFS e −10 LU, faixa de loudness (LRA) e true peak com sobreamostragem 4×. Sem alocação depois de criado. Ver "O medidor de loudness". | `Meter` (`push`, `read`, `read_kind`, `reset`), `measure` (offline), `Loudness`, `kind`, `NONE` (−200) |
 | `engine/src/analyzer.rs` | Anel de 4096 quadros mono e FFT real radix-2 própria; devolve dB de −120 a 0. | `Analyzer` (`:17`), `RING` (`:12`) |
 | `engine/src/record.rs` | Registro das notas ao vivo (`NoteRecorder`, até 16 384 notas) e capturas do render offline (`Captures`, até 64). | `MAX_REC_NOTES` (`:16`), `MAX_CAPTURES` (`:22`) |
 | `engine/src/stretch.rs` | Offline, fora da thread de áudio: WSOLA para esticar (razão 0,25–4), reamostrador sinc para transpor (±24 semitons), `detect_bpm` (60–200). Funções puras canais → canais. | `stretch` (`:44`), `detect_bpm` (`:226`), `Tempo` (`:212`) |
@@ -66,7 +68,7 @@ Fora do crate, mas parte do contrato: `engine/wasm/src/lib.rs` (exports C do wor
 
 `Instrument` (`instrument.rs:16`) e `Effect` (`effect.rs:12`) são `Send`. O motor garante que `render`/`process` recebem blocos de até `CHUNK` quadros (128), abaixo do teto de contrato `MAX_BLOCK = 4096` (`lib.rs:98`). Todos os efeitos e instrumentos alocam tudo em `new`.
 
-- `Instrument`: `note_on`, `note_off`, `release_all` (release normal, usado no stop), `silence` (corte imediato, usado no pânico), `set_param`, `set_sample` (só o sampler usa), `render` (soma, não zera), `active` (permite pular o render).
+- `Instrument`: `note_on`, `note_off`, `release_all` (release normal, usado no stop), `silence` (corte imediato, usado no pânico), `set_param`, `set_sample` (só o sampler usa), `zones_clear`, `zone_add` e `zone_sample` (só o sampler usa: apagar as zonas, acrescentar uma, e ligar ou desligar o áudio de um id nas zonas que o citam; os três têm implementação vazia por padrão), `render` (soma, não zera), `active` (permite pular o render).
 - `Effect`: `set_param`, `process`, `process_keyed` (sidechain; só compressor e gate sobrescrevem), `set_tempo` (só `delay`, `tremolo` e `filter`), `reset`, `latency`, `meter` (compressor, gate e limitador devolvem a redução de ganho em dB).
 
 ## Fluxo de dados / ciclo de vida
@@ -96,7 +98,7 @@ O tamanho do pedaço é o menor entre: o resto até o próximo múltiplo de `CHU
 5. Master: cadeia de inserts do master (`master_fx`, com parada por silêncio como nas faixas), depois volume e balanço (`Track::apply_master`, `mixer.rs`: o pan só atenua o lado oposto), depois a varredura que troca NaN/infinito por 0.
 6. Metrônomo, só com o transporte tocando: renderizado num buffer de rascunho e somado depois da cadeia do master, multiplicado pelo ganho atual do fader do master (o clique não passa por efeito do master, mas segue o volume).
 7. Com o transporte parado e cauda de clipes ativa, o contador `tail` desce.
-8. Limitador de segurança (`limiter.rs`), `clamp(-1, 1)`, medidor de pico do master, analisador (se observa o master) e capturas do master.
+8. Limitador de segurança (`limiter.rs`), `clamp(-1, 1)`, **medidor de loudness** (`loudness.push`, fora do pré-roll do render, ver abaixo), medidor de pico do master, analisador (se observa o master) e capturas do master.
 
 Em resumo, a ordem que interessa para quem depura é: clipes → entrada monitorada → instrumento → inserts → envios pré → fader → envios pós → saída/barramentos (em ordem de índice) → inserts do master → volume do master → metrônomo → limitador.
 
@@ -124,6 +126,41 @@ Estado em `Engine` (`lib.rs:474`): `pos` (quadros, f64), `playing`, `loop_on`/`l
 **Notas ao vivo** (`live_on`/`live_off`, `:905`/`:922`) vão direto ao instrumento, sem depender do transporte, e não são soltas por seek nem pela volta do loop. Velocidade 0 ou NaN equivale a `live_off`. Com a gravação ligada e o transporte tocando, entram no `NoteRecorder` com a batida do momento.
 
 **Clipes.** `Engine.clips` é uma lista única (`Clip`, `lib.rs:208`): faixa, id do sample, `start` em batidas, `offset` e `length` em segundos do sample, ganho, `fade_in`/`fade_out` em segundos. `render_clips` (`:1817`) percorre todos os clipes filtrando pela faixa, converte o início para quadros pelo andamento atual, lê o sample com interpolação cúbica (`Sample::at_cubic`, com conversão de taxa) e aplica o envelope de fade (`fade`, `:1848`, curva quadrática). Clipe cujo `id` de sample não está carregado é ignorado. A lista é reenviada inteira a cada sincronização (`clips_clear` + `clip_add`). Não há checagem de tipo: `render_source` soma clipes em qualquer faixa que não seja barramento, mesmo de instrumento; só o monitoramento da entrada exige faixa de áudio.
+
+### Zonas do sampler e fatiamento (`engine/src/sampler_zones.rs`)
+
+Sem zonas o sampler é o de sempre (um áudio, nota base e modo do parâmetro do instrumento). Com **pelo menos uma zona** (`Sampler.zones` não vazio) `note_on` desvia para `note_on_zones` (`sampler.rs`, `sampler_zones.rs:240`): o áudio único, o parâmetro `root` e o parâmetro `one_shot` deixam de valer; `tune` (afinação fina do instrumento), o ADSR, `velocity` e `level` continuam valendo.
+
+**Estruturas.**
+
+| Estrutura | Papel |
+|---|---|
+| `ZoneDef` (`:39`, `Copy`) | O que o app manda em `zone_add`: `root`, `lo`..`hi` (notas), `vlo`..`vhi` (velocidade 1..=127), `cents`, `gain_db`, `pan`, `one_shot`, `group`, `start`/`end` (trecho em segundos do áudio, `end` ≤ 0 é o fim), `loop_start`/`loop_end` (só no modo sustentado, vale com `loop_end > loop_start`). `Default`: nota base 60, teclado e velocidades inteiros, sustentado, sem grupo, sem loop. |
+| `ZoneDef::sanitized` (`:89`) | Roda em `add_zone`: limita cada campo (`cents` −1200..1200, `gain_db` −60..24, `pan` −1..1, `group` 0..63; notas 0..127, velocidades 1..127), troca as pontas de faixas invertidas, número não finito vira 0, tempo negativo vira 0. |
+| `Zone` | `def` + `sample_id` + `Option<Arc<Sample>>` + `Option<Span>`. Sem áudio (ainda não carregado, ou descartado) ou com trecho vazio a zona não toca. |
+| `Span` (`:120`, `Copy`) | O trecho já em quadros do áudio da zona (`first`, `limit`), o loop `[início, fim)` em quadros, o ganho de cada lado (pan), `one_shot`, nota base, cents e a descida do fim. A voz guarda uma cópia. `Span::whole` é o áudio inteiro sem loop (o sampler de áudio único). |
+
+**Seleção da zona (`note_on_zones`).**
+
+1. A velocidade do `note_on` (0..1) vira inteiro `round(v · 127)` limitado a 1..=127.
+2. Passam as zonas com áudio e trecho válidos cuja faixa de notas e cuja faixa de velocidade contêm a nota e a velocidade (`Zone::plays`). **Todas** as que casam tocam: zonas sobrepostas empilham (camadas). Nenhuma zona casa: a nota não soa.
+3. Round-robin: para cada grupo `g > 0` conta-se quantas zonas dele casam (`counts[g]`); a `k`-ésima delas (na ordem da lista) só toca se `k == rr[g] % counts[g]`. Depois de escolher, `rr[g]` avança em 1 para cada grupo que teve zona casada (`wrapping_add`). O contador é por grupo, não por nota. Grupo 0 não alterna.
+4. Sem vozes soando a rampa do volume (`level_now`) salta para o `level` (a primeira nota sai no volume pedido).
+5. A mesma nota de novo: as vozes seguras e ainda não soltas dessa altura entram em release (também as `one_shot`) e as novas começam do início.
+6. Para cada zona escolhida: passo de leitura `step_at(pitch, sample, root, cents + tune)` (a nota base e os cents da zona, mais o `tune` do instrumento), ganho `1 − velocity + velocity · v²` vezes `10^(gain_db/20)`, vaga de voz por `take_slot` (rouba a mais antiga se as 16 estão seguras), o `Span` da zona entra na voz e a voz guarda o `Arc<Sample>` (`own`). Cada zona que dispara ocupa **uma voz**: uma nota com 3 camadas gasta 3 das 16.
+
+**Na voz (`Voice`).** `span.first` é o primeiro quadro lido (`start` da zona); `push` volta de `end` para `start` no loop (o quadro `end` nunca é lido, sem crossfade); depois de `span.limit` o áudio é silêncio e, com `limit + 3` quadros, a voz acaba. Sem loop, `Span::fade` desce o ganho a zero no último milissegundo do trecho (`END_FADE_SECS = 1 ms`, no máximo metade do trecho), para as fatias não estalarem; com loop, o fade é 0. O pan da zona é balanço (`gl = 1 − max(pan, 0)`, `gr = 1 + min(pan, 0)`). No `note_off`, com `span.zone` vale o `span.one_shot` da zona e sem ele o parâmetro `one_shot` do instrumento; `release_all` (stop) solta tudo, `one_shot` inclusive.
+
+**Áudio por id.** A zona cita o áudio pelo id de `Engine::load_sample`. `Engine::add_zone` (`lib.rs:921`) procura o `Arc<Sample>` e o entrega à zona (`None` se ainda não carregou); `load_sample` e `drop_sample` chamam `zone_sample(id, ...)` em todos os instrumentos (`bind_zone_sample`), que ligam ou desligam o áudio nas zonas com aquele id e refazem o `Span`. `Engine::clear_zones` (`lib.rs:913`) esvazia a lista e zera `rr`. As vozes que já tocavam **não** são cortadas por mexer nas zonas ou descartar o áudio: cada uma guarda o próprio `Arc` e o próprio `Span`; o `render` do sampler usa `own` antes do áudio único. A troca do áudio único (`set_sample`) não toca nas vozes de zona (`!v.span.zone`, commit `6f3d245`).
+
+**Limites (`sampler_zones.rs:27-35`).** `MAX_ZONES = 128` (a lista nasce com essa capacidade em `Sampler::new`; passar disso descarta, sem alocar), `MAX_GROUPS = 64` (grupos 0..63; o `sanitized` limita a 63), `MAX_SLICES = 96`, `FIRST_SLICE_NOTE = 24` (C1; 24 + 96 − 1 = 119 < 127). O disparo usa só arrays na pilha (`counts`, `seen`, `picked`).
+
+**Fatiamento.** `slice_points(channels, rate, mode)` (`:321`) devolve os pontos de corte em segundos, crescentes; o primeiro é sempre 0 (áudio vazio: nenhum). `SliceMode::Count(k)` (1..=96, no máximo o número de quadros) divide em `k` partes iguais. `SliceMode::Transients(sensibilidade 0..1)` (`transients`, `:345`):
+
+- Mono = média dos canais. A cada 5 ms (`HOP_SECS`) calcula `ln(1 + 1e4·energia) + ln(1 + 1e4·energia da derivada)`; o fluxo positivo desse envelope é comparado com a média local (±0,2 s), com o maior fluxo e com um piso, e só os máximos locais a 50 ms um do outro passam. Se o maior fluxo é menor que 0,5 (silêncio, tom constante) não há cortes além do 0. Limiares: `relativo = 6,0 − 4,5·s`, `piso = 1,2 − 0,8·s`, `fração do pico = 0,30 − 0,22·s`.
+- O corte é refinado no áudio (`onset`, `:419`): o primeiro quadro em que o sinal passa de 10% do pico do ataque, recuado até o cruzamento de zero mais próximo (até 2 ms). Depois do refinamento, dois cortes a menos de 25 ms viram o mais forte deles; cortes a menos de 10 ms (`EDGE_SECS`) do começo ou do fim caem; passando de 95, ficam os 95 mais fortes.
+
+`slice_zones(pontos, primeira_nota)` (`:435`) gera uma `ZoneDef` por ponto: nota `primeira + i` (cromática, para em 127 ou em 96), `lo = hi = root = nota`, `one_shot`, `start` = o ponto, `end` = o ponto seguinte (0 na última), o resto no padrão; pontos repetidos, fora de ordem ou não finitos são pulados. **Nada disso é chamada da API**: `slice_points` e `slice_zones` não estão em `CALLS` nem no wasm. O app (`app/lib/daw/sampler_zones.dart`) tem uma **porta em Dart** da mesma conta (`slicePoints`, `sliceZones`, com os mesmos limiares e os testes equivalentes em `app/test/sampler_zones_test.dart`) e manda o resultado como zonas comuns (`zone_add`). O código Rust serve de referência e de teste; quem mudar um limiar tem de mudar os dois.
 
 ### Automação
 
@@ -215,8 +252,14 @@ Convenções abaixo: `faixa` é índice de zero; `bool` é 0/1; batidas são f64
 | `track_kind` | `faixa` (usize), `tipo` (u32) | Só age se o tipo mudou: recria o instrumento nos padrões (envia antes dos `param`) e zera os estáticos; virar ou deixar de ser barramento refaz o roteamento. Tipo desconhecido fica sem instrumento. |
 | `param` | `faixa` (usize), `id` (u32), `valor` (f32) | Parâmetro do instrumento; não finito é ignorado; guarda o estático e só repassa se o alvo não está sob automação. |
 | `instrument_sample` | `faixa` (usize), `sample` (u32) | Áudio do sampler (0 = nenhum); id ainda não carregado fica guardado e é ligado quando chegar. |
+| `zones_clear` | `faixa` (usize) | Apaga as zonas do sampler da faixa (volta ao áudio único) e zera os contadores de round-robin. Faixa que não é sampler ou índice inexistente: nada. As notas que soam terminam. |
+| `zone_add` | `faixa` (usize), `sample` (u32), `nota base` (u32), `nota mínima` (u32), `nota máxima` (u32), `velocidade mínima` (u32), `velocidade máxima` (u32), `afinação em cents` (f32), `ganho em dB` (f32), `pan` (f32), `modo` (u32), `início` (f64, s), `fim` (f64, s), `início do loop` (f64, s), `fim do loop` (f64, s), `grupo` (u32) | **16 argumentos, a maior chamada.** Acrescenta uma zona ao sampler da faixa, tocando o áudio `sample` (o id de `sample_load`; pode chegar depois: a zona fica muda até o áudio chegar). Notas, velocidades e nota base passam por `min(127)`, grupo por `min(255)` e depois pelo `sanitized` (grupo até 63, velocidades 1..127, cents ±1200, ganho −60..24 dB, pan ±1); `modo` ≠ 0 é "até o fim"; `fim` ≤ 0 é o fim do áudio; o loop vale com `fim do loop > início do loop`, só no modo sustentado. Passa de 128 zonas: ignora. Em faixa que não é sampler não faz nada. |
 | `notes_clear` | nenhum | Apaga as notas do sequenciador de todas as faixas (as que soam terminam no fim delas). |
 | `note_add` | `faixa` (usize), `início` (f64), `duração` (f64), `altura` (u32), `velocidade` (f32) | Nota em batidas absolutas; altura > 127, início não finito ou duração ≤ 0 são ignorados; início mínimo 0; velocidade limitada a 0–1 (não finita vira 0,8). |
+| `cc_clear` | nenhum | Apaga os eventos de controle (bend, modulação, pedal) de todas as faixas; as notas não são afetadas. Detalhes em [04](04-expressao-midi.md). |
+| `cc_add` | `faixa` (usize), `controle` (u32: 1, 64 ou 128), `batida` (f64, absoluta), `valor` (f32) | Evento de controle do clipe; controle desconhecido ou valor não finito é ignorado. |
+| `live_cc` | `faixa` (usize), `controle` (u32), `valor` (f32) | Controle ao vivo (roda, pedal); tocando, também entra no registro da gravação. |
+| `live_bend` | `faixa` (usize), `valor` (f32, −1..1) | Pitch bend ao vivo; equivale a `live_cc` com o controle 128. |
 | `live_on` | `faixa` (usize), `altura` (u32), `velocidade` (f32) | Nota ao vivo; velocidade ≤ 0 ou NaN vale `live_off`; altura > 127 ignorada; velocidade limitada a 1. |
 | `live_off` | `faixa` (usize), `altura` (u32) | Solta a nota ao vivo. |
 | `panic` | nenhum | Corta instrumentos, reseta todas as cadeias (faixas e master) e o metrônomo; o transporte segue. |
@@ -240,10 +283,40 @@ Convenções abaixo: `faixa` é índice de zero; `bool` é 0/1; batidas são f64
 | `capture_add` | `faixa` (i32) | **Devolve** (i32) o índice da captura, ou −1 (sem lugar ou faixa < −1). |
 | `beat` | nenhum | **Devolve** (f64) a posição em batidas do próximo quadro que sai. |
 | `playing` | nenhum | **Devolve** (u32) 1 se tocando, 0 se parado. |
+| `loudness_reset` | nenhum | Zera o medidor de loudness do master: integrado, faixa, máximos de momentâneo e curto prazo e true peak. Os filtros K-weighting seguem com o sinal que veem (não gera transiente). |
+| `loudness` | `tipo` (u32) | **Devolve** (f64) a medida do master depois do limitador: 0 momentâneo (LUFS), 1 curto prazo (LUFS), 2 integrado (LUFS), 3 true peak máximo (dBTP), 4 faixa de loudness (LU). −200 (`loudness::NONE`) = sem medida; tipo desconhecido também devolve −200. |
 
 Chamadas fora de `apply` (levam ponteiro, cada hospedeiro tem função própria; lista `HOST_ONLY`, `api.rs:182`): `alloc`, `dealloc`, `init`, `process`, `sample_load`, `analyzer`, `set_input`, `rec_notes`, `captured`, `peaks`, `stretch_run`, `stretch_channel`, `stretch_free`, `detect_bpm`, `detect_confidence`. Chamar uma delas por `apply` é erro com mensagem específica; `init` diz que o motor nasce no hospedeiro.
 
-`Call` (`api.rs:63`) é `Copy`, sem heap e com no máximo 64 bytes (teste `chamada_convertida_e_copia_simples`): um hospedeiro com thread de áudio valida na thread dele com `Call::parse` e manda o `Call` por uma fila sem trava; só o caminho de erro aloca (a mensagem).
+`Call` (`api.rs:63`) é `Copy`, sem heap e com no máximo 96 bytes (era 64 até a `zone_add`, que leva uma `ZoneDef` inteira com quatro tempos em f64; teste `chamada_convertida_e_copia_simples`): um hospedeiro com thread de áudio valida na thread dele com `Call::parse` e manda o `Call` por uma fila sem trava; só o caminho de erro aloca (a mensagem).
+
+### O medidor de loudness (`engine/src/loudness.rs`)
+
+Contrato do que o medidor mede, para quem altera o motor ou compara com o cálculo em Dart (`app/lib/daw/loudness.dart`).
+
+| Medida | `kind` | Definição |
+|---|---|---|
+| Momentâneo | 0 | Média da energia K-ponderada dos últimos 4 blocos de 100 ms (400 ms), em LUFS. Existe a partir de 400 ms de áudio. |
+| Curto prazo | 1 | Idem com os últimos 30 blocos (3 s). Existe a partir de 3 s. |
+| Integrado | 2 | Blocos de 400 ms a cada 100 ms (75% de sobreposição): passam pelo gate absoluto (−70 LUFS) e pelo relativo (−10 LU abaixo da média do que passou); média da energia do que sobrou. |
+| True peak | 3 | Maior valor absoluto, dos dois canais, do sinal sobreamostrado 4× (FIR polifásico de 16 pontos por fase, janela de Kaiser com beta 7; a fase 0 é a própria amostra), desde o reset. |
+| Faixa (LRA) | 4 | Distribuição do curto prazo com gate absoluto de −70 LUFS e relativo de −20 LU; percentil 95 menos percentil 10. |
+
+Também guarda `momentary_max` e `short_term_max` (só `Meter::read`; nenhuma chamada da API os devolve).
+
+**Algoritmo.**
+
+- **K-weighting para qualquer taxa.** Dois biquads em f64, forma transposta II: prateleira de agudos (`f0` 1681,97 Hz, +3,9998 dB, `Q` 0,7072) e passa-altas (`f0` 38,135 Hz, `Q` 0,5003). Os coeficientes são calculados a partir dos protótipos analógicos com a transformada bilinear para a taxa do motor (`k_weighting(rate)`); a norma só tabela os de 48 kHz. Um teste confere 44,1, 48, 96, 192 e 22,05 kHz.
+- **Energia.** Soma dos quadrados dos dois canais K-ponderados (peso 1 cada), média por bloco de 100 ms (`hop = rate × 0,1` quadros), guardada num anel de 30 posições. LUFS = `−0,691 + 10·log10(energia)`. Um canal só (`Meter::new(rate, 1)`) mede 3,01 dB abaixo do mesmo sinal nos dois.
+- **Gates por histograma.** Integrado e faixa usam dois histogramas de 8000 faixas de 0,01 LU (−70 a +10 LUFS), cada faixa com a contagem e a soma das energias. A energia somada é exata; a quantização só decide de que lado do gate um bloco cai (erro de no máximo 0,01 LU). Por isso a thread de áudio não precisa guardar todos os blocos.
+- **Cache.** `read` recalcula integrado e faixa só depois de um bloco fechado (`cache`); ler várias vezes por bloco não repete a soma dos histogramas.
+- **Sanidade.** Amostra não finita conta como silêncio; nunca sai NaN nem infinito; tudo abaixo do piso vira −200.
+- **Onde é alimentado.** No fim de `Engine::render`, depois do limitador e do `clamp(-1, 1)`, com o buffer final do master (`loudness.push(out_l, Some(out_r))`), exceto durante o pré-roll do render offline (`captures.priming`), que não é música. O metrônomo e a entrada monitorada entram na medida, porque estão antes do limitador.
+- **Offline.** `loudness::measure(left, right, rate)` mede um trecho de uma vez e completa o true peak com 8 zeros no fim. O render offline do app **não** usa isso: ele traz os canais ao Dart, que mede com `loudness.dart` (ver [02](02-pontes-web-e-android.md)).
+
+**Sem alocação no caminho de áudio.** O `Meter` aloca só em `Meter::new` (dois histogramas de 8000 posições, ~190 KB, na criação do `Engine`); `push`, `read` e `reset` não alocam. O teste `nao_aloca_depois_de_criado` usa `testalloc::count` e exige 0 alocações depois de criado; é um dos testes com essa prova, ao lado de `fm.rs`, `wavetable.rs` e das zonas do sampler (ver Tempo real). O ganho fixo de exportação não passa por aqui.
+
+**Testes** (`cargo test -p jopendaw-engine loudness`, 20 testes no arquivo): seno de 1 kHz nos dois canais a −20 dBFS mede −20 LUFS (EBU Tech 3341, caso 1) e canal único −23,01; passa-altas e prateleira com a diferença esperada por frequência; ruído branco confere com a energia ponderada; silêncio, trecho curto e NaN; os gates; faixa de loudness; true peak entre amostras, de impulso e de DC; medidor ao vivo igual ao offline em qualquer fatiamento; reset; alocação zero; medida do `Engine` inteiro igual à offline; true peak depois do limitador.
 
 ### Limites e constantes
 
@@ -260,6 +333,10 @@ Chamadas fora de `apply` (levam ponteiro, cada hospedeiro tem função própria;
 | `MAX_SLOTS`, `MAX_SENDS` | 16 e 16 | `mixer.rs:22`, `:25` |
 | `STATIC_PARAMS` | 64 | `mixer.rs:29` |
 | `MAX_REC_NOTES`, `MAX_CAPTURES` | 16 384 e 64 | `record.rs:16`, `:22` |
+| `MAX_ZONES` | 128 zonas por sampler | `sampler_zones.rs:27` |
+| `MAX_GROUPS` | 64 (grupos de round-robin 0..63) | `sampler_zones.rs:29` |
+| `MAX_SLICES`, `FIRST_SLICE_NOTE` | 96 fatias, a partir da nota 24 (C1) | `sampler_zones.rs:31`, `:33` |
+| `END_FADE_SECS` | 1 ms (descida no fim do trecho de uma zona sem loop) | `sampler_zones.rs:35` |
 | `SMOOTH_SECS` (fader, porta do solo, envios) | 5 ms | `mixer.rs:9` |
 | `FADE_SECS` (transições da cadeia) | 10 ms | `mixer.rs:13` |
 
@@ -273,6 +350,7 @@ Chamadas fora de `apply` (levam ponteiro, cada hospedeiro tem função própria;
 - **Cadeia que dorme.** Sem entrada e com saída em silêncio a cadeia não roda, mas só depois de passar pelo tempo máximo de cauda (`tail_secs`); assim um delay de 4 s não é cortado.
 - **Limitador de segurança sempre depois do metrônomo, fora da cadeia do master.** O clique não ganha o reverb do master mas segue o volume; nada passa de −0,3 dBFS, e o clamp final em ±1 pega o resto.
 - **Sanidade contra NaN em três pontos.** Sai da cadeia de uma faixa (silêncio e `reset` do efeito), sai da cadeia do master (idem) e antes do limitador (troca por 0). Um efeito que explode não contamina barramentos e master para sempre.
+- **Loudness medido depois do limitador, dentro do motor; a normalização fica fora.** O medidor lê o que vai para a saída, no mesmo ponto do medidor de pico do master, e a tela do mixer só o mostra. A normalização da exportação (ganho constante até um alvo de LUFS, com teto de true peak) é feita **em Dart puro** (`app/lib/daw/loudness.dart`) sobre os canais que o render devolveu, por três razões: funciona igual na web e no Android sem chamada nova nas pontes, dispensa recompilar o `engine.wasm` e os `.so` para o que o usuário mais precisa (o arquivo certo), e o ganho é uma multiplicação que não pertence ao caminho de áudio. O preço são duas implementações do mesmo cálculo (motor e Dart) que precisam concordar; `app/test/loudness_test.dart` e `app/test/export_loudness_test.dart` as conferem. Diferenças conhecidas: o Dart guarda todos os blocos e aplica os gates exatos (o motor usa histogramas de 0,01 LU) e não calcula faixa de loudness.
 - **Plataforma fora do crate.** O crate não sabe de threads nem de E/S, então o mesmo código roda no worklet, no AAudio e no render offline nativo, e os testes rodam no desktop.
 
 ## Tempo real: alocação e travas
@@ -291,6 +369,7 @@ A regra do código (declarada em `effect.rs`, `instrument.rs`, `dsp.rs`, `record
 | `Chain::collect` (`mixer.rs:596`) | libera o efeito antigo (`Drop` de `Box<dyn Effect>`) | roda dentro de `prepare`, na thread de áudio, entre blocos; é uma liberação, não alocação, mas não é de custo zero |
 | `add_clip` (`:814`) | `Vec::push` na lista de clipes, sem reserva inicial (`Vec::new()` em `Engine::new`) | realoca de tempos em tempos ao reenviar o documento com muitos clipes; ver Armadilhas |
 | `add_note` (`:890`) | `push`; reserva de 1024 por faixa | passar disso realoca |
+| `add_zone` (`:921`) | `Vec::push` na lista de zonas do sampler, reservada com 128 em `Sampler::new` | não realoca; passar de 128 descarta a zona |
 | `add_point` (`:1196`) | `insert`; reserva de 256 por lane | passar disso realoca |
 | `clear_automation` (`:1172`) | `push` em `auto_restore`, reserva de 64 | passar disso realoca |
 | `add_lane` (`:1182`) | `AutoLane::new` reserva 256 pontos | só ao criar lane nova |
@@ -299,7 +378,7 @@ A regra do código (declarada em `effect.rs`, `instrument.rs`, `dsp.rs`, `record
 | `start_render` (`:1442`) | `std::mem::replace` com `Vec::new()` (não aloca) e processamento de silêncio | uma vez por render |
 | `Engine::new` | `limiter_latency` aloca `vec!` de ≥ 4096 quadros para medir o limitador | só na criação |
 
-**Prova automática.** `engine/src/testalloc.rs` instala, só em teste, um `#[global_allocator]` que conta as alocações de uma thread dentro de `count(|| ...)`. Ele é usado em exatamente dois testes: `nao_aloca_depois_do_new` de `fm.rs:1184` e de `wavetable.rs:1361` (notas em 16 alturas, troca de parâmetros, 50 renders, `note_off`, `release_all`, `silence`, exigindo 0 alocações). **Não há teste de contagem para `synth`, `drums`, `sampler`, nenhum dos 12 efeitos, `Chain` nem o `Engine` inteiro**: para esses, a garantia de "sem alocação no áudio" é a leitura do código descrita acima e a convenção, não um teste (`(não confirmado)` por execução).
+**Prova automática.** `engine/src/testalloc.rs` instala, só em teste, um `#[global_allocator]` que conta as alocações de uma thread dentro de `count(|| ...)`. Ele é usado em exatamente quatro testes: `nao_aloca_depois_do_new` de `fm.rs:1184` e de `wavetable.rs:1361` (notas em 16 alturas, troca de parâmetros, 50 renders, `note_off`, `release_all`, `silence`, exigindo 0 alocações), `zonas_nao_alocam_na_thread_de_audio` de `sampler_zones_tests.rs` (limpa e recria 128 zonas com round-robin e loop, dispara 70 notas, religa e desliga áudios por id, `release_all`, `silence`; exige 0 alocações no sampler com zonas) e `nao_aloca_depois_de_criado` de `loudness.rs` (o `Meter` sozinho: 4 s de seno em blocos de 128, `read`, `reset`, `push` de 4 s de uma vez e `read_kind`, exigindo 0 alocações; não cobre o `Engine` inteiro). **Não há teste de contagem para `synth`, `drums`, o `sampler` de áudio único, nenhum dos 12 efeitos, `Chain` nem o `Engine` inteiro**: para esses, a garantia de "sem alocação no áudio" é a leitura do código descrita acima e a convenção, não um teste (`(não confirmado)` por execução).
 
 O `panic = "abort"` do perfil `wasm` e o `catch_unwind` do perfil `android` estão em `Cargo.toml` da raiz; um pânico no `process` derruba o worklet (web) ou vira silêncio e código de erro (Android).
 
@@ -313,12 +392,18 @@ cargo clippy -p jopendaw-engine --all-targets
 cargo fmt --check
 ```
 
-Os testes ficam no fim de cada arquivo (`#[cfg(test)]`): `lib.rs` tem 57 (transporte, notas no quadro exato, loop, solo com barramentos, automação, sidechain, NaN, gravação, capturas e a igualdade entre tamanhos de bloco), `api.rs` 6, e cada instrumento e efeito tem os seus. Testes do contrato com o Dart: `synth.rs:1502`, `fm.rs:1209` e `wavetable.rs:1394` leem `app/lib/daw/instruments.dart` e conferem faixas, padrões e ids (pulam com aviso se o arquivo não existir). Para tocar de verdade e medir picos no navegador, ver [03-build-teste-e-depuracao.md](03-build-teste-e-depuracao.md).
+Os testes ficam no fim de cada arquivo (`#[cfg(test)]`): `lib.rs` tem 57 (transporte, notas no quadro exato, loop, solo com barramentos, automação, sidechain, NaN, gravação, capturas e a igualdade entre tamanhos de bloco), `api.rs` 6, `sampler_zones_tests.rs` 42 (zonas, camadas, round-robin, loop, trecho, áudio que chega e sai, alocação zero, fatiamento por número e por transientes com rajadas sintéticas) e cada instrumento e efeito tem os seus. Testes do contrato com o Dart: `synth.rs:1502`, `fm.rs:1209` e `wavetable.rs:1394` leem `app/lib/daw/instruments.dart` e conferem faixas, padrões e ids (pulam com aviso se o arquivo não existir). Para tocar de verdade e medir picos no navegador, ver [03-build-teste-e-depuracao.md](03-build-teste-e-depuracao.md).
 
 ## Armadilhas conhecidas
 
 - **Mudou o motor, recompile os hospedeiros.** `./engine/build-web.sh` e `./engine/build-android.sh` (NDK 28); commite `app/web/engine/engine.wasm` e os três `libjopendaw_engine.so` juntos. Sem recompilar os `.so` o Android fica com o motor velho, e mudo se o `apply` for novo. Detalhes em [02-pontes-web-e-android.md](02-pontes-web-e-android.md).
+- **Binários sem o loudness (caso da fase 8, resolvido em `357b6fc`).** O commit `dca27bc` declarava no corpo que `engine.wasm` e os três `.so` não tinham sido recompilados; até a integração o medidor do mixer ficava em `—` e o botão `Zerar` não agia (web: o worklet confere `typeof w.loudness === 'function'` e não publica nada; Android: `jd_loudness` não existia e o Dart desiste uma vez, `_noLoudness`). A normalização da exportação sempre funcionou, porque é Dart puro. Ver [02](02-pontes-web-e-android.md).
 - **Chamada nova no motor exige espelho em todos os lados.** Export no `engine/wasm/src/lib.rs` (o teste `apply_conhece_todos_os_exports_sem_ponteiro_do_wasm` obriga a entrada em `CALLS` e `Call`), `Call::parse` e `Call::apply`, o lado Android (`jd_*` e `jd_calls`), o `host.js`/`worklet.js` e o `engine_ffi.dart`.
+- **Binários sem as zonas (caso da fase 8, resolvido em `357b6fc`).** Os commits `b6b7abb`, `6f3d245` e `6e5fa7b` (zonas do sampler) não recompilaram os binários; só faixas com zonas eram afetadas (web: `TypeError` em `w.zone_add` perdia o resto da lista; Android: o `.so` com `ARGS_MAX = 12` recusava a lista que contivesse um `zone_add` de 16 argumentos). A integração recompilou os quatro binários.
+- **Zonas: o app reenvia todas a cada edição.** `_syncZones` (`controller.dart`) manda `zones_clear` seguido de todos os `zone_add` sempre que a lista de chamadas de zona muda (uma zona editada, ou o áudio de uma zona que acabou de carregar e ganhou id). Como `clear_zones` zera `rr`, o ciclo do round-robin recomeça a cada edição (`(não confirmado)` que isso seja audível). Editar com notas soando é seguro: as vozes guardam o próprio áudio e trecho.
+- **Zonas: o parâmetro `one_shot` do instrumento não vale, mas a interface ainda o usa.** Com zonas, quem manda é o `one_shot` de cada zona; o painel do app, porém, continua apagando a `Soltura` e desenhando o envelope curto conforme o parâmetro do instrumento, e o teclado da tela continua marcando o `root` do instrumento.
+- **Zonas: a `Sustentação` do ADSR vale também para vozes `one_shot`.** Fatias e golpes decaem com `Sustentação` abaixo de 1 (o ADSR é o do instrumento, comum a todas as zonas).
+- **Fatiamento duplicado em Rust e Dart.** `slice_points`/`slice_zones` do motor não são chamados por nenhum hospedeiro; o app usa a porta em Dart. Mudou um limiar em um, mude no outro.
 - **Ids de parâmetro são contrato.** Não reutilize nem renumere; id novo vai no fim e precisa entrar em `SPECS` do instrumento e em `instruments.dart`/`effects.dart`. Só synth, FM e wavetable têm teste que confere o Dart; bateria, sampler e os 12 efeitos não (`(não confirmado)` se há outra conferência).
 - **Ordem dos comandos importa.** `track_kind` antes de `param`; `fx_set` antes de `fx_param`; `tracks` antes de tudo que indexa faixa. `fx_param` com slot ≥ contagem é ignorado; `set_fx` e `send_set` esticam sozinhos.
 - **`tracks` sem teto no wasm.** O teto de 1024 vive só em `apply` (Android e render nativo); o export `tracks` do wasm aceita qualquer `usize`.

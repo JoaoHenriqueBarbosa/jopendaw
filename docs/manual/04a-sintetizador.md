@@ -2,6 +2,10 @@
 
 > Sintetizador subtrativo de dois osciladores com sub, ruído, uníssono, filtro ressonante, dois envelopes e um LFO: serve para baixos, leads, pads, teclas e efeitos, e sai de fábrica com 22 presets.
 
+![Painel Instrumento do sintetizador (preset Baixo sub): osciladores 1 e 2, mistura e filtro.](../img/instrumento-sintetizador.jpg)
+
+*Painel Instrumento do sintetizador (preset Baixo sub): osciladores 1 e 2, mistura e filtro.*
+
 ## Onde fica
 
 1. Crie a faixa em `Nova faixa` (coluna de faixas do arranjo) > `Sintetizador`, ou selecione uma faixa `Sintetizador` existente.

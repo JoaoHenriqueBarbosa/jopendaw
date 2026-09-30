@@ -2,6 +2,10 @@
 
 > O que é o jopendaw, como a tela se divide, o que muda entre computador e celular, os conceitos que o resto do manual assume e um glossário. Leia primeiro; os demais capítulos aprofundam cada peça.
 
+![Tela do projeto com o modelo Batida eletrônica: barra de transporte, faixas com clipes, barramento Reverb, faixa Master e minimapa "Visão geral".](../img/timeline-batida.jpg)
+
+*Tela do projeto com o modelo Batida eletrônica: barra de transporte, faixas com clipes, barramento Reverb, faixa Master e minimapa "Visão geral".*
+
 O jopendaw é um estúdio de música completo (DAW) que roda no navegador e no Android. É o mesmo app Flutter nos dois, com o mesmo motor de áudio escrito em Rust: no navegador o motor roda compilado para WebAssembly dentro de um AudioWorklet; no Android roda como biblioteca nativa, tocando pela saída de áudio do sistema (AAudio). O som é produzido no seu aparelho. O servidor só guarda a conta, a lista de projetos, o documento de cada projeto (para levar de um aparelho a outro) e os arquivos de áudio que você importa ou grava.
 
 ## Onde fica

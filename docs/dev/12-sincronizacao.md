@@ -50,6 +50,8 @@ Princípios (de `app/lib/daw/sync.dart:1`):
 
 Regras do `PUT` do documento: `base_version = 0` é a primeira gravação (só uma de várias concorrentes vence: as outras recebem 409); qualquer outro valor só vale se for **exatamente** a versão atual (`UPDATE ... WHERE version = base`); a versão sobe de 1 em 1 e o `updated_at` do projeto acompanha na mesma transação; teto de 8 MB; nada de `\u0000`. O servidor não interpreta o documento.
 
+**Atrás do nginx de produção** (`app/nginx.conf.template`), os dois `PUT` grandes passam: o `location /api/` tem `client_max_body_size 600m` e `proxy_request_buffering off` (desde `0c0593e`). Até esse commit o padrão de 1 MB do nginx valia, e um documento acima de 1 MB ou qualquer áudio acima de 1 MB receberia `413` do próprio nginx antes de chegar à API (deduzido do padrão do nginx; o capítulo [11 Servidor](11-servidor.md) já marcava isso como não confirmado); nos testes locais contra a `:8080` isso não aparecia, porque a API serve o app diretamente sem nginx. Os tetos que continuam valendo são os da API (8 MB por documento, 512 MB por áudio, cota de 4 GB). `(a correção não foi conferida por um envio real pelo nginx nesta atualização; se houver outro proxy na frente, como o Traefik do Dokploy, o limite dele também vale)`.
+
 ### Estado local por projeto (`sync:<projectId>` no `LocalStore`)
 
 ```json
@@ -65,11 +67,11 @@ Sobrevive a fechar o app no meio. Sem estado guardado (primeira abertura) vale `
 
 ### Como o documento vira "pendente"
 
-`DawController._save` (`controller.dart:1411`, chamado 400 ms depois de cada mudança, e no `dispose`) compara o JSON inteiro do documento com o último gravado (`_lastSaved`). Se mudou, chama `sync.markDirty()` **antes** de gravar `doc:<id>`: se o app morrer entre os dois passos, sobra um pendente a mais (inofensivo), nunca uma mudança que ninguém vai enviar. `markDirty` incrementa a geração (`_gen`), persiste `dirty: true` e agenda o envio em **3 s** (`debounce`) depois da última edição.
+`DawController._save` (em `controller.dart`, chamado 400 ms depois de cada mudança, e no `dispose`) compara o JSON inteiro do documento com o último gravado (`_lastSaved`). Se mudou, chama `sync.markDirty()` **antes** de gravar `doc:<id>`: se o app morrer entre os dois passos, sobra um pendente a mais (inofensivo), nunca uma mudança que ninguém vai enviar. `markDirty` incrementa a geração (`_gen`), persiste `dirty: true` e agenda o envio em **3 s** (`debounce`) depois da última edição.
 
 ### O que o outro aparelho ignora ao aplicar um documento remoto
 
-`_applyRemote` (`controller.dart:1467`) troca o documento, mas mantém os do aparelho: `bpm` e `beats_per_bar` (vêm do projeto no servidor, `PATCH /api/projects/{id}`), `metronome`, `count_in`, `rec_latency_ms` e, por faixa (pelo `id`), `armed` e `monitor`. O histórico de desfazer é apagado.
+`DawController._applyRemote` (em `controller.dart`) troca o documento, mas mantém os do aparelho: `bpm` e `beats_per_bar` (vêm do projeto no servidor, `PATCH /api/projects/{id}`), `metronome`, `count_in`, `rec_latency_ms` e, por faixa (pelo `id`), `armed` e `monitor`. O histórico de desfazer é apagado.
 
 ## A máquina de estados do `SyncService`
 
@@ -124,7 +126,7 @@ Depois: `_pulled = true` e `host.fetchMissing()` (tenta baixar áudios que o doc
 `_push()` (`sync.dart:272`):
 
 1. `gen = _gen`; `json = host.docJson()` (o documento de agora).
-2. `uploadSamples(host.sampleHashes())`: pergunta ao servidor quais faltam (`POST /api/samples/missing`, só dos que este serviço ainda não confirmou em `_serverHas`), e envia **um por vez** (`PUT /api/samples/{hash}`) os que este aparelho tem em `sample:<hash>`. Áudio que o aparelho também não tem fica de fora. Erro `4xx` de áudio (cota, tamanho) **não trava o documento**: ele segue e o estado final é `error` com "Alguns áudios não foram enviados: ..." (o outro aparelho verá esses áudios como faltando). `5xx`, `408` e `429` sobem para o recuo.
+2. `uploadSamples(host.sampleHashes())` (`DawController._hashesOf`: `doc.samples`, o `sample` de cada faixa de sampler, o `sample` de cada **zona** do sampler e o `sample` e as `takes` de cada clipe): pergunta ao servidor quais faltam (`POST /api/samples/missing`, só dos que este serviço ainda não confirmou em `_serverHas`), e envia **um por vez** (`PUT /api/samples/{hash}`) os que este aparelho tem em `sample:<hash>`. Áudio que o aparelho também não tem fica de fora. Erro `4xx` de áudio (cota, tamanho) **não trava o documento**: ele segue e o estado final é `error` com "Alguns áudios não foram enviados: ..." (o outro aparelho verá esses áudios como faltando). `5xx`, `408` e `429` sobem para o recuo.
 3. `_version = await api.putProjectDoc(projectId, _version, json)`: manda `base_version = _version` e guarda a versão nova.
 4. Se `gen == _gen` (ninguém editou durante o envio), `dirty = false`; senão continua pendente e agenda outra rodada (`_again`): **um envio que termina depois de outra edição não zera o pendente**.
 5. `_persist()` e fase `synced` (ou `syncing` se ficou pendente).
@@ -314,4 +316,6 @@ Teste de uso obrigatório para qualquer mudança aqui (regra do dono: testar **o
 - **`applyRemote` durante a gravação** lança `StateError('gravando: ...')`, que o serviço trata como falha genérica (recuo): o projeto novo entra depois.
 - **Tipos novos em app velho.** Um aparelho com app antigo lê `fm`/`wavetable` como `audio` e, se salvar, **regrava assim** e envia para o servidor (ver [10 App Flutter](10-app-flutter.md)). `AutoKind` desconhecido derruba a abertura: "A versão do servidor não abre nesta versão do app. Atualize o jopendaw." (`SyncFailure`, fase `error`).
 - **Sem limpeza local.** Apagar o projeto no servidor não apaga `doc:`, `sync:` nem `sample:` do aparelho.
+- **Projeto importado de `.jopendaw` vai pelo fluxo normal.** `importProjectBundle` (`app/lib/daw/project_file.dart`) cria o projeto pela API (`POST /api/projects`, mais um `PATCH` se o andamento ou o compasso do arquivo diferem), grava `sample:<hash>` só se a chave ainda não existe e por último `doc:<id>`; não grava `sync:<id>`. Na primeira abertura, documento local sem estado de sincronização conta como pendente (`dirty = localExisted`, ver acima), então os áudios e o documento sobem pelo caminho descrito neste capítulo. Áudio de um `.jopendaw` grande obedece aos mesmos tetos do servidor (512 MB por áudio, cota de 4 GB) e cai no caso "Alguns áudios não foram enviados" se estourar.
+- **Documento maior com zonas e controles.** As zonas do sampler (chave `zones` de cada faixa, commit `6e5fa7b`) e os controles MIDI dos clipes (chave `cc` de cada clipe MIDI, commit `01c0c44`) entram no JSON do documento e contam para o teto de 8 MB; só são gravados quando não estão vazios (`model.dart`: `if (zones.isNotEmpty)`, `if (controls.isNotEmpty)`), então documento antigo abre igual. Ao contrário, um app velho lendo documento novo só lê as chaves que conhece e, se salvar, **regrava sem elas** e envia para o servidor, do mesmo modo que o caso `fm`/`wavetable` acima. `(deduzido do padrão de leitura do fromJson; não reproduzido)`
 - **Sessão morta no meio.** `Unauthenticated` leva à fase `off` e o roteador manda ao login; o pendente segue guardado em `sync:<id>` e sai quando houver sessão de novo.

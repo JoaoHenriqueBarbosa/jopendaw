@@ -2,6 +2,10 @@
 
 > A cadeia de efeitos (inserts) de uma faixa ou do master: adicionar, reordenar, ligar e desligar, aplicar presets e mexer nos controles de cada efeito. Use quando o som de uma faixa precisa de timbre, dinâmica, espaço ou cor; cada efeito, parâmetro por parâmetro, está em [06d Referência dos efeitos](06d-efeitos-referencia.md).
 
+![Aba Efeitos de uma faixa com um Compressor: curva de transferência, controles e chave de sidechain.](../img/efeitos-compressor.jpg)
+
+*Aba Efeitos de uma faixa com um Compressor: curva de transferência, controles e chave de sidechain.*
+
 ## Onde fica
 
 O painel Efeitos é uma das quatro abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos). Ele mostra o rack de **uma** faixa por vez, ou do master.

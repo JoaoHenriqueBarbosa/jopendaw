@@ -13,9 +13,39 @@ Regras que valem para o menu inteiro:
 - **Sobre quais notas atua.** As transformações agem na **seleção**; **sem seleção, em todas as notas do clipe**. Onde a tabela diz "só seleção", o item fica apagado enquanto nada estiver selecionado.
 - **Desfazer.** Cada ferramenta é uma edição só no histórico: um `Ctrl+Z` desfaz tudo o que ela fez. Se o resultado seria idêntico ao que já existe, nada é gravado.
 - **Depois de aplicar**, as notas resultantes ficam selecionadas e a tela rola até elas se estiverem fora de vista.
+- **Pontos de controle.** Um clipe também guarda pontos de pitch bend, modulação e sustain (faixa de controle do editor). Nenhum item novo entrou no menu por causa deles, mas dois itens passaram a levá-los junto das notas (`Escalar o tempo` e `Inverter no tempo`); o resto do menu só mexe em notas. O quadro completo está em [Os controles nas ferramentas](#os-controles-nas-ferramentas).
 - **Notação dos exemplos.** `C4@0(1)` é a nota C4 começando no tempo 0 do clipe, com 1 tempo de duração (1 tempo = uma semínima; um compasso 4/4 tem 4 tempos). `[C4 E4 G4]@0(4)` são três notas juntas, no tempo 0, com 4 tempos. Os nomes de nota usam sustenidos (`D#4`, nunca `Eb4`); C4 é o dó central (MIDI 60). Os números com vírgula são decimais.
 
 ## Controles
+
+### Os controles nas ferramentas
+
+Os pontos de `Pitch bend`, `Modulação` e `Sustain` do clipe (ver [Faixa de controle](05-piano-roll.md#faixa-de-controle)) têm batidas contadas do início do clipe, como as notas. Este quadro diz o que cada operação faz com eles.
+
+| Operação | O que acontece com os pontos de controle | Detalhe |
+|---|---|---|
+| `Escalar o tempo` › `×0,5 (metade)`, `×2 (dobro)` e `Personalizado…` | **Escalados** pelo mesmo fator, a partir do início da primeira nota alvo (a que fica parada) | Sem seleção, todos os pontos do clipe; com notas selecionadas, só os pontos entre o início da primeira e o fim da última nota selecionada (as bordas contam). O fator vale para os pontos mesmo com `Escalar as durações também` desmarcado. Nenhum ponto passa para antes do começo do clipe: os que ficariam antes do 0 param no 0 |
+| `Inverter no tempo` | **Espelhados** no trecho ocupado pelas notas alvo (do menor início ao maior fim): a curva de bend e de modulação toca de trás para frente | O `Sustain` **não** é espelhado (cada "desce" viraria "sobe" e o que era segurado passaria a soltar). Pontos fora do trecho ficam onde estão |
+| `Dividir no cursor` (`K`) | **Nada**: só corta notas. Os pontos continuam no mesmo clipe, onde estavam | Para cortar também os pontos, divida o clipe na linha do tempo (`Cortar no cursor`, tecla `S`; ver abaixo) |
+| `Unir notas iguais adjacentes`, `Remover duplicadas`, `Aparar sobrepostas` | Nada | `Aparar sobrepostas` encurta **notas** da mesma altura; não tem relação com aparar o clipe |
+| `Humanizar…`, `Rampa de velocidade`, `Legato`, `Staccato…`, `Inverter na altura`, `Reverter a ordem das notas`, `Colcheias em tercinas`, arpejo e acordes | Nada | Os pontos não acompanham notas que mudam de lugar por essas ferramentas |
+| `Quantizar` (`Q`), setas, arrastar notas | Nada | Um bend desenhado numa nota não anda com ela |
+| Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) | Nada: a área de transferência guarda só notas | Para repetir um bend junto do trecho, duplique o clipe inteiro na linha do tempo ou redesenhe |
+
+Como os itens de `Escalar o tempo` e `Inverter no tempo` agem sobre "as notas alvo", eles ficam apagados num clipe **sem notas**, mesmo que ele tenha pontos de controle.
+
+**Na linha do tempo** (não são itens do menu `Ferramentas`, mas decidem o destino dos pontos):
+
+| Operação | O que acontece com os pontos de controle |
+|---|---|
+| `Cortar no cursor` (`S`, também no menu do clipe) | Divide os pontos junto do clipe: os anteriores ao corte ficam no clipe da esquerda; os demais vão para o da direita, com a batida recontada a partir do corte. O controle que estava fora do repouso no corte (pedal embaixo, bend ou modulação fora do centro) **começa o clipe da direita com o mesmo valor**, a menos que já haja um ponto exatamente no começo dele |
+| `Duplicar` (`Ctrl+D`) | A cópia leva os pontos |
+| Mover o clipe | Os pontos vão junto (as batidas deles são relativas ao clipe) |
+| Aparar a borda esquerda | Os pontos são deslocados como as notas: ficam no mesmo lugar do arranjo. Os que passam a ficar antes do início do clipe ficam guardados, mudos, e voltam se você estender o clipe de novo (ou desfizer) |
+| Aparar a borda direita | Só muda a duração; pontos depois do novo fim ficam guardados e mudos |
+| Sobrepor (soltar, colar ou gravar um clipe em cima de outro) | O clipe de baixo é aparado, partido ou removido como as notas dele: a parte que sobra à esquerda mantém os pontos; se o clipe novo cai no meio, a parte da direita vira um clipe novo com os pontos deslocados; o clipe totalmente coberto some com os pontos |
+
+Ao aparar a borda esquerda e ao sobrepor, o **estado** que um controle tinha antes do novo começo não é carregado: um pedal que estava embaixo no trecho aparado não continua embaixo no que sobrou (ao contrário do `Cortar no cursor`).
 
 ### Escala e acordes
 
@@ -375,7 +405,7 @@ Os fantasmas se alinham pelo tempo do arranjo, não pelo início do clipe; só c
 
 ## Combina com
 
-- [Editor de notas](05-piano-roll.md): a seleção, o painel de velocidade, o cursor e o fim do clipe que estas ferramentas usam.
+- [Editor de notas](05-piano-roll.md): a seleção, o painel de velocidade, a faixa de controle (bend, modulação e sustain), o cursor e o fim do clipe que estas ferramentas usam.
 - `Quantizar` (barra do editor, tecla `Q`): o par natural do `Humanizar`. Humanizar afasta as notas da grade; quantizar com força 50% traz parte do caminho de volta.
 - [Melodia e harmonia com as ferramentas](../guias/melodia-e-harmonia-com-as-ferramentas.md): progressão, arpejo, baixo e escala passo a passo.
 
@@ -388,6 +418,7 @@ Os fantasmas se alinham pelo tempo do arranjo, não pelo início do clipe; só c
 - `Colcheias em tercinas` só reconhece 1/2 tempo exato (tolerância de 0,0001).
 - No arpejador, "Ordem tocada" segue a ordem das notas na lista do clipe (a ordem em que foram criadas ou coladas), não a ordem em que você as tocaria.
 - Na bateria: `Escala…`, `Prender na escala`, `Inserir acorde…`, `Acorde no clique` e `Inverter na altura` não estão disponíveis; o botão `Escala` some. `Arpejador…` e `Desdobrar acorde em arpejo` funcionam, mas arpejar peças de bateria raramente faz sentido musical.
+- **Bend, modulação e pedal não acompanham as ferramentas de notas.** Só `Escalar o tempo` e `Inverter no tempo` levam os pontos junto; depois de `Humanizar`, `Quantizar`, arpejo ou mover notas, um bend desenhado sob uma nota continua onde estava. `Dividir no cursor` (`K`) corta notas, não pontos.
 - A semente do `Humanizar` e do arpejo `Aleatório` avança a cada uso, então repetir a mesma ferramenta dá um resultado diferente.
 - Os ajustes dos diálogos (padrão, taxa, oitavas, gate, tempo, velocidade, staccato) e o `Acorde no clique` valem para a sessão; o `Escalar o tempo` sempre reabre em ×1,50. A escala do clipe fica gravada no clipe.
 

@@ -2,6 +2,10 @@
 
 > Bateria eletrônica com 12 peças sintetizadas na hora (sem samples), no espírito das 808 e 909: cada peça tem volume, afinação, decaimento e timbre próprios, e há 7 kits prontos.
 
+![Painel Instrumento da bateria (kit 808): uma coluna por peça, com volume, afinação, decaimento e timbre.](../img/instrumento-bateria.jpg)
+
+*Painel Instrumento da bateria (kit 808): uma coluna por peça, com volume, afinação, decaimento e timbre.*
+
 ## Onde fica
 
 1. Crie a faixa em `Nova faixa` (coluna de faixas do arranjo) > `Bateria`, ou selecione uma faixa `Bateria`.

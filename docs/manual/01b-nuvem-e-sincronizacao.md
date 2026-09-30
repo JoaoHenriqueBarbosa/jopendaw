@@ -46,7 +46,7 @@ Texto do diálogo: `Há uma versão mais nova no servidor e também mudanças fe
 
 Detalhes do que acontece:
 
-- Não há mistura automática das duas versões. Se os dois lados têm coisa boa, antes de decidir use `Exportar` neste aparelho para guardar o som do que está aqui (o botão continua disponível durante o conflito).
+- Não há mistura automática das duas versões. Se os dois lados têm coisa boa, antes de decidir use `Exportar` neste aparelho para guardar o som do que está aqui (o botão continua disponível durante o conflito). Para guardar o projeto editável, abra `Exportar` e, na janela `Exportar áudio`, escolha `Projeto inteiro (.jopendaw)…`: o arquivo leva a versão deste aparelho e, depois, dá para importá-lo como projeto novo mesmo que você escolha `Usar a versão do servidor`.
 - Com o conflito de pé, as edições seguem sendo salvas no aparelho, mas nada sobe.
 - Se `Usar a versão do servidor` falhar (por exemplo, a rede caiu no meio do download), o conflito continua e o tooltip do ícone mostra `Não deu para baixar a versão do servidor agora.` para você tentar de novo.
 - O conflito aparece em três situações: você abre um projeto que tem mudanças pendentes e a nuvem tem versão mais nova; você envia e a nuvem responde que a versão-base ficou velha; ou você edita enquanto os áudios da nuvem ainda estavam descendo.
@@ -105,6 +105,25 @@ Se a sessão acabar (a conta foi encerrada em outro lugar), o indicador some e o
 
 Nos aparelhos que já têm o projeto, o spinner não aparece: o estúdio abre na hora com a cópia local e a conversa com a nuvem corre atrás.
 
+## Arquivo `.jopendaw` e a nuvem
+
+O arquivo `.jopendaw` ([capítulo 01](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw)) é uma cópia do projeto fora da nuvem. Ele não é outra forma de sincronizar: os dois caminhos não se falam.
+
+| Pergunta | Resposta |
+|---|---|
+| Importar um `.jopendaw` cria um projeto novo ou atualiza um existente? | **Sempre um projeto novo**, com id novo no servidor, cadastrado na conta que está logada neste aparelho. Nunca sobrescreve nem mistura com um projeto existente, nem com o de onde o arquivo saiu. |
+| O projeto importado sincroniza? | Sim, como qualquer projeto. O app abre o estúdio dele logo depois de importar; como o aparelho já tem o documento e não tem estado de sincronização, o documento vale como mudança pendente e sobe sozinho: primeiro os áudios que a nuvem ainda não tem, depois o documento (versão 1 no servidor). O ícone passa por `Sincronizando (x/y arquivos)` e chega a `Sincronizado`. |
+| Pode dar conflito de ids com o projeto original? | Não. Os ids de faixas, clipes e efeitos só precisam ser únicos **dentro** do projeto; cada projeto tem o seu documento e o seu id de servidor. O importador ainda refaz ids repetidos ou fora do padrão dentro do próprio documento. |
+| E os áudios? | Cada áudio é identificado pelo SHA-256, na conta inteira. Se o original e a cópia usam o mesmo áudio, o áudio sobe (e conta na cota de 4 GB) uma vez só. O importador também não regrava no aparelho um áudio que ele já tem. |
+| Exportar exige que o projeto esteja sincronizado? | Não. Do projeto aberto, o arquivo leva o que está na tela agora, sincronizado ou não. Na lista, leva a cópia guardada no aparelho (ou a do servidor, se o aparelho nunca abriu o projeto). Áudio que o aparelho não tem é buscado na nuvem; se nenhum dos dois tem, fica de fora e a janela avisa. |
+| Importar funciona sem rede ou sem conta? | Não. O projeto novo é cadastrado no servidor antes de tudo, e o app não passa do login sem sessão. Depois de importado, o envio do documento e dos áudios segue as regras normais: sem rede, o ícone fica `Offline` e sobe quando a rede voltar. |
+| Exportar de um projeto e importar no mesmo aparelho e conta? | Vira um segundo projeto, ` (importado)` no nome, com o mesmo conteúdo. Os áudios repetidos não ocupam cota nem espaço de novo. |
+| Levo de volta as mudanças? | Não há como fundir. Para trazer de volta o que foi mexido na cópia, exporte a cópia e importe de novo: sai mais um projeto novo. Quem precisa do **mesmo** projeto nos dois lados usa a mesma conta e a sincronização. |
+
+O que pode dar errado na primeira subida de um projeto importado (as mensagens são as de sempre, na tabela `Mensagens do estado Erro`): áudios que passam de 4 GB de cota, arquivo de áudio acima de 512 MB ou documento acima de 8 MB. O importador aceita um `project.json` de até 64 MB, então um arquivo importado com documento entre 8 e 64 MB abre no aparelho e depois fica no estado `Erro` (`documento grande demais (máximo de 8 MB)`) `(deduzido do código; não testado com um arquivo assim)`.
+
+Conflito só aparece se outro aparelho abrir o projeto recém-importado e editar antes de o aparelho que importou terminar a primeira subida: os dois lados terão mudado, como no caso do modelo descrito no [capítulo 01](01-projetos-modelos-conta.md). Evite abrir o projeto novo em outro aparelho antes de o ícone mostrar `Sincronizado`.
+
 ## Passo a passo
 
 **Continuar no computador o que começou no celular**
@@ -137,12 +156,14 @@ Nos aparelhos que já têm o projeto, o spinner não aparece: o estúdio abre na
 - [01 Projetos, modelos e conta](01-projetos-modelos-conta.md): entrar na mesma conta nos dois aparelhos; o modelo é aplicado só no aparelho que criou.
 - [03 Áudio e clipes](03-audio-e-clipes.md) e [03c Gravação](03c-gravacao.md): de onde vêm os áudios que sobem.
 - [08 Exportação](08-exportacao.md): guardar o som do que está no aparelho antes de decidir um conflito.
+- [01 Projetos, modelos e conta](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw): o arquivo `.jopendaw`, cópia do projeto que não depende da nuvem.
+- [Guia: backup e levar o projeto para outro aparelho](../guias/backup-e-levar-projeto-para-outro-aparelho.md): quando usar o arquivo e quando usar a sincronização.
 - [09 Configurações, atalhos e Android](09-configuracoes-atalhos-android.md): onde ficam os dados locais em cada plataforma.
 
 ## Limites e pegadinhas
 
 - **Não há atualização ao vivo.** O app não fica perguntando à nuvem se outro aparelho mudou o projeto. A versão nova é buscada quando você abre o projeto (ou volta ao app com algo por resolver); se você deixar dois aparelhos abertos no mesmo projeto e editar nos dois, o conflito só aparece quando o segundo tentar enviar.
-- **Sem histórico de versões.** A nuvem guarda só a versão atual do documento; `Manter esta e enviar` e `Usar a versão do servidor` são definitivos.
+- **Sem histórico de versões.** A nuvem guarda só a versão atual do documento; `Manter esta e enviar` e `Usar a versão do servidor` são definitivos. Um `.jopendaw` exportado antes de decidir é a forma de guardar uma versão que a nuvem vai perder.
 - **Dados só do aparelho** (não sincronizam): zoom e rolagem, altura das faixas, seleção, grade de encaixe, altura do painel inferior, a entrada de áudio escolhida, o estado do teclado do computador e do MIDI.
 - **O que fica só no aparelho se nunca sincronizar é seu risco:** limpar os dados do site no navegador ou desinstalar o app no Android apaga o que ainda não subiu. O app Android não participa do backup automático do sistema (`allowBackup` desligado no manifesto).
 - **Aparelho com documento local mas sem registro de sincronização** (por exemplo, dados de uma versão antiga): o app trata o documento como mudança pendente e o envia; se a nuvem já tiver uma versão, aparece o conflito.

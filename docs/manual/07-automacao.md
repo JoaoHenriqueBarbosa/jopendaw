@@ -2,6 +2,14 @@
 
 > Desenhar, na linha do tempo, como um controle muda ao longo da música (volume, pan, nível de envio e qualquer parâmetro de instrumento ou de efeito); use para fades, varreduras de filtro, entradas e saídas de reverb.
 
+![Botão A da faixa: o menu de alvos da automação (Volume, Pan, instrumento e cada efeito da cadeia).](../img/automacao-menu-alvo.jpg)
+
+*Botão A da faixa: o menu de alvos da automação (Volume, Pan, instrumento e cada efeito da cadeia).*
+
+![Raia de automação de volume com pontos e curvas entre eles; o rótulo mostra a posição e o valor do ponto sob o cursor.](../img/automacao-volume.jpg)
+
+*Raia de automação de volume com pontos e curvas entre eles; o rótulo mostra a posição e o valor do ponto sob o cursor.*
+
 ## Onde fica
 
 - **Botão `A`** no cabeçalho de cada faixa na linha do tempo (à direita de `S` e do botão de armar), e no cabeçalho do `Master`, no fim da lista de faixas. Tooltip: `Automação`, ou `Automação (N)` quando a faixa já tem N automações.

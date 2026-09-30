@@ -2,12 +2,17 @@
 
 > Como entrar no jopendaw, criar, renomear e apagar projetos, o que cada um dos três modelos monta de saída, e o que a tela `Conta` faz. É o primeiro capítulo prático: em dois minutos você tem um projeto tocando.
 
+![Diálogo Novo projeto, com o nome e os três pontos de partida (Vazio, Batida eletrônica, Gravação de banda).](../img/novo-projeto.jpg)
+
+*Diálogo Novo projeto, com o nome e os três pontos de partida (Vazio, Batida eletrônica, Gravação de banda).*
+
 ## Onde fica
 
 - **Entrar:** é a primeira tela quando não há sessão (`/login`). Qualquer endereço do app sem sessão cai aqui e, depois de entrar, você volta para onde ia.
 - **Projetos:** botão `Projetos` do rail lateral (computador, 800 px ou mais) ou da barra inferior (celular). É a tela inicial depois de entrar.
 - **Conta:** botão `Conta` do mesmo rail ou barra.
 - **Novo projeto:** botão `Novo projeto` na barra da página (computador) ou botão flutuante (celular). Quando a lista está vazia há também `Criar o primeiro`.
+- **Projeto em arquivo (`.jopendaw`):** `Importar projeto` na barra da página `Projetos` (texto no computador; só o ícone de seta para cima, com o tooltip `Importar projeto`, no celular; na lista vazia, também ao lado de `Criar o primeiro`). `Exportar projeto…` no menu `Mais` do card. Dentro do projeto, `Exportar` na barra de transporte e, na janela `Exportar áudio`, o botão `Projeto inteiro (.jopendaw)…`. Detalhes na seção [Projeto em arquivo (.jopendaw)](#projeto-em-arquivo-jopendaw).
 
 ## Controles
 
@@ -71,8 +76,9 @@ O título é `Projetos`; embaixo, o total (`1 projeto`, `3 projetos`). Os cards 
 |---|---|---|---|
 | `Novo projeto` | Abre o diálogo `Novo projeto` | Fica desligado enquanto uma ação roda | |
 | `Criar o primeiro` | Mesmo diálogo, na lista vazia | Aparece com o título `Nenhum projeto ainda` e o texto `Um projeto guarda as faixas, os clipes e a mixagem de uma música.` | |
+| `Importar projeto` | Escolhe um arquivo `.jopendaw` e cria um projeto novo com ele ([seção abaixo](#projeto-em-arquivo-jopendaw)) | Fica desligado enquanto uma ação roda. No celular é só o ícone, com o tooltip `Importar projeto` | Nunca sobrescreve um projeto existente |
 | Card do projeto | Clicar abre o projeto (estúdio) | Mostra o nome, `120 BPM · 4/4 · 48.0 kHz` e `Mexido agora` / `Mexido há N min` / `Mexido há N h` / `Mexido dd/mm` | O `kHz` é o cadastrado no servidor (48.0 nos projetos criados pelo app) |
-| Menu `Mais` (três pontos do card) | `Renomear` e `Apagar` | | |
+| Menu `Mais` (três pontos do card) | `Renomear`, `Exportar projeto…` e `Apagar` | | `Exportar projeto…` gera o arquivo `.jopendaw` ([seção abaixo](#projeto-em-arquivo-jopendaw)) |
 | `Renomear` | Abre `Renomear projeto` (campo `Nome`, botão `Salvar`) | Até 120 caracteres | Só salva se o nome mudou e não ficou vazio |
 | `Apagar` | Pede confirmação: `Apagar "<nome>"?` / `O projeto some para sempre, com tudo o que estiver nele.` | Botões `Cancelar` e `Apagar` (vermelho) | Depois: `Projeto apagado.` |
 | `Tentar de novo` | Recarrega a lista quando deu erro | Erro na tela: `Não deu para carregar` | Sem rede: `Sem conexão com o servidor. Tente de novo.` |
@@ -189,10 +195,111 @@ A sessão dura até 30 dias sem uso e, no máximo, 90 dias de qualquer forma; o 
 1. Abra `Conta` e toque em `Sair de todos os aparelhos`.
 2. Confirme em `Sair de todos`. Você cai no login; nos outros aparelhos a sessão acaba na próxima chamada.
 
+## Projeto em arquivo (.jopendaw)
+
+> Um único arquivo com o projeto inteiro (faixas, clipes, mixagem e os áudios) para guardar como backup, levar a outro aparelho ou conta e enviar a outra pessoa, sem depender da sincronização pela nuvem.
+
+O arquivo `.jopendaw` é um pacote zip com o documento do projeto e os áudios dentro. O nome sai do nome do projeto (`Minha música` vira `Minha música.jopendaw`). Ele serve para três coisas: **backup** (uma cópia congelada que nenhuma edição altera), **levar** o projeto para outro aparelho ou outra conta e **enviar** o projeto a um colaborador. Passo a passo de cada uso: [guia Backup e levar o projeto para outro aparelho](../guias/backup-e-levar-projeto-para-outro-aparelho.md).
+
+### Onde ficam os botões
+
+| Onde | Rótulo exato | O que faz | Quando fica desligado |
+|---|---|---|---|
+| Barra de transporte do projeto aberto: `Exportar` > janela `Exportar áudio` | `Projeto inteiro (.jopendaw)…` (botão de texto no rodapé da janela, à esquerda de `Cancelar`) | Fecha a janela `Exportar áudio` e abre a janela `Exportar projeto` com o projeto **como está agora na tela** | O `Exportar` da barra fica desligado durante a gravação (tooltip `Pare a gravação para exportar`) e enquanto há outro trabalho em andamento (o texto com a roda girando na barra); sem ele a janela nem abre |
+| Tela `Projetos`, menu `Mais` do card | `Exportar projeto…` | Abre a mesma janela, para um projeto que não está aberto | Não fica desligado |
+| Tela `Projetos`, barra da página (computador) | `Importar projeto` (ícone de seta para cima) | Escolhe um arquivo e cria um projeto novo | Enquanto uma ação da tela roda |
+| Tela `Projetos`, barra da página (celular) | Só o ícone, tooltip `Importar projeto` | O mesmo | O mesmo |
+| Tela `Projetos` vazia (`Nenhum projeto ainda`) | `Importar projeto` (botão contornado ao lado de `Criar o primeiro`) | O mesmo | O mesmo |
+
+A barra de transporte não tem mais um botão só para o projeto: ele fica dentro da janela `Exportar áudio`, que abre no botão `Exportar` (ícone de disquete, tooltip `Exportar a música (e as faixas separadas) em WAV`). O `Exportar` em si é outra coisa: gera **som** (WAV), não o projeto editável ([capítulo 08](08-exportacao.md)). Escolher `Projeto inteiro (.jopendaw)…` não guarda as opções do WAV nem começa a exportar áudio: a janela de opções fecha e só a do arquivo do projeto continua.
+
+### Janela `Exportar projeto`
+
+A janela não fecha clicando fora dela. Ela roda sozinha assim que abre:
+
+| Momento | O que aparece |
+|---|---|
+| Começo | `Preparando…` e uma barra de progresso |
+| Juntando os áudios | `Reunindo os áudios: 3 de 12` (a barra avança) |
+| Sem nenhum áudio no projeto | `Montando o arquivo…` |
+| Entregando o arquivo | `Salvando…` |
+| Terminou | `Pronto: Minha música.jopendaw (12 áudios).` e a nota `Guarda as faixas, os clipes, a mixagem e os áudios do projeto.`; botão `Fechar` |
+| Faltou áudio | Aviso em cima da nota: `1 áudio não está neste aparelho nem no servidor e ficou de fora do arquivo: o projeto abre, mas esse som fica em silêncio.` (ou `N áudios não estão…`) |
+| Erro | O motivo na janela (ex.: `Não deu para exportar o projeto: …`) e o botão `Tentar de novo`, além de `Cancelar` |
+
+Enquanto roda, o botão `Cancelar` fica desligado: não dá para interromper a montagem, só esperar.
+
+### Passo a passo
+
+**Exportar o projeto que está aberto**
+
+1. Pare a gravação, se houver, e espere sumir o texto de trabalho em andamento na barra.
+2. Toque em `Exportar` na barra e, na janela `Exportar áudio`, em `Projeto inteiro (.jopendaw)…` (ícone de caixa; fica no rodapé, à esquerda de `Cancelar`).
+3. Espere a janela chegar a `Pronto: <nome>.jopendaw (N áudios).`.
+4. Na web, o navegador baixa o arquivo para a pasta de downloads dele (a pergunta de "onde salvar" depende da configuração do navegador). No Android abre o seletor de "salvar como" do sistema, com o título `Salvar <nome>.jopendaw`; se o aparelho não tiver um, abre a folha de compartilhar, de onde dá para mandar o arquivo para o Drive, os Arquivos ou outro app.
+5. Toque em `Fechar`.
+
+**Exportar um projeto sem abri-lo**
+
+1. Em `Projetos`, abra o menu `Mais` do card e escolha `Exportar projeto…`.
+2. Siga a janela como acima. O documento vem da cópia guardada neste aparelho; se este aparelho nunca abriu o projeto, vem do servidor (precisa de rede). Se nem o servidor tem documento ainda, a janela diz `Este projeto ainda não tem nada para exportar: abra-o e adicione algo primeiro.`
+
+**Importar um arquivo `.jopendaw`**
+
+1. Em `Projetos`, toque em `Importar projeto` (no celular, no ícone de seta para cima na barra).
+2. Escolha o arquivo no seletor (aceita `.jopendaw` e `.zip`). Cancelar o seletor não faz nada e não mostra mensagem.
+3. A tela mostra o andamento: `Conferindo o arquivo…`, `Criando o projeto…` e `Guardando os áudios: 3 de 12`.
+4. Terminando, o app abre o estúdio do projeto novo. O nome é o que estava no arquivo; se você já tem um projeto com esse nome (sem diferenciar maiúsculas), vira `<nome> (importado)`, depois `<nome> (importado 2)` e assim por diante. Arquivo sem nome vira `Projeto importado`. O nome é cortado em 120 caracteres.
+5. Deixe o ícone de nuvem chegar a `Sincronizado` antes de fechar o app ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
+
+### O que o arquivo contém
+
+- **O documento inteiro do projeto:** faixas (áudio, sintetizador, bateria, sampler, FM, wavetable, barramento), clipes de áudio (com corte, fades, ganho, warp, transposição, inversão e as tomadas de cada clipe), clipes de notas, parâmetros dos instrumentos, efeitos e bypass, envios e saída de cada faixa, automações, marcadores, loop, ganho e pan do master e a cadeia de efeitos do master.
+- **Os áudios usados:** os arquivos originais como foram importados ou gravados (mp3 continua mp3), incluindo os do sampler e as tomadas. Cada áudio entra uma única vez, mesmo usado em vários clipes ou projetos.
+- **Configurações que moram no documento:** metrônomo ligado/desligado, contagem antes de gravar, compensação de latência de gravação e o estado de armar/monitorar de cada faixa. Elas viajam junto e valem no projeto importado.
+- **Metadados:** nome do projeto, data e hora da exportação e a versão do app que exportou.
+
+### O que o arquivo NÃO contém
+
+- **Andamento e compasso do projeto como campos do servidor:** o arquivo guarda os do documento e, ao importar, eles são aplicados ao projeto novo (o andamento vira número inteiro entre 20 e 400; o compasso, entre 1 e 32). Um andamento com casas decimais é arredondado.
+- **O histórico de desfazer:** o projeto importado abre com o desfazer vazio.
+- **Os sons derivados do warp** (esticados, transpostos, invertidos): cada aparelho os refaz a partir do original, como na sincronização.
+- **Preferências do aparelho:** zoom e rolagem, altura das faixas, seleção, entrada de áudio escolhida, teclado e MIDI ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
+- **O vínculo com a nuvem:** id do projeto, versão no servidor e estado de sincronização. O projeto importado é um projeto novo, sem ligação com o original.
+- **Áudios que o aparelho exportador não tinha:** ficam de fora e o arquivo avisa (veja a janela acima). O projeto abre, mas o clipe correspondente fica em silêncio (`áudio fora deste aparelho`).
+- **Som já mixado:** não há WAV dentro. Para o som, use `Exportar` ([capítulo 08](08-exportacao.md)).
+
+### O que acontece ao importar
+
+- **Sempre um projeto novo.** Importar nunca sobrescreve nem mistura com um projeto existente. Importar o mesmo arquivo duas vezes cria dois projetos (o segundo com ` (importado)` no nome).
+- **Precisa de sessão e de rede.** O projeto novo é cadastrado no servidor antes de qualquer outra coisa ([capítulo 01b](01b-nuvem-e-sincronizacao.md) explica o envio depois).
+- **Tudo ou nada.** O arquivo é conferido inteiro antes de criar qualquer coisa. Se algo falha depois de criado o projeto (por exemplo, falta de espaço para gravar os áudios), o projeto criado é apagado; se nem isso for possível, sobra um projeto vazio na lista e você o apaga à mão.
+- **Áudio que o aparelho já tem** (mesmo conteúdo) não é gravado de novo.
+- **Ids das faixas, clipes, efeitos e marcadores** são mantidos quando são seguros e únicos dentro do projeto; os repetidos ou estranhos são refeitos, e envios, saídas e automações são reapontados juntos. Um envio para uma faixa que não existe é descartado, uma saída para faixa inexistente volta ao master e uma automação sem alvo some.
+
+### Mensagens de erro da importação
+
+Aparecem em vermelho na tela `Projetos` e nada é criado.
+
+| Mensagem | Quando |
+|---|---|
+| `O arquivo está vazio.` | Arquivo de 0 byte |
+| `Isto não parece um arquivo de projeto do jopendaw (ou ele está truncado ou corrompido).` | Não é um zip legível |
+| `Isto não parece um arquivo de projeto do jopendaw: falta o project.json.` / `... falta o manifest.json.` | Zip qualquer (ou de outro programa) |
+| `Este arquivo foi criado por uma versão mais nova do jopendaw (formato N; esta versão lê até o 1). Atualize o app para abri-lo.` | Arquivo de um app mais novo |
+| `O documento do projeto é de uma versão mais nova do jopendaw (documento N; esta versão lê até o 1). Atualize o app.` | Idem, para o documento |
+| `O arquivo está corrompido: ...` | `project.json` ou `manifest.json` ilegíveis, documento que não abre, entradas repetidas, áudio com tamanho ou sha-256 diferente do declarado |
+| `O arquivo está truncado ou incompleto: falta o áudio 1a2b3c4d….` | O manifesto lista um áudio que não está no zip (download cortado, por exemplo) |
+| `O arquivo tem nomes de caminho suspeitos e foi recusado por segurança.` / `... tem atalhos (links) dentro dele ...` | Zip montado à mão com caminhos como `../x` ou links |
+| `O arquivo é grande demais para abrir aqui.` / `O arquivo tem entradas demais para ser um projeto.` / `O conteúdo do arquivo é grande demais para abrir (possível bomba de compressão).` / `Um áudio do projeto é grande demais para abrir.` | Passou de um dos limites: arquivo de 1 GB, 2 GB descomprimidos, 512 MB por áudio, 20 000 entradas |
+| `Não deu para importar o projeto: <motivo>` | Falha de rede ou do servidor ao criar o projeto, ou ao gravar no aparelho |
+
 ## Combina com
 
 - [00 Visão geral](00-visao-geral.md): o mapa do estúdio que abre depois de criar o projeto.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o que acontece com o projeto ao mudar de aparelho.
+- [08 Exportação](08-exportacao.md): o `Exportar` em WAV gera som; o `.jopendaw` guarda o projeto editável. Um não substitui o outro.
+- [Guia: backup e levar o projeto para outro aparelho](../guias/backup-e-levar-projeto-para-outro-aparelho.md): backup periódico, migrar entre aparelhos e enviar a um colaborador.
 - [04 Painel de instrumento](04-painel-de-instrumento.md) e [04b Bateria](04b-bateria.md): para mexer nos timbres que o modelo `Batida eletrônica` monta.
 - [06 Mixer](06-mixer.md): os envios e o barramento `Reverb` dos modelos.
 - [03c Gravação](03c-gravacao.md): usar as faixas armáveis do modelo `Gravação de banda`.
@@ -206,6 +313,9 @@ A sessão dura até 30 dias sem uso e, no máximo, 90 dias de qualquer forma; o 
 - O `Email` da conta não pode ser trocado na tela `Conta`.
 - `Sair` encerra a sessão, mas não apaga do aparelho os projetos e áudios já guardados: eles continuam lá e voltam a valer quando a conta entrar de novo.
 - Os nomes de projeto não precisam ser únicos.
+- **O `.jopendaw` não é sincronização.** Importar cria uma cópia independente: mudanças feitas depois no original não chegam nela, nem o contrário. Para manter o mesmo projeto em dois aparelhos, use a conta e a nuvem ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
+- **Importar precisa de conta e de rede**, mesmo com o arquivo já no aparelho: o app não abre projeto fora de uma sessão e cadastra o projeto novo no servidor. Já exportar a partir do projeto aberto funciona sem rede se os áudios estão no aparelho.
+- **Cancelar o `salvar como` do Android** parece contar como sucesso: a janela `Exportar projeto` mostra `Pronto: ...` mesmo sem o arquivo ter sido gravado. Confira que ele apareceu na pasta escolhida. `(deduzido do código; não visto rodando)`
 
 ## Atalhos
 

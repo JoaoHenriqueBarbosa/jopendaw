@@ -6,7 +6,7 @@
 
 - **Gravar:** botão vermelho (círculo cheio) na barra do transporte, ao lado de parar e tocar. A setinha logo à direita dele (tooltip `Opções de gravação`) abre a contagem e as configurações.
 - **Armar a faixa:** cada faixa tem um ponto de gravação (`Armar para gravar`), no cabeçalho da faixa (entre `S` e `A`) e no canal do mixer. Sem faixa armada, gravar não grava nada.
-- **Monitorar a entrada:** só no canal do mixer, botão com ícone de fone (`Monitorar a entrada`), só em faixa de áudio.
+- **Monitorar a entrada:** no canal do mixer (botão com ícone de fone, `Monitorar a entrada`) e no menu de três pontos da faixa (`Monitorar a entrada`, com marca de seleção); só em faixa de áudio.
 - **Configurações de gravação:** engrenagem da barra (tooltip `Configurações: entrada de áudio, latência e contagem`) ou item `Configurações de gravação…` da setinha do botão gravar. Abre a janela `Configurações`.
 - **Teclado e MIDI:** dois ícones no meio da barra: teclado (`Tocar com o teclado do computador (Ctrl+K)`) e cabo (`Entrada MIDI: ligar teclado ou controlador`).
 
@@ -31,7 +31,7 @@ Durante a gravação ficam **travados**: mover o cursor e marcar/arrastar o loop
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | `Armar para gravar` (ponto vermelho, tooltip `Armar para gravar: ao gravar (R), o que entra no microfone vira um clipe nesta faixa` na de áudio; `... as notas que você tocar (teclado do computador ou MIDI) viram um clipe nesta faixa` na de instrumento) | Escolhe as faixas que recebem a gravação. Armar a primeira faixa de áudio **abre a entrada** (o navegador pede o microfone). Desarmar a última que precisava dela fecha a entrada | Desligado por padrão. Barramento não tem o botão. Fica no projeto, mas **fora do desfazer** | Armada: contorno vermelho; cheio enquanto grava de verdade (depois da contagem). No cabeçalho da faixa os tooltips são `Armar para gravar a entrada de áudio`, `Armar para gravar as notas (teclado ou MIDI)`, `Desarmar` e, gravando, `Gravando nesta faixa` |
-| `Monitorar a entrada` (fone azul, só faixa de áudio, só no mixer; tooltip `Monitorar a entrada: ouvir o microfone ao vivo pelos efeitos e pelo fader desta faixa (use fones, senão microfona)`) | Faz o microfone soar ao vivo na faixa, **depois dos efeitos e do fader**, sem precisar tocar nem gravar | Desligado por padrão | Use fones para não dar microfonia. Também abre a entrada; funciona com o transporte parado |
+| `Monitorar a entrada` (fone azul, só faixa de áudio; também existe no menu de três pontos da faixa; tooltip `Monitorar a entrada: ouvir o microfone ao vivo pelos efeitos e pelo fader desta faixa (use fones, senão microfona)`) | Faz o microfone soar ao vivo na faixa, **depois dos efeitos e do fader**, sem precisar tocar nem gravar | Desligado por padrão | Use fones para não dar microfonia. Também abre a entrada; funciona com o transporte parado |
 | Medidor de entrada | Mostra o nível de pico do que chega **antes de qualquer efeito** | Escala de −48 a 0 dB; verde até 70% do curso, âmbar até 88%, vermelho depois; ~30 atualizações por segundo, sobe na hora e cai devagar | Aparece só em faixa de **áudio armada**: barra vertical ao lado do fader no mixer, barra fina de 3 px no pé do cabeçalho da faixa, e a barra `Nível` na janela `Configurações` |
 | Luz de saturação (ponta do medidor) | Fica vermelha por 2 s quando o pico chega a −0,1 dBFS ou mais (já cortou no conversor) | | Tooltip `Vermelho no topo: saturou; baixe o ganho na fonte` |
 
@@ -53,9 +53,23 @@ Durante a gravação ficam **travados**: mover o cursor e marcar/arrastar o loop
 | Ícone de teclado (tooltip `Tocar com o teclado do computador (Ctrl+K)`; ligado: `Teclado do computador ligado (Ctrl+K): A a L tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%)`) | Liga as teclas como piano. Ligado, mostra a oitava no ícone (`C4`) | `A W S E D F T G Y H U J K O L P` = dó a ré# da oitava seguinte. Oitava **0 a 8**, padrão 4 (tecla `A` = dó central, nota 60). Intensidade **10% a 100%**, passo de 10%, padrão 80% | `Z`/`X` baixam/sobem a oitava; `C`/`V` diminuem/aumentam a intensidade. Segurar a tecla não reataca |
 | Ícone de cabo (tooltip `Entrada MIDI: ligar teclado ou controlador`; depois `Entrada MIDI: <nomes>` ou `MIDI ligado, nenhum aparelho conectado: conecte e ele aparece aqui sozinho`) | Pede acesso ao MIDI e passa a ouvir todos os aparelhos. O número no ícone é a quantidade de aparelhos conectados | Web MIDI **sem sysex**; aparelho que entra ou sai com a página aberta é detectado sozinho | Precisa de um clique (gesto). Negado ou sem suporte: aviso em texto |
 
-O MIDI entende: nota ligada e desligada (nota ligada com velocidade 0 vale como desligada), pedal de sustain (CC 64, ligado a partir de 64), `CC 121` (solta o pedal), `CC 120` (corta tudo na hora) e `CC 123` (todas as notas desligadas). A velocidade vem do controlador. Pitch bend, modulação e outros controles não são lidos.
+O MIDI entende, em qualquer canal (o número do canal é ignorado):
 
-**Qual faixa toca:** a faixa **selecionada**, se for de instrumento; mas havendo faixa de instrumento **armada** e a selecionada não estando armada, toca (e grava) a **primeira armada**. Armar leva a entrada para a faixa.
+| Mensagem | O que faz | Valores |
+|---|---|---|
+| Nota ligada e desligada | Toca e solta a nota (nota ligada com velocidade 0 vale como desligada) | A velocidade vem do controlador |
+| Pitch bend (`0xE0`) | Afina as notas da faixa, até o `Alcance do bend` do instrumento | 14 bits (LSB e MSB), 8192 no centro: de -1 a quase +1 (8191/8192) |
+| `CC 1` (roda de modulação) | Liga o vibrato da roda | 0 a 127, vira 0 a 1 |
+| `CC 64` (pedal de sustain) | Segura as notas soltas até o pedal subir | Embaixo a partir de 64 |
+| `CC 121` (reset dos controles) | Bend, roda e pedal voltam ao repouso, cada um na faixa em que estava | |
+| `CC 120` (all sound off) | Corta tudo na hora, inclusive as caudas, e zera bend, roda e pedal | |
+| `CC 123` (todas as notas desligadas) | Solta as notas que o MIDI estava tocando | |
+
+Outros controles não são lidos. O bend, a roda e o pedal vão para a mesma faixa das notas (regra abaixo) e, com uma gravação em andamento, são gravados junto (ver "Gravar bend, modulação e pedal"). O pedal agora é resolvido dentro do motor: as notas soltas com o pedal embaixo ficam soando até ele subir, também as tocadas pelas teclas do teclado da tela e do computador. A bateria ignora bend, roda e pedal.
+
+**Qual faixa toca:** a faixa **selecionada**, se for de instrumento; mas havendo faixa de instrumento **armada** e a selecionada não estando armada, toca (e grava) a **primeira armada**. Armar leva a entrada para a faixa. Se a entrada muda de faixa com a roda de modulação, o bend ou o pedal fora do repouso, a faixa antiga volta ao repouso.
+
+As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrumento.md#rodas-de-pitch-bend-e-de-modulação)) tocam a faixa do painel, não a regra acima; se essa faixa está armada, também são gravadas.
 
 ## Passo a passo
 
@@ -78,6 +92,12 @@ O MIDI entende: nota ligada e desligada (nota ligada com velocidade 0 vale como 
 3. Aperte `R`, espere a contagem e toque com `A W S E D F T G Y H U J K O L P`.
 4. Pare. As notas caem no clipe de notas que já estava sob o cursor (o clipe **estica em compassos inteiros** se passar do fim) ou num clipe novo que cobre os compassos gravados. Para dar outra camada, volte o cursor para dentro do mesmo clipe e grave de novo: as notas novas **somam** às antigas.
 
+**Gravar bend, modulação e pedal junto das notas**
+1. Faixa de instrumento com afinação (`Sintetizador`, `FM`, `Wavetable` ou `Sampler`) armada e um teclado MIDI ligado (ícone de cabo), ou use as duas rodas do teclado da tela (a de bend volta ao centro sozinha; a de modulação fica onde você a deixa).
+2. Aperte `R`, espere a contagem e toque mexendo a roda de bend, a de modulação e o pedal.
+3. Pare. As notas e os pontos caem no mesmo clipe. Abra-o no editor de notas e, embaixo da grade, escolha `Pitch bend`, `Modulação` ou `Sustain` no canto esquerdo da faixa para ver e editar os pontos ([Faixa de controle](05-piano-roll.md#faixa-de-controle)).
+4. Para regravar só o bend (ou só o pedal) por cima de um clipe, volte o cursor para dentro dele e grave de novo: veja as regras de overdub abaixo.
+
 **Gravar com o transporte andando**
 1. Dê play (espaço), com faixa armada.
 2. Aperte `R` no ponto onde quer começar a gravar. Não há contagem: a gravação vale a partir dali. A posição exata do início vem do primeiro bloco de áudio capturado (`recordBeat` da entrada), e não do desenho do cursor no momento do clique.
@@ -90,7 +110,9 @@ O MIDI entende: nota ligada e desligada (nota ligada com velocidade 0 vale como 
 - [Áudio para MIDI](03d-audio-para-midi.md): uma gravação de voz ou linha de baixo (que sai como WAV) pode virar notas.
 - [Mixer](06-mixer.md): efeitos, fader e envios da faixa; o monitor passa por eles.
 - [Transporte e barra de ferramentas](02-transporte.md): botão gravar, contagem, loop e a janela `Configurações`.
-- [Editor de notas (piano roll)](05-piano-roll.md): limpar, quantizar e editar as notas gravadas.
+- [Editor de notas (piano roll)](05-piano-roll.md): limpar, quantizar e editar as notas gravadas e, na faixa de controle, os pontos de bend, modulação e pedal.
+- [Painel de instrumento](04-painel-de-instrumento.md): as rodas do teclado da tela e o `Alcance do bend` de cada instrumento.
+- [Expressão MIDI na prática](../guias/expressao-midi-na-pratica.md): receitas de gravação com teclado MIDI, bend e pedal.
 
 ## Limites e pegadinhas
 
@@ -129,11 +151,25 @@ O MIDI entende: nota ligada e desligada (nota ligada com velocidade 0 vale como 
 - Tocar notas clicando no teclado do piano roll também é "ao vivo" e pode ser gravado (não confirmado).
 - `jopendawEngine.injectMidi(status, d1, d2)` (no console do navegador, só na web) injeta uma mensagem MIDI pelo mesmo caminho de um aparelho: por exemplo `jopendawEngine.injectMidi(0x90, 60, 100)` liga o dó central e `jopendawEngine.injectMidi(0x80, 60, 0)` desliga. **É só para teste e depuração**, sem hardware. Só chega depois de ligar o MIDI (ícone do cabo) (não confirmado sem isso).
 
+**Gravação de bend, modulação e pedal**
+- Os controles chegam ao motor pela mesma via das notas ao vivo (`live_bend`, `live_cc`) e são registrados com a batida exata em que ele os aplicou, **só com o transporte tocando**. O motor guarda até **32.768 eventos de controle** por gravação, numa cota à parte das 16.384 notas: uma roda mexida a fundo não toma o lugar das notas. Passou disso, os novos são descartados.
+- O que entra no clipe: um ponto por mudança de valor (bend de -1 a 1; modulação de 0 a 1; pedal solto ou embaixo), com a batida contada do começo do clipe. A gravação é **afinada** antes de entrar: por controle, no máximo um ponto a cada 1/48 de batida (uns 10 ms a 120 bpm; dentro dessa janela vale o valor mais recente), sem repetir o valor anterior, sem o primeiro ponto se ele só confirma o repouso, e o último valor (onde a roda parou) sempre fica. O pedal guarda só as mudanças de estado.
+- O que se tocou **na contagem** fica de fora (as notas da contagem têm regra própria, acima).
+- **Pedal fechado no fim:** se o pedal estava embaixo quando a gravação parou, o clipe ganha um ponto de subida no ponto de parada (nunca menos de 1/16 de batida depois do último evento, para o pedal não ter duração zero). Bend e modulação não ganham ponto de retorno: a última posição da roda fica no clipe, e ao chegar ao fim do clipe o motor os devolve ao repouso.
+- **Overdub:** gravando sobre um clipe existente, para cada controle que você mexeu, os pontos velhos **do mesmo controle** no trecho tocado (do primeiro ao último ponto novo dele) são substituídos pelos novos; os outros controles e os pontos fora do trecho ficam. Notas novas somam às antigas, como sempre. Se o clipe estica para a esquerda para caber a gravação, os pontos velhos vão junto.
+- **Só controles, sem nenhuma nota:** os pontos entram no clipe que estava sob o cursor (útil para gravar só o pedal por cima de notas que já existem). Sem clipe ali **nada é criado** e o app não avisa (o aviso `Nenhuma nota foi tocada…` só sai quando não houve nota nem controle).
+- **Em loop**, só a **última passada** vale para os controles (as passadas anteriores cobrem as mesmas batidas com outra curva, e curvas intercaladas dariam tremor); as notas de todas as passadas continuam entrando.
+- Gravar só considera faixas de instrumento **armadas**; pontos de faixa desarmada ou inexistente são ignorados.
+- A bateria ignora os controles ao tocar, mas a gravação os registra do mesmo jeito (o clipe da bateria fica com pontos que não soam nada) (não confirmado).
+- Se a roda de modulação já estava levantada quando você apertou gravar, o motor grava só o que muda depois: o valor inicial não entra no clipe (não confirmado).
+- Teste sem hardware (só web, depois de ligar o MIDI): `jopendawEngine.injectMidi(0xE0, 0, 96)` manda um pitch bend de meio alcance para cima (14 bits: MSB 96, LSB 0 = 12288, ou +0,5); `jopendawEngine.injectMidi(0xB0, 1, 127)` levanta a roda de modulação; `jopendawEngine.injectMidi(0xB0, 64, 127)` desce o pedal e `jopendawEngine.injectMidi(0xB0, 64, 0)` o solta (não confirmado).
+
 **Teclado do computador ocupa atalhos**
 - Com o teclado ligado, as letras de nota (`A W S E D F T G Y H U J K O L P`) e `Z X C V` são consumidas por ele: `S` (cortar no cursor), `E` (editor), `F` (efeitos), `L` (loop), `C` (metrônomo), `X` (mixer) e `Z` (enquadrar) **deixam de funcionar** como atalhos. `R`, `M`, `I`, espaço e `Enter` continuam. Com `Ctrl`/`⌘` apertado, as teclas voltam a ser atalhos. Desligue o teclado (`Ctrl+K`) para usar os atalhos de letra.
 
 **Diferenças entre web e Android**
 - Web: entrada pelo `getUserMedia` do navegador, captura em blocos de 4096 quadros (uns 85 ms a 48 kHz). Android: entrada nativa (AAudio) do aparelho, MIDI pelo plugin de MIDI do app.
+- Bend (`0xE0`), modulação (`CC 1`) e pedal (`CC 64`) chegam pelo mesmo caminho nas duas plataformas: o Web MIDI do navegador e o plugin de MIDI do app no Android entregam a mensagem à mesma função do app, que a passa ao motor (o WASM na web, `libjopendaw_engine.so` no Android), com a mesma cota de 32.768 eventos por gravação. Este trecho vem da leitura do código e dos testes; nenhuma das duas plataformas foi conferida com um controlador de verdade (não confirmado).
 - Em Firefox o navegador não converte taxa: se a entrada estiver numa taxa diferente do motor, o app manda ajustar nas configurações de som do sistema (`A entrada de áudio está em <taxa> Hz e o motor em <taxa> Hz…`).
 
 ## Atalhos

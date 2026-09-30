@@ -30,6 +30,8 @@ Não há CI no repositório (nenhum `.github/`): quem roda os checks é quem mex
 | `engine/build-web.sh` | compila o motor para WASM e copia para `app/web/engine/engine.wasm`. |
 | `engine/build-android.sh` | compila os três ABIs, confere os símbolos exportados e copia para `app/android/app/src/main/jniLibs/`. |
 | `docker-compose.yml` | `db` (Postgres 17, `jopendaw-pg`), `minio` + `minio-init`, `api`, `web`. |
+| `server/Dockerfile`, `.dockerignore` | imagem da API; contexto = a raiz do repositório (`docker build -f server/Dockerfile .`, ou o `api` do compose). Copia o workspace inteiro (inclusive `engine/`) para o cargo carregar os membros. |
+| `app/Dockerfile`, `app/nginx.conf.template` | imagem do app web (Flutter 3.47.4 + nginx); contexto = `app/`. O nginx faz proxy de `/api/` com corpo de até 600 MB. |
 | `tool/cdp.mjs` | cliente CDP sem dependências (Node 22 ou mais novo) para o Chrome de depuração. |
 | `app/test/` | testes de unidade e de widget (`fake_engine.dart`, `fake_sync_api.dart`, `native/fake_engine.c`). |
 | `app/integration_test/` | `engine_test.dart` (motor nativo no Android) e `platform_test.dart` (ponte com o Android). |
@@ -48,6 +50,7 @@ docker-compose up -d minio minio-init                    # (opcional) S3 local: 
 ```
 
 - O compose não monta o `schema.sql` no `initdb` porque o colima não enxerga `/Volumes`.
+- Imagens Docker (opcional): `docker-compose up --build` constrói a `api` (`server/Dockerfile`, contexto na raiz) e a `web` (`app/Dockerfile`, contexto `app/`) e sobe tudo, com a API em :8080 e o nginx em :8081. O contexto da API é a raiz porque o workspace lista `engine/`, `engine/wasm` e `engine/android`; o `Dockerfile` copia `engine/` por causa disso (desde `0c0593e`; antes dele o build da imagem não achava os manifestos dos membros do workspace). O `.dockerignore` da raiz mantém fora `target/`, `app/`, `dumps/`, `**/.env`, `.git/`, `.claude/`, `docs/`, `engine/target/` e `node_modules/`. Não rodei esse build ao atualizar este capítulo.
 - Depois de mudar o schema em produção/dev, rode o script idempotente de `db/migrations/` (hoje: `docker exec -i jopendaw-pg psql -U jopendaw -d jopendaw < db/migrations/2026-09-30-fase6.sql`).
 - `server/.env` precisa de `JWT_SECRET` (32+ caracteres) e `JMAIL_API_KEY`. Sem eles o servidor não sobe (`server/src/config.rs`). Para usar áudio no MinIO local, descomente as linhas `S3_*` do `.env.example` (`S3_ENDPOINT=http://localhost:9000`, `S3_BUCKET=jopendaw`, `S3_ACCESS_KEY=jopendaw`, `S3_SECRET_KEY=jopendaw-minio-dev`); sem `S3_ENDPOINT` os áudios vão para `DATA_DIR` em disco.
 
@@ -82,6 +85,7 @@ Notas:
 - Estilo: `rustfmt` com largura 160. O clippy roda com `-D warnings`.
 - `cargo test` usa o perfil `test` (`opt-level = 2`, `Cargo.toml`), então os testes de DSP não são lentos como no `dev`.
 - **Alocação no caminho de áudio.** `engine/src/testalloc.rs` é um alocador global só de testes que conta as alocações da thread; `fm.rs` e `wavetable.rs` o usam para provar que `render` não aloca (`fm.rs:1187`, `wavetable.rs:1364`). Detalhes em [01-motor.md](01-motor.md).
+- **Testes novos da fase 8.** Motor: `loudness.rs` (medidor; inclui a prova de que não aloca, com `testalloc`), `sampler_zones_tests.rs` (zonas e fatiamento; idem) e `expression_tests.rs` (bend, roda de modulação e pedal); todos rodam no `cargo test -p jopendaw-engine`. Ponte Android: `zone_add_cabe_com_os_16_argumentos` em `engine/android/src/call.rs` (o limite de argumentos da fila subiu de 12 para 16 em `6f3d245`). App: `loudness_test.dart`, `export_loudness_test.dart`, `project_file_test.dart` (o `.jopendaw`), `sampler_zones_test.dart`, `expression_test.dart` e `piano_roll_cc_test.dart`. Esses testes passam sem os binários novos do motor (o app usa o motor falso), então **teste verde não prova que o `engine.wasm` e os `.so` commitados conhecem as chamadas novas**: veja a armadilha "Binários do motor atrás do código".
 - **Servidor.** Sem `TEST_DATABASE_URL` cada teste de rota se declara pulado e passa; então "passou" sem a variável não prova nada sobre rotas. O banco tem de ser à parte (`jopendaw_test`), nunca o de desenvolvimento: os testes criam contas e tarefas.
 
   ```bash
@@ -123,6 +127,20 @@ flutter build apk --debug --dart-define=API_BASE=http://10.0.2.2:8080   # APK de
   - `engine_native_test.dart` compila `test/native/fake_engine.c` com o `cc` do sistema para conferir a fronteira do `dart:ffi` no computador (ponteiros, cópias, memória, isolates, polling); sem compilador esses testes são pulados.
   - `engine_ffi_test.dart` confere o plano de render contra o `render-worker.js` pelo `node` quando há `node` (senão pula, `skip: 'sem node para rodar o render-worker.js'`).
   - Testes de contrato garantem que as tabelas do Dart batem com o motor (`effects_contract_test.dart`; os testes Rust dos instrumentos leem `instruments.dart`).
+- **Testar no navegador, não só na VM do Dart.** `flutter test` roda na VM do Dart, onde o `int` tem 64 bits; no navegador (dart2js) o `int` é um número de JavaScript e os operadores de bit (`<<`, `>>`, `&`, `|`, `^`, `~`) valem 32 bits. Por isso a VM não pega bugs como o do `606664f` (`1 << 62` virava 0 na web e o `Fatiar sample…` nunca achava cortes; ver a armadilha em [10 App Flutter](10-app-flutter.md#armadilhas-conhecidas)). Para a lógica numérica (fatiamento, limites, conversões de bytes, máscaras), rode também no Chrome:
+
+  ```bash
+  cd app
+  flutter test --platform chrome test/sampler_zones_test.dart
+  ```
+
+  O comando existe e funciona neste projeto (Flutter 3.47.2, Google Chrome instalado; o Flutter abre um Chrome próprio, sem relação com o de depuração da 9222). Ele compila os testes com o compilador de desenvolvimento (DDC), não com o dart2js do `build web --release`, mas a aritmética de inteiros é a mesma; nada substitui o teste de uso no build de release. Conferido em 2026-09-30, arquivo por arquivo (`flutter test --platform chrome test/<arquivo>`), **a suíte inteira não roda no Chrome**:
+  - **Passam no Chrome:** `automation_math_test`, `export_loudness_test`, `export_test`, `keyboard_test`, `loudness_test`, `midi_tools_test`, `notes_test`, `recording_test`, `sync_test`, `templates_test`, `warp_test`, `wav_test`, `wavetable_shape_test`.
+  - **Não compilam para a web** (usam `dart:ffi` por `engine_ffi.dart`, ou `AudioEngine.instance.log`/`e.log`, que só existe no motor falso do lado `dart:io`): `automation_lane_test`, `controller_test`, `effects_contract_test`, `effects_controller_test`, `engine_ffi_test`, `engine_native_test`, `expression_test`, `fm_wavetable_test`, `live_value_test`, `local_store_test`, `overlap_test`, `recording_ui_test`, `reorder_test`, `structure_test`, `studio_test`.
+  - **Compilam e falham:** `sampler_zones_test` (28 passam, 1 falha: `documento sem zonas fica byte a byte como antes` compara o JSON como texto, e no navegador o `jsonDecode` reordena as chaves numéricas de `params`, então `"0","7","6",...` vira `"0","1","2",...`; a falha é da comparação de texto, não do app), `project_file_test` (33 passam, 3 falham, pela mesma ordem de chaves), `piano_roll_test` e `rack_test` (`Unsupported operation: Platform._environment` no `setUpAll`), `piano_roll_cc_test` (1 passa, 10 falham) e `piano_roll_tools_test` (4 passam, 17 falham), ambos com `variant: TargetPlatform.macOS`, causa não investigada `(não confirmado)`.
+  - **Só roda na VM por natureza:** `web_int_safety_test` lê `app/lib/` com `dart:io` (`Unsupported operation: _Namespace` no Chrome); ele é justamente o teste que compensa a VM.
+
+  Na prática: ao mexer em lógica numérica pura (`sampler_zones.dart`, `wav.dart`, `loudness.dart`, `midi_tools.dart`, `project_file.dart`), rode o arquivo de teste correspondente com `--platform chrome` se ele estiver na lista dos que rodam ou compilam; se o arquivo não roda no Chrome, escreva o caso numérico num teste pequeno sem `dart:io`, `dart:ffi` nem motor falso (como `automation_math_test`), para poder rodá-lo nos dois lados. Tornar a suíte toda verde no Chrome não foi feito.
 - Versão do Flutter: o `app/Dockerfile` fixa `FLUTTER_VERSION=3.47.4`; a máquina local tem 3.47.2 (no dia desta escrita). O `pubspec.yaml` pede `sdk: ^3.13.2`.
 - O nome do pacote para importar nos testes é `jopendaw_app`.
 - `flutter build web --release` não é obrigatório para o servidor de desenvolvimento subir, mas sem ele a API não publica frontend algum (`JOPENDAW_STATIC` inexistente).
@@ -302,6 +320,7 @@ TEST_DATABASE_URL=... cargo test -p jopendaw-server
 (cd app && flutter analyze && flutter test)
 ./engine/build-web.sh && ./engine/build-android.sh          # se mexeu em engine/
 (cd app && flutter build web --release)                     # então: uso real no Chrome
+docker-compose up --build                                   # (opcional) imagens da api e da web; API em :8080, nginx em :8081
 (cd app && flutter build apk --debug --dart-define=API_BASE=http://10.0.2.2:8080)   # então: emulador
 ```
 
@@ -331,6 +350,10 @@ Este capítulo é o "como testar". Um roteiro mínimo para uma mudança típica:
 - O `grant` do `cdp.mjs` só vale enquanto o processo roda; se ele terminar, a permissão some e o aviso do navegador volta a travar a automação.
 - `sleep` longo em primeiro plano é bloqueado no ambiente do agente; use `until curl ...; do sleep 3; done`.
 - Duas abas no mesmo projeto: conflito de sincronização legítimo.
+- Bug que só existe no navegador (operador de bit de 32 bits do dart2js, `int` além de 2^53) não aparece em `flutter test`, que roda na VM de 64 bits: rode a lógica numérica com `flutter test --platform chrome` (ver o item 5) e confirme no build web no Chrome.
 - O motor só roda no navegador e no Android: `flutter test` no computador usa motor falso (e `AudioEngine.supported` é falso fora desses dois).
+- **Binários do motor atrás do código.** Caso real da fase 8, resolvido em `357b6fc`: `dca27bc`, `b6b7abb`, `6f3d245` e `b7e802e` mexeram em `engine/` sem recompilar `engine.wasm` nem os `.so` (última recompilação antes disso: `f1cfbaa`, fase 7; conferido com `git log`), e só o commit de integração `357b6fc` recompilou os quatro binários e ampliou a lista `want` do `build-android.sh` (`jd_loudness`, `jd_stretch`, `jd_detect_bpm`). O `build-android.sh` confere os símbolos `jd_*` exportados, mas nenhum passo confere que o `.wasm` commitado está em dia com o código do motor: depois de mexer em `engine/`, confira com `git log -1 -- app/web/engine/engine.wasm` contra `git log -1 -- engine/src`.
+- **Build da imagem Docker da API.** Resolvido em `0c0593e`: o `server/Dockerfile` copiava só os manifestos do servidor e o cargo não carregava o workspace (faltavam os membros `engine`, `engine/wasm`, `engine/android`). Se um membro novo entrar em `Cargo.toml`, copie-o no Dockerfile também.
+- **Upload grande pelo nginx.** Resolvido em `0c0593e`: o padrão de 1 MB do nginx cortaria `PUT` de áudio e de documento acima disso; o `location /api/` agora aceita 600 MB. Quem testa upload contra o compose deve usar a porta 8081 (nginx), não a 8080: a 8080 (API direta) nunca teve esse limite.
 - Detecção de BPM: exata em 75–140 BPM; nos extremos erra por oitava (65 vira 130, 170 vira 85, 190 vira 95; o diálogo tem ÷2/×2). Ao testar com os `tempo*.wav`, é o resultado esperado.
 - Ferramentas MIDI e marcadores foram testadas de forma parcial no Chrome até a fase 7; ao dar uma fase por pronta, cubra os casos longos, extremos e negativos, e os dois lados (Chrome e Android).

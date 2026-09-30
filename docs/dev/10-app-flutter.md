@@ -2,7 +2,7 @@
 
 > Para quem mexe no app (`app/lib/`): como as telas se ligam, o formato exato do documento do projeto (o JSON que vai para o disco do aparelho e para o servidor), o que o `DawController` faz a cada edição e o passo a passo para acrescentar instrumento, efeito ou parâmetro.
 
-Citações `arquivo:linha` valem para o estado do repositório em 30/09/2026 (commit `9a790a2` mais a documentação); as linhas andam, o nome do símbolo é o que vale.
+Citações `arquivo:linha` valem para o estado do repositório em 30/09/2026 (commit `357b6fc` mais a documentação); as linhas andam, o nome do símbolo é o que vale.
 
 ## Visão geral
 
@@ -84,8 +84,8 @@ Chaves do `LocalStore` usadas pelo app:
 
 | Chave | Valor | Quem grava |
 |---|---|---|
-| `doc:<projectId>` | JSON do `DawDoc` (texto) | `DawController._save` |
-| `sample:<sha256>` | bytes do arquivo de áudio como foi importado ou gravado | importar, gravar, congelar, baixar do servidor |
+| `doc:<projectId>` | JSON do `DawDoc` (texto) | `DawController._save`; `importProjectBundle` (a primeira gravação de um projeto importado) |
+| `sample:<sha256>` | bytes do arquivo de áudio como foi importado ou gravado | importar, gravar, congelar, baixar do servidor, importar `.jopendaw` (`importProjectBundle`, só se a chave ainda não existe) |
 | `sync:<projectId>` | `{"version": int, "dirty": bool}` | `SyncService._persist` |
 | `template:<projectId>` | nome do modelo escolhido ao criar o projeto (apagada na 1ª abertura) | `projects_screen`, `_fromTemplate` |
 | `rec:input` | id da entrada de áudio escolhida | `_chooseInput` |
@@ -218,7 +218,7 @@ Nota: `pitch` (int; só 0..127 toca, fora disso é ignorada por `flattenNotes`),
 | `level` | número | sim | `0.5` ao criar (−6 dB) | ganho linear, 0..2 |
 | `pre` | bool | não | `false` | antes do fader da faixa |
 
-Um envio cujo `target` não existe, não é barramento, é a própria faixa ou fecharia um ciclo continua no documento mas **não vai ao motor** (`_routeIndex`, `controller.dart:1048`).
+Um envio cujo `target` não existe, não é barramento, é a própria faixa ou fecharia um ciclo continua no documento mas **não vai ao motor** (`_routeIndex` em `controller.dart`).
 
 #### Faixa de automação (`AutoLane`, `model.dart:255`)
 
@@ -296,11 +296,11 @@ Vivem só no controlador: seleção (`selectedClip`, `selectedTrack`, `selectedM
 ### Duas armadilhas de compatibilidade do esquema
 
 1. **Tipos de faixa novos em app velho.** `TrackKind.parse` devolve `audio` para um `kind` que a versão não conhece. Um app antigo que abre um projeto com faixa `fm`/`wavetable` a lê como `audio`, e ao salvar **regrava `audio`**, perdendo o tipo (aconteceu com um APK velho instalado por engano em 30/09/2026, segundo as notas de processo). `AutoKind.byName` é o oposto: lança, e o documento não abre.
-2. **Sidechain é índice de faixa, não id.** O parâmetro `10` do compressor e o `6` do gate guardam o **índice** da faixa-chave (−1 = desligado, faixa `-1..63` na tabela). Por isso `removeTrack`, `duplicateTrack`, `moveTrack` e o congelar reescrevem esses valores (`_remapSidechains`, `controller.dart:1680`). Editar o documento por fora (ou mesclar dois documentos) exige o mesmo cuidado.
+2. **Sidechain é índice de faixa, não id.** O parâmetro `10` do compressor e o `6` do gate guardam o **índice** da faixa-chave (−1 = desligado, faixa `-1..63` na tabela). Por isso `removeTrack`, `duplicateTrack`, `moveTrack` e o congelar reescrevem esses valores (`_remapSidechains` em `controller.dart`). Editar o documento por fora (ou mesclar dois documentos) exige o mesmo cuidado.
 
 ## Fluxo de dados / ciclo de vida do `DawController`
 
-O controlador (`daw/controller.dart`, ~4 200 linhas) é criado por `ProjectScreen.reload` (`DawController(project)..open()`) e descartado no `dispose` da tela. Construtor: `DawController(project, {engine, store, api, canSync, syncTimeScale})`; os quatro últimos existem para os testes (`FakeEngine`, servidor falso).
+O controlador (`daw/controller.dart`, ~4 400 linhas) é criado por `ProjectScreen.reload` (`DawController(project)..open()`) e descartado no `dispose` da tela. Construtor: `DawController(project, {engine, store, api, canSync, syncTimeScale})`; os quatro últimos existem para os testes (`FakeEngine`, servidor falso).
 
 ### Grupos de métodos (seções do arquivo)
 
@@ -323,16 +323,16 @@ O controlador (`daw/controller.dart`, ~4 200 linhas) é criado por `ProjectScree
 | visão (`:3945`) | zoom, rolagem, enquadrar |
 | marcadores e seções (`:4016`) | `addMarker`, `moveMarker`, loops por seção/marcadores/seleção |
 
-### `open()` (`controller.dart:587`)
+### `open()` (`DawController.open` em `controller.dart`)
 
 1. Confere `_engine.supported`; `_engine.start()` devolve a taxa do motor (`engineRate`).
 2. Lê `doc:<id>` do `LocalStore`. Se existe, `DawDoc.fromJson`. Senão `_fromTemplate()`: se há `template:<id>` (modelo escolhido ao criar; apagado na hora), `ProjectTemplate.build`; senão `_fresh()` (uma faixa `Áudio 1`, `loop_end = beats_per_bar * 4`). O modelo `Vazio` da tela de projetos **não** grava `template:<id>`, então cai em `_fresh()`.
 3. Sobrescreve `doc.bpm` e `doc.beatsPerBar` com os do projeto (servidor).
 4. Carrega cada áudio de `doc.samples` (`sample:<hash>` → `_engine.decode` → `_register`, que atribui um id inteiro ao hash em `_sampleIds`, manda ao motor e desenha a forma de onda). Áudio ausente do aparelho entra em `missing`.
-5. Sincronização: `sync.start(localExisted: ...)`. **Espera de até 25 s** (`controller.dart:611`–`621`) quando `saved is! String && !_templated && _canSync()`, isto é, projeto sem documento local, sem modelo e com sessão: nesse caso o projeto pode existir só no servidor (criado em outro aparelho) e o spinner só termina depois da primeira conversa (documento + áudios). Ver [12 Sincronização](12-sincronizacao.md). Nos demais casos a sincronização segue em segundo plano.
+5. Sincronização: `sync.start(localExisted: ...)`. **Espera de até 25 s** (o `started.timeout(const Duration(seconds: 25))` em `DawController.open`) quando `saved is! String && !_templated && _canSync()`, isto é, projeto sem documento local, sem modelo e com sessão: nesse caso o projeto pode existir só no servidor (criado em outro aparelho) e o spinner só termina depois da primeira conversa (documento + áudios). Ver [12 Sincronização](12-sincronizacao.md). Nos demais casos a sincronização segue em segundo plano.
 6. `ready = true`, primeiro `_sync()` (manda o documento inteiro ao motor), `_lastSaved` = documento atual. Faixa de áudio que estava armada ou monitorando reabre a entrada (`_restoreInput`).
 
-### `edit()` e o desfazer (`controller.dart:1338`–`1389`)
+### `edit()` e o desfazer (`DawController.edit`, `checkpoint`, `mutate`, `undo`/`redo` e `_travel` em `controller.dart`)
 
 ```
 edit(fn, undoable: true)
@@ -436,6 +436,120 @@ A escala vem de `DawController._warpOf`: `gainToFader`/`faderToGain` (curva cúb
 | `audio_to_midi.dart`, `midi_convert_dialog.dart` | áudio → MIDI pelo servidor (job `audio_to_midi`) e o diálogo |
 | `sync.dart`, `sync_ui.dart` | sincronização e seu indicador |
 | `templates.dart` | modelos de projeto (`Vazio`, `Batida eletrônica`, `Gravação de banda`) |
+| `project_file.dart`, `project_file_ui.dart` | o arquivo `.jopendaw`: montar, ler e validar o zip, refazer ids, importar (lógica pura) e a janela `Exportar projeto` com o seletor de arquivo (seção [Arquivo de projeto `.jopendaw`](#arquivo-de-projeto-jopendaw)) |
+
+## Arquivo de projeto (`.jopendaw`)
+
+O projeto inteiro (documento e áudios) num zip: backup, transporte entre aparelhos e contas, envio a terceiros. Vem do commit `7af1f19`. Só o app conhece o formato; o servidor não o vê (o que ele recebe, depois da importação, é o fluxo normal de sincronização).
+
+### Peças
+
+| Arquivo | Símbolos | Papel |
+|---|---|---|
+| `app/lib/daw/project_file.dart` | `projectFileFormat`, `ProjectFileLimits`, `ProjectFileException`, `ProjectBundle`, `projectHashes`, `projectFileName`, `buildProjectFile`, `parseProjectFile`, `remapDocIds`, `importedProjectName`, `importProjectBundle` | Lógica pura, sem tela: monta e lê o zip, valida, refaz ids e cria o projeto pelos callbacks que recebe |
+| `app/lib/daw/project_file_ui.dart` | `showExportProjectDialog`, `loadSampleLocalOrServer`, `loadDocLocalOrServer`, `ExportProjectDialog`, `pickProjectFile`, `ProjectImporter` | A janela `Exportar projeto` (progresso e erro dentro dela), de onde vêm o documento e os áudios, o seletor de arquivo e o orquestrador da importação (`ProjectImporter.import`) |
+| `app/lib/daw/export.dart` | `showExportDialog`, `ExportDialog.onWholeProject` | Botão `Projeto inteiro (.jopendaw)…` (ícone `inventory_2_outlined`) no rodapé da janela `Exportar áudio` do projeto aberto. Ao tocar, `showExportDialog` fecha a janela de opções e chama `showExportProjectDialog(context, name: c.project.name, loadDoc: () async => c.doc, loadSample: loadSampleLocalOrServer)`: usa `c.doc` (a memória). Antes do commit `677f064` era um botão só na barra (`transport_bar.dart`), tirado dali porque a barra estourava; a barra não importa mais `project_file_ui.dart` |
+| `app/lib/screens/projects_screen.dart` | `_importFile`, `_export`, item `Exportar projeto…` do menu `Mais` | Botão `Importar projeto`, importação e exportação a partir do cartão (`loadDocLocalOrServer`) |
+| `app/test/project_file_test.dart` | 737 linhas | Ida e volta, arquivos inválidos, ids, nomes, importação com falha, janela de exportar |
+
+Dependências novas: `archive: ^4.3.0` (zip) e, já presentes, `crypto` (sha-256), `file_picker` (abrir e salvar) e `share_plus` (folha de compartilhar do Android).
+
+### O formato, campo a campo (versão 1)
+
+O arquivo é um zip comum (qualquer descompactador abre), com três tipos de entrada:
+
+```
+Minha música.jopendaw
+├── samples/<sha-256 em 64 hexa minúsculos>.<ext>   (um por áudio distinto; ordem por hash)
+├── project.json
+└── manifest.json
+```
+
+**`project.json`** (objeto JSON UTF-8, até 64 MiB na leitura):
+
+| Campo | Tipo | Conteúdo | Na leitura |
+|---|---|---|---|
+| `format` | int | Versão do formato do arquivo (`projectFileFormat`, hoje `1`) | Obrigatório, inteiro ≥ 1; maior que o que o app lê é recusado |
+| `name` | string | Nome do projeto na hora da exportação | Opcional; `trim()`; vazio vira `Projeto importado` |
+| `app_version` | string | `projectFileAppVersion`, constante `'0.1.0'` | Informativo; guardado em `ProjectBundle.appVersion` |
+| `exported_at` | string | Data e hora UTC em ISO 8601 | Informativo; `DateTime.tryParse`, valor ruim vira nulo |
+| `doc` | objeto | `DawDoc.toJson()`, o mesmo JSON de [Esquema JSON completo](#esquema-json-completo-versão-1), inclusive `version` | Obrigatório; `doc.version` maior que `DawDoc.version` é recusado; `DawDoc.fromJson` que lança vira `O arquivo está corrompido: o documento do projeto não pôde ser lido.` |
+
+**`manifest.json`** (objeto JSON UTF-8, até 64 MiB):
+
+| Campo | Tipo | Conteúdo | Na leitura |
+|---|---|---|---|
+| `format` | int | Igual ao de `project.json` | Não é lido |
+| `samples` | lista | Um item por áudio que entrou no zip | Obrigatória |
+| `samples[].hash` | string | sha-256 do arquivo original, 64 hexa minúsculos | Precisa casar `^[0-9a-f]{64}$` |
+| `samples[].size` | int | Tamanho em bytes | Confere com o tamanho descomprimido |
+| `samples[].name` | string | Nome original do áudio (`doc.samples[hash].name`), `''` se não há | Não é lido (informativo) |
+| `samples[].file` | string | Caminho da entrada no zip | Precisa casar `^samples/<hash>\.([a-z0-9]{1,8})$` com o mesmo hash |
+| `missing` | lista de hash | Áudios que o documento cita e o exportador não tinha | Não é lido: o importador recalcula o conjunto a partir do documento e do que veio |
+
+**`samples/<hash>.<ext>`:** os bytes do arquivo como foram importados ou gravados. A extensão vem da extensão do nome original se estiver em `wav mp3 ogg oga flac m4a aac opus webm aif aiff`; senão `bin`. Os formatos já comprimidos (`mp3 ogg oga flac m4a aac opus webm`) entram **sem compressão** no zip (`ArchiveFile.noCompress`); o resto (WAV, AIFF, `.bin` e os dois JSON) usa a compressão padrão do `archive` (deflate no zip). O conjunto de áudios é `projectHashes(doc)`: `doc.samples`, o `sample` de cada faixa (sampler) e o `sample` e as `takes` de cada clipe. Um hash que não é sha-256 no documento não vira arquivo: entra em `missing`. Os sons derivados do warp (`warp:<chave>`) **não** entram.
+
+### Exportar
+
+1. `showExportProjectDialog` abre `ExportProjectDialog` (não dispensável clicando fora), que chama `loadDoc()` e `buildProjectFile`.
+2. **De onde vem o documento:** projeto aberto, `c.doc` (o que está na memória, mesmo sem ter sido salvo). Cartão da lista, `loadDocLocalOrServer`: `doc:<id>` do `LocalStore` e, se o aparelho nunca abriu o projeto, o do servidor (`ApiClient.projectDoc`); sem nenhum, `StateError('Este projeto ainda não tem nada para exportar: ...')`.
+3. **De onde vêm os áudios:** `loadSampleLocalOrServer`: `sample:<hash>` do `LocalStore`, senão `ApiClient.getSample`; falha de rede vira "ausente".
+4. `buildProjectFile` percorre os hashes em ordem, cede o laço a cada áudio (`Future.delayed(Duration.zero)`) e reporta `onProgress(done, total)`. Ele **copia o documento no começo** (`doc.toJson()`), então editar durante a montagem não muda o arquivo. Devolve `BuiltProjectFile(bytes, missing, sampleCount)`.
+5. O arquivo vai para `AudioEngine.instance.saveFile(projectFileName(name), bytes, 'application/octet-stream')`, o mesmo caminho do WAV: na web `saveFile` do `host.js` (Blob + `<a download>`, `URL.revokeObjectURL` depois de 60 s); no Android `saveFile` de `engine_ffi.dart` (`FilePicker.saveFile`, com a folha do `share_plus` de reserva se o seletor não existe). Fora da web e do Android, `UnsupportedError('Salvar arquivos não funciona neste sistema...')`. O MIME é `octet-stream` de propósito: com `application/zip` o seletor do Android poderia acrescentar `.zip` ao nome.
+6. `projectFileName`: troca `\u0000-\u001f`, `\u007f` e `/ \ : * ? " < > |` por `_`, tira pontos do começo, corta em 80 caracteres, vazio vira `projeto`, acrescenta `.jopendaw`.
+
+### Importar
+
+Cadeia: `projects_screen._importFile` → `pickProjectFile` → `ProjectImporter.import` → `parseProjectFile` → `importProjectBundle`.
+
+- `pickProjectFile`: `FilePicker.pickFiles(dialogTitle: 'Importar projeto', type: FileType.custom, allowedExtensions: ['jopendaw', 'zip'])`; devolve `(nome, bytes)` ou nulo se cancelou.
+- `ProjectImporter.import`: espera 20 ms para a tela pintar `Conferindo o arquivo…` (a leitura é síncrona e pesada), chama `parseProjectFile` e passa ao `importProjectBundle` com `onProgress` virando `Guardando os áudios: d de t`. Existe como classe para os testes trocarem API e guardado.
+- `parseProjectFile(bytes, {limits})` valida nesta ordem, lançando `ProjectFileException` com a mensagem pronta para a tela: arquivo vazio; tamanho ≤ `maxFileBytes`; zip decodificável; número de entradas ≤ `maxEntries`; **para cada entrada** nome hostil (`_hostileName`: vazio, começa com `/`, contém `\` ou NUL, prefixo de unidade `C:`, segmento `..`), link simbólico, nome repetido e soma dos tamanhos **declarados** ≤ `maxTotalBytes`; `project.json` presente e ≤ `maxJsonBytes`; `format`; `doc` e `doc.version`; `DawDoc.fromJson`; `manifest.json`; para cada áudio do manifesto, formato do hash e do caminho, presença da entrada, `size` ≤ `maxSampleBytes`, **descompressão com teto** (`_inflate`/`_BoundedOutput` para no instante em que passa do limite, mesmo que o cabeçalho do zip minta o tamanho), soma real ≤ `maxTotalBytes`, tamanho igual ao declarado e sha-256 igual ao hash. Tudo o que o zip traz além disso é ignorado. Nada é gravado em disco a partir de um nome de dentro do zip: os áudios são procurados pelo nome exato que o manifesto declara.
+- `ProjectFileLimits` (padrões): arquivo 1 GiB (`1024 * 1024 * 1024`, não `1 << 30`: ver a armadilha dos operadores de bit em 32 bits), soma descomprimida 2 GiB (`2 * 1024 * 1024 * 1024`), um áudio 512 MiB, cada JSON 64 MiB, 20 000 entradas.
+- `importProjectBundle(bundle, ...)`, na ordem que deixa o pior caso inofensivo: `remapDocIds(doc)`; `createProject(importedProjectName(...))` (POST `/api/projects`); se o andamento (`doc.bpm` arredondado e limitado a 20–400) ou o compasso (`beatsPerBar` limitado a 1–32) diferem dos padrões do projeto novo, `patchProject`; copia o andamento e o compasso do projeto para o documento; grava cada `sample:<hash>` **se a chave ainda não existe**; grava `doc:<id>` por último (é o que faz o projeto "existir" para o editor). Qualquer falha depois de criado o projeto chama `deleteProject` (melhor esforço) e relança.
+- `remapDocIds`: id de faixa, clipe de áudio, clipe MIDI, efeito (faixas e master), marcador e raia de automação fica igual se casa `^[A-Za-z0-9_-]{1,64}$` e ainda não foi usado; senão recebe `newId()`. Depois reaponta: envio para faixa que sumiu é descartado, `output` inexistente vira `null` (master), raia de efeito ou de envio cujo alvo não existe é descartada. Faixas com id repetido: as referências vão para a primeira. Sidechain não precisa de tratamento, é índice de faixa (ver [Duas armadilhas de compatibilidade](#duas-armadilhas-de-compatibilidade-do-esquema)).
+- `importedProjectName(nome, existentes)`: compara sem maiúsculas e sem espaços nas pontas; acrescenta ` (importado)`, ` (importado 2)`...; corta em 120 caracteres.
+
+**Depois da importação não há chamada de sincronização própria.** A tela navega para `/projetos/<id>`; o `DawController.open` encontra `doc:<id>` (então `saved is String`, `localExisted = true`), não encontra `sync:<id>`, e o `SyncService._start` marca o documento como pendente (`_dirty = localExisted`, versão 0). Como o projeto novo não tem documento no servidor (`version: 0, doc: null`), não há conflito: `_push` envia os áudios que faltam (`uploadSamples`) e faz `PUT` com `base_version: 0`. Ver [12 Sincronização](12-sincronizacao.md).
+
+### Como evoluir o formato sem quebrar arquivos antigos
+
+Existem duas versões independentes: `format` (a moldura do zip: nomes, manifesto, o que é cada entrada) e `doc.version` (o esquema do documento, `DawDoc.version`, hoje 1). Um leitor **recusa** o que é mais novo que ele (mensagem `Atualize o app`) e **lê** o que é mais antigo.
+
+1. **Mudança aditiva** (campo opcional novo em `project.json` ou no `manifest.json`, entrada nova que o leitor pode ignorar): não muda `format`. O leitor só olha as chaves que conhece e ignora entradas extras do zip, então apps velhos continuam abrindo. Se o campo tem efeito, um app velho o perde ao regravar (ver Armadilhas).
+2. **Campo novo no documento:** siga [Um campo novo no documento](#um-campo-novo-no-documento) (`fromJson` com padrão, `toJson`). O `.jopendaw` o carrega sozinho, porque `doc` é o `toJson()`. Não muda `format`, nem precisa mudar `DawDoc.version` enquanto o app antigo lê o documento sem quebrar.
+3. **Mudança incompatível na moldura** (renomear `project.json`, outra estrutura de `samples/`, mudar o significado de um campo, exigir uma entrada nova): suba `projectFileFormat` para `2` **e** mantenha a leitura do `1`. Hoje `parseProjectFile` só compara `format` com o máximo; o caminho é uma ramificação por versão logo depois de ler `format` que normaliza o arquivo antigo para o `ProjectBundle` atual, sem reescrever o arquivo. Um app na versão 1 recusa o arquivo `2` com a mensagem certa (foi para isso que a checagem existe). Nenhuma migração existe ainda, porque só há a versão 1.
+4. **Mudança incompatível no documento:** suba `DawDoc.version` e escreva a migração em `DawDoc.fromJson` (hoje ele ignora `version`). O `parseProjectFile` já recusa `doc.version` maior que o do app e aceita a ausência do campo.
+5. **Regras que não se quebram:** o nome de entrada de áudio segue a expressão regular `samples/<hash>.<ext>` e o hash confere com o conteúdo (nenhum nome vindo do zip vira caminho de disco); os limites de leitura continuam valendo para entradas novas; `project.json` e `manifest.json` mantêm os nomes; não leia o que o arquivo diz como se fosse confiável.
+6. **Teste de compatibilidade:** os testes atuais constroem o arquivo com `buildProjectFile` na hora, então não pegam uma regressão da leitura de arquivos antigos. Ao subir o formato, guarde um `.jopendaw` da versão 1 em `app/test/` como fixture e leia com o código novo (recomendação; não existe hoje).
+
+### Decisões e por quê
+
+- **Zip com JSON e áudios avulsos**, não um JSON com base64: abre em qualquer descompactador, os áudios não incham 33% e dá para inspecionar ou consertar à mão.
+- **Áudio endereçado por sha-256**, como no guardado local e no servidor: deduplica, e a conferência na leitura pega arquivo truncado ou adulterado.
+- **Importar sempre cria projeto novo:** evita decidir conflito com um projeto existente; o custo é não haver "restaurar por cima".
+- **Documento por último, projeto apagado na falha:** o editor só enxerga o projeto quando `doc:<id>` existe.
+- **Sincronizar pelo caminho normal** (documento local sem `sync:<id>` conta como pendente) em vez de enviar tudo dentro da importação: não duplica a lógica de cota, nomes e conflito.
+- **Limites e nomes recusados na leitura:** o arquivo pode vir de qualquer pessoa. O teto de 2 GiB é aplicado duas vezes (declarado e real) por causa de zip bomb.
+
+### Como testar
+
+```bash
+cd app
+flutter test test/project_file_test.dart
+```
+
+Cobre: ida e volta exata do documento e dos áudios, dedupe e extensões, projeto sem áudio e com muitos, áudio ausente (`missing`), arquivos inválidos (vazio, lixo, truncado, sem `project.json`/`manifest.json`, formato e documento novos demais, nomes hostis, caminho fora do padrão, sha-256 e tamanho errados, zip bomb honesta e com cabeçalho mentindo), ids (seguros preservados, repetidos refeitos, referências acompanhando), nomes, criação do projeto com andamento e compasso, falha no meio (projeto apagado), importar duas vezes e a janela de exportar. Uso real (arquivo grande, `saveFile` no Android): `(não confirmado)`; o Android usa o seletor do sistema e a web o download do navegador.
+
+### Armadilhas do arquivo de projeto
+
+- **`app_version` é uma constante** (`'0.1.0'`), não lida do `pubspec.yaml`: não serve para diagnosticar qual build exportou.
+- **Versão do documento e mensagem de erro:** a checagem de `doc.version` só atua se `version` é inteiro; um documento sem `version` passa. Um campo novo lido por `DawDoc.fromJson` sem padrão (ou `AutoKind.byName`, que lança) faz o documento cair em `O arquivo está corrompido: o documento do projeto não pôde ser lido.`, mensagem enganosa para um arquivo que só é de um app mais novo.
+- **Andamento inteiro:** o projeto no servidor guarda `bpm` inteiro; o importador arredonda `doc.bpm` e o limita a 20–400 (o servidor aceita 20–999). Um andamento fracionado ou acima de 400 muda na importação.
+- **Preferências e armar/monitorar viajam junto** porque estão no `toJson`; o projeto importado abre com o metrônomo, a contagem, a latência e as faixas armadas do original (e o `open` tenta reabrir a entrada de áudio se há faixa de áudio armada).
+- **Leitura inteira na memória:** `pickProjectFile` faz `readAsBytes` e `parseProjectFile` roda síncrona na thread da interface; um arquivo perto de 1 GiB é pesado para um celular. `(não medido)`
+- **`saveFile` cancelado no Android** volta sem erro; a janela `Exportar projeto` então mostra `Pronto: ...`. `FilePicker.saveFile` devolve nulo ao cancelar e o resultado é descartado (`engine_ffi.dart:1276`).
+- **O cabeçalho do código** de `project_file.dart` diz "para abrir sem servidor", mas a importação cadastra o projeto pela API (`createProject`), então exige sessão e rede.
 
 ## Tabelas espelhadas do motor (`instruments.dart`, `effects.dart`)
 
@@ -463,6 +577,7 @@ Duas consequências práticas: (1) os testes de Rust **fazem parse de texto do D
 - Documento: seção "Esquema JSON" acima. O servidor guarda o objeto sem interpretá-lo (só exige objeto JSON, sem `\u0000`, ≤ 8 MB): ver [11 Servidor](11-servidor.md).
 - Motor: nomes e argumentos das chamadas em [02 Pontes web e Android](02-pontes-web-e-android.md) e `engine/src/api.rs`.
 - Servidor: rotas em [11 Servidor](11-servidor.md); o cliente delas é `ApiClient` (`api/client.dart`).
+- Arquivo `.jopendaw`: seção [Arquivo de projeto](#arquivo-de-projeto-jopendaw) acima (zip com `project.json`, `manifest.json` e `samples/<sha-256>.<ext>`; `format` 1).
 
 ## Como acrescentar (checklist ponta a ponta)
 
@@ -492,7 +607,7 @@ Se o instrumento tem um desenho próprio no painel (como o gráfico da wavetable
 2. `app/lib/daw/effects.dart`: `EffectKind.novo(13, 'Rótulo', 'Descrição', ícone)` no fim, `family`, `params` e a tabela `novoParams`.
 3. `app/test/effects_contract_test.dart`: entrada no mapa `_names` (constante do motor → nome do parâmetro).
 4. `app/lib/daw/fx_presets.dart`: lista de presets e o ramo do `switch` (`~:190`); editor: o genérico (`fx_editors.dart`) já monta knobs por grupo; um editor próprio (como o EQ e a dinâmica) entra no `switch` de `fx_editors.dart:290`/`:300`. Regras de habilitar/esmaecer parâmetros por dependência estão em `fx_editors.dart:327`–`:341`.
-5. Se tem sidechain: ampliar `_sidechainParam` (`controller.dart:1694`) e `isSidechain` (`fx_editors.dart:327`).
+5. Se tem sidechain: ampliar `_sidechainParam` (`controller.dart`) e `isSidechain` (`fx_editors.dart`).
 6. Recompilar os binários; testes; documentação.
 
 ### Um parâmetro novo em instrumento ou efeito existente
@@ -534,7 +649,7 @@ Para conferir a saída: `flutter test 2>&1 | tr '\r' '\n' | grep -E "All tests p
 
 ## Armadilhas conhecidas
 
-- **Preferências contam como mudança para sincronizar.** `_save` compara o JSON inteiro com o último gravado (`controller.dart:1411`); `metronome`, `count_in`, `rec_latency_ms`, `armed` e `monitor` estão no JSON, então ligar o metrônomo marca o projeto como pendente e gera versão nova no servidor (mesmo que outro aparelho as ignore ao aplicar). Lido no código; efeito sobre conflitos falsos `(não confirmado no uso)`.
+- **Preferências contam como mudança para sincronizar.** `_save` compara o JSON inteiro com o último gravado (`DawController._save` em `controller.dart`); `metronome`, `count_in`, `rec_latency_ms`, `armed` e `monitor` estão no JSON, então ligar o metrônomo marca o projeto como pendente e gera versão nova no servidor (mesmo que outro aparelho as ignore ao aplicar). Lido no código; efeito sobre conflitos falsos `(não confirmado no uso)`.
 - **`setTempo` e o desfazer.** O andamento mora no servidor; desfazer a mudança de andamento restaura só o documento local (`bpm` antigo no motor), enquanto `projects.bpm` mantém o novo. Ao reabrir, `open()` sobrescreve `doc.bpm` com o do projeto. `(não testado no app; deduzido de _travel e setTempo)`
 - **Sem limpeza local ao apagar projeto.** `projects_screen` chama só `deleteProject` na API; `doc:<id>`, `sync:<id>` e os `sample:<hash>` ficam no aparelho. O cache `warp:<chave>` também não tem limpeza (registrado nas notas do projeto).
 - **`docker-compose up` e a URL da API.** O app web servido em `localhost:8081` (container `web`) **não** usa o `api` do compose: `ApiClient.base` só adota a origem da página quando a porta é 8080 ou o host não é `localhost`; em `localhost:8081` cai na URL de produção (a menos de `--dart-define=API_BASE`, definido só no build). `(deduzido de client.dart:37; não testado)`
@@ -543,3 +658,12 @@ Para conferir a saída: `flutter test 2>&1 | tr '\r' '\n' | grep -E "All tests p
 - **`ProjectScreen` recria o controlador** ao trocar de projeto (`ValueKey`), e o `dispose` do controlador salva (`_save`) e para o motor (`stop`, `panic`, `watch_*`): um projeto nunca deixa nota soando para o próximo.
 - **Áudio → MIDI só com WAV.** `convertToMidi` envia o sample **original** (`sample:<hash>`) ao servidor, e o servidor só decodifica WAV PCM 16/24/32 ou float 32, mono/estéreo (`server/src/audio.rs:33`). Clipes importados de mp3, ogg, flac etc. falham com "formato não suportado" no job. `(não testado no app com mp3; deduzido do código)`
 - **`flac` nunca é pedido pelo app.** O job `flac` existe no servidor, mas nada em `app/lib/` chama `createJob('flac', ...)`.
+- **dart2js: operadores de bit em 32 bits.** Na web, `<<`, `>>`, `&`, `|`, `^` e `~` trabalham em 32 bits (o inteiro do dart2js é um número de JavaScript), enquanto na VM do Dart (testes, Android) o inteiro tem 64 bits. Então `1 << 62` dá 0 no navegador e `2 << 30` dá um número negativo, e a VM não mostra nada. Caso real, corrigido em `606664f`: `slicePoints` (`sampler_zones.dart`) começava a busca do menor comprimento de canal em `1 << 62`, que no navegador virava 0; `n == 0` devolvia lista vazia e o `Fatiar sample…` nunca achava corte (nem por transientes, nem em N fatias iguais). No mesmo commit, `ProjectFileLimits` (`project_file.dart`) tinha `maxTotalBytes = 2 << 30`, negativo no navegador, e o limite de tamanho do `.jopendaw` ficava errado. A regra: para inteiros grandes que rodam na web, use aritmética normal (`1024 * 1024 * 1024`, `reduce(math.min)` em vez de um valor inicial enorme; um `int` da web é exato só até 2^53) ou `BigInt`, nunca `<<` que passe de 31 bits, e nunca máscara ou deslocamento em valor que possa passar de 32 bits. O teste `app/test/web_int_safety_test.dart` varre `app/lib/` atrás de constantes `N << K` que passem de 31 bits, mas só enxerga literais (não vê `1 << n` com `n` variável, `>>` nem máscaras) e roda na VM, lendo os arquivos com `dart:io`. Levantamento de `<<` e `>>` em `app/lib/` (feito depois de `606664f`), todos hoje dentro de 32 bits, listados como riscos a vigiar:
+  - `daw/project_file.dart:51-52`: `512 << 20` (2^29) e `64 << 20` (2^26); passam, mas não aceitam mais um bit; prefira a multiplicação, como os outros dois limites.
+  - `daw/export.dart:126`: `1 << 30` como teto do `clamp` (2^30, no limite: `1 << 31` já seria negativo).
+  - `daw/controller.dart:3271`: `_countZoneBars = 1 << 16`; `audio/engine_ffi.dart:883`: `1 << 20` (só Android); `daw/sync.dart:227`: `1 << math.min(_failures, 10)` (o `min` segura em 2^10; sem ele, a partir de 31 falhas o valor viraria negativo ou voltaria a 1 no navegador).
+  - `daw/wav.dart:104-106` e `:185-186`: WAV de 24 bits, `q & 0xFF`, `q >> 8`, `q >> 16` e `bytes[p+2] << 16`; valores de no máximo 24 bits com sinal, seguros.
+  - `daw/controller.dart:2453`: pitch bend `(data2 & 0x7F) << 7 | (data1 & 0x7F)`, 14 bits, seguro.
+  - `daw/instrument_panel.dart:564-573` e `:2049-2071`: máscaras de portadores e moduladores do FM (`carriers >> n & 1`, `mods[to] >> from & 1`), de poucos bits (4 operadores), seguras.
+  - `daw/automation_lane.dart:34,48,63`, `daw/automation_math.dart:42` e `daw/timeline.dart:274`: `(lo + hi) >> 1` em índices de busca binária; seguros enquanto a lista tiver menos de 2^31 itens.
+  - Fora dos deslocamentos, os `Uint64` de `audio/engine_ffi.dart` são `dart:ffi` (só Android, 64 bits de verdade); `wav.dart:37` compara `total - 8 > 0xFFFFFFFF` sem operador de bit (comparação normal, exata até 2^53); o LCG de `sampler_zones_test.dart` faz `& 0xFFFFFFFF` sobre um produto de cerca de 2^52, no limite da exatidão da web.
