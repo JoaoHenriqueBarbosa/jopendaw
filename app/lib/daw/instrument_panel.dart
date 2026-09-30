@@ -22,6 +22,7 @@ import 'instruments.dart';
 import 'knob.dart';
 import 'model.dart';
 import 'presets.dart';
+import 'sampler_zones.dart' show zoneCoveredNotes;
 import 'sampler_zones_panel.dart';
 import 'wavetable_shape.dart';
 
@@ -343,7 +344,8 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
       color: x.color,
       marks: switch (t.kind) {
         TrackKind.drums => {for (final p in drumPieces) p.pitch},
-        TrackKind.sampler => {t.param(SamplerId.root).round()},
+        // com zonas quem manda são elas: marca as notas que alguma cobre; sem zonas, a nota base do cartão
+        TrackKind.sampler => t.zones.isEmpty ? {t.param(SamplerId.root).round()} : zoneCoveredNotes(t.zones),
         _ => const <int>{},
       },
       labels: t.kind == TrackKind.drums ? {for (final p in drumPieces) p.pitch: p.name} : const {},
@@ -759,7 +761,9 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   List<_Section> _samplerSections(_Ctx x) {
     final t = x.t;
     double v(int id) => t.param(id);
-    final oneShot = v(SamplerId.oneShot) >= 0.5;
+    // com zonas o Modo do cartão Áudio não vale (cada zona tem o dela): o envelope é o das zonas sustentadas
+    final zoned = t.zones.isNotEmpty;
+    final oneShot = !zoned && v(SamplerId.oneShot) >= 0.5;
     final byGroup = <String, List<ParamSpec>>{};
     for (final p in samplerParams) {
       (byGroup[p.group] ??= []).add(p);
@@ -770,7 +774,14 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
         width: 340,
         trailing: _samplePicker(x),
         display: _sampleDisplay(x),
-        controls: [for (final p in byGroup['Áudio']!) x.knob(p, format: p.id == SamplerId.root ? (n) => noteName(n.round()) : null)],
+        controls: [
+          for (final p in byGroup['Áudio']!)
+            x.knob(
+              p,
+              dimmed: zoned && (p.id == SamplerId.root || p.id == SamplerId.oneShot),
+              format: p.id == SamplerId.root ? (n) => noteName(n.round()) : null,
+            ),
+        ],
       ),
       _Section(
         'Envelope',

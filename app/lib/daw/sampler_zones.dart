@@ -3,8 +3,11 @@
 /// Uma zona toca um áudio do projeto numa faixa de notas e numa faixa de velocidade, com nota base,
 /// afinação fina, ganho, pan, modo (sustentado ou até o fim), trecho e loop. Sem zonas o sampler é
 /// o de sempre (um áudio, uma nota base). O espelho no motor é `engine/src/sampler_zones.rs`
-/// (`ZoneDef`, `slice_points`, `slice_zones`): as faixas e os limites daqui são os de lá, e o
-/// fatiamento por transientes é a mesma conta (portada, com os testes equivalentes).
+/// (`ZoneDef`): as faixas e os limites daqui são os de lá. O fatiamento (pontos de corte por
+/// transientes ou iguais, e as zonas por fatia) só existe aqui em produção, porque é o app que
+/// decodifica o áudio e mostra a prévia; o motor guarda uma cópia de referência só nos testes
+/// (`sampler_slice_ref.rs`) e os dois lados conferem os mesmos vetores fixos (grupo "paridade com o
+/// motor" em `test/sampler_zones_test.dart`).
 library;
 
 import 'dart:math' as math;
@@ -15,7 +18,8 @@ import '../audio/engine_types.dart';
 /// Zonas por sampler (o motor ignora as que passam disto).
 const maxZones = 128;
 
-/// Fatias de uma vez e a primeira nota delas (C1).
+/// Fatias de uma vez (2 a 96) e a primeira nota delas (C1).
+const minSlices = 2;
 const maxSlices = 96;
 const firstSliceNote = 24;
 
@@ -195,11 +199,20 @@ class SamplerZone {
   bool matches(int pitch, int velocity) => pitch >= lo && pitch <= hi && velocity >= vlo && velocity <= vhi;
 }
 
-/// Faixa de notas e nota base de uma zona nova: a maior lacuna que as zonas existentes deixam no
-/// teclado (a zona a preenche, com a base no meio dela); sem lacuna, uma oitava em volta do dó
-/// central por cima das outras.
-({int lo, int hi, int root}) nextZoneRange(Iterable<SamplerZone> zones) {
-  if (zones.isEmpty) return (lo: 0, hi: 127, root: 60);
+/// Onde uma zona nova nasce: a faixa de notas, a nota base e, se o teclado já estava todo coberto,
+/// a zona que cede metade da faixa dela ([divides]; o controlador encurta a `hi` dela para `lo - 1`).
+/// [overlaps]: nem dividir dava (todas as zonas têm uma nota só), a nova fica por cima das outras.
+typedef ZonePlacement = ({int lo, int hi, int root, SamplerZone? divides, bool overlaps});
+
+/// A nota base de uma zona nova, quando não se sabe a altura do áudio: o dó central (C4), ou a nota da
+/// faixa mais perto dele.
+int defaultZoneRoot(int lo, int hi) => 60.clamp(lo, hi);
+
+/// A primeira zona cobre o teclado todo; da segunda em diante cada uma ocupa a maior lacuna que as
+/// zonas existentes deixam (nunca por cima de outra). Sem lacuna, divide ao meio a zona de faixa mais
+/// larga (a nova fica com a metade de cima); só se nem isso der, sobrepõe uma oitava a partir do C4.
+ZonePlacement nextZoneRange(Iterable<SamplerZone> zones) {
+  if (zones.isEmpty) return (lo: 0, hi: 127, root: defaultZoneRoot(0, 127), divides: null, overlaps: false);
   final covered = List<bool>.filled(128, false);
   for (final z in zones) {
     for (var n = z.lo; n <= z.hi; n++) {
@@ -221,10 +234,46 @@ class SamplerZone {
       bestLo = from;
     }
   }
-  if (bestLen == 0) return (lo: 60, hi: 72, root: 60);
-  final hi = bestLo + bestLen - 1;
-  // a primeira zona cobre o teclado todo; da segunda em diante cada uma ocupa a maior lacuna
-  return (lo: bestLo, hi: hi, root: bestLo + bestLen ~/ 2);
+  if (bestLen > 0) {
+    final hi = bestLo + bestLen - 1;
+    return (lo: bestLo, hi: hi, root: defaultZoneRoot(bestLo, hi), divides: null, overlaps: false);
+  }
+  SamplerZone? widest;
+  for (final z in zones) {
+    if (z.hi - z.lo >= 1 && (widest == null || z.hi - z.lo > widest.hi - widest.lo)) widest = z;
+  }
+  if (widest != null) {
+    final lo = widest.lo + (widest.hi - widest.lo + 1) ~/ 2;
+    return (lo: lo, hi: widest.hi, root: defaultZoneRoot(lo, widest.hi), divides: widest, overlaps: false);
+  }
+  return (lo: 60, hi: 72, root: 60, divides: null, overlaps: true);
+}
+
+/// As notas que alguma zona cobre (para marcar o teclado da tela).
+Set<int> zoneCoveredNotes(Iterable<SamplerZone> zones) => {
+  for (final z in zones)
+    for (var n = z.lo; n <= z.hi; n++) n,
+};
+
+/// As faixas de velocidade de [n] camadas iguais sobre 1..127, sem lacuna nem sobreposição
+/// (2: 1–63 e 64–127; 3: 1–42, 43–84, 85–127; 4: 1–31, 32–63, 64–95, 96–127). [n] fora de 1..127 é limitado.
+List<(int, int)> velocityLayers(int n) {
+  final k = n.clamp(1, 127);
+  return [for (var i = 0; i < k; i++) (1 + (127 * i) ~/ k, (127 * (i + 1)) ~/ k)];
+}
+
+/// Lê uma nota digitada: número 0..127 ou nome ("C4", "c#3", "Db-1", "F♯2"; C4 = 60, como nos rótulos do
+/// app). Null se não entendeu ou passou de 0..127.
+int? parseNoteInput(String text) {
+  final t = text.trim().replaceAll('♯', '#').replaceAll('♭', 'b');
+  final number = int.tryParse(t);
+  if (number != null) return number >= 0 && number <= 127 ? number : null;
+  final m = RegExp(r'^([A-Ga-g])([#b]?)(-?\d)$').firstMatch(t);
+  if (m == null) return null;
+  const base = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11};
+  final accidental = m[2] == '#' ? 1 : (m[2] == 'b' ? -1 : 0);
+  final n = (int.parse(m[3]!) + 1) * 12 + base[m[1]!.toUpperCase()]! + accidental;
+  return n >= 0 && n <= 127 ? n : null;
 }
 
 /// Nome de nota "C4" (60) para os rótulos do mapa.
@@ -247,7 +296,7 @@ List<double> slicePoints(DecodedAudio a, {int? count, double sensitivity = 0.5})
 }
 
 List<int> _equalCuts(int n, int count) {
-  final k = math.min(count.clamp(1, maxSlices), n);
+  final k = math.min(count.clamp(minSlices, maxSlices), n);
   final out = <int>[];
   for (var i = 0; i < k; i++) {
     final f = (i * n / k).round();

@@ -1,5 +1,6 @@
 //! Testes das zonas e do fatiamento do sampler (submódulo de `sampler_zones.rs`).
 
+use super::slice_ref::*;
 use super::*;
 use crate::instrument::{Instrument, kind, sampler_param as param};
 
@@ -358,6 +359,42 @@ fn mesma_nota_de_novo_solta_todas_as_camadas_antigas() {
     assert_eq!(on.iter().filter(|v| v.released).count(), 2, "só as antigas entram no release");
 }
 
+#[test]
+fn mesma_nota_de_novo_nao_corta_a_voz_ate_o_fim() {
+    let mut s = sampler();
+    s.set_param(param::RELEASE, 0.001);
+    add(&mut s, 1, &constant(0.2, 48_000), ZoneDef { one_shot: true, ..zone(0, 127) });
+    s.note_on(60, 1.0);
+    render(&mut s, 200);
+    s.note_on(60, 1.0);
+    assert_eq!(s.voices.iter().filter(|v| v.on && v.released).count(), 0, "nenhuma entra no release");
+    render(&mut s, 2000);
+    assert_eq!(voices(&s), 2, "a anterior segue soando e a nova empilha");
+    // até o limite de vozes: depois disso a mais antiga é roubada
+    for _ in 0..VOICES + 4 {
+        s.note_on(60, 1.0);
+    }
+    assert!(s.voices.iter().filter(|v| v.held()).count() <= VOICES);
+}
+
+#[test]
+fn sustentacao_baixa_nao_faz_decair_a_voz_ate_o_fim() {
+    let mut s = sampler();
+    s.set_param(param::DECAY, 0.01);
+    s.set_param(param::SUSTAIN, 0.2);
+    add(&mut s, 1, &constant(0.5, 48_000), ZoneDef { one_shot: true, ..zone(60, 60) });
+    add(&mut s, 2, &constant(0.5, 48_000), zone(62, 62));
+    s.note_on(60, 1.0);
+    s.note_on(62, 1.0);
+    let (l, _) = render(&mut s, 12_000);
+    // as duas somadas: a sustentada caiu a 20% (0,1), a até o fim segue em 0,5
+    assert!((l[11_999] - 0.6).abs() < 0.01, "{}", l[11_999]);
+    // mexer na sustentação com a voz soando também não a derruba
+    s.set_param(param::SUSTAIN, 0.0);
+    let (l, _) = render(&mut s, 12_000);
+    assert!((l[11_999] - 0.5).abs() < 0.01, "{}", l[11_999]);
+}
+
 // ---------------------------------------------------------------- round-robin
 
 #[test]
@@ -626,8 +663,8 @@ fn fatias_iguais() {
     let ch = vec![vec![0.0f32; 48_000]];
     let p = slice_points(&ch, RATE, SliceMode::Count(4));
     assert_eq!(p, vec![0.0, 0.25, 0.5, 0.75]);
-    assert_eq!(slice_points(&ch, RATE, SliceMode::Count(1)), vec![0.0]);
-    assert_eq!(slice_points(&ch, RATE, SliceMode::Count(0)), vec![0.0], "zero vira uma");
+    assert_eq!(slice_points(&ch, RATE, SliceMode::Count(1)), vec![0.0, 0.5], "o mínimo é 2");
+    assert_eq!(slice_points(&ch, RATE, SliceMode::Count(0)), vec![0.0, 0.5], "zero vira o mínimo");
     assert_eq!(slice_points(&ch, RATE, SliceMode::Count(10_000)).len(), MAX_SLICES);
     // mais fatias do que quadros: uma por quadro
     let tiny = vec![vec![0.0f32; 3]];
@@ -789,4 +826,49 @@ fn trocar_o_audio_unico_nao_mexe_nas_vozes_de_zona() {
     let (l, _) = render(&mut s, 300);
     assert!((l[299] - 0.5).abs() < 1e-3, "{}", l[299]);
     assert_eq!(voices(&s), 1);
+}
+
+// ---------------------------------------------------------------- paridade com o Dart
+
+/// O sinal dos vetores de paridade: só aritmética exata (ruído de um LCG inteiro, degraus de potência de dois),
+/// para que o Dart (`paritySignal` em `app/test/sampler_zones_test.dart`) gere os mesmos bits.
+fn parity_signal() -> Vec<f32> {
+    let mut seed = 12345u32;
+    let mut rnd = || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        f64::from(seed >> 8) / f64::from(1u32 << 24) * 2.0 - 1.0
+    };
+    let mut x: Vec<f64> = (0..96_000).map(|_| 1e-4 * rnd()).collect();
+    for (s, amp) in [(14_400usize, 0.8f64), (38_400, 0.7), (57_600, 0.9), (84_000, 0.6)] {
+        for k in 0..5760 {
+            x[s + k] += amp * 0.5f64.powi((k / 1440) as i32) * rnd();
+        }
+    }
+    x.into_iter().map(|v| v as f32).collect()
+}
+
+/// Os mesmos vetores estão em `app/test/sampler_zones_test.dart` (grupo "paridade com o motor").
+#[test]
+fn paridade_com_o_dart() {
+    let x = parity_signal();
+    let want = [0.0, 0.299_979_166_666_666_7, 0.8, 1.2, 1.749_895_833_333_333_4];
+    for sensitivity in [0.0f32, 0.5, 1.0] {
+        let p = slice_points(std::slice::from_ref(&x), RATE, SliceMode::Transients(sensitivity));
+        assert_eq!(p.len(), want.len(), "{p:?}");
+        for (a, b) in p.iter().zip(want) {
+            assert!((a - b).abs() < 1e-12, "{p:?}");
+        }
+    }
+    let seven = [0.0, 0.148_812_5, 0.297_625, 0.446_437_5, 0.595_229_166_666_666_7, 0.744_041_666_666_666_7, 0.892_854_166_666_666_6];
+    let p = slice_points(&[vec![0.0; 50_000]], RATE, SliceMode::Count(7));
+    assert_eq!(p.len(), seven.len());
+    for (a, b) in p.iter().zip(seven) {
+        assert!((a - b).abs() < 1e-12, "{p:?}");
+    }
+    // e as zonas que o app cria a partir deles: uma nota cada a partir de C1, cada uma até o próximo corte
+    let z = slice_zones(&want, FIRST_SLICE_NOTE);
+    assert_eq!(
+        z.iter().map(|d| (d.root, d.start, d.end)).collect::<Vec<_>>(),
+        vec![(24, 0.0, want[1]), (25, want[1], 0.8), (26, 0.8, 1.2), (27, 1.2, want[4]), (28, want[4], 0.0)]
+    );
 }

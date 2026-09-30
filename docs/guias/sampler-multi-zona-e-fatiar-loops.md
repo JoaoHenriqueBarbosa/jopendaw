@@ -36,13 +36,13 @@ Resultado: um piano com duas regiões do teclado, cada uma com uma gravação su
 **2. A região grave (C3): camada suave**
 
 1. No cartão `ZONAS`, `Adicionar sample como zona` > `Importar um arquivo…` e escolha `piano_C3_suave`. A zona nasce cobrindo o teclado todo (de C-1 a G9), `Nota base` C4.
-2. No editor da zona, leve a `Nota base` a `C3` (12 cliques em `Menos`).
+2. No editor da zona, leve a `Nota base` a `C3`: toque no número da `Nota base`, digite `C3` (ou `48`) e aperte Enter.
 3. No mapa, arraste a borda direita do bloco até a nota 59 (B3): a zona fica de C-1 a B3. Confira no primeiro par (`Notas de` `C-1`, `até` `B3`).
 
 **3. A região aguda (C5): camada suave**
 
-1. `Adicionar sample como zona` > `Importar um arquivo…` e escolha `piano_C5_suave`. A zona ocupa a lacuna que sobrou (de C4 a G9), com a nota base no meio dela.
-2. Leve a `Nota base` a `C5`: ela nasce no meio da lacuna (nota 94, `A#6`); aperte `Menos` até o nome mostrar `C5` (nota 72, 22 cliques).
+1. `Adicionar sample como zona` > `Importar um arquivo…` e escolha `piano_C5_suave`. A zona ocupa a lacuna que sobrou (de C4 a G9), com a `Nota base` em `C4`.
+2. Leve a `Nota base` a `C5` digitando `C5` no campo dela (ela nasce em `C4`, a nota mais perto do dó central que cabe na faixa).
 
 **4. As camadas fortes**
 
@@ -54,7 +54,7 @@ Resultado: um piano com duas regiões do teclado, cada uma com uma gravação su
 
 O objetivo é: suaves cobrem as velocidades 1 a 83; fortes cobrem de 81 a 127 (uma sobreposição de 3 valores, em vez de um buraco). As duas camadas tocam juntas nesses 3 valores.
 
-1. Selecione uma zona suave. No mapa, arraste a borda **de cima** do bloco para baixo até o segundo par (`Velocidade de` / `até`) mostrar `até` perto de 83. Ajuste fino com `Menos` e `Mais`: cada clique anda de 4 em 4 (de 127: 123, 119, ... 83).
+1. Selecione uma zona suave. No mapa, arraste a borda **de cima** do bloco para baixo até o segundo par (`Velocidade de` / `até`) mostrar `até` perto de 83. Ajuste fino digitando o valor no campo ou com `Menos` e `Mais` (1 em 1). Para camadas iguais sem conta, `Camadas de velocidade` > `Dividir em 2 camadas iguais` (ver o manual do sampler).
 2. Selecione a zona forte da mesma região. Arraste a borda **de baixo** para cima até `Velocidade de` mostrar 81 (ou 1 a 3 acima do `até` da suave: sobrepor é seguro, deixar um valor sem zona o deixa mudo).
 3. Faça o mesmo para a outra região.
 4. Confira o mapa: dois andares de blocos em cada região, o de baixo (suave) e o de cima (forte), sem vão entre eles.
@@ -98,7 +98,7 @@ O mapa é um quadro de notas por força: cada arquivo ocupa um retângulo, e a n
 | Duas zonas tocam juntas o tempo todo | As faixas de velocidade se sobrepõem demais | Arraste as bordas até os números mostrarem faixas separadas |
 | As duas camadas soam iguais | As duas zonas apontam para o mesmo áudio | Selecione a zona e troque o áudio (`Trocar o áudio da zona`) |
 | Notas altas soam finas ou curtas | Zona esticada demais a partir da nota base | Acrescente mais gravações e encurte as regiões |
-| A região aguda sai muito acima ou abaixo da nota certa | `Nota base` errada (a nova zona nasce com a base no meio da lacuna) | Corrija a `Nota base` com `Menos` e `Mais` |
+| A região aguda sai muito acima ou abaixo da nota certa | `Nota base` errada (a nova zona nasce com a base em `C4`, ou na nota da faixa mais perto dele) | Digite a `Nota base` certa (`C5`, `A#3` ou o número) |
 | A segunda zona nasceu por cima da primeira | A primeira cobria o teclado inteiro | Encurte a primeira antes de acrescentar a próxima (passo 2.3) |
 | Acorde longo com camadas corta notas | Cada nota usa uma voz por camada e o limite é 16 | Use uma camada por região, ou toque menos notas juntas |
 

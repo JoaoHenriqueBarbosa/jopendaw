@@ -22,11 +22,11 @@ use crate::expression::PitchExpr;
 use crate::instrument::{Instrument, sampler_param as param};
 use crate::{Sample, hermite};
 
-// zonas de teclado e velocidade (multi-sample) e fatiamento de loops: ver `sampler_zones.rs`
+// zonas de teclado e velocidade (multi-sample) e (o fatiamento mora no app): ver `sampler_zones.rs`
 #[path = "sampler_zones.rs"]
 mod zones;
-pub use zones::{FIRST_SLICE_NOTE, MAX_SLICES, MAX_ZONES, SliceMode, ZoneDef, slice_points, slice_zones};
 use zones::{MAX_GROUPS, Span, Zone};
+pub use zones::{MAX_ZONES, ZoneDef};
 
 /// Vozes tocáveis ao mesmo tempo.
 pub const VOICES: usize = 16;
@@ -184,7 +184,8 @@ impl Voice {
         for _ in 0..3 {
             self.push(c0, c1);
         }
-        self.env.set(adsr[0], adsr[1], adsr[2], adsr[3]);
+        // "até o fim" ignora a sustentação: o envelope não decai (só o ataque vale)
+        self.env.set(adsr[0], adsr[1], if self.span.one_shot { 1.0 } else { adsr[2] }, adsr[3]);
         self.env.reset();
         self.env.gate_on();
     }
@@ -305,6 +306,11 @@ impl Voice {
     }
 }
 
+/// A voz ignora o note off (e a sustentação): com zonas manda o modo da zona, sem elas o parâmetro do instrumento.
+fn ignores_note_off(v: &Voice, global: bool) -> bool {
+    if v.span.zone { v.span.one_shot } else { global }
+}
+
 fn channels(sample: &Sample, stereo: bool) -> (&[f32], &[f32]) {
     let c0 = sample.channel(0);
     (c0, if stereo { sample.channel(1) } else { c0 })
@@ -393,8 +399,9 @@ impl Sampler {
 
     fn apply_env(&mut self) {
         let [a, d, s, r] = self.adsr;
+        let global = self.one_shot;
         for v in &mut self.voices {
-            v.env.set(a, d, s, r);
+            v.env.set(a, d, if ignores_note_off(v, global) { 1.0 } else { s }, r);
         }
     }
 }
@@ -418,10 +425,12 @@ impl Instrument for Sampler {
             // a rampa do volume só anda com voz soando; a primeira nota já sai no volume pedido
             self.level_now = self.level;
         }
+        let global = self.one_shot;
         let voices = &mut self.voices;
 
         // a mesma nota de novo: a anterior entra no release e a nova começa do início
-        for voice in voices.iter_mut().filter(|w| w.held() && !w.released && w.pitch == pitch) {
+        // (vozes "até o fim" não: elas ignoram note off e a mesma nota só empilha)
+        for voice in voices.iter_mut().filter(|w| w.held() && !w.released && w.pitch == pitch && !ignores_note_off(w, global)) {
             voice.release();
         }
         // sem vaga na polifonia: rouba a mais antiga, preferindo as que já foram soltas
@@ -436,7 +445,7 @@ impl Instrument for Sampler {
             voices.iter().enumerate().filter(|(_, w)| w.fading()).min_by(|a, b| a.1.fade.total_cmp(&b.1.fade)).map_or(0, |(i, _)| i)
         });
         self.age += 1;
-        voices[slot].span = Span::whole(sample.frames());
+        voices[slot].span = Span { one_shot: global, ..Span::whole(sample.frames()) };
         voices[slot].own = None;
         voices[slot].start(pitch, gain, step, sample, self.adsr, self.age);
     }
@@ -444,7 +453,7 @@ impl Instrument for Sampler {
     fn note_off(&mut self, pitch: u8) {
         // com zonas, quem manda é o modo da zona; sem elas, o parâmetro do instrumento
         let global = self.one_shot;
-        for v in self.voices.iter_mut().filter(|v| v.held() && !v.released && v.pitch == pitch && !(if v.span.zone { v.span.one_shot } else { global })) {
+        for v in self.voices.iter_mut().filter(|v| v.held() && !v.released && v.pitch == pitch && !ignores_note_off(v, global)) {
             v.release();
         }
     }
@@ -509,7 +518,10 @@ impl Instrument for Sampler {
                     self.level_now = self.level;
                 }
             }
-            param::ONE_SHOT => self.one_shot = value >= 0.5,
+            param::ONE_SHOT => {
+                self.one_shot = value >= 0.5;
+                self.apply_env();
+            }
             param::VELOCITY => self.velocity = value.clamp(0.0, 1.0),
             _ => {}
         }
@@ -748,6 +760,19 @@ mod tests {
         // toca até o fim do áudio
         render(&mut s, 3000);
         assert!(!s.active());
+    }
+
+    #[test]
+    fn one_shot_sem_zonas_ignora_sustentacao_e_a_mesma_nota_empilha() {
+        let mut s = sampler(vec![vec![0.5; 48_000]], RATE);
+        s.set_param(param::ONE_SHOT, 1.0);
+        s.set_param(param::DECAY, 0.01);
+        s.set_param(param::SUSTAIN, 0.2);
+        s.note_on(60, 1.0);
+        let (l, _) = render(&mut s, 12_000);
+        assert!((l[11_999] - 0.5).abs() < 0.01, "{}", l[11_999]);
+        s.note_on(60, 1.0);
+        assert_eq!(s.voices.iter().filter(|v| v.on && v.released).count(), 0);
     }
 
     #[test]

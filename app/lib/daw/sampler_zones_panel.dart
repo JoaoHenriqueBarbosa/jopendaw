@@ -4,7 +4,9 @@
 /// como zona e para fatiar um sample.
 ///
 /// No mapa, arrastar a borda esquerda ou direita de um bloco muda a faixa de notas, a de cima ou
-/// a de baixo muda a faixa de velocidade, e arrastar o corpo move o bloco (a nota base vai junto).
+/// a de baixo muda a faixa de velocidade, e arrastar o corpo move o bloco só na horizontal (a faixa
+/// de notas e a nota base vão juntas; a velocidade só muda pelas bordas de cima e de baixo ou pelos
+/// campos).
 /// Um arraste que começa fora de qualquer bloco rola o mapa. Cada arraste é um passo só no
 /// desfazer. No celular o mapa rola na horizontal e os controles ficam em coluna.
 library;
@@ -14,6 +16,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/feedback.dart';
 import 'controller.dart';
 import 'instruments.dart';
 import 'sampler_zones.dart';
@@ -78,7 +81,8 @@ class ZoneMapGeometry {
 }
 
 /// Muda a faixa de [z] como o arraste de [part] até o ponteiro ([note], [vel]) pediria, partindo
-/// da cópia [from] (a zona no começo do arraste) e do ponto onde ele começou ([n0], [v0]).
+/// da cópia [from] (a zona no começo do arraste) e do ponto onde ele começou ([n0]; [v0] não é usado:
+/// arrastar o corpo não mexe na velocidade).
 void dragZone(SamplerZone z, SamplerZone from, ZonePart part, {required int note, required int vel, required int n0, required int v0}) {
   switch (part) {
     case ZonePart.left:
@@ -91,13 +95,10 @@ void dragZone(SamplerZone z, SamplerZone from, ZonePart part, {required int note
       z.vlo = math.min(vel, from.vhi);
     case ZonePart.body:
       final dn = (note - n0).clamp(-from.lo, 127 - from.hi);
-      final dv = (vel - v0).clamp(1 - from.vlo, 127 - from.vhi);
       z
         ..lo = from.lo + dn
         ..hi = from.hi + dn
-        ..root = (from.root + dn).clamp(0, 127)
-        ..vlo = from.vlo + dv
-        ..vhi = from.vhi + dv;
+        ..root = (from.root + dn).clamp(0, 127);
   }
 }
 
@@ -115,6 +116,9 @@ class SamplerZonesPanel extends StatefulWidget {
 class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
   String? _selected;
 
+  /// Aviso da última zona acrescentada (teclado dividido ou sobreposto).
+  String? _notice;
+
   DawController get c => widget.c;
   List<SamplerZone> get _zones => c.zonesOf(widget.track);
 
@@ -126,8 +130,15 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
   static const _importItem = 'importar';
 
   Future<void> _add(String value) async {
-    final z = value == _importItem ? await c.addZoneFromFile(widget.track) : c.addZone(widget.track, value);
-    if (z != null && mounted) setState(() => _selected = z.id);
+    String? notice;
+    void say(String text) => notice = text;
+    final z = value == _importItem ? await c.addZoneFromFile(widget.track, onNotice: say) : c.addZone(widget.track, value, onNotice: say);
+    if (z != null && mounted) {
+      setState(() {
+        _selected = z.id;
+        _notice = notice;
+      });
+    }
   }
 
   Widget _addButton() {
@@ -181,7 +192,10 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
           GestureDetector(
             onTap: () {
               c.clearZones(widget.track);
-              setState(() => _selected = null);
+              setState(() {
+                _selected = null;
+                _notice = null;
+              });
             },
             child: const Text(
               'Apagar todas',
@@ -195,6 +209,10 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
       children: [
         toolbar,
         const SizedBox(height: 8),
+        if (_notice != null && zones.isNotEmpty) ...[
+          InlineNotice(_notice!, error: false, onClose: () => setState(() => _notice = null)),
+          const SizedBox(height: 8),
+        ],
         if (zones.isEmpty)
           const _EmptyHint()
         else ...[
@@ -212,6 +230,14 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
               compact: widget.compact,
               onGone: () => setState(() => _selected = null),
               onDuplicate: () => setState(() => _selected = c.duplicateZone(widget.track, sel.id)?.id ?? _selected),
+              onLayers: (n) {
+                final made = c.splitZoneLayers(widget.track, sel.id, n);
+                setState(
+                  () => _notice = made.isEmpty
+                      ? 'Não coube: as zonas já estão no limite de $maxZones.'
+                      : '${made.length} ${made.length == 1 ? 'cópia criada' : 'cópias criadas'} logo depois desta zona, cada uma com a sua faixa de velocidade. Selecione cada uma e troque o áudio.',
+                );
+              },
             ),
         ],
       ],
@@ -510,6 +536,9 @@ class _ZoneEditor extends StatelessWidget {
   final Color color;
   final bool compact;
   final VoidCallback onGone, onDuplicate;
+
+  /// Divide a zona em N camadas de velocidade.
+  final void Function(int n) onLayers;
   const _ZoneEditor({
     super.key,
     required this.c,
@@ -519,6 +548,7 @@ class _ZoneEditor extends StatelessWidget {
     required this.compact,
     required this.onGone,
     required this.onDuplicate,
+    required this.onLayers,
   });
 
   void _edit(void Function(SamplerZone z) fn, {bool undoable = true}) => c.editZone(track, zone.id, fn, undoable: undoable);
@@ -569,11 +599,11 @@ class _ZoneEditor extends StatelessWidget {
     final has = wave != null && !c.missing.contains(z.sample);
     final end = z.end > 0 ? z.end : dur;
     final controls = <Widget>[
-      _Stepper(label: 'Nota base', value: noteName(z.root), onChange: (d) => _edit((z) => z.root += d)),
-      _Stepper(label: 'Notas de', value: noteName(z.lo), onChange: (d) => _edit((z) => z.lo += d)),
-      _Stepper(label: 'até', value: noteName(z.hi), onChange: (d) => _edit((z) => z.hi += d)),
-      _Stepper(label: 'Velocidade de', value: '${z.vlo}', onChange: (d) => _edit((z) => z.vlo += d * 4)),
-      _Stepper(label: 'até', value: '${z.vhi}', onChange: (d) => _edit((z) => z.vhi += d * 4)),
+      _Stepper(label: 'Nota base', value: noteName(z.root), parse: parseNoteInput, hint: 'C4 ou 60', onSet: (n) => _edit((z) => z.root = n)),
+      _Stepper(label: 'Notas de', value: noteName(z.lo), parse: parseNoteInput, hint: 'C4 ou 60', onSet: (n) => _edit((z) => z.lo = n)),
+      _Stepper(label: 'até', value: noteName(z.hi), parse: parseNoteInput, hint: 'C4 ou 60', onSet: (n) => _edit((z) => z.hi = n)),
+      _Stepper(label: 'Velocidade de', value: '${z.vlo}', parse: _parseVelocity, hint: '1 a 127', onSet: (n) => _edit((z) => z.vlo = n)),
+      _Stepper(label: 'até', value: '${z.vhi}', parse: _parseVelocity, hint: '1 a 127', onSet: (n) => _edit((z) => z.vhi = n)),
       _slider(context, 'Afinação', z.cents, -100, 100, '${z.cents.round()} ct', (v) => _edit((z) => z.cents = v.roundToDouble(), undoable: false)),
       _slider(context, 'Ganho', z.gainDb, -24, 12, '${z.gainDb.toStringAsFixed(1)} dB', (v) => _edit((z) => z.gainDb = (v * 2).round() / 2, undoable: false)),
       _slider(
@@ -596,16 +626,25 @@ class _ZoneEditor extends StatelessWidget {
       selected: {z.oneShot},
       onSelectionChanged: (s) => _edit((z) => z.oneShot = s.first),
     );
+    final layers = PopupMenuButton<int>(
+      tooltip: 'Divide esta zona em camadas de velocidade iguais: ela fica com a primeira e as outras são cópias para trocar o áudio',
+      position: PopupMenuPosition.under,
+      onSelected: (n) => onLayers(n),
+      itemBuilder: (_) => [
+        for (final n in const [2, 3, 4]) PopupMenuItem(value: n, height: 38, child: Text('Dividir em $n camadas iguais')),
+      ],
+      child: _ChipButton(icon: Icons.layers_outlined, label: 'Camadas de velocidade', color: color),
+    );
     final group = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text('Round-robin ', style: TextStyle(fontSize: 11.5, color: Colors.white60)),
         DropdownButton<int>(
-          value: z.group.clamp(0, 15),
+          value: z.group.clamp(0, maxZoneGroup),
           isDense: true,
           underline: const SizedBox.shrink(),
           style: const TextStyle(fontSize: 12, color: Colors.white),
-          items: [for (var i = 0; i <= 15; i++) DropdownMenuItem(value: i, child: Text(i == 0 ? 'nenhum' : 'grupo $i'))],
+          items: [for (var i = 0; i <= maxZoneGroup; i++) DropdownMenuItem(value: i, child: Text(i == 0 ? 'nenhum' : 'grupo $i'))],
           onChanged: (v) => _edit((z) => z.group = v ?? 0),
         ),
       ],
@@ -672,7 +711,7 @@ class _ZoneEditor extends StatelessWidget {
           const SizedBox(height: 4),
           Wrap(spacing: 14, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: controls),
           const SizedBox(height: 6),
-          Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [mode, group]),
+          Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [mode, group, layers]),
           const SizedBox(height: 8),
           if (!has || dur <= 0)
             const Text(
@@ -768,30 +807,83 @@ class _ZoneEditor extends StatelessWidget {
   );
 }
 
-class _Stepper extends StatelessWidget {
-  final String label, value;
-  final void Function(int delta) onChange;
-  const _Stepper({required this.label, required this.value, required this.onChange});
+int? _parseVelocity(String text) {
+  final n = int.tryParse(text.trim());
+  return n != null && n >= 1 && n <= 127 ? n : null;
+}
+
+/// Um valor inteiro com Menos/Mais de 1 em 1 e, tocando no número, digitação (o [parse] devolve null
+/// para o que não entendeu: o campo volta ao valor de antes).
+class _Stepper extends StatefulWidget {
+  final String label, value, hint;
+  final int? Function(String text) parse;
+  final void Function(int n) onSet;
+  const _Stepper({required this.label, required this.value, required this.parse, required this.onSet, required this.hint});
+
+  @override
+  State<_Stepper> createState() => _StepperState();
+}
+
+class _StepperState extends State<_Stepper> {
+  late final TextEditingController _text = TextEditingController(text: widget.value);
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit();
+    });
+  }
+
+  @override
+  void didUpdateWidget(_Stepper old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && _text.text != widget.value) _text.text = widget.value;
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final n = widget.parse(_text.text);
+    if (n != null && n != widget.parse(widget.value)) widget.onSet(n);
+    // o que não valeu, ou o valor já normalizado pelo modelo, volta a aparecer na próxima montagem
+    _text.text = widget.value;
+  }
+
+  /// Passo de 1 sobre o valor atual (lido do texto mostrado).
+  void _bump(int d) {
+    final cur = widget.parse(widget.value);
+    if (cur != null) widget.onSet(cur + d);
+  }
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(label, style: const TextStyle(fontSize: 11.5, color: Colors.white60)),
+      Text(widget.label, style: const TextStyle(fontSize: 11.5, color: Colors.white60)),
       IconButton(
         tooltip: 'Menos',
         visualDensity: VisualDensity.compact,
         iconSize: 16,
         constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-        onPressed: () => onChange(-1),
+        onPressed: () => _bump(-1),
         icon: const Icon(Icons.remove),
       ),
       SizedBox(
-        width: 34,
-        child: Text(
-          value,
+        width: 46,
+        child: TextField(
+          controller: _text,
+          focusNode: _focus,
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          decoration: InputDecoration(isDense: true, hintText: widget.hint, contentPadding: const EdgeInsets.symmetric(vertical: 6)),
+          onSubmitted: (_) => _commit(),
         ),
       ),
       IconButton(
@@ -799,7 +891,7 @@ class _Stepper extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         iconSize: 16,
         constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-        onPressed: () => onChange(1),
+        onPressed: () => _bump(1),
         icon: const Icon(Icons.add),
       ),
     ],

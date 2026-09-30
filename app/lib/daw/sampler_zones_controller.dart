@@ -18,16 +18,51 @@ extension SamplerZonesEdit on DawController {
   /// As zonas da faixa (vazia se não é um sampler).
   List<SamplerZone> zonesOf(int track) => _samplerTrack(track)?.zones ?? const [];
 
-  /// Acrescenta uma zona que toca o áudio [sample] (uma chave de `doc.samples`) na maior lacuna do
-  /// teclado. Devolve a zona, ou null se a faixa não é um sampler, o áudio não é do projeto ou
-  /// as zonas já estão no limite.
-  SamplerZone? addZone(int track, String sample) {
+  /// Acrescenta uma zona que toca o áudio [sample] (uma chave de `doc.samples`) numa faixa livre do
+  /// teclado (ver [nextZoneRange]); com o teclado todo coberto divide a zona mais larga ao meio e, sem
+  /// nem isso, sobrepõe. Nos dois últimos casos [onNotice] recebe o aviso para o usuário. Devolve a zona,
+  /// ou null se a faixa não é um sampler, o áudio não é do projeto ou as zonas já estão no limite.
+  SamplerZone? addZone(int track, String sample, {void Function(String notice)? onNotice}) {
     final t = _samplerTrack(track);
     if (t == null || !doc.samples.containsKey(sample) || t.zones.length >= maxZones) return null;
     final r = nextZoneRange(t.zones);
     final z = SamplerZone(id: newId(), sample: sample, root: r.root, lo: r.lo, hi: r.hi);
-    edit((_) => t.zones.add(z));
+    final cut = r.divides;
+    final cutName = cut == null ? null : doc.samples[cut.sample]?.name ?? 'sem nome';
+    edit((_) {
+      if (cut != null) cut.hi = r.lo - 1;
+      t.zones.add(z);
+    });
+    if (cut != null) {
+      onNotice?.call(
+        'O teclado já estava coberto: a zona "$cutName" foi dividida e a nova ficou com ${noteName(r.lo)} a ${noteName(r.hi)}. Ajuste as faixas no mapa.',
+      );
+    } else if (r.overlaps) {
+      onNotice?.call('Não há faixa livre nem zona para dividir: a nova zona ficou por cima das outras, em ${noteName(r.lo)} a ${noteName(r.hi)}.');
+    }
     return z;
+  }
+
+  /// Divide a zona [zoneId] em [n] camadas de velocidade iguais (ver [velocityLayers]): ela fica com a
+  /// primeira faixa e [n] − 1 cópias (mesmo áudio e mesmas notas; troque o áudio de cada uma) vão logo
+  /// depois com as outras. Devolve as zonas novas (vazio se não coube nos [maxZones] ou [n] < 2).
+  List<SamplerZone> splitZoneLayers(int track, String zoneId, int n) {
+    final t = _samplerTrack(track);
+    final i = t?.zones.indexWhere((z) => z.id == zoneId) ?? -1;
+    final layers = velocityLayers(n);
+    if (t == null || i < 0 || layers.length < 2 || t.zones.length + layers.length - 1 > maxZones) return const [];
+    final copies = [for (var k = 1; k < layers.length; k++) t.zones[i].copy(id: newId())..vlo = layers[k].$1];
+    edit((_) {
+      final z = t.zones[i];
+      for (var k = 0; k < layers.length; k++) {
+        final target = k == 0 ? z : copies[k - 1];
+        target
+          ..vlo = layers[k].$1
+          ..vhi = layers[k].$2;
+      }
+      t.zones.insertAll(i + 1, copies);
+    });
+    return copies;
   }
 
   /// Faz do áudio único da faixa a primeira zona (a nota base do instrumento, o teclado todo).
@@ -80,12 +115,12 @@ extension SamplerZonesEdit on DawController {
   }
 
   /// Escolhe um arquivo, importa para o projeto e o acrescenta como zona.
-  Future<SamplerZone?> addZoneFromFile(int track) async {
+  Future<SamplerZone?> addZoneFromFile(int track, {void Function(String notice)? onNotice}) async {
     final files = await FilePicker.pickFiles(dialogTitle: 'Áudio da zona', type: FileType.custom, allowedExtensions: DawController.audioExtensions);
     if (files.isEmpty) return null;
     final f = files.first;
     final hash = await importSampleFile(f.name, await f.readAsBytes());
-    return hash == null ? null : addZone(track, hash);
+    return hash == null ? null : addZone(track, hash, onNotice: onNotice);
   }
 
   /// Os cortes que o fatiamento faria no áudio [sample] (em segundos), para a prévia: [count]
