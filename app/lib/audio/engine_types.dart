@@ -66,3 +66,7 @@ class LoudnessReading {
   @override
   String toString() => 'LoudnessReading($momentary, $shortTerm, $integrated, $truePeak, $range)';
 }
+/// Somado ao número do controle (1 modulação, 64 pedal, 128 pitch bend) na "altura" de uma nota
+/// registrada pelo motor quando ela é, na verdade, um evento de controle: o valor vem no lugar da
+/// velocidade e o início e o fim são a mesma batida. Alturas de 0 a 127 são notas.
+const ccPitchBase = 256;

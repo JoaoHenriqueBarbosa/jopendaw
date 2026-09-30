@@ -263,12 +263,16 @@ List<RecordedNote> parseRecordedNotes(Float32List flat) {
     final end = flat[i + 3];
     if (!start.isFinite || !end.isFinite || !flat[i].isFinite || !flat[i + 1].isFinite) continue;
     final velocity = flat[i + 4];
+    // altura 256 + controle é um evento de controle (1 modulação, 64 pedal, 128 pitch bend), com o
+    // valor no lugar da velocidade (bend de −1 a 1)
+    final code = flat[i + 1].round();
+    final isCc = code >= ccPitchBase;
     notes.add((
       track: flat[i].round(),
-      pitch: flat[i + 1].round().clamp(0, 127),
+      pitch: isCc ? code : code.clamp(0, 127),
       start: start,
       end: end < start ? start : end,
-      velocity: velocity.isFinite ? velocity.clamp(0, 1).toDouble() : 0.8,
+      velocity: isCc ? (velocity.isFinite ? velocity.clamp(-1, 1).toDouble() : 0.0) : (velocity.isFinite ? velocity.clamp(0, 1).toDouble() : 0.8),
     ));
   }
   return notes;
@@ -349,6 +353,8 @@ const renderSkip = {
   'panic',
   'live_on',
   'live_off',
+  'live_bend',
+  'live_cc',
   'watch_fx',
   'watch_analyzer',
   'set_input',
@@ -431,6 +437,15 @@ List<List<Object>> prepareRenderCalls(List<List<Object>> calls, double toBeat, d
       }
       if (start >= toBeat - _edgeEps) continue;
       out.add(start + length > toBeat ? ['note_add', c[1], c[2], toBeat - start, c[4], c[5]] : c);
+    } else if (name == 'cc_add' && c.length >= 5) {
+      // cc_add(faixa, controle, batida, valor): depois do fim só fica o pedal que sobe, no próprio
+      // fim (senão as notas cortadas ali seguiriam presas por um pedal que o trecho não solta)
+      final beat = _num(c, 3), value = _num(c, 4);
+      if (beat == null || value == null || beat < toBeat - _edgeEps) {
+        out.add(c);
+      } else if (c[2] == 64 && value < 0.5) {
+        out.add(['cc_add', c[1], c[2], toBeat, c[4]]);
+      }
     } else {
       out.add(c);
     }
@@ -1027,8 +1042,9 @@ final class FfiEngine {
   /// Quadros por leitura da captura.
   static const _recMax = 16384;
 
-  /// Floats da leitura das notas registradas (16384 notas de 5 floats, como no worklet).
-  static const _notesMax = 5 * 16384;
+  /// Floats da leitura das notas registradas (16384 notas e 32768 eventos de controle de 5 floats,
+  /// como no worklet).
+  static const _notesMax = 5 * (16384 + 32768);
 
   bool _inputOpen = false;
   bool _capturing = false;

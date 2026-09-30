@@ -169,6 +169,8 @@ const synthParams = <ParamSpec>[
   ParamSpec(31, 'Vozes', 'Geral', 1, 16, 8, curve: Curve.integer),
   ParamSpec(32, 'Velocidade', 'Geral', 0, 1, 0.7, unit: '%'),
   ParamSpec(33, 'Volume', 'Geral', 0, 1.5, 0.7, unit: '%'),
+  ParamSpec(35, 'Alcance do bend', 'Geral', 0, 24, 2, unit: 'st', curve: Curve.integer),
+  ParamSpec(36, 'Vibrato da roda', 'Geral', 0, 2, 1, unit: 'st'),
 ];
 
 /// Uma peça da bateria: nome e a nota MIDI principal (General MIDI).
@@ -223,6 +225,7 @@ const samplerParams = <ParamSpec>[
   ParamSpec(4, 'Soltura', 'Envelope', 0.001, 10, 0.2, unit: 's', curve: Curve.log),
   ParamSpec(8, 'Velocidade', 'Geral', 0, 1, 0.7, unit: '%'),
   ParamSpec(5, 'Volume', 'Geral', 0, 1.5, 0.8, unit: '%'),
+  ParamSpec(9, 'Alcance do bend', 'Geral', 0, 24, 2, unit: 'st', curve: Curve.integer),
 ];
 
 /// Algoritmos do FM, na ordem dos ids do motor (`fm.rs`). O nome é o roteamento: `a→b` = `a` modula `b`.
@@ -295,6 +298,8 @@ const fmParams = <ParamSpec>[
   ParamSpec(39, 'Vozes', 'Geral', 1, 16, 8, curve: Curve.integer),
   ParamSpec(40, 'Glide', 'Geral', 0, 2, 0, unit: 's'),
   ParamSpec(41, 'Volume', 'Geral', 0, 1.5, 0.7, unit: '%'),
+  ParamSpec(42, 'Alcance do bend', 'Geral', 0, 24, 2, unit: 'st', curve: Curve.integer),
+  ParamSpec(43, 'Vibrato da roda', 'Geral', 0, 2, 1, unit: 'st'),
 ];
 
 /// Wavetable: 2 osciladores de tabela (série + posição contínua), sub, ruído, uníssono, filtro SVF
@@ -339,6 +344,8 @@ const wavetableParams = <ParamSpec>[
   ParamSpec(36, 'Velocidade', 'Geral', 0, 1, 0.7, unit: '%'),
   ParamSpec(37, 'Volume', 'Geral', 0, 1.5, 0.7, unit: '%'),
   ParamSpec(38, 'Posição (env. do filtro)', 'Envelope do filtro', -1, 1, 0, unit: '%'),
+  ParamSpec(39, 'Alcance do bend', 'Geral', 0, 24, 2, unit: 'st', curve: Curve.integer),
+  ParamSpec(40, 'Vibrato da roda', 'Geral', 0, 2, 1, unit: 'st'),
 ];
 
 /// Todos os parâmetros de um tipo no valor padrão.

@@ -380,12 +380,16 @@ class AudioEngine {
       final end = flat[i + 3];
       if (!start.isFinite || !end.isFinite || !flat[i].isFinite || !flat[i + 1].isFinite) continue;
       final velocity = flat[i + 4];
+      // altura 256 + controle é um evento de controle (ver `ccPitchBase`), com o valor no lugar da
+      // velocidade (bend de −1 a 1)
+      final code = flat[i + 1].round();
+      final isCc = code >= ccPitchBase;
       notes.add((
         track: flat[i].round(),
-        pitch: flat[i + 1].round().clamp(0, 127),
+        pitch: isCc ? code : code.clamp(0, 127),
         start: start,
         end: end < start ? start : end,
-        velocity: velocity.isFinite ? velocity.clamp(0, 1).toDouble() : 0.8,
+        velocity: isCc ? (velocity.isFinite ? velocity.clamp(-1, 1).toDouble() : 0.0) : (velocity.isFinite ? velocity.clamp(0, 1).toDouble() : 0.8),
       ));
     }
     return notes;

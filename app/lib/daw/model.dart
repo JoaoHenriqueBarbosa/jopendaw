@@ -123,6 +123,37 @@ class MidiNote {
   MidiNote copy() => MidiNote(pitch: pitch, start: start, length: length, velocity: velocity);
 }
 
+/// Controles MIDI que o clipe de notas guarda além das notas (ids como no motor, `expression.rs`).
+const ccMod = 1;
+const ccSustain = 64;
+
+/// O pitch bend não é um CC no MIDI; o motor usa o 128 para ele.
+const ccBend = 128;
+
+/// Os controles editáveis do piano roll, na ordem das faixas de controle.
+const ccKinds = [ccBend, ccMod, ccSustain];
+
+/// Um evento de controle num clipe: [cc] (1 modulação, 64 pedal, 128 pitch bend), a batida contada
+/// do início do clipe e o valor (modulação 0..1, pedal 0 solto/1 embaixo, bend −1..1).
+class MidiCc {
+  int cc;
+  double beat, value;
+
+  MidiCc({required this.cc, required this.beat, required this.value});
+
+  MidiCc.fromJson(Map<String, dynamic> j) : cc = j['cc'] as int, beat = (j['beat'] as num).toDouble(), value = (j['value'] as num).toDouble();
+
+  Map<String, dynamic> toJson() => {'cc': cc, 'beat': beat, 'value': value};
+
+  MidiCc copy() => MidiCc(cc: cc, beat: beat, value: value);
+
+  /// Faixa de valores do controle: −1..1 no bend, 0..1 nos outros.
+  static double clampValue(int cc, double v) => cc == ccBend ? v.clamp(-1.0, 1.0).toDouble() : v.clamp(0.0, 1.0).toDouble();
+
+  /// O valor em repouso (bend no centro, roda e pedal em zero).
+  static const neutral = 0.0;
+}
+
 /// Clipe de notas numa faixa de instrumento. Posição e duração em batidas; notas além da
 /// duração (ou antes do 0, depois de aparar a esquerda) ficam guardadas mas não tocam.
 class MidiClip {
@@ -130,10 +161,16 @@ class MidiClip {
   double start, length;
   List<MidiNote> notes;
 
+  /// Eventos de controle (pitch bend, modulação, pedal), com a batida contada do início do clipe.
+  /// Ficam de fora do JSON quando vazia: documentos sem controles continuam idênticos.
+  List<MidiCc> controls;
+
   /// Escala escolhida no editor ("tônica:id", ver `ClipScale` em `midi_tools.dart`); null = sem escala.
   String? scale;
 
-  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes, this.scale}) : notes = notes ?? [];
+  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes, List<MidiCc>? controls, this.scale})
+    : notes = notes ?? [],
+      controls = controls ?? [];
 
   MidiClip.fromJson(Map<String, dynamic> j)
     : id = j['id'],
@@ -141,6 +178,7 @@ class MidiClip {
       start = (j['start'] as num).toDouble(),
       length = (j['length'] as num).toDouble(),
       notes = [for (final n in j['notes'] as List) MidiNote.fromJson(n)],
+      controls = [for (final e in (j['cc'] as List?) ?? const []) MidiCc.fromJson(e)],
       scale = j['scale'] as String?;
 
   Map<String, dynamic> toJson() => {
@@ -149,6 +187,7 @@ class MidiClip {
     'start': start,
     'length': length,
     'notes': [for (final n in notes) n.toJson()],
+    if (controls.isNotEmpty) 'cc': [for (final e in controls) e.toJson()],
     // só quando há escala: documentos sem escala continuam idênticos
     if (scale != null) 'scale': scale,
   };

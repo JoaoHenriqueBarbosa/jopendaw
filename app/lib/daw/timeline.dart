@@ -2611,6 +2611,9 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
             for (var i = 0; i < clip.notes.length && i < _orig.notes.length; i++) {
               clip.notes[i].start = _orig.notes[i].start - delta;
             }
+            for (var i = 0; i < clip.controls.length && i < _orig.controls.length; i++) {
+              clip.controls[i].beat = _orig.controls[i].beat - delta;
+            }
           });
         }
       case _Grab.right:

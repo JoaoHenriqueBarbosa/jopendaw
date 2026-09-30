@@ -55,6 +55,8 @@ const SKIP = new Set([
   'panic',
   'live_on',
   'live_off',
+  'live_bend',
+  'live_cc',
   'watch_fx',
   'watch_analyzer',
   'set_input',
@@ -130,6 +132,12 @@ function prepareCalls(calls, toBeat, bpm) {
       const [, track, start, length, pitch, velocity] = c;
       if (start >= toBeat - EDGE_EPS) continue;
       out.push(start + length > toBeat ? ['note_add', track, start, toBeat - start, pitch, velocity] : c);
+    } else if (name === 'cc_add') {
+      // cc_add(faixa, controle, batida, valor): depois do fim só fica o pedal que sobe, no próprio
+      // fim (senão as notas cortadas ali seguiriam presas por um pedal que o trecho não solta)
+      const [, track, cc, beat, value] = c;
+      if (beat < toBeat - EDGE_EPS) out.push(c);
+      else if (cc === 64 && value < 0.5) out.push(['cc_add', track, cc, toBeat, value]);
     } else {
       out.push(c);
     }

@@ -20,9 +20,11 @@ import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'instruments.dart';
+import 'midi_cc.dart';
 import 'midi_tools.dart';
 import 'model.dart';
 
+part 'piano_roll_cc.dart';
 part 'piano_roll_input.dart';
 part 'piano_roll_paint.dart';
 part 'piano_roll_tools.dart';
@@ -371,7 +373,7 @@ class _PianoRollState extends State<PianoRoll> {
                   children: [
                     _corner(context, d),
                     Expanded(child: _keyboard(g, drums, color)),
-                    if (_Prefs.velocityLane) _velocityCorner(context, d),
+                    if (_Prefs.velocityLane) _controlCorner(context, d),
                   ],
                 ),
               ),
@@ -387,7 +389,7 @@ class _PianoRollState extends State<PianoRoll> {
                             child: _gridArea(g, clip, colors, color, drums),
                           ),
                         ),
-                        if (_Prefs.velocityLane) SizedBox(height: d.velocity, child: _velocityLane(g, clip, colors)),
+                        if (_Prefs.velocityLane) SizedBox(height: d.velocity, child: _controlLane(g, clip, colors)),
                       ],
                     ),
                     Positioned.fill(
@@ -550,7 +552,7 @@ class _PianoRollState extends State<PianoRoll> {
                   _ToolToggle(
                     icon: Icons.bar_chart,
                     on: _Prefs.velocityLane,
-                    tooltip: _Prefs.velocityLane ? 'Ocultar a faixa de velocidade' : 'Mostrar a faixa de velocidade',
+                    tooltip: _Prefs.velocityLane ? 'Ocultar a faixa de velocidade e controles' : 'Mostrar a faixa de velocidade e controles',
                     onTap: () {
                       _Prefs.velocityLane = !_Prefs.velocityLane;
                       _refresh();

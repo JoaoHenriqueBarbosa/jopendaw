@@ -326,15 +326,20 @@ void main() {
       expect(sent('live_off').last, ['live_off', 1, 60]);
 
       engine.log = [];
-      midi(0xB0, 64, 127); // pedal
+      // o pedal vai ao motor, que segura as notas soltas (e grava o pedal); a tecla solta na hora
+      midi(0xB0, 64, 127);
+      expect(sent('live_cc'), [
+        ['live_cc', 1, 64, 1.0],
+      ]);
       midi(0x91, 62, 64);
       midi(0x81, 62, 0);
-      expect(sent('live_off'), isEmpty);
-      midi(0x91, 64, 64);
-      midi(0xB0, 64, 0); // solta o pedal: sai a 62, a 64 segue apertada
       expect(sent('live_off'), [
         ['live_off', 1, 62],
       ]);
+      midi(0x91, 64, 64);
+      midi(0xB0, 64, 0);
+      expect(sent('live_cc').last, ['live_cc', 1, 64, 0.0]);
+      expect(sent('live_off'), hasLength(1), reason: 'soltar o pedal não solta tecla nenhuma: quem segura é o motor');
       midi(0xB0, 123, 0);
       expect(sent('live_off').last, ['live_off', 1, 64]);
       expect(c.liveNotes.value, isEmpty);

@@ -25,11 +25,13 @@ extension _Tools on _PianoRollState {
 
   /// Troca [before] por [after] numa edição só. As novas ocupam o lugar da primeira antiga na lista
   /// e ficam selecionadas; se nada mudou de fato, não grava nada no histórico.
-  void _replace(List<MidiNote> before, List<MidiNote> after) {
+  void _replace(List<MidiNote> before, List<MidiNote> after, {List<MidiCc> Function(List<MidiCc>)? controls}) {
     final clip = _clip;
-    if (clip == null || before.isEmpty || sameNotes(before, after)) return;
+    if (clip == null || before.isEmpty || (sameNotes(before, after) && controls == null)) return;
     final old = before.toSet();
     c.edit((_) {
+      // os eventos de controle do clipe (bend, modulação, pedal) andam junto das ferramentas de tempo
+      if (controls != null) clip.controls = controls(clip.controls);
       final at = clip.notes.indexWhere(old.contains);
       clip.notes.removeWhere(old.contains);
       clip.notes.insertAll(math.min(math.max(at, 0), clip.notes.length), after);
@@ -45,10 +47,26 @@ extension _Tools on _PianoRollState {
   }
 
   /// Aplica uma transformação à seleção (ou a todas as notas).
-  void _transform(List<MidiNote> Function(List<MidiNote>) fn) {
+  void _transform(List<MidiNote> Function(List<MidiNote>) fn, {List<MidiCc> Function(List<MidiCc>)? controls}) {
     final before = _targets;
     if (before.isEmpty) return;
-    _replace(before, fn(before));
+    _replace(before, fn(before), controls: controls);
+  }
+
+  /// Os controles do clipe escalados no tempo como as notas: a partir da primeira nota alvo, todos
+  /// (sem seleção) ou só os que caem no trecho das notas selecionadas.
+  List<MidiCc> Function(List<MidiCc>) _scaleCc(double f) {
+    final t = _targets;
+    final lo = t.map((n) => n.start).reduce(math.min), hi = t.map((n) => n.end).reduce(math.max);
+    final all = _sel.isEmpty;
+    return (cc) => scaleControls(cc, f, lo, from: all ? null : lo, to: all ? null : hi);
+  }
+
+  /// Os controles do trecho das notas alvo espelhados no tempo, como `mirrorTime` faz com elas.
+  List<MidiCc> Function(List<MidiCc>) _mirrorCc() {
+    final t = _targets;
+    final lo = t.map((n) => n.start).reduce(math.min), hi = t.map((n) => n.end).reduce(math.max);
+    return (cc) => mirrorControls(cc, lo, hi);
   }
 
   // ------------------------------------------------------------------ escala
@@ -292,7 +310,7 @@ extension _Tools on _PianoRollState {
       actions: [('ok', 'Aplicar')],
     );
     if (key == null || !mounted) return;
-    _transform((n) => scaleTime(n, f, lengths: lengths));
+    _transform((n) => scaleTime(n, f, lengths: lengths), controls: _scaleCc(f));
   }
 
   // ------------------------------------------------------------------ comandos
@@ -404,14 +422,14 @@ extension _Tools on _PianoRollState {
           item(Icons.trending_up, 'Rampa de velocidade', has ? () => _transform(velocityRamp) : null),
           item(Icons.link, 'Legato', has ? () => _transform(legato) : null, hint: 'Shift+L'),
           item(Icons.more_horiz, 'Staccato…', has ? _staccatoDialog : null),
-          item(Icons.flip, 'Inverter no tempo', has ? () => _transform(mirrorTime) : null),
+          item(Icons.flip, 'Inverter no tempo', has ? () => _transform(mirrorTime, controls: _mirrorCc()) : null),
           item(Icons.swap_vert, 'Inverter na altura', has && melodic ? () => _transform(mirrorPitch) : null),
           item(Icons.history, 'Reverter a ordem das notas', has ? () => _transform(reverseOrder) : null),
           item(Icons.looks_3, 'Colcheias em tercinas', has ? () => _transform(tripletize) : null),
         ]),
         group(Icons.straighten, 'Escalar o tempo', [
-          item(Icons.zoom_in, '×0,5 (metade)', has ? () => _transform((n) => scaleTime(n, .5)) : null),
-          item(Icons.zoom_out, '×2 (dobro)', has ? () => _transform((n) => scaleTime(n, 2)) : null),
+          item(Icons.zoom_in, '×0,5 (metade)', has ? () => _transform((n) => scaleTime(n, .5), controls: _scaleCc(.5)) : null),
+          item(Icons.zoom_out, '×2 (dobro)', has ? () => _transform((n) => scaleTime(n, 2), controls: _scaleCc(2)) : null),
           item(Icons.tune, 'Personalizado…', has ? _scaleTimeDialog : null),
         ]),
         group(Icons.content_cut, 'Cortar e limpar', [

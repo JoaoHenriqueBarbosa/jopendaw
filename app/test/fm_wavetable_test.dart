@@ -97,7 +97,7 @@ void main() {
   });
 
   group('tabelas de parâmetros', () {
-    for (final (kind, count) in [(TrackKind.fm, 42), (TrackKind.wavetable, 39)]) {
+    for (final (kind, count) in [(TrackKind.fm, 44), (TrackKind.wavetable, 41)]) {
       test('${kind.label}: ids de 0 a ${count - 1}, sem repetir, e o motor guarda até 64', () {
         final ids = [for (final p in kind.params) p.id]..sort();
         expect(ids, List.generate(count, (i) => i));

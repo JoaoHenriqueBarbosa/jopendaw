@@ -16,6 +16,7 @@ import 'package:flutter/material.dart' hide Curve;
 import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'expression_wheels.dart';
 import 'instruments.dart';
 import 'knob.dart';
 import 'model.dart';
@@ -190,6 +191,7 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
             ],
             if (keysInHeader) ...[
               const SizedBox(width: 6),
+              ..._wheels(x, 38),
               _octaveButton(x, -1),
               SizedBox(width: 17.0 * _keyCount * 7 / 12, height: 38, child: _keys(x)),
               _octaveButton(x, 1),
@@ -355,12 +357,18 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: Row(
       children: [
+        const SizedBox(width: 6),
+        ..._wheels(x, (x.desktop ? _keysHeightDesktop : _keysHeightMobile) - 12),
         _octaveButton(x, -1),
         Expanded(child: _keys(x)),
         _octaveButton(x, 1),
       ],
     ),
   );
+
+  /// As rodas de bend e de modulação ao lado do teclado (a bateria não tem afinação nem pedal).
+  List<Widget> _wheels(_Ctx x, double height) =>
+      x.t.kind == TrackKind.drums ? const [] : [ExpressionWheels(c: c, track: x.ti, height: height, color: x.color), const SizedBox(width: 6)];
 
   // ---------------------------------------------------------------------- corpo
 

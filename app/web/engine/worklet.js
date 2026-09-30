@@ -26,9 +26,13 @@ const REC_POOL = 8;
 const LEVELS_PER_SEC = 30;
 // Notas registradas numa gravação: grupos de 5 floats (faixa, altura, início, fim, velocidade).
 // 16384 notas são quase meia hora de um pianista rápido (10 por segundo); reservado uma vez, na
-// inicialização.
+// inicialização. Os eventos de controle (bend, modulação, pedal) vêm no mesmo formato, com a
+// altura 256 + controle e o valor no lugar da velocidade, e têm cota própria de 32768.
 const REC_NOTE_FLOATS = 5;
-const REC_NOTES_MAX = REC_NOTE_FLOATS * 16384;
+const REC_NOTES_MAX = REC_NOTE_FLOATS * (16384 + 32768);
+// Chamadas de expressão que um engine.wasm de antes dela não exporta: ignoradas em vez de
+// derrubar o lote inteiro de chamadas.
+const EXPRESSION_CALLS = new Set(['live_bend', 'live_cc', 'cc_add', 'cc_clear']);
 // Diferença de posição entre um bloco e o seguinte que conta como salto (seek) e não como
 // arredondamento: um milionésimo de batida é bem menos que um quadro.
 const BEAT_EPS = 1e-6;
@@ -120,6 +124,7 @@ class EngineProcessor extends AudioWorkletProcessor {
       w.sample_load(msg.id, pl, pr, frames, msg.rate);
     } else if (msg.t === 'calls') {
       for (const [name, ...args] of msg.list) {
+        if (EXPRESSION_CALLS.has(name) && typeof w[name] !== 'function') continue;
         w[name](...args);
         if (name === 'watch_analyzer') this.analyzing = args[0] !== -2;
         // o mesmo limite que o motor aplica ao andamento
