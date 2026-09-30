@@ -423,6 +423,17 @@ class DawTrack {
   String? output;
   List<AutoLane> lanes;
 
+  /// Pasta de faixas (ver `track_groups.dart`): um barramento com esta marca é a linha da pasta e
+  /// as faixas dela vêm logo abaixo, com [groupId] igual ao id dele e a saída apontando para ele.
+  /// Só faz sentido em [TrackKind.bus]; o motor vê um barramento comum.
+  bool isGroup;
+
+  /// Id da pasta a que a faixa pertence (null = fora de pasta).
+  String? groupId;
+
+  /// Pasta recolhida (estado de arranjo guardado no documento): as filhas somem da linha do tempo.
+  bool collapsed;
+
   DawTrack({
     required this.id,
     required this.name,
@@ -443,6 +454,9 @@ class DawTrack {
     List<Send>? sends,
     this.output,
     List<AutoLane>? lanes,
+    this.isGroup = false,
+    this.groupId,
+    this.collapsed = false,
   }) : params = params ?? defaultParams(kind),
        zones = zones ?? [],
        clips = clips ?? [],
@@ -470,7 +484,11 @@ class DawTrack {
       effects = _effects(j['effects']),
       sends = [for (final x in (j['sends'] as List?) ?? []) Send.fromJson(x)],
       output = j['output'],
-      lanes = [for (final x in (j['lanes'] as List?) ?? []) AutoLane.fromJson(x)];
+      lanes = [for (final x in (j['lanes'] as List?) ?? []) AutoLane.fromJson(x)],
+      // documento sem pastas (versão anterior): nenhuma faixa é pasta nem filha
+      isGroup = (j['group'] as bool? ?? false) && TrackKind.parse(j['kind']) == TrackKind.bus,
+      groupId = j['group_id'] as String?,
+      collapsed = j['collapsed'] as bool? ?? false;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -493,6 +511,10 @@ class DawTrack {
     'sends': [for (final x in sends) x.toJson()],
     'output': output,
     'lanes': [for (final l in lanes) l.toJson()],
+    // só com pastas: um documento sem elas sai igual ao de antes
+    if (isGroup) 'group': true,
+    if (groupId != null) 'group_id': groupId,
+    if (isGroup && collapsed) 'collapsed': true,
   };
 
   /// Valor de um parâmetro do instrumento (o padrão da tabela se não foi mexido).
@@ -625,7 +647,21 @@ class DawDoc {
       masterEffects = _effects(j['master_effects']),
       masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)],
       markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat)),
-      midiMap = MidiMap.fromJson(j['midi_map']);
+      midiMap = MidiMap.fromJson(j['midi_map']) {
+    _repairGroups();
+  }
+
+  /// Solta as filhas cuja pasta não existe (documento editado à mão ou de uma versão que perdeu a
+  /// pasta): elas seguem como faixas comuns. Pasta é sempre barramento; barramento nunca é filho.
+  void _repairGroups() {
+    final folders = {
+      for (final t in tracks)
+        if (t.isGroup && t.kind == TrackKind.bus) t.id,
+    };
+    for (final t in tracks) {
+      if (t.groupId != null && (!folders.contains(t.groupId) || t.kind == TrackKind.bus)) t.groupId = null;
+    }
+  }
 
   Map<String, dynamic> toJson() => {
     'version': version,

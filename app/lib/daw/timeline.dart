@@ -34,6 +34,8 @@ import 'tempo_map.dart';
 import 'warp_dialog.dart';
 import 'model.dart';
 import 'structure_menu.dart';
+import 'track_groups.dart';
+import 'track_groups_ui.dart';
 
 const _rulerHeight = 30.0;
 
@@ -91,6 +93,13 @@ class Timeline extends StatelessWidget {
   double get laneHeight => (compact ? 64 : 76) * c.laneScale.factor;
 
   Widget _header(_Row r) => switch (r.kind) {
+    _RowKind.track when c.doc.tracks[r.track].isGroup => GroupHeader(
+      key: ValueKey('t:${c.doc.tracks[r.track].id}'),
+      c: c,
+      index: r.track,
+      height: r.height,
+      compact: compact,
+    ),
     _RowKind.track => _TrackHeader(key: ValueKey('t:${c.doc.tracks[r.track].id}'), c: c, index: r.track, height: r.height, compact: compact),
     _RowKind.lane => AutomationLaneHeader(
       key: ValueKey('a:${r.lane!.id}'),
@@ -300,6 +309,11 @@ class _Layout {
 
     for (var i = 0; i < c.doc.tracks.length; i++) {
       tops.add(y);
+      // filha de pasta recolhida: sem linha e sem altura (o bloco vazio nunca é a faixa sob um y)
+      if (c.doc.hiddenByGroup(i)) {
+        ends.add(y);
+        continue;
+      }
       rows.add(_Row(_RowKind.track, i, y, laneHeight));
       y += laneHeight;
       lanes(i, c.doc.tracks[i].lanes);
@@ -333,7 +347,12 @@ class _Layout {
     for (var i = 0; i < blockEnd.length; i++) {
       if (y < blockEnd[i]) return i;
     }
-    return blockEnd.length - 1;
+    // abaixo de tudo: a última faixa visível (as filhas de pasta recolhida têm bloco vazio)
+    var i = blockEnd.length - 1;
+    while (i > 0 && blockEnd[i] == blockEnd[i - 1]) {
+      i--;
+    }
+    return i;
   }
 }
 
@@ -790,7 +809,18 @@ class _TrackHeaderState extends State<_TrackHeader> {
             children: [
               Row(
                 children: [
-                  Container(width: 4, color: color),
+                  // filha de pasta: uma tira da cor da pasta na frente (no celular, dentro dos 4 px da barra
+                  // da faixa: a linha de baixo do cabeçalho não tem folga)
+                  if (!compact && c.doc.folderOf(index) >= 0) GroupIndent(color: trackColorAt(c.doc.tracks[c.doc.folderOf(index)].color)),
+                  Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: color,
+                      border: compact && c.doc.folderOf(index) >= 0
+                          ? Border(left: BorderSide(color: trackColorAt(c.doc.tracks[c.doc.folderOf(index)].color), width: 2))
+                          : null,
+                    ),
+                  ),
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(compact ? 6 : 8, 6, compact ? 2 : 4, 6),
@@ -1159,6 +1189,8 @@ class _TrackMenu extends StatelessWidget {
               return;
             }
             c.removeTrack(index);
+          default:
+            if (v.startsWith('grp:')) await onGroupMenu(context, c, index, v);
         }
       },
       itemBuilder: (context) {
@@ -1185,6 +1217,7 @@ class _TrackMenu extends StatelessWidget {
           ),
           PopupMenuItem(value: 'up', enabled: index > 0, child: const Text('Mover para cima')),
           PopupMenuItem(value: 'down', enabled: index < c.doc.tracks.length - 1, child: const Text('Mover para baixo')),
+          ...groupMenuItems(c, index),
           const PopupMenuItem(value: 'color', child: Text('Trocar a cor')),
           const PopupMenuItem(value: 'delete', child: Text('Apagar a faixa')),
         ];
@@ -1802,6 +1835,7 @@ class _LanesState extends State<_Lanes> {
     bool shown(String id, double start, double end) => (end > c.scrollBeat && start < visibleEnd) || id == c.selectedClip;
     final hint = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white30);
     String? hintOf(DawTrack t) {
+      if (t.isGroup) return t.collapsed ? null : 'Pasta: o volume, o mudo e os efeitos dela valem para as faixas de baixo';
       if (t.kind == TrackKind.bus) return 'Barramento: recebe o som das faixas que enviam ou saem para ele';
       final empty = t.kind.isInstrument ? t.midi.isEmpty : t.clips.isEmpty;
       if (!empty) return null;
@@ -1836,40 +1870,54 @@ class _LanesState extends State<_Lanes> {
                 ),
               ),
               for (var ti = 0; ti < tracks.length; ti++)
-                if (hintOf(tracks[ti]) case final text?)
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    top: layout.trackTop[ti],
-                    height: laneHeight,
-                    child: IgnorePointer(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: hint),
+                if (!doc.hiddenByGroup(ti))
+                  if (hintOf(tracks[ti]) case final text?)
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      top: layout.trackTop[ti],
+                      height: laneHeight,
+                      child: IgnorePointer(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: hint),
+                        ),
                       ),
                     ),
+              // pasta recolhida: a miniatura dos clipes das filhas na linha dela
+              for (var ti = 0; ti < tracks.length; ti++)
+                if (tracks[ti].isGroup && tracks[ti].collapsed)
+                  Positioned(
+                    key: ValueKey('group-mini:${tracks[ti].id}'),
+                    left: 0,
+                    right: 0,
+                    top: layout.trackTop[ti],
+                    height: laneHeight,
+                    child: GroupMiniLane(c: c, index: ti, scrollBeat: c.scrollBeat, pxPerBeat: c.pxPerBeat),
                   ),
               for (var ti = 0; ti < tracks.length; ti++) ...[
-                for (final clip in tracks[ti].clips)
-                  if (shown(clip.id, clip.start, doc.clipEnd(clip)))
-                    Positioned(
-                      key: ValueKey(clip.id),
-                      left: (clip.start - c.scrollBeat) * c.pxPerBeat,
-                      top: layout.trackTop[ti] + 2,
-                      width: math.max(4, doc.clipBeats(clip) * c.pxPerBeat),
-                      height: laneHeight - 4,
-                      child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
-                    ),
-                for (final clip in tracks[ti].midi)
-                  if (shown(clip.id, clip.start, clip.end))
-                    Positioned(
-                      key: ValueKey('midi:${clip.id}'),
-                      left: (clip.start - c.scrollBeat) * c.pxPerBeat,
-                      top: layout.trackTop[ti] + 2,
-                      width: math.max(4, clip.length * c.pxPerBeat),
-                      height: laneHeight - 4,
-                      child: _MidiClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
-                    ),
+                if (!doc.hiddenByGroup(ti)) ...[
+                  for (final clip in tracks[ti].clips)
+                    if (shown(clip.id, clip.start, doc.clipEnd(clip)))
+                      Positioned(
+                        key: ValueKey(clip.id),
+                        left: (clip.start - c.scrollBeat) * c.pxPerBeat,
+                        top: layout.trackTop[ti] + 2,
+                        width: math.max(4, doc.clipBeats(clip) * c.pxPerBeat),
+                        height: laneHeight - 4,
+                        child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
+                      ),
+                  for (final clip in tracks[ti].midi)
+                    if (shown(clip.id, clip.start, clip.end))
+                      Positioned(
+                        key: ValueKey('midi:${clip.id}'),
+                        left: (clip.start - c.scrollBeat) * c.pxPerBeat,
+                        top: layout.trackTop[ti] + 2,
+                        width: math.max(4, clip.length * c.pxPerBeat),
+                        height: laneHeight - 4,
+                        child: _MidiClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
+                      ),
+                ],
               ],
               // por cima dos clipes (a gravação substitui o que estiver embaixo); montada só enquanto
               // grava, então o estado dela (onde começou, quantas voltas deu no loop) nasce e morre
@@ -1882,7 +1930,7 @@ class _LanesState extends State<_Lanes> {
                       c: c,
                       rows: [
                         for (var ti = 0; ti < tracks.length; ti++)
-                          if (tracks[ti].armed && tracks[ti].kind != TrackKind.bus) (layout.trackTop[ti], laneHeight),
+                          if (tracks[ti].armed && tracks[ti].kind != TrackKind.bus && !doc.hiddenByGroup(ti)) (layout.trackTop[ti], laneHeight),
                       ],
                     ),
                   ),

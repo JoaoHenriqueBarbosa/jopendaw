@@ -17,6 +17,8 @@ De cima para baixo, cada canal de faixa tem: lista de efeitos (inserts), lista d
 
 Os barramentos aparecem com um fundo violeta discreto, para não se confundirem com faixas de som.
 
+Quando há **pastas** (ver [02b](02b-timeline-e-clipes.md#pastas-de-faixa-grupos)), uma barra colorida com o rótulo `Grupo` fica sobre o canal da pasta e uma faixa da mesma cor, mais clara, sobre os canais das faixas dela, que vêm logo depois. O fader da pasta controla todas, e um efeito nela vale para todas. Recolher a pasta no arranjo não tira as faixas do mixer.
+
 ## Controles
 
 ### Efeitos do canal (inserts)

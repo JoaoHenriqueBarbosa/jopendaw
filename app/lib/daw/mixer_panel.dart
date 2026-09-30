@@ -21,10 +21,15 @@ import 'meter.dart';
 import 'midi_learn_ui.dart';
 import 'model.dart';
 import 'timeline.dart' show ToggleChip;
+import 'track_groups.dart';
+import 'track_groups_ui.dart';
 
 /// Altura de uma linha das listas de inserts e de envios.
 const _row = 18.0;
 const _stripWidth = 92.0;
+
+/// Folga entre canais (a margem direita de cada um).
+const _stripGap = 6.0;
 
 /// Folga entre as duas listas.
 const _listGap = 3.0;
@@ -110,15 +115,33 @@ class MixerPanel extends StatelessWidget {
       builder: (context, box) {
         final available = box.hasBoundedHeight ? box.maxHeight : 360.0;
         final height = math.max(available, _Layout.minHeight);
+        // com pastas há uma barra de grupo em cima dos canais: o painel cresce essa altura e cada
+        // canal fica com a mesma de antes
+        final extra = c.doc.hasGroups ? groupBarHeight : 0.0;
         final strips = SizedBox(
-          height: height,
+          height: height + extra,
           child: ColoredBox(color: Palette.bar, child: _strips(_Layout.of(c, height))),
         );
-        if (available >= height) return strips;
+        if (available >= height + extra) return strips;
         return SingleChildScrollView(child: strips);
       },
     ),
   );
+
+  /// O canal [i]; com pastas no projeto, sob a barra de grupo (que o marca como pasta ou filha).
+  Widget _slot(int i, _Layout layout) {
+    final strip = _Strip(key: ValueKey(c.doc.tracks[i].id), c: c, index: i, layout: layout);
+    if (!c.doc.hasGroups) return strip;
+    return SizedBox(
+      width: _stripWidth + _stripGap,
+      child: Column(
+        children: [
+          GroupBar(doc: c.doc, index: i, stripWidth: _stripWidth, gap: _stripGap),
+          Expanded(child: strip),
+        ],
+      ),
+    );
+  }
 
   Widget _strips(_Layout layout) => Row(
     children: [
@@ -127,7 +150,7 @@ class MixerPanel extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           children: [
-            for (var i = 0; i < c.doc.tracks.length; i++) _Strip(key: ValueKey(c.doc.tracks[i].id), c: c, index: i, layout: layout),
+            for (var i = 0; i < c.doc.tracks.length; i++) _slot(i, layout),
             _AddStrip(c: c),
           ],
         ),
@@ -135,7 +158,16 @@ class MixerPanel extends StatelessWidget {
       Container(width: 1, color: Palette.hairlineStrong),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: _Strip(c: c, index: -1, layout: layout),
+        child: c.doc.hasGroups
+            ? Column(
+                children: [
+                  const SizedBox(height: groupBarHeight),
+                  Expanded(
+                    child: _Strip(c: c, index: -1, layout: layout),
+                  ),
+                ],
+              )
+            : _Strip(c: c, index: -1, layout: layout),
       ),
     ],
   );
@@ -172,7 +204,7 @@ class _Strip extends StatelessWidget {
       onTap: t == null ? null : () => c.selectTrack(index),
       child: Container(
         width: _stripWidth,
-        margin: EdgeInsets.only(right: _master ? 0 : 6),
+        margin: EdgeInsets.only(right: _master ? 0 : _stripGap),
         padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
           color: background,
@@ -932,8 +964,9 @@ class _KindIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final kind = c.doc.tracks[track].kind;
+    final group = c.doc.tracks[track].isGroup;
     VoidCallback? open;
-    var tip = kind.label;
+    var tip = group ? 'Grupo' : kind.label;
     if (kind.isInstrument) {
       tip = '${kind.label}: abrir o instrumento';
       open = () {
@@ -941,7 +974,7 @@ class _KindIcon extends StatelessWidget {
         c.setDock(Dock.instrument);
       };
     } else if (kind == TrackKind.bus) {
-      tip = '${kind.label}: abrir os efeitos';
+      tip = '${group ? 'Grupo' : kind.label}: abrir os efeitos';
       open = () {
         c.selectTrack(track);
         c.showEffects(track);
@@ -952,7 +985,7 @@ class _KindIcon extends StatelessWidget {
       child: InkWell(
         onTap: open,
         borderRadius: BorderRadius.circular(4),
-        child: Icon(kind.icon, size: 13, color: color),
+        child: Icon(group ? Icons.folder : kind.icon, size: 13, color: color),
       ),
     );
   }

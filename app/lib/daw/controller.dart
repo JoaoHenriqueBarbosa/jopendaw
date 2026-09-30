@@ -34,6 +34,7 @@ import 'model.dart';
 import 'sync.dart';
 import 'tempo_map.dart';
 import 'templates.dart';
+import 'track_groups.dart' show planTrackMove;
 import 'warp.dart';
 import 'wav.dart';
 
@@ -2089,7 +2090,9 @@ class DawController extends ChangeNotifier {
       if (now == null) continue;
       t
         ..armed = now.armed
-        ..monitor = now.monitor;
+        ..monitor = now.monitor
+        // recolher/expandir é estado de arranjo: desfazer uma edição não mexe nele
+        ..collapsed = now.collapsed;
     }
     if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
     _prune();
@@ -2310,6 +2313,12 @@ class DawController extends ChangeNotifier {
     edit((d) {
       final gone = d.tracks.removeAt(i);
       _dropRoutesTo(gone.id);
+      // apagar a pasta solta as filhas (seguem como faixas comuns, com a saída no master)
+      if (gone.isGroup) {
+        for (final t in d.tracks) {
+          if (t.groupId == gone.id) t.groupId = null;
+        }
+      }
       _remapSidechains((old) => old == i ? -1 : (old > i ? old - 1 : old));
       selectedTrack = math.max(0, math.min(selectedTrack, d.tracks.length - 1));
     });
@@ -2317,8 +2326,12 @@ class DawController extends ChangeNotifier {
 
   /// Duplica a faixa logo abaixo dela: clipes, instrumento, efeitos, envios e automação, com ids
   /// novos (e as automações de efeito apontando para os efeitos da cópia).
+  ///
+  /// Uma filha duplicada fica na mesma pasta (a cópia entra logo abaixo dela, dentro do bloco).
+  /// Pasta não se duplica (a cópia do barramento ficaria sem as filhas e quebraria o bloco): nada
+  /// acontece; duplique as faixas dela.
   void duplicateTrack(int i) {
-    if (i < 0 || i >= doc.tracks.length) return;
+    if (i < 0 || i >= doc.tracks.length || doc.tracks[i].isGroup) return;
     edit((d) {
       final src = d.tracks[i];
       // a cópia não sai armada nem monitorando: gravaria (e dobraria a entrada) sem pedir
@@ -2366,19 +2379,39 @@ class DawController extends ChangeNotifier {
   /// barramentos: o roteamento de barramento que passar a apontar para trás é desfeito (a faixa
   /// volta ao master, o envio sai). Sidechains seguem as faixas.
   void moveTrack(int from, int to) {
-    final n = doc.tracks.length;
-    if (from < 0 || from >= n) return;
-    to = to.clamp(0, n - 1);
-    if (to == from) return;
+    // pasta: mover leva as filhas junto; largar dentro de uma pasta põe a faixa nela (ver
+    // `planTrackMove` em track_groups.dart)
+    final plan = planTrackMove(doc.tracks, from, to);
+    if (plan == null) return;
     edit((d) {
-      final selectedId = selectedTrack < n ? d.tracks[selectedTrack].id : null;
-      final before = [for (final t in d.tracks) t.id];
-      d.tracks.insert(to, d.tracks.removeAt(from));
-      final after = _trackIndex();
-      _remapSidechains((old) => old < before.length ? after[before[old]] ?? -1 : -1);
-      _dropBackwardRoutes();
-      if (selectedId != null) selectedTrack = after[selectedId] ?? selectedTrack;
+      plan.applyGroups();
+      setTrackOrder(plan.order);
     });
+  }
+
+  /// Troca a lista de faixas por [order] (o mesmo conjunto reordenado, mais faixas novas ou menos
+  /// faixas apagadas); chamar dentro de um [edit]. Sidechains seguem as faixas, o que mandava para
+  /// uma faixa que saiu é desligado, o roteamento de barramento que ficou apontando para trás é
+  /// desfeito e a seleção acompanha a faixa.
+  void setTrackOrder(List<DawTrack> order) {
+    final d = doc;
+    final selectedId = selectedTrack >= 0 && selectedTrack < d.tracks.length ? d.tracks[selectedTrack].id : null;
+    final before = [for (final t in d.tracks) t.id];
+    final kept = {for (final t in order) t.id};
+    final gone = [
+      for (final id in before)
+        if (!kept.contains(id)) id,
+    ];
+    d.tracks
+      ..clear()
+      ..addAll(order);
+    for (final id in gone) {
+      _dropRoutesTo(id);
+    }
+    final after = _trackIndex();
+    _remapSidechains((old) => old < before.length ? after[before[old]] ?? -1 : -1);
+    _dropBackwardRoutes();
+    if (selectedId != null) selectedTrack = after[selectedId] ?? math.max(0, math.min(selectedTrack, d.tracks.length - 1));
   }
 
   /// Tira do documento envios e saídas para [busId] e a automação desses envios.
@@ -5393,12 +5426,9 @@ class DawController extends ChangeNotifier {
   /// barramento para barramento que passariam a apontar para trás (e a automação desses envios).
   /// Uma frase por rota; vazio se o movimento não quebra nada.
   List<String> routesBrokenByMove(int from, int to) {
-    final n = doc.tracks.length;
-    if (from < 0 || from >= n) return const [];
-    to = to.clamp(0, n - 1);
-    if (to == from) return const [];
-    final order = List.of(doc.tracks);
-    order.insert(to, order.removeAt(from));
+    final plan = planTrackMove(doc.tracks, from, to);
+    if (plan == null) return const [];
+    final order = plan.order;
     final index = {for (var i = 0; i < order.length; i++) order[i].id: i};
     final out = <String>[];
     for (var i = 0; i < order.length; i++) {
@@ -5412,6 +5442,10 @@ class DawController extends ChangeNotifier {
       }
       final o = t.output == null ? null : index[t.output];
       if (o != null && o <= i && order[o].kind == TrackKind.bus) out.add('a saída de "${t.name}" para "${order[o].name}" (volta ao master)');
+    }
+    // entrar ou sair de uma pasta troca a saída da faixa
+    for (final c in plan.changes) {
+      if (c.warning != null) out.add(c.warning!);
     }
     return out;
   }

@@ -137,6 +137,17 @@ Segure o cabeçalho (toque longo; com o mouse, segure o botão por cerca de meio
 
 A ordem das faixas é a ordem do sinal entre barramentos: se mover uma faixa faria um barramento apontar para trás, esse roteamento é desfeito (a faixa volta ao master e o envio sai). Sidechains de compressor e gate acompanham as faixas.
 
+### Pastas de faixa (grupos)
+
+Uma **pasta** organiza faixas de áudio e de instrumento sob um barramento de grupo: o volume, o mudo, o solo e os efeitos da pasta valem para todas as faixas dela (a saída de cada faixa vai para o barramento da pasta; os envios delas seguem como estavam).
+
+- **Criar:** no menu da faixa (três pontos), **Agrupar em pasta…**. O diálogo pede o nome e deixa marcar as faixas (a faixa do menu já vem marcada; `Todas` marca tudo). A pasta nasce no lugar da primeira faixa marcada e as outras descem para logo abaixo dela; faixas que estavam no meio descem para depois do bloco. Uma faixa só também vale.
+- **Linha da pasta:** seta para recolher ou expandir, nome (duplo clique renomeia), `M` e `S` do grupo, efeitos, volume do grupo e medidor. Recolhida, as faixas somem da lista e a linha da pasta mostra uma miniatura dos clipes delas. Recolher é estado do arranjo: fica salvo no projeto e não entra no desfazer.
+- **Mudo e solo:** o mudo da pasta cala todas as faixas dela. O solo da pasta deixa soar só as faixas dela (e o que a pasta alimenta); solo numa faixa da pasta deixa soar só ela e a pasta.
+- **Dentro e fora:** arraste o cabeçalho de uma faixa (toque longo) para entre duas faixas da pasta, ou logo abaixo do cabeçalho dela, e ela entra (a saída passa a ser a pasta). Logo depois da última faixa já é fora. Uma pasta recolhida não engole a faixa: ela pula o bloco. O menu da faixa também tem **Tirar da pasta** e **Mover para a pasta "…"**. Mover a pasta leva as faixas junto. O diálogo `Mover a faixa?` avisa quando a saída da faixa vai mudar.
+- **Desagrupar…** (menu da pasta) pede confirmação: as faixas voltam a sair no Master e o barramento some; se ele tiver efeitos, automação ou receber de outras faixas, fica como barramento comum.
+- **Limites:** não há pasta dentro de pasta, e barramento de retorno não entra em pasta (o app avisa). Duplicar uma faixa da pasta põe a cópia na mesma pasta; a pasta em si não se duplica. Apagar a pasta solta as faixas. No mixer, as faixas aparecem sob uma barra **Grupo** colorida, ao lado do canal da pasta.
+
 ### Nova faixa
 
 A linha **Nova faixa** (botão `+ Faixa` com uma seta) fica logo depois da última faixa. O tooltip é `Nova faixa`. Toque e escolha o tipo. A faixa nova entra no fim da lista, já selecionada, com a próxima cor da paleta.
