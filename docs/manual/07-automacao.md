@@ -6,9 +6,9 @@
 
 *Botão A da faixa: o menu de alvos da automação (Volume, Pan, instrumento e cada efeito da cadeia).*
 
-![Raia de automação de volume com pontos e curvas entre eles; o rótulo mostra a posição e o valor do ponto sob o cursor.](../img/automacao-volume.jpg)
+![Raia de automação de volume sob a faixa Baixo: pontos e curvas entre eles, o seletor de modo L, o olho para ocultar e o X para fechar; ao alto, a faixa Andamento.](../img/automacao-volume.jpg)
 
-*Raia de automação de volume com pontos e curvas entre eles; o rótulo mostra a posição e o valor do ponto sob o cursor.*
+*Raia de automação de volume sob a faixa Baixo: pontos e curvas entre eles, o seletor de modo L, o olho para ocultar e o X para fechar; ao alto, a faixa Andamento.*
 
 ## Onde fica
 
@@ -130,6 +130,10 @@ Parado, os controles mostram o valor fixo. Em `Ler`, arrastar um controle automa
 ## Gravar automação
 
 Em vez de desenhar os pontos, você pode **tocar a música e mexer no controle**: o app grava o movimento como pontos de automação. Serve para fades, varreduras de filtro e ajustes de nível feitos "de ouvido". Só grava com o transporte **tocando**, e não junto com a gravação de áudio ou MIDI.
+
+![O menu do botão Automação da barra: Ler, Escrever, Toque e Trava, cada um com a frase que resume o que faz. O seletor L da raia Volume (à esquerda do olho) mostra o modo daquela raia.](../img/automacao-modos.jpg)
+
+*O menu do botão Automação da barra: Ler, Escrever, Toque e Trava, cada um com a frase que resume o que faz. O seletor L da raia Volume (à esquerda do olho) mostra o modo daquela raia.*
 
 ### Onde fica
 

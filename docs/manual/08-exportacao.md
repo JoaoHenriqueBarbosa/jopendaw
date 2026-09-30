@@ -188,9 +188,9 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 
 O WAV leva o som; o `.mid` leva só as **notas** (e três controles, mais o programa e o alcance do bend de cada faixa), para abrir a melodia em outro programa ou guardá-la como texto musical. Vem do botão `Notas em MIDI (.mid)…` da janela **Exportar áudio**. Para o caminho de volta (importar um `.mid`), veja [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid).
 
-![Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Captura anterior à fase 11: o texto pequeno ainda diz que leva só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.](../img/exportar-midi.jpg)
+![Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. O texto informa que o arquivo leva os andamentos e compassos do projeto (aqui, com o mapa de 120 para 88 BPM), as notas, o pitch bend, a modulação e o pedal, o programa de cada faixa e o alcance do bend.](../img/exportar-midi.jpg)
 
-*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. A captura é anterior à fase 11: o texto pequeno aparece com a frase antiga (`Leva o andamento (120 BPM) e o compasso (4/4)…`, só o inicial). Hoje o texto é `Leva os andamentos e compassos do projeto, as notas, o pitch bend, a modulação e o pedal, o programa de cada faixa e o alcance do bend.`, e o arquivo leva o mapa de andamento e o de compassos inteiros.*
+*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. O texto informa que o arquivo leva os andamentos e compassos do projeto (aqui, com o mapa de 120 para 88 BPM), as notas, o pitch bend, a modulação e o pedal, o programa de cada faixa e o alcance do bend.*
 
 ### Janela Exportar MIDI (.mid)
 
