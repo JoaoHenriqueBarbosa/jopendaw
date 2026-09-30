@@ -71,6 +71,13 @@ class _VersionNameDialogState extends State<_VersionNameDialog> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // o nome padrão já vem selecionado: digitar substitui em vez de emendar
+    _name.selection = TextSelection(baseOffset: 0, extentOffset: _name.text.length);
+  }
+
+  @override
   void dispose() {
     _name.dispose();
     _note.dispose();
