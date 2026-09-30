@@ -11,6 +11,7 @@ import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'history.dart';
+import 'keymap.dart' show shortcutHint;
 import 'snapshots_ui.dart';
 
 /// Abre o painel do histórico.
@@ -20,8 +21,8 @@ Future<void> showHistoryDialog(BuildContext context, DawController c) => showDia
 );
 
 /// "Desfazer: Mover clipe", ou só "Desfazer (Ctrl+Z)" sem passo.
-String undoTooltipText(DawController c) => withMod(c.nextUndo == null ? 'Desfazer (Ctrl+Z)' : '${undoTooltip('Desfazer', c.nextUndo)} (Ctrl+Z)');
-String redoTooltipText(DawController c) => withMod(c.nextRedo == null ? 'Refazer (Ctrl+Shift+Z)' : '${undoTooltip('Refazer', c.nextRedo)} (Ctrl+Shift+Z)');
+String undoTooltipText(DawController c) => '${c.nextUndo == null ? 'Desfazer' : undoTooltip('Desfazer', c.nextUndo)}${shortcutHint('edit.undo')}';
+String redoTooltipText(DawController c) => '${c.nextRedo == null ? 'Refazer' : undoTooltip('Refazer', c.nextRedo)}${shortcutHint('edit.redo')}';
 
 /// Valores do menu dos botões desfazer e refazer.
 enum HistoryMenuChoice { history, versions, saveVersion }
