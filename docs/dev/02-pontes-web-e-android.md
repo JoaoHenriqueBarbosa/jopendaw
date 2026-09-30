@@ -191,6 +191,21 @@ Nenhuma função `jd_*` nova: o Android as recebe pelo `jd_calls`, e o teste de 
 - **Render offline (exportação e congelamento).** Os três nomes **não** estão em `SKIP` (`render-worker.js`) nem em `renderSkip` (`engine_ffi.dart`): o render as aplica ao motor novo junto do documento e a modulação vale no arquivo. Não há tratamento especial no aparo do fim do trecho. O teste `o render (motor novo) recebe a modulação inteira` (`modulation_test.dart`) usa `debugFullSyncCalls()`.
 - **Checklist.** Seguiram o [checklist](#checklist-acrescentar-uma-chamada-nova-de-ponta-a-ponta) (passos 1 a 3, 4 e 8; o item 5 é o "não pular no render").
 
+### Chamada de estilo do metrônomo (`metronome_style`)
+
+Chamada comum (só números, sem ponteiro) da fase 17 (`54bd4da` no motor, `8a9ea40` no app, integradas em `f41fe00` com `engine.wasm` e os três `.so` recompilados; os quatro binários contêm o nome, conferido por `strings`). Semântica, faixas e testes em [01-motor.md](01-motor.md#metrônomo-timbres-subdivisões-e-acento-enginesrcmetronomers-fase-17); o documento e o controlador em [10-app-flutter.md](10-app-flutter.md#punch-pré-roll-tap-tempo-e-opções-do-metrônomo-fase-17-c).
+
+| Chamada | Argumentos (tipo no wasm) | Web (worklet) | Android (`jd_calls`) |
+|---|---|---|---|
+| `metronome_style` | `timbre` (`u32`, 0 clique, 1 madeira, 2 bipe, 3 cowbell, 4 hi-hat), `subdivisão` (`u32`, 0 tempo, 1 colcheias, 2 tercina, 3 semicolcheias, 4 só o acento), `nível do acento` (`f32`), `altura do acento` (`f32`, razão de frequência), `nível da subdivisão` (`f32`) | `w.metronome_style(timbre, sub, accentLevel, accentPitch, subLevel)` (export de `engine/wasm/src/lib.rs`) | `Call::MetronomeStyle { ... }` → `Engine::set_metronome_style`; nenhuma função `jd_*` nova |
+
+- **Ordem no lote.** `_sync` (`controller.dart`) manda `_docCalls`, depois `_metronomeStyleCalls()` e por último `_monitorCalls()`: um motor que não conheça a chamada nova para ali sem perder o resto do lote. A chamada só sai quando o estilo difere do que o motor tem (`_SyncCache.metroSig`, o texto dos cinco números; vazio = tudo no padrão): um projeto com o metrônomo no padrão nunca a envia, e cada mudança de opção manda uma. O volume não vai nela: segue no `metronome(ligado, ganho)` do `_docCalls` (`ganho` = `Volume` do documento, padrão 0,5).
+- **Web: motor antigo.** O nome entrou em `OPTIONAL_CALLS` do `worklet.js` (`8a9ea40`): um `engine.wasm` sem o export ignora a chamada e o metrônomo toca o clique de sempre.
+- **Android: motor antigo.** Um `.so` sem a chamada devolve `UnknownCall` no `apply`, contado em `diag.unknown_calls` sem parar o lote `(lido do código; não testado com um .so antigo)`.
+- **Render offline (exportação e congelamento).** O metrônomo é desligado no preparo do render (`renderSetupCalls` manda `['metronome', 0, 0]`) e a chamada de estilo nem sai do `_sync`: nada disto chega ao arquivo exportado.
+- **Reinício do áudio.** `restartAudio` zera `tempoSig` e `meterSig` do cache, mas **não** `metroSig`: depois de `Reiniciar o áudio` um estilo fora do padrão não é reenviado ao motor novo (que nasce com o clique padrão) até a próxima mudança de opção `(lido do código; não testado)`.
+- **Checklist.** Seguiu o [checklist](#checklist-acrescentar-uma-chamada-nova-de-ponta-a-ponta) (passos 1 a 4 e 8; o teste de paridade do Android lê `api::call_names()`; o item 5 não se aplica).
+
 ### Exports do wasm que não são chamadas (`HOST_ONLY`, `api.rs:226`)
 
 Levam memória por ponteiro; cada hospedeiro tem função própria.

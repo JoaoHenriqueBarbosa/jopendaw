@@ -13,12 +13,12 @@ Comece por aqui, na ordem:
 | [00 Visão geral](manual/00-visao-geral.md) | Mapa da tela, conceitos e glossário |
 | [01 Projetos, modelos e conta](manual/01-projetos-modelos-conta.md) | Entrar, criar projeto, modelos prontos |
 | [01b Nuvem e sincronização](manual/01b-nuvem-e-sincronizacao.md) | Vários aparelhos, conflitos, cotas |
-| [02 Transporte](manual/02-transporte.md) | Barra superior, andamento, loop, metrônomo |
+| [02 Transporte](manual/02-transporte.md) | Barra superior, andamento e tap tempo, loop, metrônomo, punch |
 | [02b Timeline e clipes](manual/02b-timeline-e-clipes.md) | Faixas, clipes, marcadores, minimapa |
 | [02c Pastas de faixa](manual/02c-pastas-de-faixa.md) | Agrupar faixas sob um barramento, recolher e expandir, solo e stems da pasta |
 | [03 Áudio e clipes](manual/03-audio-e-clipes.md) | Importar, fades, ganho |
 | [03b Warp e altura](manual/03b-warp-e-altura.md) | Esticar no tempo, transpor, detectar andamento |
-| [03c Gravação](manual/03c-gravacao.md) | Microfone, tomadas, MIDI ao vivo |
+| [03c Gravação](manual/03c-gravacao.md) | Microfone, tomadas, MIDI ao vivo, punch in/out, pré-roll e opções do metrônomo |
 | [03d Áudio para MIDI](manual/03d-audio-para-midi.md) | Converter melodia cantada em notas |
 | [04 Painel de instrumento](manual/04-painel-de-instrumento.md) | Presets, teclado, knobs |
 | [04a Sintetizador](manual/04a-sintetizador.md) | Subtrativo |
@@ -28,6 +28,7 @@ Comece por aqui, na ordem:
 | [04e Wavetable](manual/04e-wavetable.md) | Tabelas morfáveis |
 | [05 Piano roll](manual/05-piano-roll.md) | Editor de notas |
 | [05b Ferramentas MIDI](manual/05b-ferramentas-midi.md) | Escalas, acordes, arpejo, humanizar |
+| [05c Sequenciador de passos](manual/05c-sequenciador-de-passos.md) | Aba `Passos`: grade de quadradinhos para bateria e sampler fatiado, swing, acentos, fantasmas e 9 padrões prontos |
 | [06 Mixer](manual/06-mixer.md) | Faders, envios, barramentos, master |
 | [06b Analisador e medidores](manual/06b-analisador-e-medidores.md) | Espectro e níveis |
 | [06c Painel de efeitos](manual/06c-painel-de-efeitos.md) | Cadeia de efeitos |
@@ -46,7 +47,9 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | Guia | Resultado |
 |---|---|
 | [Primeira batida do zero](guias/primeira-batida-do-zero.md) | Bateria, baixo e pad em loop, exportados |
+| [Batida com o sequenciador de passos](guias/batida-com-o-sequenciador-de-passos.md) | House de quatro no chão com chimbal, hip-hop com swing e fantasmas, trap com rolos de chimbal, na aba `Passos` |
 | [Gravar uma banda e mixar](guias/gravar-uma-banda-e-mixar.md) | Microfone, tomadas, reverb em barramento, stems |
+| [Regravar um trecho com punch e pré-roll](guias/regravar-um-trecho-com-punch-e-pre-roll.md) | Consertar uma frase de voz com punch in/out, solo com pré-roll sem contagem, tap tempo e metrônomo com subdivisões |
 | [Melodia e harmonia com as ferramentas](guias/melodia-e-harmonia-com-as-ferramentas.md) | Acordes, arpejo, humanizar, escala |
 | [FM e wavetable na prática](guias/fm-e-wavetable-na-pratica.md) | Seis timbres com efeitos |
 | [Sampler multi-zona e fatiar loops](guias/sampler-multi-zona-e-fatiar-loops.md) | Piano em camadas, kit de um loop, round-robin |

@@ -670,7 +670,7 @@ Legenda das colunas de banda: `Limiar, Razão, Ataque, Soltura, Ganho, Joelho`. 
 
 ### Cuidados
 
-- **`Solo` é o som, não só a escuta**: com um `Solo` ligado as outras bandas somem da saída (com uma transição de poucos ms), inclusive na exportação. Confira que nenhum ficou ligado antes de exportar.
+- **`Solo` é o som, não só a escuta**: com um `Solo` ligado as outras bandas somem da saída (com uma transição de poucos ms), inclusive na exportação. Confira que nenhum ficou ligado antes de exportar: desde a fase 17 o cartão mostra o selo `SOLO` enquanto uma banda está em solo e a janela `Exportar áudio` avisa (`Um efeito está em solo ou ouvindo a banda: a exportação sairá assim (Multibanda (nome da faixa))…`), com o efeito ligado; em bypass o selo e o aviso somem `(testado só por testes automáticos)`.
 - Latência 0: não entra na compensação de latência ([06e](06e-compensacao-de-latencia.md)). Não tem `Sidechain`.
 - Sem `Mistura`: para compressão paralela, use um envio para um barramento ([Efeitos em combinação, receita 2](../guias/efeitos-em-combinacao.md#receita-2-bateria-com-compressor-paralelo-em-barramento)).
 - O medidor por banda só aparece no efeito que estiver sendo medido: um por vez, junto com o `Compressor`, o `Gate`, o `Limitador`, o `De-esser` e a `Imagem estéreo`. Toque no gráfico para passar a medida para ele.
@@ -702,7 +702,7 @@ Gráfico à esquerda, medidor de redução ao lado e os knobs à direita (no cel
 | Aviso `OUVINDO A BANDA` (canto superior esquerdo) | Aparece com `Ouvir banda` em `Sim`. | Lembrete de que a saída é só a banda. |
 | Medidor à direita (marcas 1, 3, 6, 12 e 24 dB) | Só leitura. | Redução de ganho em dB, com o traço de pico (1,2 s, depois cai a 12 dB/s), como no [`Compressor`](#2-compressor): número `0.0`, `−4.5` ou `—`. |
 
-O medidor é o mesmo das dinâmicas: um efeito por vez. Com este efeito medido o tooltip é `Redução de ganho agora (o traço segura o pico)`; senão, `O medidor mostra um efeito por vez: toque neste para medir` (também com o efeito em bypass).
+O medidor é o mesmo das dinâmicas: um efeito por vez. Com este efeito medido o tooltip é `Redução de ganho agora (o traço segura o pico)`; senão, `O medidor mostra um efeito por vez: toque neste para medir`. Com o efeito em bypass o tooltip é `Efeito desligado: nada a medir` (desde a fase 17; antes dela o texto de "um efeito por vez" valia também em bypass).
 
 ### Parâmetros
 
@@ -738,7 +738,7 @@ Todos com `Ouvir banda` em `Não` e `Modo` `Banda dividida`, menos o `Banda larg
 ### Cuidados
 
 - Excesso vira ceceio: se a voz soar "sem o s", suba o `Limiar` ou baixe a `Razão`.
-- `Ouvir banda` em `Sim` deixa a saída só com a banda, também na exportação; os presets o desligam.
+- `Ouvir banda` em `Sim` deixa a saída só com a banda, também na exportação; os presets o desligam. Enquanto está ligado, o cartão mostra o selo `OUVINDO A BANDA` ao lado do título e a janela `Exportar áudio` avisa que a exportação sairá assim (ver [06c, cartão de efeito](06c-painel-de-efeitos.md#cartão-de-efeito)).
 - O `Q` alto e a `Frequência` errada fazem o efeito agir em pouca coisa: confira com o medidor e com `Ouvir banda`.
 - Um `Limiar` acima do nível da banda não comprime nada; o efeito é então transparente (saída igual à entrada, no modo dividido).
 
@@ -781,7 +781,7 @@ Grupos `CRUZAMENTOS`, `LARGURA`, `SAÍDA` e `MONO`.
 | `Mono nos graves` (`MONO`) | Tira o lado abaixo da frequência de `Abaixo de`. | `Não`/`Sim`. Padrão `Não`. |
 | `Abaixo de` (`MONO`) | Frequência do mono nos graves. Apagado com `Mono nos graves` em `Não`. | 40 Hz a 500 Hz, log. Padrão 120 Hz. |
 
-O cruzamento médio/agudo fica sempre pelo menos 1,5 vez acima do baixo (com o baixo em 1 kHz e o outro em 1 kHz, o motor usa 1,5 kHz). Todos os controles são automatizáveis ([07 Automação](07-automacao.md)).
+O cruzamento médio/agudo fica sempre pelo menos 1,5 vez acima do baixo (com o baixo em 1 kHz e o outro em 1 kHz, o motor usa 1,5 kHz). O app aplica a mesma regra desde a fase 17: ao mover um dos dois nos extremos, o que passaria do limite para em 1,5× (ou 1/1,5×) o outro, e o valor mostrado no knob é o efetivo `(testado só por testes automáticos)`. Todos os controles são automatizáveis ([07 Automação](07-automacao.md)).
 
 ### Presets
 

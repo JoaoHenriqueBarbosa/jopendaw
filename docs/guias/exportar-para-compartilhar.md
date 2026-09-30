@@ -18,6 +18,7 @@ O que vale para os três cenários:
 
 - **Precisa de conta e de rede.** O motor do app só escreve WAV; FLAC e MP3 são gerados no servidor a partir do WAV que o app renderiza no aparelho. Sem conta, sem rede ou com erro do servidor, a janela oferece `Exportar em WAV mesmo assim` (salva o WAV já renderizado, sem renderizar de novo).
 - **Até 30 minutos por arquivo** (trecho mais `Cauda`). Passando disso, aparece o aviso `O servidor converte até 30 minutos por arquivo: escolha um trecho menor, diminua a cauda ou exporte em WAV.` e `Exportar` fica desligado.
+- **O WAV que sobe não pode passar de 512 MB.** Em taxa e profundidade altas (por exemplo 96 kHz e 24 bits) isso acontece antes dos 30 minutos, com uns 15 minutos: a janela mostra `O WAV desta música passa de 512 MB (N MB), o limite do servidor para converter: exporte em WAV, ou reduza a taxa de amostragem, o trecho ou a cauda.` e deixa `Exportar` desligado, em vez de descobrir no envio.
 - **O MP3 só existe a 44,1 ou 48 kHz.** Ao escolher `MP3 (para compartilhar)` com outra taxa, a janela passa a taxa para 44,1 kHz sozinha.
 - **Tamanhos:** um MP3 CBR pesa a taxa dividida por 8: 128 kbps dá cerca de 0,96 MB por minuto, 192 kbps 1,44 MB, 256 kbps 1,92 MB e 320 kbps 2,40 MB. O WAV 24 bits a 48 kHz pesa 17,3 MB por minuto e o FLAC fica em geral bem abaixo disso (estimativa de 50% a 70%, varia com a música `(não confirmado)`).
 
@@ -29,15 +30,16 @@ O que vale para os três cenários:
 2. Em `FORMATO`, escolha `MP3 (para compartilhar)`. Em `Qualidade do MP3`, deixe `192 kbps (CBR)` (padrão) ou, se quiser o menor arquivo, `128 kbps (CBR)`.
 3. Deixe `INTERVALO` em `Música inteira` (ou `Região do loop`, para mandar só o refrão) e `Cauda` em 2 s.
 4. Se quiser que a prévia soe no volume de um serviço de streaming, ligue `Normalizar o loudness` e deixe `Streaming −14,0` com o teto em −1,0 dBTP.
-5. Toque em `Exportar`. Acompanhe `Enviando ao servidor…`, `Compactando no servidor N%…`, `Baixando o arquivo…`. Ao fim, `Exportação concluída` (o texto sai como `A mixagem foi salva (MP3 (para compartilhar)) em N s.`, com parênteses duplos).
-6. Pegue o arquivo `<nome do projeto>.mp3` nos downloads (no Android, escolha onde salvar) e envie. Uma prévia de 3 minutos a 192 kbps tem cerca de 4,3 MB; a 128 kbps, cerca de 2,9 MB.
+5. Se quiser o seu nome nos metadados e no nome do arquivo, preencha `Artista (opcional)` (o campo aparece com FLAC e MP3).
+6. Toque em `Exportar`. Acompanhe `Enviando ao servidor…`, `Na fila do servidor…` (só se outra exportação estiver sendo convertida), `Compactando no servidor N%…`, `Baixando o arquivo…`. A barra soma o render (metade) e a conversão (outra metade) e não volta para trás. Ao fim, `Exportação concluída` (o texto sai como `A mixagem foi salva (MP3) em N s.`).
+7. Pegue o arquivo `<nome do projeto>.mp3` (ou `<artista> - <nome do projeto>.mp3`, se preencheu o artista) nos downloads (no Android, escolha onde salvar) e envie. Uma prévia de 3 minutos a 192 kbps tem cerca de 4,3 MB; a 128 kbps, cerca de 2,9 MB.
 
 ### Cenário 2: arquivar em FLAC
 
 1. `Exportar` e, em `FORMATO`, `FLAC (sem perda, menor)`.
 2. Nos chips, deixe `24 bits` (o mesmo que o WAV de estúdio). Na lista, `Padrão` serve; `Menor arquivo` demora mais e economiza um pouco de espaço; `Rápido` o contrário.
 3. Deixe `Normalizar` e `Normalizar o loudness` **desligados**: o arquivo morto guarda o som como saiu do mix, com folga para masterizar depois.
-4. Para guardar o projeto separado por faixa, ligue `Stems`. Cada faixa vira um `.flac` (`<projeto> - <faixa>.flac`), convertido um de cada vez; faixa muda sai de fora.
+4. Para guardar o projeto separado por faixa, ligue `Stems`. Cada faixa vira um `.flac` (`<projeto> - <faixa>.flac`, com `<artista> - ` na frente se você preencheu `Artista (opcional)`), convertido um de cada vez; faixa muda sai de fora.
 5. `Exportar`. Guarde os arquivos junto do `.jopendaw` do projeto (`Projeto inteiro (.jopendaw)…` na mesma janela; ver [Backup e levar o projeto](backup-e-levar-projeto-para-outro-aparelho.md)): o FLAC guarda o som, o `.jopendaw` guarda o projeto editável.
 
 ### Cenário 3: o master final em WAV 24 bits e MP3 320
@@ -46,7 +48,7 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 
 1. Exporte primeiro o **WAV**: `WAV 24 bits`, `Normalizar o loudness` ligado, chip `Streaming −14,0`, `Teto de true peak` em −1,5 dBTP (folga para o MP3, ver "Por que funciona"). Leia a frase do resultado: `mediu −14,0 LUFS` quer dizer que chegou.
 2. Abra `Exportar` de novo: a janela já abre com as últimas opções (alvo e teto ficam guardados até fechar o app). Troque só o `FORMATO` para `MP3 (para compartilhar)` e, em `Qualidade do MP3`, para `320 kbps (CBR)` (ou `V0 (VBR, ~245 kbps, a melhor)` para um arquivo menor).
-3. `Exportar`. Os dois arquivos saem com o mesmo nome e extensões diferentes (`<projeto>.wav` e `<projeto>.mp3`), então não se sobrescrevem.
+3. `Exportar`. Os dois arquivos saem com o mesmo nome e extensões diferentes (`<projeto>.wav` e `<projeto>.mp3`), então não se sobrescrevem. Se você preencher `Artista (opcional)`, só o MP3 (e o FLAC) leva o artista: `<artista> - <projeto>.mp3`, enquanto o WAV continua `<projeto>.wav`.
 4. Ouça o MP3 de ponta a ponta antes de mandar. A frase de loudness do segundo export descreve o WAV que foi ao servidor, não o MP3.
 5. Entregue o WAV 24 bits a quem vai masterizar ou distribuir e o MP3 320 a quem só vai ouvir. Guarde o WAV (ou um FLAC dele, cenário 2).
 
@@ -56,7 +58,7 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 - **FLAC de 16 bits.** Chip `16 bits`: para tocar em aparelho que não lê 24 bits. O WAV que sobe ao servidor é de 16 bits, com dither.
 - **Podcast.** MP3 com `Normalizar o loudness` no chip `Podcast −16,0` (ver [Loudness e master, variações](loudness-e-master.md#variações)).
 - **Guardar em FLAC e ainda tocar em um leitor simples.** Exporte os dois formatos, um de cada vez; a janela guarda as últimas opções.
-- **Vários stems.** Cada arquivo espera a fila do servidor: 8 stems são 8 conversões em série. Deixe a aba aberta até a janela dizer `Exportação concluída`.
+- **Vários stems.** Cada arquivo espera a fila do servidor: 8 stems são 8 conversões em série (e, se outra pessoa estiver exportando no mesmo servidor, a sua espera em `Na fila do servidor…`). Deixe a aba aberta até a janela dizer `Exportação concluída`; se ela disser `Exportação cancelada`, no Android, é porque a janela `Salvar` foi fechada.
 
 ## Por que funciona
 
@@ -81,3 +83,4 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 | Cancelei e sobrou áudio na conta | Só num servidor antigo: ele não cancela a conversão em andamento (`409`) | O app tenta apagar de novo depois de 3, 10 e 30 s; se sobrar, na tela `Conta`, `Limpar áudios sem uso` (só leva o que subiu há mais de 1 hora) |
 | A janela diz `Exportação cancelada: você não escolheu onde salvar` | Você fechou a janela `Salvar <nome>` do Android | `Voltar às opções` e exporte de novo, concluindo o `Salvar <nome>` |
 | O MP3 soa mais alto ou estoura na decodificação | Pico do MP3 acima do WAV | Baixe o `Teto de true peak` (−1,5 ou −2,0 dBTP) e exporte de novo |
+| Aviso `Um efeito está em solo ou ouvindo a banda: a exportação sairá assim (...)` | Um `Solo` de banda do `Multibanda` ou o `Ouvir banda` do `De-esser` ficou ligado (o cartão do efeito mostra o selo `SOLO` ou `OUVINDO A BANDA`) | Feche a janela, desligue o solo ou o `Ouvir banda` e exporte de novo; o aviso não impede a exportação |

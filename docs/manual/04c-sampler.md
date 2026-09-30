@@ -287,6 +287,7 @@ Você também pode guardar os seus (`Salvar como preset…`, seção `MEUS PRESE
 6. Ouça: no teclado da tela desça duas vezes com `Oitava abaixo` (de C3 para C1) e toque; ou toque as teclas embaixo do mapa. Cada tecla é uma fatia, na ordem em que aparecem no loop.
 7. No piano roll, escreva as notas nas linhas C1, C#1, D1, ...: para refazer o loop original, uma nota por batida na ordem 1, 2, 3, ...; para reorganizar, embaralhe a ordem, repita uma fatia, tire outra. A duração da nota não corta a fatia.
 8. Ajuste cada fatia que precise: clique no bloco dela e mexa em `Ganho` (por exemplo -3 dB no chimbal), `Pan` ou `Afinação`.
+9. Em vez de escrever as notas no piano roll, use a aba `Passos` do painel de baixo: uma linha por fatia (`Fatia 1 · C1`, `Fatia 2 · C#1`...), um clique por passo, com swing, acentos e fantasmas. Ver [05c Sequenciador de passos](05c-sequenciador-de-passos.md).
 
 ### Montar um instrumento multi-sample com 3 arquivos
 
@@ -318,6 +319,7 @@ Para dar camadas de força do toque a esse instrumento (um piano macio e um fort
 - [04 Painel de instrumento](04-painel-de-instrumento.md): presets, teclado da tela, gestos dos knobs.
 - [03 Áudio e clipes](03-audio-e-clipes.md): importar áudios, fades e ganho de clipes; os áudios do projeto são os mesmos que o sampler e as zonas usam.
 - [05 Piano roll](05-piano-roll.md): escrever as notas que disparam as zonas; o painel `Vel.` (velocidade) é o que escolhe a camada de velocidade.
+- [05c Sequenciador de passos](05c-sequenciador-de-passos.md): a aba `Passos` mostra uma linha por zona e programa as fatias em grade, como uma bateria; o botão `Padrões` só existe na bateria.
 - [05b Ferramentas MIDI](05b-ferramentas-midi.md): `Humanizar` (varia a velocidade e por isso a camada e o round-robin) e `Rampa de velocidade` (passeia pelas camadas); `Staccato` e `Legato` não mudam o tamanho de zonas `Até o fim`.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md): efeitos da faixa (reverberação, filtro) sobre todo o sampler; um insert atua sobre todas as zonas juntas.
 - [07 Automação](07-automacao.md): dá para automatizar `Volume`, `Afinação` e o envelope; as propriedades de cada zona (ganho, pan, faixas, loop) não são automatizáveis.

@@ -1,11 +1,11 @@
 # Configurações, atalhos e Android
 
-> Tudo o que se ajusta uma vez e se esquece: a janela `Configurações` (entrada de áudio, contagem, latência), a lista completa de atalhos de teclado (e como personalizá-los), as permissões de microfone e MIDI, e o que muda entre usar o jopendaw no navegador ou no app Android.
+> Tudo o que se ajusta uma vez e se esquece: a janela `Configurações` (entrada de áudio, contagem, pré-roll, punch, latência e metrônomo), a lista completa de atalhos de teclado (e como personalizá-los), as permissões de microfone e MIDI, e o que muda entre usar o jopendaw no navegador ou no app Android.
 
 ## Onde fica
 
 - **Configurações:** botão de engrenagem na barra de transporte (tooltip `Configurações: entrada de áudio, latência e contagem`), ou a seta ao lado do botão de gravar (`Opções de gravação`) e o item `Configurações de gravação…`.
-- **Atalhos:** botão de teclado com o símbolo de comando na barra de transporte (tooltip `Atalhos do teclado (?)`), ou a tecla `?` com o estúdio em foco. Para **personalizar**, o botão `Personalizar` no rodapé dessa janela (só na web e no computador; no app Android ele não aparece). Passo a passo em [Personalizar os atalhos](#personalizar-os-atalhos).
+- **Atalhos:** a tecla `?` com o estúdio em foco (vale em qualquer largura, com teclado físico); o botão `Atalhos do teclado` no rodapé da janela `Configurações` (sempre presente, e é o caminho no celular); e o botão de teclado com o símbolo de comando na barra de transporte (tooltip `Atalhos do teclado (?)`), que **só existe em janelas de 1640 px ou mais** (em janelas menores, inclusive no celular, ele foi tirado para a barra caber; ver [capítulo 02](02-transporte.md#onde-fica)). Para **personalizar**, o botão `Personalizar` no rodapé dessa janela (só na web e no computador; no app Android ele não aparece). Passo a passo em [Personalizar os atalhos](#personalizar-os-atalhos).
 - **Permissões:** aparecem sozinhas na primeira vez que o app precisa do microfone ou do MIDI (ver abaixo).
 - **Barra de transporte:** no computador fica no topo do projeto; no celular, embaixo ([capítulo 00](00-visao-geral.md)).
 
@@ -13,7 +13,7 @@
 
 ### Janela `Configurações`
 
-Abre com duas seções, `ENTRADA DE ÁUDIO` e `GRAVAÇÃO`, e um único botão `Fechar`. Ao abrir, a janela procura as entradas de áudio e, na web, é aí que o navegador pede permissão para o microfone. Se ninguém mais precisava do microfone, a entrada é fechada de novo ao terminar a procura.
+Abre com três seções, `ENTRADA DE ÁUDIO`, `GRAVAÇÃO` e `METRÔNOMO` (esta desde a fase 17), e, no rodapé, dois botões: `Atalhos do teclado` (à esquerda, botão de texto com o ícone de tecla de comando) e `Fechar` (cheio). Ao abrir, a janela procura as entradas de áudio e, na web, é aí que o navegador pede permissão para o microfone. Se ninguém mais precisava do microfone, a entrada é fechada de novo ao terminar a procura.
 
 **Seção `ENTRADA DE ÁUDIO`**
 
@@ -33,21 +33,41 @@ A escolha da entrada é do **aparelho**: fica guardada nele e não vai para a nu
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Interruptor `Contagem de um compasso` | Liga a contagem: o metrônomo conta um compasso antes de a gravação começar. Legenda: `O metrônomo conta um compasso antes de a gravação começar` | Padrão: ligado, em qualquer projeto novo | Mesmo controle do item `Contagem de um compasso` do menu `Opções de gravação`. Não entra no desfazer |
+| Título `Pré-roll` com cinco fichas de escolha (`Não`, `1`, `2`, `3`, `4`) e, abaixo, o texto `Compassos que tocam a música antes de a gravação valer (com punch, antes do punch in). É independente da contagem: a contagem são os cliques, o pré-roll é o arranjo tocando.` | Quantos compassos do arranjo tocam antes do ponto de gravar (o cursor, ou o punch in com punch ligado). Contados para trás pelo mapa de compassos; perto do zero só vai até o zero | 0 a 4 compassos, padrão `Não` (0) | Mesmo controle da lista `Pré-roll` do menu `Opções de gravação` (`Sem pré-roll`, `1 compasso`…). Só vale com o transporte parado ao apertar `R`. Fora do desfazer |
+| Interruptor `Punch in/out`, com a legenda `Ligue para marcar a região na régua (arraste as pontas vermelhas)` (sem região) ou `Da posição 9.1.1 à 11.1.1: só isso é gravado` (com região; as posições no formato `compasso.tempo.dezesseis-avos`) | Liga o punch: a gravação só vale entre o punch in e o punch out | Padrão desligado. Ligando sem região, ela nasce do loop (se ligado e com largura) ou de dois compassos a partir do cursor | Mesmo controle do botão `Punch (P)` e do item `Punch in/out (P)` da barra. Gravando, avisa `Pare a gravação para ligar ou desligar o punch.`. Fora do desfazer |
+| Botão de texto `Usar a região do loop` | Copia a região do loop para a do punch, sem ligar o punch | Desligado (cinza) se o loop tem 0,01 batida ou menos de largura ou se está gravando; **não exige o loop ligado** | Serve para marcar o punch por cima de uma região de loop já desenhada |
 | Controle deslizante `Compensação de latência` | Ajusta o quanto o áudio gravado é deslocado para acertar a batida | De −200 a 500 ms, passos de 1 ms, padrão 0 ms (vale além da latência do motor e do aparelho, que já é medida sozinha; a ida e volta do monitoramento aparece logo abaixo) | O número aparece sobre o controle enquanto se arrasta; só vale ao soltar |
 | Campo numérico com o sufixo `ms` | O mesmo valor, digitado | Aceita dígitos e o sinal de menos (`-` ou `−`); fora da faixa mostra `De -200 a 500 ms` | Vale ao apertar `Enter`, ao sair do campo ou ao tocar em `Fechar` |
 | Texto de apoio | Como usar | `Quanto o áudio gravado chega atrasado, além do que já é medido sozinho (a latência do motor, com os efeitos e o limitador, e a que o navegador informa para a entrada e a saída): positivo adianta o que for gravado, negativo atrasa. Para medir, grave o metrônomo pelo microfone e ajuste até a batida gravada cair na grade.` No Android, onde está "o navegador" o texto diz `o sistema` | Um número inválido segura a janela aberta com o motivo à vista |
 | Linha `Ida e volta do monitoramento: N ms`, com a legenda `Entrada do aparelho, motor com a compensação dos efeitos e saída, somados: o atraso que quem toca ouve entre o gesto e o som.` | Só informa (não é controle): a soma da latência de entrada do aparelho, da do motor (PDC dos efeitos, cadeia do `Master` e limitador de segurança) e da saída do aparelho, em ms inteiros | Sem o microfone aberto a linha ganha ` (sem a entrada: ela só é medida com o microfone aberto)` e a parte da entrada não entra na soma | É o atraso que quem toca ouve ao monitorar; não muda a gravação nem a `Compensação de latência` |
 | `Fechar` | Fecha a janela | | Leva junto o número digitado e ainda não confirmado |
 
-A contagem e a latência valem para **este projeto** (ficam no documento do projeto, e por isso sobem à nuvem), mas ao receber uma versão nova da nuvem cada aparelho mantém a sua. Nenhuma das duas entra no desfazer (é calibragem, não edição da música). Detalhes de como gravar: [capítulo 03c](03c-gravacao.md).
+A contagem, o pré-roll, o punch (região e liga/desliga) e a latência valem para **este projeto** (ficam no documento do projeto, e por isso sobem à nuvem), mas ao receber uma versão nova da nuvem cada aparelho mantém a sua. Nenhum deles entra no desfazer (é calibragem e preferência, não edição da música).
+
+**Seção `METRÔNOMO`**
+
+Vem depois da `Ida e volta do monitoramento`. Os três primeiros são listas; os quatro seguintes, controles deslizantes com o valor à direita que só entregam o número **ao soltar** (arrastar não manda o estilo ao motor a cada passo). Tudo vale para o projeto, fica fora do desfazer e só vai ao arquivo quando foge do padrão (`metronome_options`, [dev/10](../dev/10-app-flutter.md#punch-pré-roll-tap-tempo-e-opções-do-metrônomo-fase-17-c)).
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Lista `Timbre` | O som do clique | `Clique` (padrão: senoide de 30 ms em 1000 Hz), `Madeira` (60 ms, 800 Hz mais uma parcial em 2,4 vezes), `Bipe agudo` (50 ms, 1800 Hz, corpo plano), `Cowbell` (160 ms, 540 Hz mais uma parcial inarmônica em 1,4815 vezes) e `Hi-hat` (60 ms de ruído com passa-altas em 6000 Hz) | `(o som dos timbres não foi ouvido; durações e frequências são as do código do motor)` |
+| Lista `Subdivisão` | Quantos cliques cabem em cada tempo do compasso | `Um clique por tempo` (padrão), `Colcheias` (2 por tempo), `Tercinas` (3), `Semicolcheias` (4) e `Só o acento do compasso` (1 clique por compasso, no primeiro tempo) | O "tempo" é a semínima em x/4 e a colcheia em 6/8 e 7/8: em 4/4, `Colcheias` dá 8 cliques por compasso; em 6/8, 12 |
+| Lista `Quando soa` | Em que condição o clique toca | `Sempre que ligado` (padrão) ou `Só ao gravar` | No modo `Só ao gravar` o botão do metrônomo (`C`) é a permissão: ligado, o clique só soa gravando, na contagem e no pré-roll |
+| Controle `Volume` | Volume do clique comum | 0 a 100%, padrão 50% | É o ganho da chamada `metronome` do motor (0,5); o do motor sozinho seria 0,6 |
+| Controle `Acento do primeiro tempo` | Nível do clique do primeiro tempo do compasso em relação ao `Volume` | 0 a 200%, padrão 100% | 0% cala o primeiro tempo; os outros seguem |
+| Controle `Altura do acento` | Quanto o acento é mais agudo que o clique comum (razão de frequência) | `×0,50` a `×4,00`, padrão `×1,60` (1600 Hz sobre 1000 Hz no timbre `Clique`) | No `Hi-hat` mexe no corte do passa-altas |
+| Controle `Volume das subdivisões` | Nível dos cliques entre os tempos em relação ao `Volume` | 0 a 200%, padrão 50% | **Só aparece** com `Colcheias`, `Tercinas` ou `Semicolcheias` |
+| Texto de apoio | Lembra como ligar | `Liga e desliga pelo botão do metrônomo (C). O clique acompanha o compasso e o andamento do projeto.` e, no modo `Só ao gravar`, `Liga e desliga pelo botão do metrônomo (C); nesse modo ele só soa gravando, na contagem e no pré-roll.` | |
+
+O motor recebe o estilo pela chamada `metronome_style` quando algo muda; um projeto com tudo no padrão nunca a envia. O clique não vai para a exportação. Detalhes de como gravar: [capítulo 03c](03c-gravacao.md).
 
 ### Janela `Atalhos do teclado`
 
-Abre com a tecla `?` (ou `Shift+/`, que o teclado digita como `?`) ou com o botão da barra. **A lista é gerada do catálogo de ações** (`app/lib/daw/keymap.dart`) e das teclas de agora: se você personalizar um atalho, a janela já mostra o novo (fase 16). O rodapé tem `Personalizar` (só na web e no computador; ver [Personalizar os atalhos](#personalizar-os-atalhos)) e `Fechar`. Os títulos dos grupos aparecem em maiúsculas. Cada linha mostra as teclas (várias separadas por `·`; ação sem tecla mostra `—`) e o texto da ação; com a tela abaixo de 520 px de largura as teclas ficam em cima do texto.
+Abre com a tecla `?` (ou `Shift+/`, que o teclado digita como `?`), com o botão `Atalhos do teclado` do rodapé da janela `Configurações` ou com o botão da barra (só em janelas de 1640 px ou mais). **A lista é gerada do catálogo de ações** (`app/lib/daw/keymap.dart`) e das teclas de agora: se você personalizar um atalho, a janela já mostra o novo (fase 16). O rodapé tem `Personalizar` (só na web e no computador; ver [Personalizar os atalhos](#personalizar-os-atalhos)) e `Fechar`. Os títulos dos grupos aparecem em maiúsculas. Cada linha mostra as teclas (várias separadas por `·`; ação sem tecla mostra `—`) e o texto da ação; com a tela abaixo de 520 px de largura as teclas ficam em cima do texto.
 
 São 8 grupos, nesta ordem: `Transporte`, `Marcadores e loop`, `Visão`, `Edição`, `Painéis`, `Aprender MIDI`, `Teclado do computador (Ctrl+K liga)` (o título escreve as teclas de agora do `Teclado do computador liga/desliga`; no Mac, `⌘+K liga`) e `Piano roll`. Depois vem o grupo `Suspensos enquanto o teclado do computador está ligado`. Antes da fase 16 o grupo `Aprender MIDI` vinha entre `Edição` e `Painéis`.
 
-Nesta página `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). As tabelas abaixo foram conferidas contra `app/lib/daw/keymap.dart` (o catálogo, com as **54 ações** e as teclas padrão), `shortcuts_dialog.dart` e `project_screen.dart` na versão `53ca96d` `(testado só por testes automáticos: a janela nova, gerada do catálogo, não foi vista no navegador)`. Cada tabela é um grupo da janela: **Ação** é o rótulo do catálogo, **Contexto** diz onde a ação vale (ver [Contextos e camadas](#contextos-e-camadas)), **Texto na janela** só aparece quando a janela escreve algo mais longo que o rótulo, e **Id** é o nome estável da ação no arquivo `.jokeys` ([Formato do arquivo](#exportar-e-importar-o-arquivo-jokeys)).
+Nesta página `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). As tabelas abaixo foram conferidas contra `app/lib/daw/keymap.dart` (o catálogo, com as **56 ações** e as teclas padrão; as duas últimas, `Punch liga/desliga` e `Tap tempo`, entraram na fase 17), `shortcuts_dialog.dart` e `project_screen.dart` na versão `53ca96d` `(testado só por testes automáticos: a janela nova, gerada do catálogo, não foi vista no navegador)`. Cada tabela é um grupo da janela: **Ação** é o rótulo do catálogo, **Contexto** diz onde a ação vale (ver [Contextos e camadas](#contextos-e-camadas)), **Texto na janela** só aparece quando a janela escreve algo mais longo que o rótulo, e **Id** é o nome estável da ação no arquivo `.jokeys` ([Formato do arquivo](#exportar-e-importar-o-arquivo-jokeys)).
 
 **Transporte**
 
@@ -58,6 +78,8 @@ Nesta página `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a m
 | Gravar | Geral | `R` | Gravar (com faixas armadas) | `transport.record` |
 | Loop liga/desliga | Geral | `L` | Loop liga/desliga (arraste na régua para marcar a região) | `transport.loop` |
 | Metrônomo | Geral | `C` | | `transport.metronome` |
+| Punch liga/desliga | Geral | `P` | Punch liga/desliga: com ele, a gravação só vale na região marcada na régua | `transport.punch` |
+| Tap tempo | Geral | `T` | Tap tempo: bata no ritmo; o andamento vale quando você para de bater | `transport.tap` |
 
 **Marcadores e loop**
 
@@ -177,12 +199,14 @@ A janela acrescenta ao fim de alguns grupos estas linhas, que descrevem gestos e
 
 **Suspensos enquanto o teclado do computador está ligado**
 
-Este grupo é **calculado** a cada abertura (`suspendedShortcutsOf` em `shortcuts_dialog.dart`) a partir das teclas de agora: entra cada ação do estúdio ou do piano roll que tenha uma tecla **sem `Ctrl`/`⌘` nem `Alt`** que seja letra de nota (`A W S E D F T G Y H U J K O L P`) ou tecla do teclado tocando (as de oitava e velocidade). Se você tirar `Mixer` do `X`, ele sai da lista; se puser `Gravar` no `Y`, ele entra. Com os padrões são estas 14 linhas (o texto é o rótulo da ação e o que a tecla vira):
+Este grupo é **calculado** a cada abertura (`suspendedShortcutsOf` em `shortcuts_dialog.dart`) a partir das teclas de agora: entra cada ação do estúdio ou do piano roll que tenha uma tecla **sem `Ctrl`/`⌘` nem `Alt`** que seja letra de nota (`A W S E D F T G Y H U J K O L P`) ou tecla do teclado tocando (as de oitava e velocidade). Se você tirar `Mixer` do `X`, ele sai da lista; se puser `Gravar` no `Y`, ele entra. Com os padrões são estas 16 linhas (o texto é o rótulo da ação e o que a tecla vira):
 
 | Tecla | Ação suspensa (e no que a tecla se transforma) |
 |---|---|
 | `L` | Loop liga/desliga (vira nota) |
 | `C` | Metrônomo (vira velocidade menor) |
+| `P` | Punch liga/desliga (vira nota) |
+| `T` | Tap tempo (vira nota) |
 | `Shift+L` | Loop no clipe selecionado (vira nota) |
 | `Z` | Enquadrar o projeto inteiro (vira oitava abaixo) |
 | `Shift+Z` | Enquadrar o clipe selecionado (vira oitava abaixo) |
@@ -233,7 +257,7 @@ O tratamento de uma tecla segue esta ordem: (1) teclado tocando, se ligado; (2) 
 
 Cada ação tem até 3 atalhos, e você pode trocar, acrescentar, tirar, restaurar, exportar e importar. Vale para a web e o computador; no app Android o botão não existe (ver [Web e Android](#web-e-android)). Não há personalização por projeto: os atalhos são do aparelho.
 
-**Onde fica.** Abra a janela `Atalhos do teclado` (`?` ou o botão da barra) e toque em `Personalizar` no rodapé. A janela passa a se chamar `Personalizar atalhos` e o botão vira `Voltar à lista`; `Fechar` continua ao lado. As personalizações valem na hora e ficam guardadas sem apertar nada.
+**Onde fica.** Abra a janela `Atalhos do teclado` (`?`, o botão `Atalhos do teclado` das `Configurações` ou o botão da barra, em janelas de 1640 px ou mais) e toque em `Personalizar` no rodapé. A janela passa a se chamar `Personalizar atalhos` e o botão vira `Voltar à lista`; `Fechar` continua ao lado. As personalizações valem na hora e ficam guardadas sem apertar nada.
 
 **A tela.** De cima para baixo:
 
@@ -471,6 +495,18 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 3. Olhe onde a batida gravada caiu em relação à grade. Em `Configurações`, mova `Compensação de latência` (positivo adianta o gravado, negativo atrasa) e grave de novo.
 4. Repita até a batida gravada cair na grade. O valor fica no projeto.
 
+**Escolher pré-roll e punch**
+
+1. Abra `Configurações` (engrenagem da barra) e, em `GRAVAÇÃO`, toque numa ficha de `Pré-roll` (`Não`, `1` a `4`).
+2. Ligue `Punch in/out`: a legenda passa a `Da posição … à …: só isso é gravado`. Ajuste as pontas vermelhas `IN` e `OUT` na régua, ou marque o loop e toque em `Usar a região do loop`.
+3. Feche em `Fechar` e grave com `R` ([capítulo 03c](03c-gravacao.md#punch-pré-roll-e-metrônomo-fase-17)).
+
+**Trocar o timbre do metrônomo e ouvir as subdivisões**
+
+1. Em `Configurações`, na seção `METRÔNOMO`, escolha `Timbre` (`Madeira`, por exemplo) e `Subdivisão` (`Colcheias`).
+2. Ligue o metrônomo (`C`) e toque: o clique de cada tempo ganha um meio-tempo mais baixo. Ajuste `Volume das subdivisões` (que apareceu com a subdivisão) até ele ficar de fundo.
+3. Para o clique só valer gravando, ponha `Quando soa` em `Só ao gravar`.
+
 **Ligar ou desligar a contagem**
 
 1. Abra a seta ao lado do botão de gravar (`Opções de gravação`).
@@ -484,7 +520,7 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 
 **Consultar os atalhos**
 
-1. Aperte `?` ou o botão de atalhos da barra.
+1. Aperte `?`, ou abra `Configurações` (engrenagem) e toque em `Atalhos do teclado`; o botão de atalhos da barra só existe em janelas de 1640 px ou mais.
 2. Role a lista, e feche em `Fechar`.
 
 **Personalizar um atalho (só na web e no computador)**
@@ -509,7 +545,7 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 ## Limites e pegadinhas
 
 - **As mensagens falam do lugar onde você está.** No Android os textos dizem `este aparelho` e `O Android negou o acesso ao microfone` onde a web diz `este navegador` e `O navegador negou o acesso ao microfone` (a janela `Configurações` e os erros de importar áudio, ligar o MIDI e abrir a entrada).
-- **A entrada de áudio é do aparelho; a latência e a contagem são do projeto.** Se você calibrar a latência num aparelho e abrir o projeto em outro, a versão da nuvem não troca o valor de cada aparelho, então calibre em cada um.
+- **A entrada de áudio é do aparelho; a latência, a contagem, o pré-roll, o punch e as opções do metrônomo são do projeto** (mas cada aparelho mantém os seus ao receber uma versão da nuvem). Se você calibrar a latência num aparelho e abrir o projeto em outro, a versão da nuvem não troca o valor de cada aparelho, então calibre em cada um.
 - **A latência está limitada a −200 a 500 ms.** O valor é guardado no projeto e entra na sincronização, mas não no desfazer.
 - **Trocar a entrada no meio da gravação não é permitido:** o seletor fica desligado e o texto pede `Pare a gravação para trocar de entrada.`
 - **Um atalho que "não pega"** costuma ser: campo de texto com foco, teclado do computador ligado (as letras viram notas; o botão da barra mostra `C4 · sem atalhos` e a janela de atalhos tem um grupo que lista o que ficou suspenso), o piano roll sem ter sido o último lugar clicado, ou **você personalizou aquela ação** (abra `?`: a janela mostra a tecla de agora; o tooltip do botão ainda mostra a de fábrica).
@@ -535,6 +571,8 @@ Os atalhos deste assunto (as teclas **padrão**; a janela `?` mostra as suas, se
 | `Shift+K` | Ligar/desligar o modo `Aprender MIDI` (com o teclado do computador ligado vira nota e fica listado em `Suspensos enquanto o teclado do computador está ligado`) |
 | `R` | Gravar |
 | `C` | Metrônomo (com o teclado do computador ligado, vira "velocidade menor" e fica listado em `Suspensos enquanto o teclado do computador está ligado`) |
+| `P` | Punch liga/desliga (com o teclado ligado vira nota) |
+| `T` | Tap tempo (com o teclado ligado vira nota) |
 | `Z` / `X` | Com o teclado ligado: oitava abaixo / acima da faixa que toca (a bateria começa no `C2`) |
 | `Enter` · `Home` | Parar e voltar ao começo |
 | `Delete` · `Backspace` | Apagar o clipe |

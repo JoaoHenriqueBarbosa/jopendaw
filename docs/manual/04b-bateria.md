@@ -126,6 +126,8 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 4. Aperte a barra de espaço para ouvir; ative o loop (ver [02 Transporte](02-transporte.md)) para ajustar tocando.
 5. Ajuste os knobs das peças no painel `Instrumento` enquanto o clipe repete.
 
+Mais rápido: a aba `Passos` faz o mesmo desenho com um clique por passo (ou `Padrões` > `Quatro no chão`); ver [05c](05c-sequenciador-de-passos.md).
+
 ### Dinâmica e notas fantasma
 
 1. No piano roll, mostre a faixa de velocidade (tooltip `Mostrar a faixa de velocidade`).
@@ -149,6 +151,7 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 
 - [04 Painel de instrumento](04-painel-de-instrumento.md): kits, teclado da tela, gestos dos knobs.
 - [05 Piano roll](05-piano-roll.md): as linhas das peças, a grade e a faixa de velocidade.
+- [05c Sequenciador de passos](05c-sequenciador-de-passos.md): a aba `Passos`, a batida em grade de quadradinhos, com swing, acentos, fantasmas e nove padrões prontos.
 - [06 Mixer](06-mixer.md): os envios de reverberação para caixa e palmas, e compressão no barramento da bateria.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md): efeitos na faixa inteira; a bateria sai numa única faixa, então o efeito vale para todas as peças juntas.
 - [07 Automação](07-automacao.md): dá para automatizar os knobs, mas `Afinação`, `Decaimento` e `Timbre` só valem no próximo golpe.
@@ -156,18 +159,7 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 
 ## Sequenciador de passos (aba Passos)
 
-Com uma faixa de bateria (ou de sampler com zonas/fatias) selecionada, o painel de baixo ganha a aba `Passos`: a mesma batida do piano roll, desenhada como grade (uma linha por peça, um quadrado por subdivisão). Ela edita as mesmas notas do clipe, então o piano roll, a exportação MIDI e o som não mudam.
-
-- **Ligar e desligar**: clique no passo; no mouse, arrastar pinta ou apaga vários de uma vez; no celular, arrastar rola a grade e o toque longo seguido de arraste pinta. Cada gesto é um único passo do `Ctrl+Z`.
-- **Velocidade**: o preenchimento do passo mostra a intensidade. Escolha o pincel `Normal`, `Acento` ou `Fantasma`, dê dois cliques rápidos num passo para acentuá-lo, ou toque no nome da linha e arraste na faixa `Velocidade` que aparece embaixo.
-- **Resolução**: 1/4, 1/8, 1/16, 1/32, 1/64 e as tercinas (1/8 e 1/16). `Compassos` (1 a 8) é o tamanho do padrão.
-- **Swing**: o controle escolhe o valor (0 a 75%, 33% dá a tercina) e `Aplicar swing` atrasa as notas dos passos pares; `Tirar swing` devolve. O swing é um atraso das notas, não um ajuste guardado: fechando o app, as notas seguem atrasadas e aparecem como fora da grade.
-- **Fora da grade**: notas com micro-tempo (humanizadas, gravadas) aparecem no passo mais próximo com contorno âmbar e ponto, e não mudam quando você mexe em outros passos.
-- **Padrões**: o botão `Padrões` preenche as linhas com quatro no chão, rock, funk, hip-hop, trap (com rolo de chimbal em 1/32), reggaeton, bossa nova, house e shuffle. Notas de fora do kit ficam.
-- **Ações**: limpar, copiar e colar, deslocar, inverter, aleatorizar (densidade), preencher a cada N passos e `Repetir até o fim do clipe`. Com uma linha selecionada valem só para ela; sem seleção, para todas.
-- **Ouvir**: o alto-falante da linha toca a peça (com o transporte parado, ligar um passo também toca).
-
-Sem clipe sob o cursor, a aba oferece `Criar clipe aqui`.
+Com uma faixa `Bateria` selecionada, o painel de baixo tem a aba `Passos` (entre `Editor` e `Instrumento`): a mesma batida do piano roll desenhada como grade, uma linha por peça (na ordem `Bumbo`, `Caixa`, `Palmas`, `Chimbal fechado`, `Chimbal aberto`, `Aro`, `Tom grave`, `Tom médio`, `Tom agudo`, `Prato de ataque`, `Prato de condução`, `Cowbell`) e um quadrado por subdivisão. Ela edita as mesmas notas do clipe (não há formato novo, então o piano roll, a exportação MIDI e o som não mudam) e traz o botão `Padrões` com nove ritmos prontos (`Quatro no chão`, `Rock`, `Funk`, `Hip-hop`, `Trap`, `Reggaeton (dembow)`, `Bossa nova`, `House` e `Shuffle (tercinas)`), swing e os pincéis `Normal`, `Acento` e `Fantasma`. Tudo está em [05c Sequenciador de passos](05c-sequenciador-de-passos.md); o guia [Batida com o sequenciador de passos](../guias/batida-com-o-sequenciador-de-passos.md) mostra três estilos com valores.
 
 ## Limites e pegadinhas
 

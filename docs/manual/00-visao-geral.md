@@ -45,7 +45,8 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | Parar e voltar (`Enter`) | Para e leva o cursor ao começo (ou ao início do loop). Gravando, encerra a gravação primeiro (tooltip: `Parar a gravação e voltar (Enter)`) | | Também `Home` |
 | `Tocar (espaço)` / `Pausar (espaço)` | Toca a partir do cursor ou pausa. Gravando, o tooltip vira `Parar a gravação (espaço)` e o clique encerra a gravação e pausa | Botão cheio, ciano | |
 | Gravar (círculo vermelho, `R`) | Liga e desliga a gravação nas faixas armadas. Na contagem pisca no andamento do projeto; gravando fica cheio | Tooltip diz quantas faixas estão armadas | Sem faixa armada o tooltip avisa `nenhuma faixa armada; arme no mixer (●)` |
-| Seta ao lado do gravar (`Opções de gravação`) | Menu com `Contagem de um compasso` (marcável) e `Configurações de gravação…` | | Abre a janela do [capítulo 09](09-configuracoes-atalhos-android.md) |
+| Seta ao lado do gravar (`Opções de gravação`) | Menu com `Contagem de um compasso` (marcável), `Punch in/out (P)` (marcável), o bloco `Pré-roll: toca a música antes de gravar` (`Sem pré-roll`, `1 compasso` a `4 compassos`, um marcado) e `Configurações de gravação…` | | Abre a janela do [capítulo 09](09-configuracoes-atalhos-android.md); punch e pré-roll em [Gravação](03c-gravacao.md) |
+| `Punch (P)` (só o ícone de setas cruzadas, logo depois da seta do Gravar; aceso na cor da marca quando ligado) | Liga e desliga o punch in/out: grava só numa região marcada na régua. Tooltips: `Punch (P): grava só numa região. Ligue e ajuste as pontas na régua` (sem região) e `Punch (P): a gravação só vale entre o punch in e o punch out da régua` (com região) | Desligado por padrão | Detalhes em [Gravação](03c-gravacao.md) |
 | Posição | Mostra `compasso.tempo.semicolcheia` (ex.: `1.1.1`) e, embaixo, `m:ss.cc` | Antes do zero (contagem) mostra `−N` em vermelho | |
 | `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM de 20 a 999, com uma casa decimal; `Tempos por compasso` de `1/4` a `32/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. Vale na hora, com ou sem rede; o servidor recebe um espelho depois |
 | `Loop (L) · arraste na régua para marcar` | Liga e desliga o loop | | |
@@ -66,7 +67,7 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | `Seguir o cursor na reprodução` | A janela rola atrás do cursor tocando | Ligado por padrão | Também no menu `Visão` |
 | Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequenas`, `Faixas médias`, `Faixas grandes`, `Seguir o cursor`, `Régua em minutos e segundos` | Altura padrão: média | |
 | Menu de bandeira (`Seções e marcadores (M cria um no cursor)`) | Lista de marcadores (clicar leva o cursor), `Marcador no cursor (M)`, `Loop entre marcadores`, `Loop desta seção`, `Loop no clipe selecionado (Shift+L)` | `Nenhum marcador ainda` quando vazio | A bandeira fica ciano com marcadores |
-| Duração (texto cinza) | Duração do projeto em minutos e segundos; tooltip `Duração do projeto: ... (N compassos)` | | Conta até o fim do último clipe |
+| Duração (texto cinza, ex.: `0:08`) | Duração do projeto em minutos e segundos; tooltip `Duração do projeto: ... (N compassos)` | **Só em janelas de 1640 px ou mais** (some abaixo disso, inclusive no celular) | Conta até o fim do último clipe |
 
 **Grupo 3: painéis de baixo**
 
@@ -85,6 +86,7 @@ A aba `Modulação` do mesmo painel (tooltip `Modulação da faixa: LFO, seguido
 |---|---|---|---|
 | Teclado (`Tocar com o teclado do computador (Ctrl+K)`) | Transforma as letras em teclas de piano na faixa selecionada | Ligado, mostra a oitava e o aviso: `C4 · sem atalhos` (`C2 · sem atalhos` numa bateria); o tooltip vira `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/K/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga` | As letras deixam de ser atalhos enquanto estiver ligado; a lista está na janela de atalhos ([capítulo 09](09-configuracoes-atalhos-android.md)) |
 | Cabo (`Entrada MIDI: ligar teclado ou controlador`) | Liga o MIDI e mostra quantos aparelhos estão conectados | `0` quando ligado sem aparelho | Pede permissão no navegador |
+| `Aprender MIDI (Shift+K): clique num controle e mexa no botão do seu teclado` (ícone de controle remoto, logo depois do cabo) | Liga o modo Aprender MIDI | **Só aparece** com o MIDI ligado, com o modo ligado ou com mapeamentos no projeto | Capítulo próprio: [06f](06f-midi-learn.md) |
 
 **Grupo 5: arquivos e ajustes**
 
@@ -93,10 +95,10 @@ A aba `Modulação` do mesmo painel (tooltip `Modulação da faixa: LFO, seguido
 | `Importar áudio ou MIDI (Ctrl+I)` (rótulo `Importar` quando há largura) | Abre o seletor de arquivos de áudio ou MIDI | áudio: `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff`; MIDI: `mid`, `midi` | Desligado gravando ou com trabalho em andamento |
 | `Exportar áudio (WAV, FLAC ou MP3)` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
 | `Configurações: entrada de áudio, latência e contagem` | Abre `Configurações` | | [Capítulo 09](09-configuracoes-atalhos-android.md) |
-| `Atalhos do teclado (?)` | Abre `Atalhos do teclado`, com a lista das teclas de agora e, no rodapé, o botão `Personalizar` (só na web e no computador) | | Também a tecla `?`. Personalização: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
+| `Atalhos do teclado (?)` | Abre `Atalhos do teclado`, com a lista das teclas de agora e, no rodapé, o botão `Personalizar` (só na web e no computador) | **Só em janelas de 1640 px ou mais** (ao lado da engrenagem) | Em janelas menores: a tecla `?` ou o botão `Atalhos do teclado` no rodapé das `Configurações`. Personalização: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
 | Texto com roda girando (por último na barra) | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
 
-O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones.
+O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones. A duração total e o botão `Atalhos do teclado (?)` são outra regra: só existem quando a janela tem 1640 px ou mais, para a engrenagem caber numa janela de 1512 px ([capítulo 02](02-transporte.md#onde-fica)).
 
 Nesta tabela os tooltips aparecem com `Ctrl`; no Mac e no iOS o app troca `Ctrl` por `⌘` nos tooltips de `Desfazer`, `Refazer`, `Duplicar`, `Importar áudio ou MIDI` e do teclado do computador (por exemplo `Desfazer (⌘+Z)`), e no atalho do item `Duplicar` do menu do clipe.
 
@@ -124,14 +126,15 @@ Ocupa o meio da tela. À esquerda, uma coluna de cabeçalhos de faixa; à direit
 
 Os gestos sobre os clipes (arrastar, aparar, fades, duplo clique) estão no [capítulo 02b](02b-timeline-e-clipes.md).
 
-### Painel inferior (abas Mixer / Editor / Instrumento / Efeitos / Modulação)
+### Painel inferior (abas Mixer / Editor / Passos / Instrumento / Efeitos / Modulação)
 
-Um painel só, com cinco abas; mostra um conteúdo por vez.
+Um painel só, com cinco abas fixas e uma sexta, `Passos`, que só aparece com uma faixa de bateria ou de sampler com zonas selecionada; mostra um conteúdo por vez.
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Aba `Mixer` (tooltip `Mixer (X)`) | Um canal por faixa e o master à direita: inserts, envios, pan, fader, armar/monitorar, mudo/solo, saída | | [Capítulo 06](06-mixer.md) |
 | Aba `Editor` (tooltip `Editor de notas (E)`) | Piano roll do clipe de notas aberto | Vazio: `Nenhum clipe aberto` | [Capítulo 05](05-piano-roll.md) |
+| Aba `Passos` (tooltip `Sequenciador de passos da bateria e do sampler fatiado`) | Sequenciador de passos: as notas do clipe da faixa de bateria (ou de sampler com zonas) como grade de quadradinhos, com swing, acentos, fantasmas e 9 padrões prontos. Fica entre `Editor` e `Instrumento` e só aparece quando a faixa selecionada é uma `Bateria` ou um `Sampler` com zonas | Assunto: `<clipe> · <faixa>`. Sem clipe sob o cursor: `Criar clipe aqui`. Sem tecla própria | [Capítulo 05c](05c-sequenciador-de-passos.md) |
 | Aba `Instrumento` (tooltip `Instrumento da faixa (I)`) | Presets e controles do instrumento da faixa | Em faixa de áudio ou barramento diz `sem instrumento` | [Capítulo 04](04-painel-de-instrumento.md) |
 | Aba `Efeitos` (tooltip `Efeitos da faixa (F)`) | Cadeia de efeitos da faixa selecionada, ou do master | Subtítulo: `<faixa> · N efeitos` ou `Master · sem efeitos` | [Capítulo 06c](06c-painel-de-efeitos.md) |
 | Aba `Modulação` (tooltip `Modulação da faixa: LFO, seguidor de envelope e macros`) | Moduladores da faixa selecionada, ou do master: LFO, seguidor de envelope e macro, cada um com até 4 destinos; `Adicionar` e `Presets` no topo | Subtítulo: `<faixa> · sem moduladores`, `<faixa> · 1 modulador` ou `<faixa> · N moduladores` | [Capítulo 06g](06g-modulacao.md) |
@@ -140,7 +143,7 @@ Um painel só, com cinco abas; mostra um conteúdo por vez.
 | `Fechar o painel (Esc)` | Fecha o painel | | |
 | Alça (fio fino de 6 px acima das abas; também a área vazia da barra de abas) | Arrastar muda a altura | Só no computador; mínimo 230 px; o arranjo nunca fica com menos de 150 px | A altura escolhida vale até fechar o app |
 
-No computador o painel abre com a metade do espaço (mínimo 320 px). No celular ocupa 60% do espaço, sem alça e sem botão de maximizar; abaixo de 560 px de largura as abas mostram só o ícone.
+No computador o painel abre com a metade do espaço (mínimo 320 px). No celular ocupa 60% do espaço, sem alça e sem botão de maximizar; abaixo de 560 px de largura as abas mostram só o ícone (com a aba `Passos` presente, o limite sobe para 760 px).
 
 ### Aviso de falha do áudio (`Reiniciar o áudio`)
 
@@ -175,6 +178,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Altura da raia | 76 px (vezes 0,7 / 1 / 1,5 conforme `P`/`M`/`G`) | 64 px (mesmos fatores) |
 | Painel inferior | Altura arrastável, botão de maximizar | 60% do espaço, fixo |
 | Botões `Importar` e `Exportar` | Com texto se a barra tiver 1540 px ou mais | Só ícone |
+| Duração total e botão `Atalhos do teclado (?)` na barra | Só em janelas de 1640 px ou mais | Não existem (atalhos: `?` ou `Configurações`) |
 | Efeitos (rack) | Cartões na horizontal, na ordem do sinal | Cartões um embaixo do outro |
 | Menu de contexto do botão direito | No navegador, o app usa o botão direito para os menus dos clipes (o menu do navegador é desligado na tela do projeto) | Toque longo (não confirmado) |
 | Atalhos de teclado | Todos | Só com teclado físico conectado (não confirmado) |

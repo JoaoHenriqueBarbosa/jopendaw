@@ -11,6 +11,7 @@ Tudo abaixo supõe compasso de 4 tempos. Números de nível e de efeito são pon
 | Modelo `Gravação de banda` | Cinco faixas prontas (`Voz`, `Violão`, `Baixo`, `Bateria`, `Reverb`), metrônomo e contagem ligados | [01 Projetos, modelos e conta](../manual/01-projetos-modelos-conta.md) |
 | Janela `Configurações` (entrada, `Nível`, `Compensação de latência`, `Contagem de um compasso`) | Microfone, nível e calibragem | [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md), [02 Transporte](../manual/02-transporte.md) |
 | Armar (`Armar para gravar`), `Monitorar a entrada`, `R`, loop, tomadas | Gravar em camadas, ouvir o que grava, escolher a melhor passada | [03c Gravação](../manual/03c-gravacao.md) |
+| `Punch (P)`, `IN` e `OUT` na régua, `Pré-roll` | Regravar só um verso, sem refazer a música (passo 7b) | [03c Gravação](../manual/03c-gravacao.md#punch-pré-roll-e-metrônomo-fase-17), [guia do punch](regravar-um-trecho-com-punch-e-pre-roll.md) |
 | Clipe de áudio: cortar (`S`), fades, menu `Tomadas` | Arrumar o que foi gravado | [03 Áudio e clipes](../manual/03-audio-e-clipes.md), [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md) |
 | Bateria (kit `Acústico eletrônico`, teclado do computador) | Bateria tocada nas teclas, camada por camada | [04b Bateria](../manual/04b-bateria.md), [05 Piano roll](../manual/05-piano-roll.md) |
 | Mixer: fader, pan, `Envio`, barramento `Reverb` | Níveis, posição e espaço | [06 Mixer](../manual/06-mixer.md) |
@@ -93,6 +94,18 @@ A faixa `Bateria` do modelo vem sem notas. Toque-as você mesmo, em camadas, usa
 3. Com o loop ligado (o botão `Loop (L)` aceso), aperte `Espaço` e compare as tomadas ouvindo a voz com a bateria e o violão.
 4. Para ficar com uma frase de cada tomada, corte o clipe nos limites das frases (cursor no ponto, `S`) e escolha a tomada de cada pedaço: o corte copia as tomadas para os dois lados e a troca só muda o áudio. `(não confirmado em uso)`
 
+### 7b. Regravar só um verso com punch (sem refazer a música)
+
+A voz do passo 6 está boa, menos os compassos 7 e 8. Em vez de cantar tudo de novo, grave só esse trecho por cima (a 92 BPM em 4/4 um compasso dura 2,61 s: os compassos 7 e 8 vão de 15,65 s a 20,87 s). Detalhes e números do recurso em [03c Gravação](../manual/03c-gravacao.md#punch-pré-roll-e-metrônomo-fase-17) e no guia [Regravar um trecho com punch e pré-roll](regravar-um-trecho-com-punch-e-pre-roll.md).
+
+1. Desligue o loop (`L`) e ponha o cursor no começo do trecho ruim: clique na régua no compasso 7 (com a grade em `1/4`, o padrão, o cursor cai na batida mais próxima; confira `7.1.1` na caixa de posição).
+2. Ligue o punch (`P`, ou o botão `Punch (P)` logo depois da setinha do gravar). Sem loop ligado, a região nasce com **dois compassos** a partir do cursor: de `7.1.1` a `9.1.1`. Confira em `Configurações` (`Punch in/out`): `Da posição 7.1.1 à 9.1.1: só isso é gravado`. Se o trecho for outro, arraste as pontas vermelhas `IN` e `OUT` na régua.
+3. Na setinha do gravar, escolha `2 compassos` em `Pré-roll` (5,22 s de música antes de você entrar) e desmarque `Contagem de um compasso`: o pré-roll já faz o papel dela. A `Voz` continua armada e com `Monitorar a entrada` ligado (fones).
+4. `R`. Com o pré-roll, o cursor deixa de contar: o transporte parte de `5.1.1` (10,43 s), toca os compassos 5 e 6 e a gravação vale a partir de `7.1.1` (15,65 s). Cante os compassos 7 e 8.
+5. Pode seguir cantando depois do compasso 9: o app não para no punch out; pare com `R`, `Espaço` ou `Enter` quando quiser. Só o trecho de `7.1.1` a `9.1.1` vira clipe (o resto que você cantou depois é descartado).
+6. Ouça (`Espaço`; o cursor voltou a `7.1.1`). O clipe da voz antes e depois do trecho está intacto; no fim do trecho há uma emenda com crossfade de 7 ms. No começo, como o pré-roll fez a gravação começar exatamente no punch in, a emenda é **seca**: se ouvir um estalo ali, selecione o clipe novo e puxe a alça de fade de entrada a uns 5 a 10 ms ([03 Áudio e clipes](../manual/03-audio-e-clipes.md)).
+7. Não gostou: `Ctrl+Z` desfaz a gravação inteira e a frase antiga volta; a região continua marcada para outra passada. Quando terminar, desligue o punch (`P`) para o próximo `R` gravar normalmente.
+
 ### 8. Mixar
 
 Siga a ordem de [Mixagem e automação](mixagem-e-automacao.md): níveis, pan, envios, master. Aqui, com os valores deste projeto:
@@ -116,6 +129,7 @@ Siga a ordem de [Mixagem e automação](mixagem-e-automacao.md): níveis, pan, e
 
 ## Variações
 
+- **Verso regravado com várias tomadas.** Ligue o loop **em cima do trecho** (compassos 7 a 9), use `Configurações` › `Usar a região do loop` e ligue o punch: cada volta é uma tomada só do trecho e você escolhe depois no selo `N tomadas` (passo 7). O cursor deve estar no começo do loop.
 - **Sem contagem de um compasso.** Desmarque `Contagem de um compasso` (menu da seta ao lado do gravar, ou em `Configurações`). Sem contagem, gravar com o transporte já tocando (`Espaço`, depois `R` no ponto) entra "de surpresa": a posição vem do primeiro bloco de áudio capturado.
 - **Baixo sintetizado no lugar do baixo tocado.** Crie uma faixa `Sintetizador`, preset `Baixo sub` (mono, glide de 30 ms), arme, `Ctrl+K` e toque nas teclas (oitava em `C2` ou `C3` com `Z`); as notas gravadas se editam no piano roll. Veja [Primeira batida do zero](primeira-batida-do-zero.md) para o baixo em duas oitavas graves.
 - **Stems para outro programa com volume percebido igual.** Na janela `Exportar áudio`, `Normalizar o loudness` (ficha `Streaming −14,0`, teto `−1,0 dBTP`) e `Stems com o mesmo ganho`: a mixagem vai ao alvo e os stems levam o mesmo ganho, mantendo o equilíbrio (ele só aparece com `Stems` ligado; sem ele, os stems saem como renderizados). Ver [08 Exportação](../manual/08-exportacao.md) e o guia [Loudness e master](loudness-e-master.md). `(não confirmado em uso)`
@@ -145,6 +159,9 @@ Siga a ordem de [Mixagem e automação](mixagem-e-automacao.md): níveis, pan, e
 | Eco ou microfonia | O microfone capta o alto-falante (monitor ou clique do metrônomo) | Fones; desligue o metrônomo (`C`) depois da contagem |
 | As notas do teclado do computador não tocam a bateria | A oitava do teclado está em `C4`, fora do mapa da bateria | `Z` duas vezes até o botão mostrar `C2` |
 | As teclas `S`, `E`, `L`, `C` e `X` não fazem o que se espera | O teclado do computador está ligado (viram notas e oitava) | `Ctrl+K` desliga |
+| `O cursor está depois do punch out: nada seria gravado. Mova o cursor ou a região de punch.` | O punch está ligado e o cursor (sem pré-roll) ficou depois da região | Ponha o cursor antes do punch in (ou use pré-roll, que parte do punch in), ou mova as pontas `IN` e `OUT` |
+| `Nada foi gravado dentro da região de punch: a gravação parou antes do punch in, ou nada foi tocado nela.` | Você parou antes de chegar ao punch in, ou não cantou dentro da região | Grave de novo e só pare depois do punch in |
+| A regravação do verso estala no começo | Com pré-roll a gravação começa exatamente no punch in: emenda seca | Fade de entrada de 5 a 10 ms no clipe novo (passo 7b, item 6) |
 | Duas faixas de áudio receberam o mesmo clipe | As duas estavam armadas | Desarme uma; apague o clipe sobrando (`Delete`) |
 | A primeira tomada tem silêncio na frente | A gravação começou no meio do loop | Ponha o cursor no começo do loop antes de gravar |
 | A tomada ativa não é a que você queria | A ativa é a última passada completa | Passo 7: escolha outra na lista `TOMADAS` |

@@ -240,6 +240,7 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 
 - [Ferramentas MIDI](05b-ferramentas-midi.md): acordes, arpejador, humanizar, legato, escalar o tempo e limpeza das notas; todas usam a seleção do editor.
 - [Melodia e harmonia com as ferramentas](../guias/melodia-e-harmonia-com-as-ferramentas.md): receitas que juntam escala, acorde no clique, arpejo, humanizar e quantizar.
+- [Sequenciador de passos](05c-sequenciador-de-passos.md): em faixa de bateria (ou de sampler com zonas), a aba `Passos` mostra as mesmas notas deste clipe como uma grade de quadradinhos. Ligar ou apagar um passo cria ou apaga uma nota aqui; uma nota movida para fora dos passos (micro-tempo, humanizar) continua tocando onde está e aparece na grade com contorno âmbar. O `Ctrl+Z` é o mesmo dos dois lados.
 - Instrumentos e faixas: o som que sai é o do instrumento da faixa do clipe; a prévia ao editar usa esse mesmo instrumento.
 - Gravação: notas tocadas no teclado do computador ou MIDI e gravadas viram notas de um clipe que se edita aqui (ver capítulo de gravação). Pitch bend, modulação e pedal tocados junto entram no mesmo clipe, na faixa de controle: [Gravação](03c-gravacao.md).
 - [Painel de instrumento](04-painel-de-instrumento.md): as rodas de bend e de modulação do teclado da tela e o `Alcance do bend` de cada instrumento.
