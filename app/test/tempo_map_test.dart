@@ -187,7 +187,7 @@ void main() {
 
   group('documento', () {
     Map<String, dynamic> oldDoc() => {
-      'version': 1,
+      'version': DawDoc.version,
       'bpm': 100.0,
       'beats_per_bar': 3,
       'tracks': <dynamic>[],

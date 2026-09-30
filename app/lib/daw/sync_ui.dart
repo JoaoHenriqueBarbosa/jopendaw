@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'sync.dart';
@@ -69,7 +70,7 @@ class _SyncIndicatorState extends State<SyncIndicator> {
           SyncPhase.syncing => (
             Icons.cloud_sync_outlined,
             Theme.of(context).colorScheme.primary,
-            s.filesTotal > 0 ? 'Sincronizando (${s.filesDone}/${s.filesTotal} arquivos)' : 'Sincronizando',
+            s.filesTotal > 0 ? 'Sincronizando (${s.filesDone}/${plural(s.filesTotal, 'arquivo')})' : 'Sincronizando',
           ),
           SyncPhase.offline => (
             Icons.cloud_off_outlined,

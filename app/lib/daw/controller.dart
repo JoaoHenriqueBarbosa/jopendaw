@@ -2157,6 +2157,14 @@ class DawController extends ChangeNotifier {
   static const tapSlowBpm = 40.0;
   static const tapMinCommitTaps = 3;
 
+  /// A espera até aplicar o andamento [bpm]: 1,3 intervalo, no mínimo [tapCommitDelay] e no máximo
+  /// [TapTempo.resetAfter]: além disso a batida seguinte recomeçaria a sequência de qualquer jeito,
+  /// então a espera não passa do limite em que ela ainda conta (o mais lento é [TapTempo.slowestBpm]).
+  static Duration tapCommitWait(double bpm) {
+    final ms = math.min(60000 / math.max(bpm, 1) * 1.3, TapTempo.resetAfter * 1000).round();
+    return Duration(milliseconds: math.max(ms, tapCommitDelay.inMilliseconds));
+  }
+
   /// O relógio do tap (s); os testes trocam.
   @visibleForTesting
   double Function()? debugTapClock;
@@ -2170,8 +2178,7 @@ class DawController extends ChangeNotifier {
     tapBpm.value = v;
     _tapTimer?.cancel();
     if (v != null) {
-      final gap = Duration(milliseconds: (60000 / math.max(v, 1) * 1.3).round());
-      _tapTimer = Timer(gap > tapCommitDelay ? gap : tapCommitDelay, commitTap);
+      _tapTimer = Timer(tapCommitWait(v), commitTap);
     }
     return v;
   }
@@ -4421,6 +4428,9 @@ class DawController extends ChangeNotifier {
   /// A exportação para nesse arquivo.
   String? exportSaveCanceledName;
 
+  /// Quantos arquivos do WAV direto já tinham sido salvos antes do cancelamento (ou até o fim).
+  int exportSavedCount = 0;
+
   /// Taxa de amostragem do motor (a do contexto de áudio do aparelho: 44,1 ou 48 kHz, em geral):
   /// o espectro vai de 0 à metade dela.
   double engineRate = 48000;
@@ -4968,7 +4978,9 @@ class DawController extends ChangeNotifier {
     if (r == null || !recording || _recBusy) return;
     _recBusy = true;
     // parar na contagem ou no pré-roll não deixa nada a guardar: cancela, mas avisa (não some em silêncio)
-    final cancel = countingIn || (!r.started && r.frames <= r.skip);
+    // (o `started` só muda quando chega um estado do motor: parar logo depois do ponto de gravar, antes
+    // do estado seguinte, também vale pela posição do transporte)
+    final cancel = countingIn || (!r.started && r.frames <= r.skip && _estimatedBeat() < r.start - 1e-6);
     if (cancel) notice = 'Gravação cancelada: você parou antes do ponto de gravar (contagem ou pré-roll); nada foi gravado.';
     r
       ..stopBeat = _estimatedBeat()
@@ -5237,8 +5249,12 @@ class DawController extends ChangeNotifier {
       bool complete(_Piece x) => x.pad == 0 && x.to - x.from >= (f1 - f0) * 0.98;
       var active = pieces.lastIndexWhere(complete);
       if (active < 0) active = at[plan.active] ?? pieces.length - 1;
+      // O fade de saída é do próprio clipe (os últimos 7 ms dele, com o clipe de depois entrando por baixo,
+      // ver [_punchCrossfade]): não precisa de áudio gravado além do punch out, só de a gravação ter chegado
+      // a ele. Antes só havia fade se sobrasse áudio depois (e sem a espera da latência, que é o que
+      // garante essa sobra, a emenda ficava seca).
       final fade = math.min(punchFade, secs / 3);
-      out.add((start: s, seconds: secs, pieces: pieces, active: active, fadeIn: s > plan.start + 1e-9 ? fade : 0.0, fadeOut: e < endBeat - 1e-9 ? fade : 0.0));
+      out.add((start: s, seconds: secs, pieces: pieces, active: active, fadeIn: s > plan.start + 1e-9 ? fade : 0.0, fadeOut: e >= punch.$2 - 1e-9 ? fade : 0.0));
     }
     return out;
   }
@@ -5631,6 +5647,7 @@ class DawController extends ChangeNotifier {
     _exportCanceled = false;
     exportReport = null;
     exportSaveCanceledName = null;
+    exportSavedCount = 0;
     status = 'Exportando…';
     notifyListeners();
     // ganho da mixagem em dB, para os stems quando pedirem o mesmo (a mixagem é a primeira saída)
@@ -5690,6 +5707,7 @@ class DawController extends ChangeNotifier {
               exportSaveCanceledName = names[batch[k]];
               return;
             }
+            exportSavedCount++;
           }
           if (_disposed) return;
         }

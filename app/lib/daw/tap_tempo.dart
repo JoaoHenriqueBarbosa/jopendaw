@@ -7,6 +7,10 @@
 ///   passa a ser a primeira;
 /// - um intervalo curto demais ([minInterval], mais de 400 BPM) é o ricochete do toque: a batida é
 ///   ignorada e não mexe na sequência;
+/// - andamento mais lento: com as batidas a intervalos iguais, [slowestSteadyBpm] (30 BPM: o intervalo
+///   entre a primeira e a segunda não passa de [firstGap]); depois de lançado o ritmo a média pode
+///   cair até [slowestBpm] (24 BPM: nenhum intervalo passa de [resetAfter]). Mais lento que isso
+///   recomeça a sequência; o andamento digitado no campo vai até [minBpm];
 /// - o resultado fica entre [minBpm] e [maxBpm] e com uma casa decimal (a resolução do resto do app).
 library;
 
@@ -21,6 +25,12 @@ class TapTempo {
 
   /// Depois da primeira batida, um intervalo maior que isto (s) descarta a primeira.
   static const firstGap = 2.0;
+
+  /// O andamento mais lento que a sequência aguenta (BPM): um intervalo de [resetAfter].
+  static const slowestBpm = 60 / resetAfter;
+
+  /// O mais lento com batidas regulares: a segunda vem até [firstGap] depois da primeira.
+  static const slowestSteadyBpm = 60 / firstGap;
 
   /// Intervalo mínimo (s) entre duas batidas.
   static const minInterval = 0.15;

@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'instruments.dart';
@@ -24,9 +25,12 @@ class _Prefs {
   /// Compassos do padrão; null: os que cobrem as notas do clipe.
   int? bars;
 
-  /// Swing que as notas do clipe já têm nesta resolução (derivado do documento a cada leitura, não
-  /// guardado: desfazer e reabrir o projeto não o deixam para trás) e o que o controle mostra.
-  double swing = 0, pending = 0;
+  /// O valor que o usuário arrastou no controle de swing (null: nenhum) e o swing detectado nas
+  /// notas quando arrastou. O swing das notas nunca é guardado (desfazer e reabrir o projeto não o
+  /// deixam para trás): o arrasto só vale enquanto o detectado for o mesmo, senão o controle volta a
+  /// mostrar o das notas.
+  double? drag;
+  double dragBase = 0;
   int? selected;
   StepDynamic brush = StepDynamic.normal;
 }
@@ -134,23 +138,22 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
   }
 
   /// A grade do padrão. O swing vem das notas (ver [detectSwing]); quando ele muda por fora (desfazer,
-  /// edição no piano roll) o controle acompanha.
-  StepLayout _layout(MidiClip clip, _Prefs p) {
-    final sw = _swingOf(clip, p);
-    return StepLayout.of(barBeats: _barBeats(clip), bars: _barsOf(clip, p), step: resolutionById(p.res).beats, swing: sw);
-  }
+  /// edição no piano roll) o controle acompanha. Sem efeito colateral: roda no build.
+  StepLayout _layout(MidiClip clip, _Prefs p) => _layoutBase(clip, p).withSwing(_swingOf(clip, p));
+
+  StepLayout _layoutBase(MidiClip clip, _Prefs p) =>
+      StepLayout.of(barBeats: _barBeats(clip), bars: _barsOf(clip, p), step: resolutionById(p.res).beats);
 
   /// A grade reta estendida ao clipe inteiro: as ações de clipe (swing) valem além dos compassos do padrão.
-  StepLayout _fullLayout(MidiClip clip, _Prefs p) =>
-      StepLayout(step: resolutionById(p.res).beats, steps: stepsFor(clip.length, 1, resolutionById(p.res).beats));
+  StepLayout _fullLayout(MidiClip clip, _Prefs p) => _layoutBase(clip, p).covering(clip.length);
 
-  double _swingOf(MidiClip clip, _Prefs p) {
-    final sw = detectSwing(clip.notes, _fullLayout(clip, p));
-    if ((sw - p.swing).abs() > 1e-9) {
-      p.swing = sw;
-      p.pending = sw;
-    }
-    return sw;
+  /// O swing que as notas têm nesta resolução.
+  double _swingOf(MidiClip clip, _Prefs p) => detectSwing(clip.notes, _fullLayout(clip, p));
+
+  /// O swing que o controle mostra: o arrastado, enquanto as notas não mudaram por baixo dele.
+  double _shownSwing(MidiClip clip, _Prefs p) {
+    final d = p.drag, det = _swingOf(clip, p);
+    return d != null && (p.dragBase - det).abs() < 1e-9 ? d : det;
   }
 
   /// Segue o cursor na grade durante a reprodução.
@@ -376,12 +379,11 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
     pr.res = p.resolution;
     final bar = _barBeats(now);
     pr.bars = p.bars.clamp(1, maxPatternBars);
-    final full = _fullLayout(now, pr);
-    final sw = _swingOf(now, pr);
-    // o padrão de fábrica entra reto: o swing que o clipe tinha sai (de todas as notas, para a grade
-    // não ficar com uma parte no swing e outra reta) no mesmo passo do desfazer
+    // o padrão de fábrica entra reto: o swing que o clipe tinha, em qualquer resolução (não só a do
+    // padrão: o de 1/16 não sai com o Trap em 1/32), sai de todas as notas, para a grade não ficar
+    // com uma parte no swing e outra reta, no mesmo passo do desfazer
     _run(now, (n) {
-      if (sw > 0) retimeSwing(n, full, sw, 0);
+      removeAllSwing(n, now.length);
       applyPreset(n, p, clipLength: now.length, barBeats: bar);
     }, notice: 'Padrão ${p.name} aplicado.');
   }
@@ -395,7 +397,7 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
         _run(clip, (n) => clearRows(n, {for (final r in rows) r.pitch}, l));
       case 'copy':
         _clipboard = copyPattern(clip.notes, scope, l);
-        setState(() => _notice = 'Padrão copiado (${_clipboard!.notes.length} notas).');
+        setState(() => _notice = 'Padrão copiado (${plural(_clipboard!.notes.length, 'nota')}).');
       case 'paste':
         final cb = _clipboard;
         if (cb != null) _run(clip, (n) => pastePattern(n, scope, l, cb));
@@ -432,18 +434,18 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
   void _swing(MidiClip clip, _Prefs pr, double to) {
     final full = _fullLayout(clip, pr);
     final from = _swingOf(clip, pr);
+    pr.drag = null;
     final res = resolutionById(pr.res).label;
     final probe = [for (final n in clip.notes) n.copy()];
     if (retimeSwing(probe, full, from, to) == 0) {
       setState(() {
-        pr.pending = from;
         _notice = 'Nenhuma nota está nos passos pares de $res: troque a resolução para a das notas ou desenhe algo antes.';
       });
       return;
     }
     var moved = 0;
     _run(clip, (n) => moved = retimeSwing(n, full, from, to));
-    setState(() => _notice = to == 0 ? 'Swing tirado ($moved notas).' : 'Swing de ${(to * 100).round()}% aplicado ($moved notas, em $res).');
+    setState(() => _notice = to == 0 ? 'Swing tirado (${plural(moved, 'nota')}).' : 'Swing de ${(to * 100).round()}% aplicado (${plural(moved, 'nota')}, em $res).');
   }
 
   void _createClip(int lane) {
@@ -697,6 +699,7 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
     final theme = Theme.of(context);
     final small = theme.textTheme.labelMedium!.copyWith(color: Colors.white70);
     final bars = _barsOf(clip, pr);
+    final detected = l.swing, shown = _shownSwing(clip, pr);
     final drums = t.kind == TrackKind.drums;
     final scopeName = pr.selected == null ? 'todas as linhas' : rows.firstWhere((r) => r.pitch == pr.selected).name;
     Widget gap() => const SizedBox(width: 12);
@@ -734,24 +737,27 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
         icon: const Icon(Icons.add, size: 16),
       ),
       gap(),
-      Text('Swing ${(pr.pending * 100).round()}%', style: small),
+      Text('Swing ${(shown * 100).round()}%', style: small),
       SizedBox(
         width: 120,
         child: Slider(
           key: const ValueKey('step-swing'),
-          value: pr.pending * 100,
+          value: shown * 100,
           min: 0,
           max: 75,
           divisions: 75,
-          onChanged: (v) => setState(() => pr.pending = v.roundToDouble() / 100),
+          onChanged: (v) => setState(() {
+            pr.dragBase = detected;
+            pr.drag = v.roundToDouble() / 100;
+          }),
         ),
       ),
       TextButton(
         key: const ValueKey('step-swing-apply'),
-        onPressed: (pr.pending - pr.swing).abs() > 1e-9 ? () => _swing(clip, pr, pr.pending) : null,
+        onPressed: (shown - detected).abs() > 1e-9 ? () => _swing(clip, pr, shown) : null,
         child: const Text('Aplicar swing'),
       ),
-      TextButton(key: const ValueKey('step-swing-off'), onPressed: pr.swing > 0 ? () => _swing(clip, pr, 0) : null, child: const Text('Tirar swing')),
+      TextButton(key: const ValueKey('step-swing-off'), onPressed: detected > 0 ? () => _swing(clip, pr, 0) : null, child: const Text('Tirar swing')),
       gap(),
       for (final d in StepDynamic.values)
         Padding(

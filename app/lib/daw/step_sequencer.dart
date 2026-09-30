@@ -273,36 +273,62 @@ int retimeSwing(List<MidiNote> notes, StepLayout l, double from, double to) {
 }
 
 /// O swing (fração de passo, em múltiplos de 1%, 0 a 0,75) que as notas de [notes] já têm nesta
-/// resolução: o que deixa mais notas exatamente nos passos de [l]. Empate fica com o menor (reto). É
-/// o que liga o estado do swing ao documento: desfazer, reabrir o projeto ou editar no piano roll
-/// mudam as notas, e o swing mostrado acompanha. [l] deve cobrir o clipe inteiro.
+/// resolução. É o que liga o estado do swing ao documento: desfazer, reabrir o projeto ou editar no
+/// piano roll mudam as notas, e o swing mostrado acompanha. [l] deve cobrir o clipe inteiro.
+///
+/// A leitura é conservadora, para não confundir humanização, rolos (1/32 visto em 1/16) ou tercinas
+/// com swing: só há swing quando (1) TODAS as notas dos passos ímpares (o 2º, o 4º... contando do 1;
+/// o passo vai de `k·passo` até o próximo) estão no mesmo deslocamento, de 1% a 75% do passo; (2) há
+/// ao menos uma nota exatamente num passo par; e (3) nenhuma nota dos passos pares está fora da
+/// grade (se estiver, o desenho não é uma grade com swing, e lê 0). Notas só nos passos ímpares, ou
+/// todas retas, leem 0. Não há desempate: em 1/8 uma colcheia reta é 0% e só o deslocamento comum a
+/// todas as colcheias de contratempo vira swing (75% é o máximo). Um swing aplicado em 1/16 cai, em
+/// 1/8, em passos pares fora da grade e lê 0 ali: cada resolução lê o seu (ver [detectSwings]).
 double detectSwing(Iterable<MidiNote> notes, StepLayout l) {
-  final straight = l.withSwing(0);
-  final cands = <int>{};
+  int? pct;
+  var evens = 0;
   for (final n in notes) {
     final k = (n.start / l.step + 1e-9).floor();
-    if (k < 0 || !k.isOdd) continue;
-    final pct = ((n.start / l.step - k) * 100).round();
-    if (pct > 0 && pct <= 75) cands.add(pct);
-  }
-  var best = 0, bestScore = _onGridCount(notes, straight);
-  for (final pct in cands.toList()..sort()) {
-    final score = _onGridCount(notes, l.withSwing(pct / 100));
-    if (score > bestScore) {
-      best = pct;
-      bestScore = score;
+    if (k < 0) continue;
+    final off = n.start - k * l.step;
+    if (k.isEven) {
+      if (off.abs() > stepEps) return 0;
+      evens++;
+      continue;
     }
+    final p = (off / l.step * 100).round();
+    if (p < 0 || p > 75 || (off - p / 100 * l.step).abs() > stepEps) return 0;
+    if (pct != null && pct != p) return 0;
+    pct = p;
   }
-  return best / 100;
+  return pct == null || evens == 0 ? 0 : pct / 100;
 }
 
-int _onGridCount(Iterable<MidiNote> notes, StepLayout l) {
-  var c = 0;
-  for (final n in notes) {
-    final i = l.cellOf(n.start);
-    if (i != null && l.onGrid(n, i)) c++;
+/// O swing que o clipe de [clipLength] batidas tem em cada resolução de [stepResolutions] (só as
+/// que têm): a grade que leu e o swing. Vai da resolução mais grossa à mais fina, tirando o swing que
+/// achou antes de olhar a seguinte: um swing de 40% em 1/16 é também, matematicamente, um de 60% em
+/// 1/64, e só o primeiro conta (o mesmo vale para [removeAllSwing]).
+List<(StepLayout, double)> detectSwings(Iterable<MidiNote> notes, double clipLength) {
+  final work = [for (final n in notes) n.copy()];
+  final out = <(StepLayout, double)>[];
+  _straighten(work, clipLength, out);
+  return out;
+}
+
+/// Tira o swing que as notas têm em qualquer resolução (ver [detectSwings]). Devolve quantas notas
+/// se moveram.
+int removeAllSwing(List<MidiNote> notes, double clipLength) => _straighten(notes, clipLength, null);
+
+int _straighten(List<MidiNote> notes, double clipLength, List<(StepLayout, double)>? found) {
+  var moved = 0;
+  for (final r in stepResolutions) {
+    final l = StepLayout(step: r.beats, steps: stepsFor(clipLength, 1, r.beats));
+    final sw = detectSwing(notes, l);
+    if (sw <= 0) continue;
+    found?.add((l, sw));
+    moved += retimeSwing(notes, l, sw, 0);
   }
-  return c;
+  return moved;
 }
 
 /// Há o que repetir: o padrão é menor que o clipe e tem notas nos primeiros [l].span batidas.
@@ -389,19 +415,27 @@ List<StepRow> drumRows() {
   ];
 }
 
+/// A faixa foi fatiada (Fatiar sample…): duas ou mais zonas do mesmo áudio, cada uma de uma nota só,
+/// em disparo (one-shot) e ao menos uma com trecho. Uma zona aparada à mão, ou zonas de áudios
+/// diferentes (multi-sample), não contam: levam o nome da zona, não "Fatia N".
+bool isSlicedTrack(DawTrack t) {
+  final z = t.zones;
+  if (z.length < 2) return false;
+  return z.every((x) => x.sample == z.first.sample && x.oneShot && x.lo == x.hi) && z.any((x) => x.start > 0 || x.end > 0);
+}
+
 /// As linhas de um sampler com zonas: uma por zona (a nota base, ou a mais próxima dentro da faixa
 /// da zona); zonas na mesma nota (camadas de velocidade) dividem a linha.
 List<StepRow> zoneRows(DawTrack t) {
   final out = <StepRow>[];
   final seen = <int>{};
+  final sliced = isSlicedTrack(t);
   var slices = 0;
   for (var i = 0; i < t.zones.length; i++) {
     final z = t.zones[i];
     final pitch = z.root.clamp(z.lo, z.hi);
     if (!seen.add(pitch)) continue;
-    // fatia é zona de um trecho do áudio; zona de áudio inteiro (multi-sample) leva só a nota
-    final isSlice = z.start > 0 || z.end > 0;
-    out.add(StepRow(pitch, isSlice ? 'Fatia ${++slices} · ${noteName(pitch)}' : 'Zona · ${noteName(pitch)}'));
+    out.add(StepRow(pitch, sliced ? 'Fatia ${++slices} · ${noteName(pitch)}' : 'Zona · ${noteName(pitch)}'));
   }
   return out;
 }

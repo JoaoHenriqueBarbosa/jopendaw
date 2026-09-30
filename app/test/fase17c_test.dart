@@ -157,7 +157,7 @@ void main() {
 
   group('JSON do documento', () {
     Map<String, dynamic> base() => {
-      'version': 1,
+      'version': 2,
       'bpm': 120,
       'beats_per_bar': 4,
       'tracks': [],

@@ -711,6 +711,7 @@ class MetronomeOptions {
   double subLevel;
 
   /// O volume padrão é o do motor (`metronome.rs`, ganho 0,6): o app e um motor novo soam igual.
+  static const legacyDefaultVolume = 0.5;
   static const defaultVolume = 0.6, defaultAccentLevel = 1.0, defaultAccentPitch = 1.6, defaultSubLevel = 0.5;
 
   MetronomeOptions({
@@ -724,8 +725,11 @@ class MetronomeOptions {
   });
 
   /// Lê o JSON; ausente, ruim ou fora da faixa vale o padrão (um documento de versão anterior não tem o campo).
-  factory MetronomeOptions.fromJson(Object? j) {
-    if (j is! Map) return MetronomeOptions();
+  ///
+  /// [fallbackVolume] é o volume de quando o JSON não traz o campo: documentos anteriores à versão 2
+  /// guardavam só o que fugia do padrão de então, 50% ([legacyDefaultVolume]), e ficam como estavam.
+  factory MetronomeOptions.fromJson(Object? j, {double fallbackVolume = defaultVolume}) {
+    if (j is! Map) return MetronomeOptions(volume: fallbackVolume);
     T byName<T extends Enum>(List<T> values, Object? v, T fallback) {
       for (final e in values) {
         if (e.name == v) return e;
@@ -738,7 +742,7 @@ class MetronomeOptions {
       timbre: byName(MetronomeTimbre.values, j['timbre'], MetronomeTimbre.click),
       subdivision: byName(MetronomeSubdivision.values, j['subdivision'], MetronomeSubdivision.beat),
       mode: byName(MetronomeMode.values, j['mode'], MetronomeMode.always),
-      volume: number(j['volume'], 0, 1, defaultVolume),
+      volume: number(j['volume'], 0, 1, fallbackVolume),
       accentLevel: number(j['accent_level'], 0, 2, defaultAccentLevel),
       accentPitch: number(j['accent_pitch'], 0.5, 4, defaultAccentPitch),
       subLevel: number(j['sub_level'], 0, 2, defaultSubLevel),
@@ -775,7 +779,8 @@ class MetronomeOptions {
 }
 
 class DawDoc {
-  static const version = 1;
+  /// 2: o volume padrão do metrônomo passou de 50% para 60% (ver [MetronomeOptions.legacyDefaultVolume]).
+  static const version = 2;
 
   /// Teto do pré-roll em compassos.
   static const maxPreRollBars = 4;
@@ -889,7 +894,10 @@ class DawDoc {
       masterPan = (j['master_pan'] as num).toDouble(),
       countIn = j['count_in'] ?? true,
       recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
-      metronomeOptions = MetronomeOptions.fromJson(j['metronome_options']),
+      metronomeOptions = MetronomeOptions.fromJson(
+        j['metronome_options'],
+        fallbackVolume: ((j['version'] as num?)?.toInt() ?? 1) < 2 ? MetronomeOptions.legacyDefaultVolume : MetronomeOptions.defaultVolume,
+      ),
       preRollBars = ((j['pre_roll'] as num?)?.toInt() ?? 0).clamp(0, maxPreRollBars),
       punchIn = _punchOf(j)?.$1,
       punchOut = _punchOf(j)?.$2,

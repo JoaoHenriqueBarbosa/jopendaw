@@ -13,6 +13,7 @@ import 'package:jopendaw_app/daw/export.dart';
 import 'package:jopendaw_app/daw/export_compressed.dart';
 import 'package:jopendaw_app/daw/export_options.dart';
 import 'package:jopendaw_app/daw/wav.dart';
+import 'package:jopendaw_app/widgets/feedback.dart' show InlineNotice;
 
 import 'export_test.dart' show filled, project;
 import 'fake_engine.dart';
@@ -437,8 +438,11 @@ void main() {
       FakeExportApi? api,
       bool signedIn = true,
       bool saveResult = true,
+      int saveOnlyFirst = -1,
     }) async {
-      final e = FakeEngine()..saveResult = saveResult;
+      final e = FakeEngine()
+        ..saveResult = saveResult
+        ..saveOnlyFirst = saveOnlyFirst;
       final c = (await tester.runAsync(() => project(e)))!;
       e.renderResult = (outputs) => [
         for (final _ in outputs) [filled(300, 0.5), filled(300, -0.25)],
@@ -524,6 +528,25 @@ void main() {
       // parou no primeiro arquivo: uma só janela "Salvar", não uma por stem
       expect(e.saved.length, 1);
       expect(api.calls.where((c) => c == 'delete_job').length, 1);
+    });
+
+    testWidgets('WAV direto cancelado no Salvar diz o nome do arquivo e quantos já saíram (fase 22)', (tester) async {
+      final (e, _, _) = await open(tester, options: const ExportOptions(stems: true), saveOnlyFirst: 1);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('Exportação cancelada'), findsOneWidget);
+      final text = tester.widget<InlineNotice>(find.byKey(const Key('export-save-canceled'))).text;
+      expect(text, contains('"${e.saved.last.$1}"'));
+      expect(text, contains('O arquivo anterior já tinha sido salvo.'));
+    });
+
+    testWidgets('WAV direto cancelado no primeiro arquivo: o nome, sem "anteriores" (fase 22)', (tester) async {
+      final (e, _, _) = await open(tester, options: const ExportOptions(stems: true), saveResult: false);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      final text = tester.widget<InlineNotice>(find.byKey(const Key('export-save-canceled'))).text;
+      expect(text, contains('"${e.saved.single.$1}"'));
+      expect(text, isNot(contains('anterior')));
     });
 
     testWidgets('depois do "WAV mesmo assim" a mensagem diz o que saiu de cada formato', (tester) async {

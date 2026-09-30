@@ -608,6 +608,9 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall!.copyWith(color: theme.colorScheme.onSurfaceVariant);
     final cx = _cx;
+    // compactado: o CompressedExport sabe o nome e quantos já saíram; WAV direto: o controlador
+    final canceledName = cx?.canceledName ?? widget.c.exportSaveCanceledName;
+    final savedBefore = cx != null ? cx.compressed : widget.c.exportSavedCount;
     final stage = cx?.stage;
     final p = _barValue();
     // o texto do render fala do render, não da barra somada
@@ -620,8 +623,8 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         children: [
           InlineNotice(
             key: const Key('export-save-canceled'),
-            'Exportação cancelada: você não escolheu onde salvar${cx?.canceledName != null ? ' "${cx!.canceledName}"' : ''}.'
-            '${(cx?.compressed ?? 0) > 0 ? ' Os ${cx!.compressed} arquivos anteriores já tinham sido salvos.' : ''}',
+            'Exportação cancelada: você não escolheu onde salvar${canceledName != null ? ' "$canceledName"' : ''}.'
+            '${savedBefore > 0 ? (savedBefore == 1 ? ' O arquivo anterior já tinha sido salvo.' : ' Os $savedBefore arquivos anteriores já tinham sido salvos.') : ''}',
           ),
         ],
       );

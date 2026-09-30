@@ -388,7 +388,7 @@ class _PianoRollState extends State<PianoRoll> {
                         SizedBox(height: d.ruler, child: _ruler(g, clip, color)),
                         Expanded(
                           child: Semantics(
-                            label: 'Grade de notas de ${clip.name.isEmpty ? 'Clipe MIDI' : clip.name}: ${clip.notes.length} notas',
+                            label: 'Grade de notas de ${clip.name.isEmpty ? 'Clipe MIDI' : clip.name}: ${plural(clip.notes.length, 'nota')}',
                             child: _gridArea(g, clip, colors, color, drums),
                           ),
                         ),

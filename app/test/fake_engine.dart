@@ -235,10 +235,13 @@ class FakeEngine implements AudioEngine {
 
   bool saveResult = true;
 
+  /// Não negativo: só os primeiros [saveOnlyFirst] arquivos saem salvos; os seguintes são cancelados.
+  int saveOnlyFirst = -1;
+
   @override
   Future<bool> saveFile(String name, Uint8List bytes, String mime) async {
     saved.add((name, bytes, mime));
-    return saveResult;
+    return saveOnlyFirst >= 0 ? saved.length <= saveOnlyFirst : saveResult;
   }
 
   // o que ainda vier a entrar na ponte e estes testes não usam
