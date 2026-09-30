@@ -16,6 +16,7 @@ import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
 import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
+import 'structure_menu.dart';
 import 'sync_ui.dart';
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
@@ -142,6 +143,10 @@ class TransportBar extends StatelessWidget {
           ),
           IconButton(tooltip: 'Afastar', onPressed: () => c.zoom(1 / 1.5), icon: const Icon(Icons.zoom_out)),
           IconButton(tooltip: 'Aproximar', onPressed: () => c.zoom(1.5), icon: const Icon(Icons.zoom_in)),
+          _Toggle(icon: Icons.my_location, on: c.follow, tooltip: 'Seguir o cursor na reprodução', onTap: c.toggleFollow),
+          ViewMenu(c: c),
+          SectionsMenu(c: c),
+          DurationLabel(c: c),
         ];
         final panels = [
           _Toggle(icon: Icons.tune, on: c.dock == Dock.mixer, tooltip: 'Mixer (X)', onTap: () => toggleDock(c, Dock.mixer)),

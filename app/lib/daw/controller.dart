@@ -75,6 +75,17 @@ enum Snap {
   const Snap(this.label, this.beats);
 }
 
+/// Altura das faixas na linha do tempo (P/M/G no menu Visão).
+enum LaneScale {
+  small('Pequena', 'P', 0.7),
+  medium('Média', 'M', 1),
+  large('Grande', 'G', 1.5);
+
+  final String label, letter;
+  final double factor;
+  const LaneScale(this.label, this.letter, this.factor);
+}
+
 // ------------------------------------------------------------------ notas (funções puras)
 
 /// Uma nota pronta para o motor: faixa, início absoluto e duração em batidas.
@@ -477,6 +488,13 @@ class DawController extends ChangeNotifier {
   double pxPerBeat = 48;
   double scrollBeat = 0;
   bool follow = true;
+
+  /// Altura das faixas e o modo da régua (compassos ou mm:ss): só visão, fora do documento.
+  LaneScale laneScale = LaneScale.medium;
+  bool rulerTime = false;
+
+  /// Marcador selecionado na régua (para "loop entre marcadores").
+  String? selectedMarker;
 
   /// Largura visível das raias em pixels (a linha do tempo informa a cada layout).
   double viewWidth = 800;
@@ -3811,5 +3829,210 @@ class DawController extends ChangeNotifier {
   void setSnap(Snap s) {
     snap = s;
     notifyListeners();
+  }
+
+  void scrollTo(double beat) {
+    scrollBeat = math.max(0, beat);
+    notifyListeners();
+  }
+
+  void toggleFollow() {
+    follow = !follow;
+    notifyListeners();
+  }
+
+  void setLaneScale(LaneScale s) {
+    laneScale = s;
+    notifyListeners();
+  }
+
+  void toggleRulerTime() {
+    rulerTime = !rulerTime;
+    notifyListeners();
+  }
+
+  /// Enquadra o trecho [from, to] (em batidas) na janela, com uma folga nas pontas.
+  void fitRange(double from, double to) {
+    final span = math.max(to - from, doc.beatsPerBar.toDouble());
+    final pad = span * 0.04;
+    pxPerBeat = (viewWidth / (span + 2 * pad)).clamp(4.0, 800.0);
+    scrollBeat = math.max(0, from - pad);
+    notifyListeners();
+  }
+
+  /// Fim do arranjo para o zoom e o minimapa: o último clipe, marcador ou o fim do loop ligado.
+  double get arrangementEnd => math.max(math.max(doc.contentEnd, doc.markers.isEmpty ? 0.0 : doc.markers.last.beat), doc.loopOn ? doc.loopEnd : 0.0);
+
+  /// Enquadra o projeto inteiro.
+  void fitAll() => fitRange(0, arrangementEnd);
+
+  /// Intervalo do clipe selecionado (batidas), ou null sem seleção.
+  (double, double)? get selectedRange {
+    final a = selection;
+    if (a != null) return (a.$2.start, a.$2.end(doc.bpm));
+    final m = midiSelection;
+    if (m != null) return (m.$2.start, m.$2.end);
+    return null;
+  }
+
+  /// Enquadra o clipe selecionado; sem seleção, o projeto inteiro.
+  void fitSelection() {
+    final r = selectedRange;
+    if (r == null) return fitAll();
+    fitRange(r.$1, r.$2);
+  }
+
+  // ------------------------------------------------------------------ marcadores e seções
+
+  static const markerColors = [0xFFE3B341, 0xFFF0464B, 0xFF6BA8F0, 0xFF56D364, 0xFFBC8CFF, 0xFFFF8FB1];
+
+  Marker? markerById(String id) {
+    for (final m in doc.markers) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+
+  /// O marcador nesta batida (tolerância de 1/1000), se houver.
+  Marker? markerAt(double beat) {
+    for (final m in doc.markers) {
+      if ((m.beat - beat).abs() < 0.001) return m;
+    }
+    return null;
+  }
+
+  /// Cria um marcador em [beat] (o cursor, por padrão); onde já há um, devolve o que existe.
+  Marker addMarker({double? beat, String? name}) {
+    final b = ((beat ?? this.beat.value).clamp(0.0, double.infinity) * 1000).round() / 1000;
+    final have = markerAt(b);
+    if (have != null) {
+      if (name != null && name.isNotEmpty && name != have.name) renameMarker(have.id, name);
+      return have;
+    }
+    final m = Marker(id: newId(), beat: b, name: name == null || name.isEmpty ? 'Marcador ${doc.markers.length + 1}' : name);
+    edit((d) => d.markers = [...d.markers, m]..sort((a, b) => a.beat.compareTo(b.beat)));
+    selectedMarker = m.id;
+    notifyListeners();
+    return m;
+  }
+
+  /// Move um marcador. Num arraste, [undoable] é false nos passos (o [checkpoint] é do começo).
+  void moveMarker(String id, double beat, {bool undoable = true}) {
+    final m = markerById(id);
+    if (m == null) return;
+    final b = math.max(0.0, beat);
+    if (b == m.beat) return;
+    void apply(DawDoc d) {
+      m.beat = b;
+      d.markers.sort((x, y) => x.beat.compareTo(y.beat));
+    }
+
+    undoable ? edit(apply) : mutate(apply);
+  }
+
+  void renameMarker(String id, String name) {
+    final m = markerById(id);
+    if (m == null || m.name == name) return;
+    edit((_) => m.name = name);
+  }
+
+  void recolorMarker(String id, int color) {
+    final m = markerById(id);
+    if (m == null || m.color == color) return;
+    edit((_) => m.color = color);
+  }
+
+  void removeMarker(String id) {
+    if (markerById(id) == null) return;
+    edit((d) => d.markers.removeWhere((m) => m.id == id));
+    if (selectedMarker == id) selectedMarker = null;
+    notifyListeners();
+  }
+
+  /// Marcador estritamente antes / depois de [beat] (com meio milésimo de folga, para o cursor
+  /// parado num marcador ir ao vizinho e não a ele mesmo).
+  Marker? markerBefore(double beat) => doc.markers.where((m) => m.beat < beat - 0.001).lastOrNull;
+  Marker? markerAfter(double beat) => doc.markers.where((m) => m.beat > beat + 0.001).firstOrNull;
+
+  /// Leva o cursor (e a janela, se ele sair dela) para [b].
+  void goTo(double b) {
+    if (recording) return;
+    seek(b);
+    if (b < scrollBeat || b > scrollBeat + viewWidth / pxPerBeat) scrollBeat = math.max(0, b - 2);
+    notifyListeners();
+  }
+
+  /// Vai ao marcador anterior; sem ele, ao começo. Devolve se o cursor andou.
+  bool jumpToPreviousMarker() {
+    final cur = beat.value;
+    final m = markerBefore(cur);
+    if (m == null && cur <= 0.001) return false;
+    goTo(m?.beat ?? 0);
+    return true;
+  }
+
+  bool jumpToNextMarker() {
+    final m = markerAfter(beat.value);
+    if (m == null) return false;
+    goTo(m.beat);
+    return true;
+  }
+
+  /// A seção que contém [beat]: do marcador anterior (ou igual) ao seguinte; a última seção vai até
+  /// o fim do arranjo. Null antes do primeiro marcador ou sem marcadores.
+  (double, double)? sectionAt(double beat) {
+    Marker? from;
+    for (final m in doc.markers) {
+      if (m.beat <= beat + 0.001) from = m;
+    }
+    if (from == null) return null;
+    final next = doc.markers.where((m) => m.beat > from!.beat + 0.001).firstOrNull;
+    final end = next?.beat ?? arrangementEnd;
+    return end - from.beat > 0.01 ? (from.beat, end) : null;
+  }
+
+  bool get canLoopSection => sectionAt(beat.value) != null;
+  bool get canLoopBetweenMarkers => doc.markers.length >= 2;
+  bool get canLoopSelection => selectedRange != null;
+
+  void _loopTo(double a, double b) {
+    if (_blockedByRecording('mudar o loop')) return;
+    edit((d) {
+      d.loopStart = a;
+      d.loopEnd = b;
+      d.loopOn = true;
+    });
+  }
+
+  /// Loop da seção onde o cursor está.
+  bool loopSection() {
+    final s = sectionAt(beat.value);
+    if (s == null) return false;
+    _loopTo(s.$1, s.$2);
+    return true;
+  }
+
+  /// Loop entre o marcador selecionado e o próximo (o anterior, se for o último); sem seleção,
+  /// do primeiro ao último marcador.
+  bool loopBetweenMarkers() {
+    final ms = doc.markers;
+    if (ms.length < 2) return false;
+    final sel = selectedMarker == null ? null : markerById(selectedMarker!);
+    if (sel == null) {
+      _loopTo(ms.first.beat, ms.last.beat);
+      return true;
+    }
+    final i = ms.indexOf(sel);
+    final (a, b) = i + 1 < ms.length ? (sel.beat, ms[i + 1].beat) : (ms[i - 1].beat, sel.beat);
+    _loopTo(a, b);
+    return true;
+  }
+
+  /// Loop do clipe selecionado.
+  bool loopSelection() {
+    final r = selectedRange;
+    if (r == null || r.$2 - r.$1 < 0.01) return false;
+    _loopTo(r.$1, r.$2);
+    return true;
   }
 }

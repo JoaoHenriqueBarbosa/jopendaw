@@ -6,6 +6,7 @@ import '../api/client.dart';
 import '../daw/controller.dart';
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
+import '../daw/marker.dart';
 import '../daw/timeline.dart';
 import '../daw/transport_bar.dart';
 import '../models/project.dart';
@@ -143,8 +144,23 @@ class _DawStudioState extends State<DawStudio> {
       action = c.toggleKeyboard;
     } else if (!mod && k == LogicalKeyboardKey.keyS) {
       action = () => splitClipsAtPlayhead(c);
+    } else if (!mod && keys.isShiftPressed && k == LogicalKeyboardKey.keyL) {
+      // sem clipe selecionado cai na seção do cursor; sem nenhuma das duas, nada acontece
+      action = () {
+        if (!c.loopSelection()) c.loopSection();
+      };
     } else if (!mod && k == LogicalKeyboardKey.keyL) {
       action = c.toggleLoop;
+    } else if (!mod && k == LogicalKeyboardKey.keyM) {
+      final ctx = node.context;
+      action = keys.isShiftPressed && ctx != null ? () => renameMarkerAtPlayhead(ctx, c) : () => addMarkerAtPlayhead(c);
+    } else if (!mod && k == LogicalKeyboardKey.bracketLeft) {
+      action = c.jumpToPreviousMarker;
+    } else if (!mod && k == LogicalKeyboardKey.bracketRight) {
+      action = c.jumpToNextMarker;
+    } else if (!mod && k == LogicalKeyboardKey.keyZ) {
+      // no teclado musical o Z é oitava (já tratado antes, na camada dele)
+      action = keys.isShiftPressed ? c.fitSelection : c.fitAll;
     } else if (!mod && k == LogicalKeyboardKey.keyC) {
       action = c.toggleMetronome;
     } else if (!mod && k == LogicalKeyboardKey.keyX) {

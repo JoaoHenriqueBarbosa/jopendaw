@@ -21,6 +21,27 @@ List<(String, List<(String, String)>)> _groups() => [
     ],
   ),
   (
+    'Marcadores e loop',
+    [
+      ('M', 'Marcador no cursor (Shift+M: pede o nome)'),
+      ('[  /  ]', 'Cursor no marcador anterior / seguinte'),
+      ('Shift+L', 'Loop no clipe selecionado (ou na seção do cursor)'),
+      ('Arrastar · duplo clique', 'Move (com encaixe) · renomeia o marcador na régua'),
+      ('Botão direito', 'Menu do marcador: cor, loop da seção, apagar'),
+      ('Menu Seções', 'Lista de marcadores, loop entre marcadores e da seção'),
+    ],
+  ),
+  (
+    'Visão',
+    [
+      ('Z', 'Enquadrar o projeto inteiro'),
+      ('Shift+Z', 'Enquadrar o clipe selecionado'),
+      ('Menu Visão', 'Altura das faixas (P/M/G), seguir o cursor, régua em mm:ss'),
+      ('Clique em "comp."/"mm:ss"', 'Alterna a régua entre compassos e tempo'),
+      ('Visão geral (embaixo)', 'Clique ou arraste para rolar o projeto'),
+    ],
+  ),
+  (
     'Edição',
     [
       ('$_mod+Z', 'Desfazer'),
@@ -49,7 +70,7 @@ List<(String, List<(String, String)>)> _groups() => [
     'Teclado do computador ($_mod+K liga)',
     [
       ('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima'),
-      ('Z  /  X', 'Oitava abaixo / acima'),
+      ('Z  /  X', 'Oitava abaixo / acima (com o teclado ligado, o Z não enquadra)'),
       ('C  /  V', 'Velocidade menor / maior'),
     ],
   ),

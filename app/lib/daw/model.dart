@@ -352,6 +352,28 @@ class SampleInfo {
   Map<String, dynamic> toJson() => {'name': name, 'duration': duration};
 }
 
+/// Bandeirinha na régua: um ponto nomeado do arranjo (refrão, ponte...). Fica no documento, então
+/// desfaz e sincroniza como o resto.
+class Marker {
+  String id, name;
+
+  /// Posição em batidas.
+  double beat;
+
+  /// ARGB.
+  int color;
+
+  Marker({required this.id, required this.beat, this.name = '', this.color = 0xFFE3B341});
+
+  Marker.fromJson(Map<String, dynamic> j)
+    : id = j['id'] ?? newId(),
+      beat = (j['beat'] as num).toDouble(),
+      name = j['name'] ?? '',
+      color = j['color'] ?? 0xFFE3B341;
+
+  Map<String, dynamic> toJson() => {'id': id, 'beat': beat, 'name': name, 'color': color};
+}
+
 class DawDoc {
   static const version = 1;
 
@@ -374,6 +396,9 @@ class DawDoc {
   List<EffectSlot> masterEffects;
   List<AutoLane> masterLanes;
 
+  /// Marcadores, sempre ordenados por batida. Ausentes nos documentos antigos.
+  List<Marker> markers;
+
   DawDoc({
     required this.bpm,
     required this.beatsPerBar,
@@ -389,7 +414,9 @@ class DawDoc {
     this.recLatencyMs = 0,
     List<EffectSlot>? masterEffects,
     List<AutoLane>? masterLanes,
+    List<Marker>? markers,
   }) : tracks = tracks ?? [],
+       markers = markers ?? [],
        samples = samples ?? {},
        masterEffects = masterEffects ?? [],
        masterLanes = masterLanes ?? [];
@@ -408,7 +435,8 @@ class DawDoc {
       countIn = j['count_in'] ?? true,
       recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
       masterEffects = _effects(j['master_effects']),
-      masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)];
+      masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)],
+      markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat));
 
   Map<String, dynamic> toJson() => {
     'version': version,
@@ -426,6 +454,7 @@ class DawDoc {
     'rec_latency_ms': recLatencyMs,
     'master_effects': [for (final e in masterEffects) e.toJson()],
     'master_lanes': [for (final l in masterLanes) l.toJson()],
+    'markers': [for (final m in markers) m.toJson()],
   };
 
   /// Fim do último clipe, em batidas.
@@ -433,6 +462,20 @@ class DawDoc {
     tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, c.end(bpm))),
     tracks.expand((t) => t.midi).fold(0.0, (m, c) => math.max(m, c.end)),
   );
+
+  /// Duração do projeto em segundos: o fim do último clipe no andamento atual.
+  double get durationSeconds => contentEnd * 60 / bpm;
+}
+
+/// Segundos → "m:ss" (ou "h:mm:ss"); com [tenths], "m:ss.d".
+String formatClock(double seconds, {bool tenths = false}) {
+  final s = seconds.isFinite ? math.max(0.0, seconds) : 0.0;
+  final t = (s * 10).floor();
+  final whole = t ~/ 10, d = t % 10;
+  final h = whole ~/ 3600, m = (whole % 3600) ~/ 60, sec = whole % 60;
+  final ss = sec.toString().padLeft(2, '0');
+  final tail = tenths ? '.$d' : '';
+  return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$ss$tail' : '$m:$ss$tail';
 }
 
 // ------------------------------------------------------------------ utilidades

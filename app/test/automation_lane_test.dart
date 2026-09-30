@@ -376,6 +376,8 @@ void main() {
     await t.pump();
     expect(c.dock, Dock.effects);
     expect(c.effectsTrack, -1);
+    // com o painel de efeitos aberto (e o minimapa embaixo) o master pode ficar rolado para fora
+    await t.ensureVisible(find.text('A').last);
     await t.tap(find.text('A').last);
     await t.pumpAndSettle();
     expect(find.text('Sintetizador'), findsNothing);
@@ -383,6 +385,8 @@ void main() {
     await t.pumpAndSettle();
     final lane = c.doc.masterLanes.single;
     expect(t.getRect(find.byKey(ValueKey('auto:${lane.id}'))).top, t.getRect(find.byKey(const ValueKey('master'))).bottom);
+    await t.ensureVisible(find.byKey(ValueKey('auto:${lane.id}')));
+    await t.pump();
     await t.tapAt(at(t, c, lane, 1, 0.3));
     await t.pump();
     expect(lane.points.single.beat, 1);

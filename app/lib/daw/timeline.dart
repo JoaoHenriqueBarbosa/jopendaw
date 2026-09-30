@@ -21,8 +21,10 @@ import '../widgets/theme.dart';
 import 'automation_lane.dart';
 import 'controller.dart';
 import 'instruments.dart';
+import 'marker.dart';
 import 'meter.dart';
 import 'midi_convert_dialog.dart';
+import 'minimap.dart';
 import 'model.dart';
 
 const _rulerHeight = 30.0;
@@ -78,7 +80,7 @@ class Timeline extends StatelessWidget {
   const Timeline({super.key, required this.c, required this.compact});
 
   double get headerWidth => compact ? 132 : 232;
-  double get laneHeight => compact ? 64 : 76;
+  double get laneHeight => (compact ? 64 : 76) * c.laneScale.factor;
 
   Widget _header(_Row r) => switch (r.kind) {
     _RowKind.track => _TrackHeader(key: ValueKey('t:${c.doc.tracks[r.track].id}'), c: c, index: r.track, height: r.height, compact: compact),
@@ -121,9 +123,31 @@ class Timeline extends StatelessWidget {
                               bottom: BorderSide(color: Palette.hairline),
                             ),
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          alignment: Alignment.centerLeft,
-                          child: Text('${c.doc.tracks.length} faixas', style: Theme.of(context).textTheme.labelSmall),
+                          child: Tooltip(
+                            message: 'Régua em ${c.rulerTime ? 'compassos' : 'minutos e segundos'}: clique para alternar',
+                            child: InkWell(
+                              onTap: c.toggleRulerTime,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${c.doc.tracks.length} faixas',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.labelSmall,
+                                      ),
+                                    ),
+                                    Text(
+                                      c.rulerTime ? 'mm:ss' : 'comp.',
+                                      style: Theme.of(context).textTheme.labelSmall!.copyWith(color: Palette.accent, fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                         Expanded(child: _Ruler(c: c)),
                       ],
@@ -148,6 +172,28 @@ class Timeline extends StatelessWidget {
                           ],
                         ),
                       ),
+                    ),
+                  ),
+                  SizedBox(
+                    height: minimapHeight,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: headerWidth,
+                          height: minimapHeight,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          alignment: Alignment.centerLeft,
+                          decoration: const BoxDecoration(
+                            color: Palette.bar,
+                            border: Border(
+                              top: BorderSide(color: Palette.hairline),
+                              right: BorderSide(color: Palette.hairline),
+                            ),
+                          ),
+                          child: Text('Visão geral', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall),
+                        ),
+                        Expanded(child: Minimap(c: c)),
+                      ],
                     ),
                   ),
                 ],
@@ -294,54 +340,118 @@ class _Ruler extends StatefulWidget {
 class _RulerState extends State<_Ruler> {
   double? _dragFrom;
 
+  /// Batida sob o mouse (null fora da régua): a etiqueta de posição.
+  final _hover = ValueNotifier<double?>(null);
+
+  @override
+  void dispose() {
+    _hover.dispose();
+    super.dispose();
+  }
+
   double _beatAt(double x) => widget.c.scrollBeat + x / widget.c.pxPerBeat;
 
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
     final locked = c.recording;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapUp: locked ? null : (d) => c.seek(c.snapBeat(_beatAt(d.localPosition.dx))),
-      onHorizontalDragStart: locked
-          ? null
-          : (d) {
-              c.checkpoint();
-              _dragFrom = c.snapBeat(_beatAt(d.localPosition.dx));
-            },
-      onHorizontalDragUpdate: locked
-          ? null
-          : (d) {
-              final from = _dragFrom;
-              if (from != null) c.setLoop(from, c.snapBeat(_beatAt(d.localPosition.dx)));
-            },
-      onHorizontalDragEnd: locked ? null : (_) => _dragFrom = null,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              color: Palette.bar,
-              border: Border(bottom: BorderSide(color: Palette.hairline)),
-            ),
-            child: CustomPaint(
-              painter: _RulerPainter(
-                scroll: c.scrollBeat,
-                ppb: c.pxPerBeat,
-                beatsPerBar: c.doc.beatsPerBar,
-                loopOn: c.doc.loopOn,
-                loopStart: c.doc.loopStart,
-                loopEnd: c.doc.loopEnd,
-                style: Theme.of(context).textTheme.labelSmall!,
+    return MouseRegion(
+      onHover: (e) => _hover.value = math.max(0.0, _beatAt(e.localPosition.dx)),
+      onExit: (_) => _hover.value = null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: locked ? null : (d) => c.seek(c.snapBeat(_beatAt(d.localPosition.dx))),
+        onHorizontalDragStart: locked
+            ? null
+            : (d) {
+                c.checkpoint();
+                _dragFrom = c.snapBeat(_beatAt(d.localPosition.dx));
+              },
+        onHorizontalDragUpdate: locked
+            ? null
+            : (d) {
+                final from = _dragFrom;
+                if (from != null) c.setLoop(from, c.snapBeat(_beatAt(d.localPosition.dx)));
+              },
+        onHorizontalDragEnd: locked ? null : (_) => _dragFrom = null,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                color: Palette.bar,
+                border: Border(bottom: BorderSide(color: Palette.hairline)),
               ),
-              size: Size.infinite,
+              child: CustomPaint(
+                painter: _RulerPainter(
+                  scroll: c.scrollBeat,
+                  ppb: c.pxPerBeat,
+                  beatsPerBar: c.doc.beatsPerBar,
+                  loopOn: c.doc.loopOn,
+                  loopStart: c.doc.loopStart,
+                  loopEnd: c.doc.loopEnd,
+                  timeMode: c.rulerTime,
+                  bpm: c.doc.bpm,
+                  style: Theme.of(context).textTheme.labelSmall!,
+                ),
+                size: Size.infinite,
+              ),
             ),
-          ),
-          if (c.recording && c.countingIn) IgnorePointer(child: _CountInBadge(c: c)),
-        ],
+            MarkerFlags(c: c),
+            IgnorePointer(
+              child: _HoverLabel(c: c, hover: _hover),
+            ),
+            if (c.recording && c.countingIn) IgnorePointer(child: _CountInBadge(c: c)),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Posição sob o mouse na régua: compasso.tempo e mm:ss, com um fio no ponto.
+class _HoverLabel extends StatelessWidget {
+  final DawController c;
+  final ValueNotifier<double?> hover;
+  const _HoverLabel({required this.c, required this.hover});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => ValueListenableBuilder<double?>(
+      valueListenable: hover,
+      builder: (context, b, _) {
+        if (b == null) return const SizedBox.shrink();
+        final x = (b - c.scrollBeat) * c.pxPerBeat;
+        final text = '${formatPosition(b, c.doc.beatsPerBar)} · ${formatClock(b * 60 / c.doc.bpm, tenths: true)}';
+        final onRight = x < box.maxWidth - 150;
+        return Stack(
+          children: [
+            Positioned(
+              left: x,
+              top: 0,
+              bottom: 0,
+              width: 1,
+              child: const ColoredBox(color: Colors.white38),
+            ),
+            Positioned(
+              left: onRight ? x + 6 : null,
+              right: onRight ? null : math.max(0.0, box.maxWidth - x + 6),
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Palette.overlay,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Palette.hairlineStrong),
+                ),
+                child: Text(text, style: Theme.of(context).textTheme.labelSmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 /// "Contando…" na régua durante o compasso de contagem, logo à direita do cursor (onde a gravação
@@ -409,9 +519,9 @@ int _barStep(double ppb, int beatsPerBar) {
 }
 
 class _RulerPainter extends CustomPainter {
-  final double scroll, ppb, loopStart, loopEnd;
+  final double scroll, ppb, loopStart, loopEnd, bpm;
   final int beatsPerBar;
-  final bool loopOn;
+  final bool loopOn, timeMode;
   final TextStyle style;
 
   _RulerPainter({
@@ -421,6 +531,8 @@ class _RulerPainter extends CustomPainter {
     required this.loopOn,
     required this.loopStart,
     required this.loopEnd,
+    required this.timeMode,
+    required this.bpm,
     required this.style,
   });
 
@@ -435,6 +547,34 @@ class _RulerPainter extends CustomPainter {
     }
     final step = _barStep(ppb, beatsPerBar);
     final tick = Paint()..color = Colors.white24;
+    if (timeMode) {
+      // números em segundos: o menor passo "redondo" que deixa ao menos 64 px entre rótulos
+      final pxPerSec = ppb * bpm / 60;
+      const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+      final every = steps.firstWhere((s) => s * pxPerSec >= 64, orElse: () => steps.last);
+      final from = (scroll * 60 / bpm / every).floor(), to = ((scroll + size.width / ppb) * 60 / bpm / every).ceil();
+      for (var k = from; k <= to; k++) {
+        final sec = k * every;
+        final x = (sec * bpm / 60 - scroll) * ppb;
+        canvas.drawRect(Rect.fromLTWH(x, 8, 1, size.height - 8), tick);
+        final tp = TextPainter(
+          text: TextSpan(
+            text: formatClock(sec.toDouble(), tenths: every < 1),
+            style: style.copyWith(color: Colors.white70),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x + 4, 4));
+      }
+      // os compassos ficam como traços curtos embaixo, para não perder a métrica
+      final f = (scroll / beatsPerBar).floor(), l = ((scroll + size.width / ppb) / beatsPerBar).ceil();
+      if (ppb * beatsPerBar >= 8) {
+        for (var bar = f; bar <= l; bar++) {
+          canvas.drawRect(Rect.fromLTWH((bar * beatsPerBar - scroll) * ppb, size.height - 6, 1, 6), tick);
+        }
+      }
+      return;
+    }
     final first = (scroll / beatsPerBar).floor();
     final last = ((scroll + size.width / ppb) / beatsPerBar).ceil();
     for (var bar = first; bar <= last; bar++) {
@@ -461,7 +601,14 @@ class _RulerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RulerPainter o) =>
-      o.scroll != scroll || o.ppb != ppb || o.beatsPerBar != beatsPerBar || o.loopOn != loopOn || o.loopStart != loopStart || o.loopEnd != loopEnd;
+      o.scroll != scroll ||
+      o.ppb != ppb ||
+      o.beatsPerBar != beatsPerBar ||
+      o.loopOn != loopOn ||
+      o.loopStart != loopStart ||
+      o.loopEnd != loopEnd ||
+      o.timeMode != timeMode ||
+      o.bpm != bpm;
 }
 
 // ---------------------------------------------------------------------- cabeçalhos
