@@ -263,7 +263,7 @@ class MidiLearn extends ChangeNotifier {
       // a primeira mudança real do gesto (não a primeira mensagem, que pode cair no valor que já
       // estava): como o knob, anuncia à gravação de automação antes do ponto de desfazer
       c.autoRec.touch(track, m.target);
-      c.checkpoint();
+      c.checkpoint('Controle MIDI mapeado');
     }
     _keepRun(m.id, track, m.target);
     _set(track, m.target, v);

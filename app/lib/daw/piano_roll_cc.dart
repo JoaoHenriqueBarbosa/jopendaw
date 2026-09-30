@@ -68,7 +68,7 @@ extension _ControlLanes on _PianoRollState {
           _CcPrefs.line = !_CcPrefs.line;
         } else if (v == 'clear') {
           final c0 = _clip;
-          if (c0 != null && c0.controls.any((e) => e.cc == lane)) c.edit((_) => c0.controls.removeWhere((e) => e.cc == lane));
+          if (c0 != null && c0.controls.any((e) => e.cc == lane)) c.editAs('Apagar a raia de controle', (_) => c0.controls.removeWhere((e) => e.cc == lane));
         } else {
           _CcPrefs.lane = int.parse(v);
         }
@@ -213,7 +213,7 @@ class _CcLaneState extends State<_CcLane> {
 
   void _change(VoidCallback fn) {
     if (!_checkpointed) {
-      widget.c.checkpoint();
+      widget.c.checkpoint('Editar controle MIDI');
       _checkpointed = true;
     }
     widget.c.mutate((_) => fn());
@@ -237,7 +237,7 @@ class _CcLaneState extends State<_CcLane> {
     final keys = HardwareKeyboard.instance;
     // apagar: botão direito, Alt ou (abaixo) o dedo parado
     if (hit != null && (e.buttons == kSecondaryMouseButton || keys.isAltPressed)) {
-      widget.c.edit((_) => widget.clip.controls.remove(hit));
+      widget.c.editAs('Apagar evento de controle', (_) => widget.clip.controls.remove(hit));
       return;
     }
     _pointer = e.pointer;
@@ -260,7 +260,7 @@ class _CcLaneState extends State<_CcLane> {
         _op = _CcOp.none;
         _grab = null;
         _tip = null;
-        widget.c.edit((_) => widget.clip.controls.remove(g));
+        widget.c.editAs('Apagar evento de controle', (_) => widget.clip.controls.remove(g));
       });
       return;
     }

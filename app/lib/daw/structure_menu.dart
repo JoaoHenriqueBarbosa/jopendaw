@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'history_ui.dart' show showHistoryDialog;
+import 'snapshots_ui.dart' show showVersionsDialog;
 import 'model.dart';
 import 'keymap.dart';
 
@@ -87,8 +89,12 @@ class ViewMenu extends StatelessWidget {
   final DawController c;
   const ViewMenu({super.key, required this.c});
 
-  void _pick(String v) {
+  Future<void> _pick(BuildContext context, String v) async {
     switch (v) {
+      case 'history':
+        return showHistoryDialog(context, c);
+      case 'versions':
+        return showVersionsDialog(context, c);
       case 'all':
         c.fitAll();
       case 'sel':
@@ -106,7 +112,7 @@ class ViewMenu extends StatelessWidget {
   Widget build(BuildContext context) => PopupMenuButton<String>(
     tooltip: 'Visão: enquadrar, altura das faixas, seguir o cursor',
     icon: Icon(Icons.zoom_out_map, color: c.follow ? null : Colors.white54),
-    onSelected: _pick,
+    onSelected: (v) => _pick(context, v),
     itemBuilder: (_) => [
       PopupMenuItem(value: 'all', child: _row(Icons.fit_screen, 'Enquadrar tudo${shortcutHint('view.fitAll')}')),
       PopupMenuItem(value: 'sel', child: _row(Icons.center_focus_strong_outlined, 'Enquadrar a seleção${shortcutHint('view.fitClip')}')),
@@ -115,6 +121,9 @@ class ViewMenu extends StatelessWidget {
       const PopupMenuDivider(),
       CheckedPopupMenuItem(value: 'follow', checked: c.follow, child: const Text('Seguir o cursor')),
       CheckedPopupMenuItem(value: 'time', checked: c.rulerTime, child: const Text('Régua em minutos e segundos')),
+      const PopupMenuDivider(),
+      PopupMenuItem(value: 'history', child: _row(Icons.history, 'Histórico… (${c.historyCount})')),
+      PopupMenuItem(value: 'versions', child: _row(Icons.bookmarks_outlined, 'Versões…')),
     ],
   );
 }

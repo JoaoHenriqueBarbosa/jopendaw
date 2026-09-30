@@ -82,7 +82,7 @@ class _TempoLaneState extends State<TempoLane> {
     final beat = i == 0 ? 0.0 : math.max(0.0, _snap(_beat0 + dx / c.pxPerBeat));
     if (!_checkpointed) {
       if (rounded == _bpm0 && beat == _beat0) return;
-      c.checkpoint();
+      c.checkpoint('Mudar andamento');
       _checkpointed = true;
     }
     c.moveTempoPoint(i, beat: beat, bpm: rounded, undoable: false);

@@ -267,7 +267,7 @@ class GroupHeader extends StatelessWidget {
   Future<void> _rename(BuildContext context, DawTrack t) async {
     final name = await promptText(context, title: 'Nome da pasta', label: 'Nome', initial: t.name, action: 'Salvar', maxLength: 60);
     if (name == null || name.trim().isEmpty) return;
-    c.edit((_) => t.name = name.trim());
+    c.editAs('Renomear faixa', (_) => t.name = name.trim());
   }
 
   void _toggleEffects() {
@@ -345,7 +345,7 @@ class GroupHeader extends StatelessWidget {
                           on: t.mute,
                           color: Palette.danger,
                           tooltip: 'Mudo da pasta (cala todas as faixas dela)',
-                          onTap: () => c.edit((_) => t.mute = !t.mute),
+                          onTap: () => c.editAs('Mudo', (_) => t.mute = !t.mute),
                         ),
                         SizedBox(width: gap),
                         ToggleChip(
@@ -354,7 +354,7 @@ class GroupHeader extends StatelessWidget {
                           on: t.solo,
                           color: const Color(0xFFE3B341),
                           tooltip: 'Solo da pasta (deixa soar só as faixas dela)',
-                          onTap: () => c.edit((_) => t.solo = !t.solo),
+                          onTap: () => c.editAs('Solo', (_) => t.solo = !t.solo),
                         ),
                         SizedBox(width: gap),
                         SizedBox(
@@ -408,7 +408,7 @@ class GroupHeader extends StatelessWidget {
                                         value: gainToFader(gain).clamp(0, 1),
                                         onChangeStart: (_) {
                                           c.autoRec.touch(index, volume);
-                                          c.checkpoint();
+                                          c.checkpoint('Volume da pasta');
                                         },
                                         onChanged: (v) {
                                           final g = faderToGain(v);
@@ -470,7 +470,7 @@ class _GroupMenu extends StatelessWidget {
           case 'rename':
             onRename();
           case 'color':
-            c.edit((_) => t.color = (t.color + 1) % Palette.tracks.length);
+            c.editAs('Mudar a cor da faixa', (_) => t.color = (t.color + 1) % Palette.tracks.length);
           case 'up':
             await moveTrackAsking(context, c, index, index - 1);
           case 'down':

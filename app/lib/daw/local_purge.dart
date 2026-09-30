@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../audio/engine.dart';
 import 'controller.dart';
 import 'model.dart';
+import 'snapshots.dart' show snapshotPrefix;
 
 /// Apaga do aparelho o documento (`doc:<id>`), o estado de sincronização (`sync:<id>`), o modelo
 /// pendente (`template:<id>`) e os áudios que só este projeto citava. Um áudio que o documento
@@ -31,7 +32,7 @@ Future<int> purgeLocalProject(LocalStore store, String projectId, Iterable<Strin
     for (final id in ids) {
       if (id != projectId) kept.addAll(await _docHashes(store, id));
     }
-    for (final key in ['doc:$projectId', 'sync:$projectId', 'template:$projectId']) {
+    for (final key in ['doc:$projectId', 'sync:$projectId', 'template:$projectId', ...await _versionKeys(store, projectId)]) {
       try {
         await store.delete(key);
       } catch (_) {}
@@ -60,6 +61,15 @@ Future<int> purgeLocalProject(LocalStore store, String projectId, Iterable<Strin
     // guardado ilegível: nada a limpar
   }
   return removed;
+}
+
+/// As chaves das versões nomeadas do projeto (`snapshots:<projeto>:<id>`), com as ilegíveis também.
+Future<List<String>> _versionKeys(LocalStore store, String projectId) async {
+  try {
+    return await store.keys(snapshotPrefix(projectId));
+  } catch (_) {
+    return const [];
+  }
 }
 
 Future<Set<String>> _docHashes(LocalStore store, String projectId) async {

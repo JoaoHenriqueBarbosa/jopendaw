@@ -514,7 +514,7 @@ extension _Input on _PianoRollState {
     final stamp = _Prefs.chordStamp;
     final made = stamp == null || _dims.drums ? [base] : chordNotes(base, chordPitches(pitch, stamp.type, inversion: stamp.inversion, scale: _scale));
     final n = made.firstWhere((m) => m.pitch == pitch, orElse: () => made.first);
-    c.edit((_) => clip.notes.addAll(made));
+    c.editAs(made.length > 1 ? 'Inserir acorde' : 'Inserir nota', (_) => clip.notes.addAll(made));
     _sel
       ..clear()
       ..addAll(made);
@@ -630,7 +630,7 @@ extension _Input on _PianoRollState {
   /// Primeiro passo que muda algo faz o checkpoint; os seguintes só mudam.
   void _change(_Drag d, VoidCallback fn) {
     if (!d.checkpointed) {
-      c.checkpoint();
+      c.checkpoint('Editar notas');
       d.checkpointed = true;
     }
     c.mutate((_) => fn());
@@ -1162,7 +1162,7 @@ extension _Input on _PianoRollState {
       case 'pr.humanize':
         if (!repeat) _humanize();
       case 'pr.legato':
-        if (!repeat) _transform(legato);
+        if (!repeat) _transform(legato, label: 'Legato');
       case 'pr.up' || 'pr.down' || 'pr.octaveUp' || 'pr.octaveDown':
         if (_sel.isEmpty) return false;
         final id = hits.first.id;
@@ -1186,7 +1186,7 @@ extension _Input on _PianoRollState {
     final clip = _clip;
     if (clip == null || doomed.isEmpty) return;
     final set = doomed.toSet();
-    c.edit((_) {
+    c.editAs('Apagar notas', (_) {
       clip.notes.removeWhere(set.contains);
       if (controls != null) clip.controls = controls(clip.controls);
     });
@@ -1254,7 +1254,7 @@ extension _Input on _PianoRollState {
     final target = _ceilBar(lastStart + 1e-6);
     // colar muito longe do fim (a tela rolada lá adiante) não estica o clipe até lá
     final grow = target > clip.length + 1e-9 && lastStart < clip.length + bar * 8;
-    c.edit((_) {
+    c.editAs('Colar notas', (_) {
       clip.notes.addAll(notes);
       if (region.isNotEmpty) clip.controls = pasteControls(clip.controls, region, regionAt);
       if (grow) clip.length = target;
@@ -1336,7 +1336,7 @@ extension _Input on _PianoRollState {
     if (repeat) {
       c.mutate(apply);
     } else {
-      c.edit(apply);
+      c.editAs('Transpor notas', apply);
     }
     _reveal(_sel);
     _blip([for (final n in _sel.take(6)) n.pitch], _sel.first.velocity);
@@ -1357,7 +1357,7 @@ extension _Input on _PianoRollState {
     if (repeat) {
       c.mutate(apply);
     } else {
-      c.edit(apply);
+      c.editAs('Mover notas', apply);
     }
     _reveal(_sel);
     _refresh();

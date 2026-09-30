@@ -8,6 +8,7 @@ import '../api/client.dart';
 import '../daw/sync_ui.dart';
 import '../daw/controller.dart';
 import '../daw/tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
+import '../daw/history_ui.dart' show showHistoryDialog;
 import '../daw/keymap.dart';
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
@@ -195,6 +196,9 @@ class _DawStudioState extends State<DawStudio> {
         return () => toggleDock(c, Dock.instrument);
       case 'panel.effects':
         return () => toggleDock(c, Dock.effects);
+      case 'history.open':
+        final ctx = node.context;
+        return ctx != null ? () => showHistoryDialog(ctx, c) : null;
       case 'help.shortcuts':
         final ctx = node.context;
         return ctx != null ? () => showShortcuts(ctx) : null;

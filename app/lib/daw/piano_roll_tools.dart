@@ -43,7 +43,7 @@ extension _Tools on _PianoRollState {
 
   /// Troca [before] por [after] numa edição só. As novas ocupam o lugar da primeira antiga na lista
   /// e ficam selecionadas; se nada mudou de fato, não grava nada no histórico.
-  void _replace(List<MidiNote> before, List<MidiNote> after, {List<MidiCc> Function(List<MidiCc>)? controls}) {
+  void _replace(List<MidiNote> before, List<MidiNote> after, {List<MidiCc> Function(List<MidiCc>)? controls, String label = 'Editar notas'}) {
     final clip = _clip;
     if (clip == null || before.isEmpty || (sameNotes(before, after) && controls == null)) return;
     final old = before.toSet();
@@ -51,7 +51,7 @@ extension _Tools on _PianoRollState {
     // do que já passava, o clipe cresce até o compasso que o contém (como colar e duplicar fazem)
     final endBefore = before.map((n) => n.end).reduce(math.max), endAfter = after.isEmpty ? 0.0 : after.map((n) => n.end).reduce(math.max);
     final grown = endAfter > math.max(clip.length, endBefore) + 1e-9 ? _ceilBar(endAfter) : null;
-    c.edit((_) {
+    c.editAs(label, (_) {
       if (grown != null && grown > clip.length) clip.length = grown;
       // os eventos de controle do clipe (bend, modulação, pedal) andam junto das ferramentas de tempo
       if (controls != null) clip.controls = controls(clip.controls);
@@ -70,10 +70,10 @@ extension _Tools on _PianoRollState {
   }
 
   /// Aplica uma transformação à seleção (ou a todas as notas).
-  void _transform(List<MidiNote> Function(List<MidiNote>) fn, {List<MidiCc> Function(List<MidiCc>)? controls}) {
+  void _transform(List<MidiNote> Function(List<MidiNote>) fn, {List<MidiCc> Function(List<MidiCc>)? controls, String label = 'Transformar notas'}) {
     final before = _targets;
     if (before.isEmpty) return;
-    _replace(before, fn(before), controls: controls);
+    _replace(before, fn(before), controls: controls, label: label);
   }
 
   /// Os controles do clipe escalados no tempo como as notas: a partir da primeira nota alvo, todos
@@ -97,7 +97,7 @@ extension _Tools on _PianoRollState {
   void _setScale(ClipScale? s) {
     final clip = _clip;
     if (clip == null) return;
-    c.edit((_) => clip.scale = s?.encode());
+    c.editAs('Mudar a escala', (_) => clip.scale = s?.encode());
     _active = true;
     _refresh();
   }
@@ -193,7 +193,7 @@ extension _Tools on _PianoRollState {
     if (_sel.isEmpty || _dims.drums) return;
     final before = _targets, scale = _scale;
     final after = _keepSnap(<MidiNote>[for (final n in before) ...chordNotes(n, chordPitches(n.pitch, type, inversion: inversion, scale: scale))]);
-    _replace(before, after);
+    _replace(before, after, label: 'Inserir acorde');
     _blip([for (final n in _sel.take(6)) n.pitch], _sel.first.velocity);
   }
 
@@ -271,7 +271,11 @@ extension _Tools on _PianoRollState {
     _Prefs.arpOctaves = octaves;
     _Prefs.arpGate = gate;
     final before = _targets, seed = _Prefs.seed++;
-    _replace(before, arpeggiate(before, pattern: pattern, rate: arpRates[rate].$2, octaves: octaves, gate: gate, seed: seed));
+    _replace(
+      before,
+      arpeggiate(before, pattern: pattern, rate: arpRates[rate].$2, octaves: octaves, gate: gate, seed: seed),
+      label: 'Arpejo',
+    );
   }
 
   Future<void> _humanizeDialog() async {
@@ -297,7 +301,10 @@ extension _Tools on _PianoRollState {
 
   void _humanize({int? seed}) {
     final s = seed ?? _Prefs.seed++;
-    _transform((n) => humanize(n, timing: .125 * _Prefs.humTiming, velocity: .3 * _Prefs.humVelocity, seed: s));
+    _transform(
+      (n) => humanize(n, timing: .125 * _Prefs.humTiming, velocity: .3 * _Prefs.humVelocity, seed: s),
+      label: 'Humanizar',
+    );
   }
 
   Future<void> _staccatoDialog() async {
@@ -310,7 +317,7 @@ extension _Tools on _PianoRollState {
     );
     if (key == null || !mounted) return;
     _Prefs.staccato = f;
-    _transform((n) => staccato(n, factor: f));
+    _transform((n) => staccato(n, factor: f), label: 'Staccato');
   }
 
   Future<void> _scaleTimeDialog() async {

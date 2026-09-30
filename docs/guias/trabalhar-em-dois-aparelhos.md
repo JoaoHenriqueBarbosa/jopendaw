@@ -141,3 +141,5 @@ O que **não** é trocado ao aplicar a versão da nuvem: metrônomo, contagem, c
 | Perdi mudanças ao escolher o lado errado | As duas escolhas são definitivas e a nuvem não guarda histórico | Só se você exportou o `.jopendaw` antes: `Importar projeto` |
 | O card em `Projetos` continua com `Mexido há N h` | O documento não subiu ainda | O texto só anda quando o documento sobe; confira o ícone no projeto |
 | Volta ao login | A sessão terminou (`Sair de todos os aparelhos`, ou 30 dias sem uso) | Entre de novo; o que estava pendente sobe na próxima abertura do projeto |
+
+Observação: o histórico de desfazer e as `Versões…` são de cada aparelho. A sincronização troca o documento do projeto, não o histórico nem as versões; quando o projeto é atualizado por outro aparelho, o desfazer deste recomeça vazio.

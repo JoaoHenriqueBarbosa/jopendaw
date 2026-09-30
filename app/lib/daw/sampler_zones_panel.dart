@@ -368,7 +368,7 @@ class _ZoneMapState extends State<_ZoneMap> {
     final h = g.hit(widget.zones, p, preferred: widget.selected);
     if (h == null) return;
     widget.onSelect(h.zone.id);
-    widget.c.checkpoint();
+    widget.c.checkpoint('Mover zona do sampler');
     _drag = (id: h.zone.id, part: h.part, from: h.zone.copy(), n0: g.noteAt(p.dx), v0: g.velAt(p.dy));
   }
 

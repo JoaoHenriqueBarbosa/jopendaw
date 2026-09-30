@@ -279,7 +279,7 @@ class _Strip extends StatelessWidget {
               child: GestureDetector(
                 onDoubleTap: () {
                   if (gain == 1) return;
-                  c.checkpoint();
+                  c.checkpoint('Volume da faixa');
                   _setGain(1);
                 },
                 child: Tooltip(
@@ -319,14 +319,20 @@ class _Strip extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    ToggleChip(label: 'M', on: t.mute, color: Palette.danger, tooltip: 'Mudo', onTap: () => c.edit((d) => d.tracks[index].mute = !t.mute)),
+                    ToggleChip(
+                      label: 'M',
+                      on: t.mute,
+                      color: Palette.danger,
+                      tooltip: 'Mudo',
+                      onTap: () => c.editAs('Mudo', (d) => d.tracks[index].mute = !t.mute),
+                    ),
                     const SizedBox(width: 4),
                     ToggleChip(
                       label: 'S',
                       on: t.solo,
                       color: const Color(0xFFE3B341),
                       tooltip: 'Solo',
-                      onTap: () => c.edit((d) => d.tracks[index].solo = !t.solo),
+                      onTap: () => c.editAs('Solo', (d) => d.tracks[index].solo = !t.solo),
                     ),
                   ],
                 ),
@@ -627,7 +633,14 @@ mixin _DragValue<T extends StatefulWidget> on State<T> {
       _changed = true;
       final k = autoKey;
       if (k != null) c.autoRec.touch(k.$1, k.$2);
-      c.checkpoint();
+      c.checkpoint(switch (k?.$2.kind) {
+        AutoKind.volume => 'Volume',
+        AutoKind.pan => 'Pan',
+        AutoKind.send => 'Nível do envio',
+        AutoKind.effect => 'Mudar parâmetro do efeito',
+        AutoKind.instrument => 'Mudar parâmetro do instrumento',
+        null => null,
+      });
     }
     apply(norm);
   }
@@ -715,7 +728,7 @@ class _FaderState extends State<_Fader> with _DragValue {
 
   void _unity() {
     if (_gain == 1) return;
-    c.checkpoint();
+    c.checkpoint('Volume');
     _set(1);
   }
 
@@ -723,7 +736,7 @@ class _FaderState extends State<_Fader> with _DragValue {
   double _stepped(int dir) => faderToGain((valueNorm + dir * 0.02).clamp(0.0, 1.0));
 
   void _step(int dir) {
-    c.checkpoint();
+    c.checkpoint('Volume');
     _set(_stepped(dir));
   }
 
@@ -894,7 +907,7 @@ class _PanKnobState extends State<_PanKnob> with _DragValue {
 
   void _center() {
     if (_pan == 0) return;
-    c.checkpoint();
+    c.checkpoint('Pan');
     _set(0);
   }
 

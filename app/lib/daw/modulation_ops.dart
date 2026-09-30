@@ -36,7 +36,7 @@ extension ModulationOps on DawController {
     final m = modulationOf(track);
     if (m == null || m.sources.length >= maxModSources) return null;
     final s = ModSource(id: newId(), kind: kind);
-    edit((_) => m.sources.add(s));
+    editAs('Adicionar fonte de modulação', (_) => m.sources.add(s));
     return s;
   }
 
@@ -44,14 +44,14 @@ extension ModulationOps on DawController {
   void modRemoveSource(int track, String id) {
     final m = modulationOf(track);
     if (m == null || m.byId(id) == null) return;
-    edit((_) => m.sources.removeWhere((s) => s.id == id));
+    editAs('Remover fonte de modulação', (_) => m.sources.removeWhere((s) => s.id == id));
   }
 
   /// Tira o destino [index] do modulador.
   void modRemoveDest(int track, String id, int index) {
     final s = modulationOf(track)?.byId(id);
     if (s == null || index < 0 || index >= s.dests.length) return;
-    edit((_) => s.dests.removeAt(index));
+    editAs('Remover destino de modulação', (_) => s.dests.removeAt(index));
   }
 
   /// Liga o alvo a um modulador com a quantidade padrão (25%): o [sourceId] dado ou, sem ele, um
@@ -66,7 +66,7 @@ extension ModulationOps on DawController {
     if (src != null && src.dests.any((d) => d.target == target)) return null;
     if (src != null && src.dests.length >= maxModDests) return 'Cada modulador tem no máximo $maxModDests destinos.';
     if (src == null && m.sources.length >= maxModSources) return 'A faixa já tem $maxModSources moduladores.';
-    edit((_) {
+    editAs('Atribuir modulação', (_) {
       final s = src ??= ModSource(id: newId(), kind: kind);
       if (!m.sources.contains(s)) m.sources.add(s);
       s.dests.add(ModDest(target, amount: amount.clamp(-1.0, 1.0)));
@@ -85,7 +85,7 @@ extension ModulationOps on DawController {
     if (found == null) return '${preset.name}: esta faixa não tem o controle que o preset move.';
     final (target, amount) = found;
     if (!canModulate(track, target)) return '${preset.name}: esta faixa não tem o controle que o preset move.';
-    edit((_) {
+    editAs('Aplicar preset de modulação', (_) {
       final s = preset.build(newId());
       s.dests.add(ModDest(target, amount: amount));
       m.sources.add(s);

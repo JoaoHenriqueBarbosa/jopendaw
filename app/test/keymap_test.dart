@@ -58,6 +58,8 @@ String? legacyGlobal(
   if (!mod && k == LogicalKeyboardKey.keyZ) return shift ? 'view.fitClip' : 'view.fitAll';
   if (!mod && k == LogicalKeyboardKey.keyC) return 'transport.metronome';
   // da fase 17 (punch e tap tempo): teclas que antes não faziam nada
+  // da fase 18 (histórico): tecla que antes não fazia nada
+  if (mod && shift && k == LogicalKeyboardKey.keyH) return 'history.open';
   if (!mod && k == LogicalKeyboardKey.keyP) return 'transport.punch';
   if (!mod && k == LogicalKeyboardKey.keyT) return 'transport.tap';
   if (!mod && k == LogicalKeyboardKey.keyX) return 'panel.mixer';

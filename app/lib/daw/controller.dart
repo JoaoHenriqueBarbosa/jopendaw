@@ -35,6 +35,7 @@ import 'automation_math.dart';
 import 'automation_record.dart';
 import 'effects.dart';
 import 'export_options.dart';
+import 'history.dart';
 import 'instruments.dart';
 import 'keymap.dart' show Keymap;
 import 'loudness.dart';
@@ -43,6 +44,7 @@ import 'midi_file.dart';
 import 'midi_learn.dart';
 import 'model.dart';
 import 'modulation.dart';
+import 'snapshots.dart';
 import 'sync.dart';
 import 'tap_tempo.dart';
 import 'tempo_map.dart';
@@ -688,8 +690,11 @@ class DawController extends ChangeNotifier {
   /// O MIDI do navegador foi liberado e está tocando a faixa selecionada.
   bool midiEnabled = false;
 
-  final _undo = <String>[];
-  final _redo = <String>[];
+  final _undo = <HistoryEntry>[];
+  final _redo = <HistoryEntry>[];
+
+  /// O relógio do histórico e das versões automáticas (os testes trocam por um falso).
+  DateTime Function() clock = DateTime.now;
   Timer? _saveTimer;
   bool _disposed = false;
 
@@ -720,6 +725,38 @@ class DawController extends ChangeNotifier {
 
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
+
+  /// O passo que "Desfazer" desfaria agora, ou null.
+  HistoryEntry? get nextUndo => _undo.isEmpty ? null : _undo.last;
+
+  /// O passo que "Refazer" refaria agora, ou null.
+  HistoryEntry? get nextRedo => _redo.isEmpty ? null : _redo.last;
+
+  /// Quantos passos o histórico tem (desfeitos e refazíveis).
+  int get historyCount => _undo.length + _redo.length;
+
+  /// As linhas do painel "Histórico", do mais recente ao mais antigo.
+  List<HistoryStep> get historyRows => historySteps(_undo, _redo);
+
+  /// Esquece todos os passos (o documento fica como está).
+  void clearHistory() {
+    if (_undo.isEmpty && _redo.isEmpty) return;
+    _undo.clear();
+    _redo.clear();
+    notifyListeners();
+  }
+
+  /// Leva o documento ao estado depois de [position] ações (0 é o início do histórico): desfaz ou refaz quantos
+  /// passos forem preciso numa operação só (um sync, um salvar). Não faz nada durante a gravação.
+  void jumpToHistory(int position) {
+    if (recording) return;
+    final n = position.clamp(0, historyCount);
+    if (n < _undo.length) {
+      _travel(_undo, _redo, count: _undo.length - n);
+    } else if (n > _undo.length) {
+      _travel(_redo, _undo, count: n - _undo.length);
+    }
+  }
 
   // ------------------------------------------------------------------ abrir
 
@@ -777,6 +814,7 @@ class DawController extends ChangeNotifier {
       ready = true;
       _sync();
       _lastSaved = jsonEncode(doc.toJson());
+      unawaited(versions.onOpen());
       sync.addListener(_onSyncPhase);
       unawaited(_mirrorTempo());
       // faixa de áudio que ficou armada ou monitorando: a entrada volta aberta, como estava
@@ -1170,6 +1208,7 @@ class DawController extends ChangeNotifier {
     }
     editorKeyHandler = null;
     _saveTimer?.cancel();
+    versions.dispose();
     _warp.dispose();
     _save();
     _syncService?.dispose();
@@ -1287,7 +1326,7 @@ class DawController extends ChangeNotifier {
   void setClipWarp(String clipId, {bool? warp, double? sourceBpm, bool clearSourceBpm = false, double? pitch, bool? reverse}) {
     final f = _findClip(clipId);
     if (f == null || _blockedByRecording('mudar o warp')) return;
-    edit((_) {
+    editAs('Detectar andamento do clipe', (_) {
       final c = f.$2;
       if (warp != null) c.warp = warp;
       if (clearSourceBpm) c.sourceBpm = null;
@@ -1304,7 +1343,7 @@ class DawController extends ChangeNotifier {
     if (f == null) return;
     final g = gain.isFinite ? gain.clamp(0.0, maxClipGain) : 1.0;
     if (f.$2.gain == g) return;
-    edit((_) => f.$2.gain = g, undoable: undoable);
+    editAs('Ganho do clipe', (_) => f.$2.gain = g, undoable: undoable);
   }
 
   /// Nos testes: espera os sons do warp que o documento pede.
@@ -1670,7 +1709,7 @@ class DawController extends ChangeNotifier {
   void editModulation(int track, void Function(TrackModulation m) fn, {bool undoable = true}) {
     final m = modulationOf(track);
     if (m == null) return;
-    edit((_) => fn(m), undoable: undoable);
+    editAs('Mudar modulação', (_) => fn(m), undoable: undoable);
   }
 
   /// Faixa de valores, escala e valor fixo do alvo, na unidade dele, para a gravação de automação;
@@ -1693,13 +1732,13 @@ class DawController extends ChangeNotifier {
   String? autoTakeCheckpoint() {
     if (!_ckptTurn || _undo.isEmpty) return null;
     _ckptTurn = false;
-    return _undo.removeLast();
+    return _undo.removeLast().json;
   }
 
   /// Guarda [snapshot] (o documento de antes da passada) como um passo do histórico.
   void autoCommitUndo(String snapshot) {
-    _undo.add(snapshot);
-    if (_undo.length > 200) _undo.removeAt(0);
+    _undo.add(HistoryEntry(snapshot, 'Gravar automação', clock()));
+    if (_undo.length > historyLimit) _undo.removeAt(0);
     _redo.clear();
     notifyListeners();
   }
@@ -1979,7 +2018,7 @@ class DawController extends ChangeNotifier {
   void setPunchRegion(double a, double b) {
     if (recording || !a.isFinite || !b.isFinite) return;
     final lo = math.max(0.0, math.min(a, b)), hi = math.max(a, b);
-    edit((d) {
+    editAs('Região de punch', (d) {
       if (hi - lo < 0.01) {
         d.punchIn = d.punchOut = null;
         d.punchOn = false;
@@ -2058,7 +2097,7 @@ class DawController extends ChangeNotifier {
     if (_blockedByRecording('mudar o andamento')) return;
     final v = bpm.isFinite ? bpm.toDouble().clamp(minBpm, maxBpm).toDouble() : doc.bpm;
     final bpb = beatsPerBar.clamp(1, 32);
-    edit((d) {
+    editAs('Região do loop', (d) {
       d.bpm = v;
       // o ponto da batida 0 do mapa é o andamento inicial
       if (d.tempoMap.isNotEmpty) d.tempoMap = [d.tempoMap.first.copyWith(bpm: d.bpm), ...d.tempoMap.skip(1)];
@@ -2120,7 +2159,7 @@ class DawController extends ChangeNotifier {
     }
     // o ponto dado na batida 0 manda no andamento inicial
     final given = points.where((p) => p.beat <= 0 && p.bpm.isFinite).lastOrNull;
-    edit((d) {
+    editAs('Mudar andamento', (d) {
       if (given != null) d.bpm = given.bpm.clamp(minBpm, maxBpm).toDouble();
       d.tempoMap = norm.isEmpty ? const [] : [norm.first.copyWith(bpm: d.bpm), ...norm.skip(1)];
     }, undoable: undoable);
@@ -2137,7 +2176,7 @@ class DawController extends ChangeNotifier {
       error = '$meterChangesFullMessage As mudanças além dele foram ignoradas.';
     }
     final first = changes.where((m) => m.bar <= 1).lastOrNull;
-    edit((d) {
+    editAs('Mudar compasso', (d) {
       if (norm.isNotEmpty) {
         // o campo `beatsPerBar` acompanha o primeiro compasso (em batidas de semínima)
         d.beatsPerBar = norm.first.barBeats.round().clamp(1, 32);
@@ -2289,20 +2328,24 @@ class DawController extends ChangeNotifier {
   // ------------------------------------------------------------------ edição
 
   /// Uma edição desfazível: guarda o estado de antes, aplica, manda ao motor e salva.
-  void edit(void Function(DawDoc d) fn, {bool undoable = true}) {
-    if (undoable) checkpoint();
+  /// [label] é o nome do passo no histórico ("Mover clipe"); sem ele o passo aparece como "Edição".
+  void edit(void Function(DawDoc d) fn, {bool undoable = true, String? label}) {
+    if (undoable) checkpoint(label);
     mutate(fn);
   }
 
-  /// Guarda o estado atual no histórico (início de um arraste, que depois só faz [mutate]).
-  void checkpoint() {
+  /// [edit] com o nome do passo primeiro (deixa o corpo da edição, muitas vezes de várias linhas, sem mudar).
+  void editAs(String label, void Function(DawDoc d) fn, {bool undoable = true}) => edit(fn, undoable: undoable, label: label);
+
+  /// Guarda o estado atual no histórico (início de um arraste, que depois só faz [mutate]), com o nome do passo em [label].
+  void checkpoint([String? label]) {
     // o gesto que a gravação de automação anunciou não guarda ponto próprio: a passada inteira
     // entra no histórico como um passo só quando o transporte para
     if (autoRec.consumeSwallow()) return;
-    _undo.add(jsonEncode(doc.toJson()));
+    _undo.add(HistoryEntry(jsonEncode(doc.toJson()), label, clock()));
     _ckptTurn = true;
     scheduleMicrotask(() => _ckptTurn = false);
-    if (_undo.length > 200) _undo.removeAt(0);
+    if (_undo.length > historyLimit) _undo.removeAt(0);
     _redo.clear();
   }
 
@@ -2320,14 +2363,29 @@ class DawController extends ChangeNotifier {
   void undo() => _travel(_undo, _redo);
   void redo() => _travel(_redo, _undo);
 
-  void _travel(List<String> from, List<String> to) {
-    if (from.isEmpty) return;
-    to.add(jsonEncode(doc.toJson()));
+  /// Anda [count] passos de [from] para [to] (desfazer ou refazer), sincronizando e salvando uma vez só no fim.
+  void _travel(List<HistoryEntry> from, List<HistoryEntry> to, {int count = 1}) {
+    final n = math.min(count, from.length);
+    if (n <= 0) return;
+    for (var i = 0; i < n; i++) {
+      final e = from.removeLast();
+      to.add(HistoryEntry(jsonEncode(doc.toJson()), e.label, e.time));
+      _adopt(e.json);
+    }
+    if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
+    _prune();
+    _sync();
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  /// Troca o documento vivo pelo de [json], mantendo o que é preferência do aparelho e não do passo.
+  void _adopt(String json) {
     // ligar o metrônomo e o loop não entra no histórico: desfazer uma nota não pode mexer neles.
     // Só quando o passo desfeito foi desenhar a região do loop (que liga o loop) ele volta junto.
     // As preferências de gravação e o armar/monitorar das faixas também ficam como estão.
     final before = doc;
-    doc = DawDoc.fromJson(jsonDecode(from.removeLast()))
+    doc = DawDoc.fromJson(jsonDecode(json))
       ..metronome = before.metronome
       ..countIn = before.countIn
       ..recLatencyMs = before.recLatencyMs
@@ -2350,11 +2408,41 @@ class DawController extends ChangeNotifier {
         // recolher/expandir é estado de arranjo: desfazer uma edição não mexe nele
         ..collapsed = now.collapsed;
     }
+  }
+
+  /// As versões nomeadas deste projeto (locais; ver `snapshots.dart`).
+  late final VersionKeeper versions = VersionKeeper(
+    store: _store,
+    projectId: project.id,
+    currentJson: () => jsonEncode(doc.toJson()),
+    clock: () => clock(),
+    hasContent: () => doc.tracks.any((t) => t.clips.isNotEmpty || t.midi.isNotEmpty),
+  );
+
+  /// Restaura o documento de uma versão como UM passo do histórico (desfazer volta ao que era antes). Carrega no motor os
+  /// áudios que a versão cita e o aparelho ainda não abriu. false: gravando, ou a versão não é um documento válido.
+  Future<bool> restoreDocument(Map<String, dynamic> docJson, {required String label}) async {
+    if (recording) return false;
+    final String text;
+    final DawDoc next;
+    try {
+      text = jsonEncode(docJson);
+      next = DawDoc.fromJson(jsonDecode(text) as Map<String, dynamic>);
+    } catch (_) {
+      return false;
+    }
+    for (final hash in _hashesOf(next)) {
+      if (!_sampleIds.containsKey(hash)) await _loadSample(hash);
+    }
+    if (_disposed || recording) return false;
+    checkpoint(label);
+    _adopt(text);
     if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
     _prune();
     _sync();
     _scheduleSave();
     notifyListeners();
+    return true;
   }
 
   /// Esquece a seleção e o clipe do editor que não existem mais (apagados, desfeitos).
@@ -2380,6 +2468,7 @@ class DawController extends ChangeNotifier {
   }
 
   void _scheduleSave() {
+    versions.noteEdit();
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 400), _save);
   }
@@ -2534,7 +2623,7 @@ class DawController extends ChangeNotifier {
     final audio = now.$2;
     final notes = notesForClip(r, audio, doc.bpmAt(audio.start));
     if (notes.isEmpty) throw StateError('Não encontrei notas neste áudio.');
-    edit((d) {
+    editAs('Converter áudio em MIDI', (d) {
       final n = d.tracks.length;
       final name = _nextTrackName(d, TrackKind.synth);
       final midi = MidiClip(id: newId(), name: name, start: audio.start, length: math.max(d.clipBeats(audio), 0.01), notes: notes);
@@ -2555,7 +2644,7 @@ class DawController extends ChangeNotifier {
 
   // ------------------------------------------------------------------ faixas
 
-  void addTrack() => edit((d) {
+  void addTrack() => editAs('Adicionar faixa', (d) {
     final n = d.tracks.length;
     d.tracks.add(DawTrack(id: newId(), name: _nextTrackName(d, TrackKind.audio), color: n % Palette.tracks.length));
     _select(n);
@@ -2577,7 +2666,7 @@ class DawController extends ChangeNotifier {
   /// mudança de índice.
   void removeTrack(int i) {
     if (i < 0 || i >= doc.tracks.length) return;
-    edit((d) {
+    editAs('Apagar faixa', (d) {
       final gone = d.tracks.removeAt(i);
       _dropRoutesTo(gone.id);
       // apagar a pasta solta as filhas (seguem como faixas comuns, com a saída no master)
@@ -2599,7 +2688,7 @@ class DawController extends ChangeNotifier {
   /// acontece; duplique as faixas dela.
   void duplicateTrack(int i) {
     if (i < 0 || i >= doc.tracks.length || doc.tracks[i].isGroup) return;
-    edit((d) {
+    editAs('Duplicar faixa', (d) {
       final src = d.tracks[i];
       // a cópia não sai armada nem monitorando: gravaria (e dobraria a entrada) sem pedir
       final copy = DawTrack.fromJson(jsonDecode(jsonEncode(src.toJson())))
@@ -2658,7 +2747,7 @@ class DawController extends ChangeNotifier {
     // `planTrackMove` em track_groups.dart)
     final plan = planTrackMove(doc.tracks, from, to);
     if (plan == null) return;
-    edit((d) {
+    editAs('Mover faixa', (d) {
       plan.applyGroups();
       setTrackOrder(plan.order);
     });
@@ -2804,13 +2893,13 @@ class DawController extends ChangeNotifier {
     final a = selection;
     final m = midiSelection;
     if (a != null) {
-      edit((_) {
+      editAs('Apagar clipe', (_) {
         a.$1.clips.remove(a.$2);
         // o outro clipe de um crossfade perde o par: o fade automático dele volta ao de antes
         reconcileAutoFades();
       });
     } else if (m != null) {
-      edit((_) => m.$1.midi.remove(m.$2));
+      editAs('Apagar clipe', (_) => m.$1.midi.remove(m.$2));
     }
   }
 
@@ -3019,7 +3108,7 @@ class DawController extends ChangeNotifier {
       return 0;
     }
     var done = 0;
-    checkpoint();
+    checkpoint('Aplicar crossfades');
     mutate((d) {
       for (final (early, late) in pairs) {
         if (_tryCrossfade(early, late, oEnd: d.clipEnd(early), topEnd: d.clipEnd(late), force: true)) done++;
@@ -3042,7 +3131,7 @@ class DawController extends ChangeNotifier {
     final newIn = fadeIn == null ? c.fadeIn : fit(fadeIn, c.fadeOut);
     final newOut = fadeOut == null ? c.fadeOut : fit(fadeOut, newIn);
     if ((newIn - c.fadeIn).abs() < 1e-9 && (newOut - c.fadeOut).abs() < 1e-9) return;
-    edit((_) {
+    editAs('Mudar fade', (_) {
       if (fadeIn != null) {
         c.fadeIn = newIn;
         c.autoFadeIn = null;
@@ -3061,7 +3150,7 @@ class DawController extends ChangeNotifier {
     if (f == null) return;
     final c = f.$2;
     if ((fadeIn == null || fadeIn == c.fadeInShape) && (fadeOut == null || fadeOut == c.fadeOutShape)) return;
-    edit((_) {
+    editAs('Mudar curva do fade', (_) {
       if (fadeIn != null) {
         c.fadeInShape = fadeIn;
         c.autoFadeIn = null;
@@ -3080,7 +3169,7 @@ class DawController extends ChangeNotifier {
       final copy = AudioClip.fromJson(c.toJson())
         ..id = newId()
         ..start = doc.clipEnd(c);
-      edit((_) {
+      editAs('Duplicar clipe', (_) {
         t.clips.add(copy);
         selectedClip = copy.id;
         placeOnTop(copy.id);
@@ -3093,7 +3182,7 @@ class DawController extends ChangeNotifier {
     final copy = MidiClip.fromJson(c.toJson())
       ..id = newId()
       ..start = c.end;
-    edit((_) {
+    editAs('Duplicar clipe', (_) {
       t.midi.add(copy);
       selectedClip = copy.id;
       placeOnTop(copy.id);
@@ -3118,7 +3207,7 @@ class DawController extends ChangeNotifier {
     final audioCuts = audio.where((f) => f.$2.start < at && doc.clipEnd(f.$2) > at).toList();
     final midiCuts = midi.where((f) => f.$2.start < at && f.$2.end > at).toList();
     if (audioCuts.isEmpty && midiCuts.isEmpty) return;
-    edit((d) {
+    editAs('Cortar clipe', (d) {
       for (final (t, c) in audioCuts) {
         final secs = d.sourceSeconds(c, c.start, at);
         final right = AudioClip.fromJson(c.toJson())
@@ -3161,7 +3250,7 @@ class DawController extends ChangeNotifier {
   Future<void> importBytes(List<(String, Uint8List)> files, {double? at, int? track}) async {
     final start = at ?? snapBeat(beat.value);
     var ti = track ?? selectedTrack;
-    checkpoint();
+    checkpoint('Importar áudio');
     for (var i = 0; i < files.length; i++) {
       final (name, bytes) = files[i];
       status = 'Importando $name…';
@@ -3244,7 +3333,7 @@ class DawController extends ChangeNotifier {
     final importedMap = useTempo ? importedMeter(data) : null;
     final meter = importedMap != null ? MeterMap(importedMap.beatsPerBar, importedMap.changes) : doc.meter;
     final items = midiImportTracks(data, beatsPerBar: bar, start: at ?? snapBeat(beat.value), newId: newId, melodic: melodic, meter: meter);
-    edit((d) {
+    editAs('Importar MIDI', (d) {
       if (useTempo) applyImportedTempo(d, data);
       final first = d.tracks.length;
       for (final it in items) {
@@ -3371,7 +3460,7 @@ class DawController extends ChangeNotifier {
       addTrack();
       return;
     }
-    edit((d) {
+    editAs('Adicionar faixa de instrumento', (d) {
       final n = d.tracks.length;
       d.tracks.add(DawTrack(id: newId(), name: _nextTrackName(d, kind), color: n % Palette.tracks.length, kind: kind));
       _select(n);
@@ -3385,7 +3474,7 @@ class DawController extends ChangeNotifier {
     final t = doc.tracks[track];
     final len = length != null && length > 0 ? length : doc.meter.barBeatsAt(math.max(0.0, start));
     final clip = MidiClip(id: newId(), name: t.name, start: math.max(0.0, start), length: len);
-    edit((_) {
+    editAs('Criar clipe MIDI', (_) {
       t.midi.add(clip);
       selectedClip = clip.id;
       _select(track);
@@ -3563,7 +3652,7 @@ class DawController extends ChangeNotifier {
     if (spec == null) return;
     final v = _fit(spec, value);
     if (t.params.containsKey(id) && t.params[id] == v) return;
-    if (undoable) checkpoint();
+    if (undoable) checkpoint('Mudar parâmetro do instrumento');
     autoRec.value(track, AutoTarget(AutoKind.instrument, param: id), v);
     t.params[id] = v;
     _engine.calls([
@@ -3578,7 +3667,7 @@ class DawController extends ChangeNotifier {
   void applyPreset(int track, Map<int, double> values) {
     if (!_isInstrument(track)) return;
     final t = doc.tracks[track];
-    edit((_) => t.params = {for (final p in t.kind.params) p.id: _fit(p, values[p.id] ?? p.def)});
+    editAs('Aplicar preset', (_) => t.params = {for (final p in t.kind.params) p.id: _fit(p, values[p.id] ?? p.def)});
   }
 
   /// Escolhe o áudio (sha-256 de um sample do projeto) que o sampler da faixa toca.
@@ -3586,14 +3675,14 @@ class DawController extends ChangeNotifier {
     if (!_isKind(track, TrackKind.sampler)) return;
     final t = doc.tracks[track];
     if (t.sample == hash || (hash != null && !doc.samples.containsKey(hash))) return;
-    edit((_) => t.sample = hash);
+    editAs('Trocar o áudio do instrumento', (_) => t.sample = hash);
   }
 
   /// Quantiza notas de um clipe na grade (batidas). [strength] 0..1; [ends] também as durações.
   void quantizeNotes(MidiClip clip, Iterable<MidiNote> notes, double grid, {double strength = 1, bool ends = false}) {
     final list = notes.toList();
     if (list.isEmpty || !(grid > 0) || !(strength > 0)) return;
-    edit((_) => quantizeNoteList(list, grid, offset: clip.start, strength: strength, ends: ends));
+    editAs('Quantizar', (_) => quantizeNoteList(list, grid, offset: clip.start, strength: strength, ends: ends));
   }
 
   // ------------------------------------------------------------------ teclado do computador
@@ -3850,7 +3939,7 @@ class DawController extends ChangeNotifier {
     if (chain == null) throw ArgumentError.value(track, 'track', 'faixa inexistente');
     if (chain.length >= maxEffectsPerChain) throw StateError('$effectLimitHint: o motor não toca mais que isso.');
     final slot = EffectSlot(id: newId(), kind: kind);
-    edit((_) => chain.insert((at ?? chain.length).clamp(0, chain.length), slot));
+    editAs('Adicionar efeito', (_) => chain.insert((at ?? chain.length).clamp(0, chain.length), slot));
     return slot;
   }
 
@@ -3858,7 +3947,7 @@ class DawController extends ChangeNotifier {
   void removeEffect(int track, String slotId) {
     final f = _findSlot(track, slotId);
     if (f == null) return;
-    edit((_) {
+    editAs('Remover efeito', (_) {
       f.$1.remove(f.$2);
       _lanes(track)!.removeWhere((l) => l.target.kind == AutoKind.effect && l.target.ref == slotId);
     });
@@ -3872,7 +3961,7 @@ class DawController extends ChangeNotifier {
     final from = chain.indexOf(slot);
     final dest = to.clamp(0, chain.length - 1);
     if (dest == from) return;
-    edit((_) => chain.insert(dest, chain.removeAt(from)));
+    editAs('Mover efeito', (_) => chain.insert(dest, chain.removeAt(from)));
   }
 
   /// Muda um parâmetro de efeito pelo caminho rápido (só a chamada `fx_param`). Para arrastes:
@@ -3889,7 +3978,7 @@ class DawController extends ChangeNotifier {
       v = _fit(spec, id == 0 ? math.min(v, slot.param(1) / 1.5) : math.max(v, slot.param(0) * 1.5));
     }
     if (slot.params.containsKey(id) && slot.params[id] == v) return;
-    if (undoable) checkpoint();
+    if (undoable) checkpoint('Mudar parâmetro do efeito');
     autoRec.value(track, AutoTarget(AutoKind.effect, ref: slotId, param: id), v);
     slot.params[id] = v;
     final k = chain.indexOf(slot);
@@ -3912,7 +4001,7 @@ class DawController extends ChangeNotifier {
   void setEffectBypass(int track, String slotId, bool bypass) {
     final f = _findSlot(track, slotId);
     if (f == null || f.$2.bypass == bypass) return;
-    edit((_) => f.$2.bypass = bypass);
+    editAs('Bypass do efeito', (_) => f.$2.bypass = bypass);
   }
 
   /// Aplica um preset ao efeito: o que falta volta ao padrão, menos o sidechain (é roteamento, não
@@ -3922,7 +4011,7 @@ class DawController extends ChangeNotifier {
     if (f == null) return;
     final slot = f.$2;
     final sc = _sidechainParam(slot.kind);
-    edit((_) {
+    editAs('Preset de efeito', (_) {
       slot.params = {for (final p in slot.kind.params) p.id: _fit(p, values[p.id] ?? (p.id == sc ? slot.param(p.id) : p.def))};
     });
   }
@@ -3931,7 +4020,7 @@ class DawController extends ChangeNotifier {
   /// manda para barramento depois dele: assim todos os outros podem mandar para ela.
   DawTrack addBusTrack() {
     late DawTrack bus;
-    edit((d) {
+    editAs('Adicionar bus', (d) {
       final n = d.tracks.length;
       final names = {for (final t in d.tracks) t.name};
       var k = d.tracks.where((t) => t.kind == TrackKind.bus).length + 1;
@@ -3957,12 +4046,12 @@ class DawController extends ChangeNotifier {
     if (send == null) {
       // o motor só comporta [maxSendsPerTrack] envios por faixa: o seguinte não soaria
       if (t.sends.length >= maxSendsPerTrack) return false;
-      edit((_) => t.sends.add(Send(target: busId, level: lv ?? defaultSendLevel, pre: pre ?? false)));
+      editAs('Adicionar envio', (_) => t.sends.add(Send(target: busId, level: lv ?? defaultSendLevel, pre: pre ?? false)));
       return true;
     }
     final newLevel = lv ?? send.level, newPre = pre ?? send.pre;
     if (newLevel == send.level && newPre == send.pre) return true;
-    if (undoable) checkpoint();
+    if (undoable) checkpoint('Mudar envio');
     if (newLevel != send.level) autoRec.value(track, AutoTarget(AutoKind.send, ref: busId), newLevel);
     send
       ..level = newLevel
@@ -3989,7 +4078,7 @@ class DawController extends ChangeNotifier {
     if (track < 0 || track >= doc.tracks.length) return;
     final t = doc.tracks[track];
     if (!t.sends.any((s) => s.target == busId)) return;
-    edit((_) {
+    editAs('Remover envio', (_) {
       t.sends.removeWhere((s) => s.target == busId);
       t.lanes.removeWhere((l) => l.target.kind == AutoKind.send && l.target.ref == busId);
     });
@@ -4019,7 +4108,7 @@ class DawController extends ChangeNotifier {
     final t = doc.tracks[track];
     if (t.output == busId && folderLeftByOutput(track, busId) == null) return true;
     final folder = folderLeftByOutput(track, busId);
-    edit((_) {
+    editAs('Mudar a saída da faixa', (_) {
       if (folder != null) takeOutOfFolder(t, folder);
       t.output = busId;
     });
@@ -4094,7 +4183,7 @@ class DawController extends ChangeNotifier {
       return existing;
     }
     final lane = AutoLane(id: newId(), target: target);
-    edit((_) => lanes.add(lane));
+    editAs('Adicionar raia de automação', (_) => lanes.add(lane));
     return lane;
   }
 
@@ -4102,7 +4191,7 @@ class DawController extends ChangeNotifier {
   void removeLane(int track, String laneId) {
     final lanes = _lanes(track);
     if (lanes == null || !lanes.any((l) => l.id == laneId)) return;
-    edit((_) => lanes.removeWhere((l) => l.id == laneId));
+    editAs('Remover raia de automação', (_) => lanes.removeWhere((l) => l.id == laneId));
   }
 
   /// Mínimo, máximo e valor atual (sem automação) de um alvo, na unidade dele (ganho linear no
@@ -4853,7 +4942,7 @@ class DawController extends ChangeNotifier {
       }
       return;
     }
-    checkpoint();
+    checkpoint('Gravar');
     mutate((d) {
       d.samples.addAll(infos);
       for (final id in r.audioIds) {
@@ -5272,7 +5361,7 @@ class DawController extends ChangeNotifier {
     if (f == null) return;
     final clip = f.$2;
     if (clip.sample == sampleHash || !clip.takes.contains(sampleHash)) return;
-    edit((_) => clip.sample = sampleHash);
+    editAs('Trocar de take', (_) => clip.sample = sampleHash);
   }
 
   /// Não deixa [what] no meio de uma gravação (avisa em [error]).
@@ -5492,7 +5581,7 @@ class DawController extends ChangeNotifier {
         return;
       }
       final seconds = channels.first.length / rate;
-      checkpoint();
+      checkpoint('Congelar faixa');
       mutate((d) {
         final src = d.tracks[i];
         const moves = {AutoKind.volume, AutoKind.pan, AutoKind.send};
@@ -5798,7 +5887,7 @@ class DawController extends ChangeNotifier {
       return have;
     }
     final m = Marker(id: newId(), beat: b, name: name == null || name.isEmpty ? 'Marcador ${doc.markers.length + 1}' : name);
-    edit((d) => d.markers = [...d.markers, m]..sort((a, b) => a.beat.compareTo(b.beat)));
+    editAs('Adicionar marcador', (d) => d.markers = [...d.markers, m]..sort((a, b) => a.beat.compareTo(b.beat)));
     selectedMarker = m.id;
     notifyListeners();
     return m;
@@ -5815,24 +5904,24 @@ class DawController extends ChangeNotifier {
       d.markers.sort((x, y) => x.beat.compareTo(y.beat));
     }
 
-    undoable ? edit(apply) : mutate(apply);
+    undoable ? editAs('Mover marcador', apply) : mutate(apply);
   }
 
   void renameMarker(String id, String name) {
     final m = markerById(id);
     if (m == null || m.name == name) return;
-    edit((_) => m.name = name);
+    editAs('Renomear marcador', (_) => m.name = name);
   }
 
   void recolorMarker(String id, int color) {
     final m = markerById(id);
     if (m == null || m.color == color) return;
-    edit((_) => m.color = color);
+    editAs('Cor do marcador', (_) => m.color = color);
   }
 
   void removeMarker(String id) {
     if (markerById(id) == null) return;
-    edit((d) => d.markers.removeWhere((m) => m.id == id));
+    editAs('Remover marcador', (d) => d.markers.removeWhere((m) => m.id == id));
     if (selectedMarker == id) selectedMarker = null;
     notifyListeners();
   }
@@ -5885,7 +5974,7 @@ class DawController extends ChangeNotifier {
 
   void _loopTo(double a, double b) {
     if (_blockedByRecording('mudar o loop')) return;
-    edit((d) {
+    editAs('Mudar o loop', (d) {
       d.loopStart = a;
       d.loopEnd = b;
       d.loopOn = true;

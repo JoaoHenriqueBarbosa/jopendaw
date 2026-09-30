@@ -531,7 +531,7 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
   /// Um passo de arraste: o checkpoint sai na primeira mudança de fato, não ao encostar.
   void _change(VoidCallback fn) {
     if (!_dirty) {
-      c.checkpoint();
+      c.checkpoint('Editar automação');
       _dirty = true;
     }
     c.mutate((_) => fn());
@@ -547,7 +547,7 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
     final onLine = (p.dy - lineY).abs() <= (_touch ? 12 : 6);
     final value = scale.fit(onLine ? autoValueAt(points, beat, scale.current, warp: scale.warp) : scale.fromNorm(g.normAt(p.dy)));
     final point = AutoPoint(beat: beat, value: value);
-    c.edit((_) => lane.points.insert(autoInsertIndex(lane.points, beat), point));
+    c.editAs('Inserir ponto de automação', (_) => lane.points.insert(autoInsertIndex(lane.points, beat), point));
     setState(() {
       _selected
         ..clear()
@@ -557,7 +557,7 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
 
   void _deletePoints(Set<AutoPoint> which) {
     if (which.isEmpty) return;
-    c.edit((_) => lane.points.removeWhere(which.contains));
+    c.editAs('Apagar pontos de automação', (_) => lane.points.removeWhere(which.contains));
     setState(() {
       _selected.removeWhere(which.contains);
       if (which.contains(_hoverPoint)) _hoverPoint = null;
@@ -567,7 +567,7 @@ class _AutomationLaneViewState extends State<AutomationLaneView> {
 
   void _resetCurve(int i) {
     final a = points[i];
-    if (a.curve != 0) c.edit((_) => a.curve = 0);
+    if (a.curve != 0) c.editAs('Zerar a curva do ponto', (_) => a.curve = 0);
   }
 
   // ------------------------------------------------------------------ gestos

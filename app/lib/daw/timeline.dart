@@ -443,7 +443,7 @@ class _RulerState extends State<_Ruler> {
         onHorizontalDragStart: locked
             ? null
             : (d) {
-                c.checkpoint();
+                c.checkpoint('Região do loop');
                 _dragFrom = c.snapBeat(_beatAt(d.localPosition.dx));
               },
         onHorizontalDragUpdate: locked
@@ -862,7 +862,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
   /// O deslizador de volume do cabeçalho grava automação como o fader do mixer (Escrever/Toque/Trava).
   void _miniStart(int index) {
     c.autoRec.touch(index, const AutoTarget(AutoKind.volume));
-    c.checkpoint();
+    c.checkpoint('Volume da faixa');
   }
 
   void _miniGain(int index, double g) {
@@ -912,7 +912,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
   Future<void> _rename(BuildContext context, DawTrack t) async {
     final name = await promptText(context, title: 'Nome da faixa', label: 'Nome', initial: t.name, action: 'Salvar', maxLength: 60);
     if (name == null || name.trim().isEmpty) return;
-    c.edit((_) => t.name = name.trim());
+    c.editAs('Renomear faixa', (_) => t.name = name.trim());
   }
 
   @override
@@ -1011,7 +1011,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
                                 on: t.mute,
                                 color: Palette.danger,
                                 tooltip: 'Mudo',
-                                onTap: () => c.edit((_) => t.mute = !t.mute),
+                                onTap: () => c.editAs('Mudo', (_) => t.mute = !t.mute),
                               ),
                               SizedBox(width: gap),
                               ToggleChip(
@@ -1020,7 +1020,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
                                 on: t.solo,
                                 color: const Color(0xFFE3B341),
                                 tooltip: 'Solo',
-                                onTap: () => c.edit((_) => t.solo = !t.solo),
+                                onTap: () => c.editAs('Solo', (_) => t.solo = !t.solo),
                               ),
                               SizedBox(width: gap),
                               // barramento não grava; o vão deixa A e FX na mesma coluna das outras faixas
@@ -1333,7 +1333,7 @@ class _TrackMenu extends StatelessWidget {
             await _bounce(context, c, index);
           case 'color':
             final t = c.doc.tracks[index];
-            c.edit((_) => t.color = (t.color + 1) % Palette.tracks.length);
+            c.editAs('Mudar a cor da faixa', (_) => t.color = (t.color + 1) % Palette.tracks.length);
           case 'delete':
             final t = c.doc.tracks[index];
             final filled = t.clips.isNotEmpty || t.midi.isNotEmpty || t.effects.isNotEmpty || t.lanes.any((l) => l.points.isNotEmpty);
@@ -1706,7 +1706,7 @@ class _MasterHeader extends StatelessWidget {
                               automated: follows && c.playing.value,
                               onStart: () {
                                 c.autoRec.touch(-1, volume);
-                                c.checkpoint();
+                                c.checkpoint('Volume do master');
                               },
                               onGain: (g) {
                                 c.autoRec.value(-1, volume, g);
@@ -2500,14 +2500,25 @@ mixin _DragEdit<T extends StatefulWidget> on State<T> {
   /// O gesto só mexeu num fade: não reacomoda os clipes da faixa (nem cria crossfade).
   bool _fadeOnly = false;
 
-  void beginEdit() {
+  /// O nome do passo no histórico (o gesto que começou).
+  String? _editLabel;
+
+  void beginEdit([_Grab? grab]) {
     _dirty = false;
     _fadeOnly = false;
+    _editLabel = switch (grab) {
+      _Grab.move => 'Mover clipe',
+      _Grab.left => 'Aparar o início do clipe',
+      _Grab.right => 'Aparar o fim do clipe',
+      _Grab.fadeIn => 'Ajustar o fade-in',
+      _Grab.fadeOut => 'Ajustar o fade-out',
+      null => null,
+    };
   }
 
   void ensureCheckpoint() {
     if (_dirty) return;
-    ctl.checkpoint();
+    ctl.checkpoint(_editLabel);
     _dirty = true;
   }
 
@@ -2611,11 +2622,11 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     return _Grab.move;
   }
 
-  void _start(_Grab _) {
+  void _start(_Grab grab) {
     _orig = AudioClip.fromJson(widget.clip.toJson());
     // a faixa de partida: depois de trocar de faixa, `widget.track` já é a nova
     _origTrack = widget.track;
-    beginEdit();
+    beginEdit(grab);
   }
 
   void _drag(_Grab grab, Offset total) {
@@ -2984,10 +2995,10 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
     return _Grab.move;
   }
 
-  void _start(_Grab _) {
+  void _start(_Grab grab) {
     _orig = MidiClip.fromJson(widget.clip.toJson());
     _origTrack = widget.track;
-    beginEdit();
+    beginEdit(grab);
   }
 
   /// Menor duração ao aparar: um passo da grade (1/16 de batida, livre).
@@ -3051,7 +3062,7 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
       maxLength: 60,
     );
     if (name == null || name == clip.name) return;
-    widget.c.edit((_) => clip.name = name);
+    widget.c.editAs('Renomear clipe', (_) => clip.name = name);
   }
 
   Future<void> _menu(Offset at) async {

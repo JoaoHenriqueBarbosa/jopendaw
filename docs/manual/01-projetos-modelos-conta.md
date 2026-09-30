@@ -328,6 +328,27 @@ Aparecem em vermelho na tela `Projetos` e nada é criado.
 | `O arquivo é grande demais para abrir aqui.` / `O arquivo tem entradas demais para ser um projeto.` / `O conteúdo do arquivo é grande demais para abrir (possível bomba de compressão).` / `Um áudio do projeto é grande demais para abrir.` | Passou de um dos limites: arquivo de 1 GB, 2 GB descomprimidos, 512 MB por áudio, 20 000 entradas |
 | `Não deu para importar o projeto: <motivo>` | Falha de rede ou do servidor ao criar o projeto, ou ao gravar no aparelho |
 
+## Histórico de desfazer e versões do projeto
+
+### Histórico com nomes
+
+Cada passo do `Desfazer` tem nome (`Mover clipe`, `Apagar faixa`, `Mudar andamento`, `Inserir acorde`, `Gravar automação`, `Agrupar em pasta`…); o que não tem nome aparece como `Edição` com a hora. Os botões da barra dizem o passo no tooltip: `Desfazer: Mover clipe`, `Refazer: Apagar faixa`.
+
+Para abrir a lista: pressão longa (celular) ou botão direito (mouse) em `Desfazer` ou `Refazer` e `Histórico…`; o menu `Visão` (lupa) com `Histórico…`; ou o atalho `Ctrl+Shift+H` (`⌘+Shift+H` no Mac), ação `Abrir o histórico` da janela de atalhos. O painel mostra `N passos (máx. 200)`, do mais recente ao mais antigo, com o estado de agora destacado; os passos em cinza foram desfeitos e ainda dá para refazer. Tocar num passo leva o projeto até ele de uma vez. `Limpar histórico` esquece o desfazer (o projeto fica como está; as versões não mudam). Durante a gravação o painel fica parado.
+
+### Versões nomeadas
+
+Uma versão é uma cópia do projeto inteiro (faixas, clipes, efeitos, automação, andamento), sem os áudios: eles já ficam guardados à parte pelo sha-256. Pelo mesmo menu (`Versões…` e `Salvar versão…`) ou pelo botão `Versões…` do painel de histórico:
+
+- `Salvar versão…`: nome e nota opcional. Se o projeto está igual à versão mais nova, não guarda uma cópia idêntica (se a mais nova era automática, ela vira a sua, com o nome que você deu).
+- `Restaurar`: pergunta, guarda antes uma versão `Antes de restaurar <nome>` e troca o projeto. É um passo do `Desfazer`: desfazer volta ao que era antes.
+- `Comparar`: resumo do que difere do projeto de agora (faixas, clipes de áudio e MIDI, notas, efeitos, envios, raias de automação, marcadores: adicionados, removidos, mudados; andamento e compasso).
+- `Renomear…`, `Apagar…` e `Duplicar como novo projeto…` (cria um projeto novo na conta com aquela versão, pelo mesmo caminho da importação de `.jopendaw`).
+- `Salvar automaticamente`: liga e desliga as versões automáticas, a cada 5, 10, 15 (padrão), 30 ou 60 minutos de edição e ao abrir o projeto depois de mais de 1 hora. Ficam as últimas 20 automáticas; as que você salvou ou renomeou nunca saem sozinhas. A opção vale para o aparelho.
+- Aviso de espaço quando as versões do projeto passam de 50 MB; arquivo de versão ilegível é listado e pode ser limpo.
+
+**As versões são locais:** ficam só no aparelho em que foram salvas (chaves `snapshots:<projeto>:<id>` do guardado local) e não sobem para a nuvem; abrir o projeto num aparelho novo mostra a lista vazia. Apagar o projeto apaga as versões dele. Para levar uma versão a outro aparelho, use `Duplicar como novo projeto…` e depois o `.jopendaw` (veja o [guia de backup](../guias/backup-e-levar-projeto-para-outro-aparelho.md)). O formato da versão (`jopendaw-version`, versão 1) já está pronto para um envio opcional ao servidor numa fase futura.
+
 ## Combina com
 
 - [00 Visão geral](00-visao-geral.md): o mapa do estúdio que abre depois de criar o projeto.

@@ -43,7 +43,7 @@ extension SamplerZonesEdit on DawController {
     final cut = r.divides;
     final cutName = cut == null ? null : doc.samples[cut.sample]?.name ?? 'sem nome';
     final oldRoot = cut?.root;
-    edit((_) {
+    editAs('Adicionar zona do sampler', (_) {
       if (cut != null) {
         cut.hi = r.lo - 1;
         // a nota base não pode ficar acima da faixa que sobrou
@@ -71,7 +71,7 @@ extension SamplerZonesEdit on DawController {
     final layers = velocityLayers(n, lo: t.zones[i].vlo, hi: t.zones[i].vhi);
     if (n < 2 || layers.length < 2 || t.zones.length + layers.length - 1 > maxZones) return const [];
     final copies = [for (var k = 1; k < layers.length; k++) t.zones[i].copy(id: newId())];
-    edit((_) {
+    editAs('Dividir zona em camadas', (_) {
       final z = t.zones[i];
       for (var k = 0; k < layers.length; k++) {
         final target = k == 0 ? z : copies[k - 1];
@@ -91,7 +91,7 @@ extension SamplerZonesEdit on DawController {
     final s = t?.sample;
     if (t == null || s == null || !doc.samples.containsKey(s) || t.zones.isNotEmpty) return null;
     final z = SamplerZone(id: newId(), sample: s, root: t.param(SamplerId.root).round());
-    edit((_) => t.zones.add(z));
+    editAs('Criar zona do áudio da faixa', (_) => t.zones.add(z));
     return z;
   }
 
@@ -106,7 +106,7 @@ extension SamplerZonesEdit on DawController {
     }
 
     if (undoable) {
-      edit(apply);
+      editAs('Mudar zona do sampler', apply);
     } else {
       mutate(apply);
     }
@@ -115,7 +115,7 @@ extension SamplerZonesEdit on DawController {
   void removeZone(int track, String zoneId) {
     final t = _samplerTrack(track);
     if (t == null || !t.zones.any((z) => z.id == zoneId)) return;
-    edit((_) => t.zones.removeWhere((z) => z.id == zoneId));
+    editAs('Remover zona do sampler', (_) => t.zones.removeWhere((z) => z.id == zoneId));
   }
 
   /// Uma cópia da zona, logo depois dela e na mesma faixa de notas.
@@ -124,14 +124,14 @@ extension SamplerZonesEdit on DawController {
     final i = t?.zones.indexWhere((z) => z.id == zoneId) ?? -1;
     if (t == null || i < 0 || t.zones.length >= maxZones) return null;
     final copy = t.zones[i].copy(id: newId());
-    edit((_) => t.zones.insert(i + 1, copy));
+    editAs('Duplicar zona do sampler', (_) => t.zones.insert(i + 1, copy));
     return copy;
   }
 
   void clearZones(int track) {
     final t = _samplerTrack(track);
     if (t == null || t.zones.isEmpty) return;
-    edit((_) => t.zones.clear());
+    editAs('Limpar zonas do sampler', (_) => t.zones.clear());
   }
 
   /// Escolhe um arquivo, importa para o projeto e o acrescenta como zona.
@@ -162,7 +162,7 @@ extension SamplerZonesEdit on DawController {
     if (t == null || !doc.samples.containsKey(sample)) return 0;
     final zones = sliceZones(sample, points, newId);
     if (zones.isEmpty) return 0;
-    edit((_) => t.zones = zones);
+    editAs('Fatiar o áudio', (_) => t.zones = zones);
     return zones.length;
   }
 }

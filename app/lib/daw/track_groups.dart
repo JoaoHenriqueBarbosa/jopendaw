@@ -228,7 +228,7 @@ extension DawGroupsController on DawController {
     }
     final label = name.trim().isEmpty ? nextGroupName() : name.trim();
     final folder = DawTrack(id: newId(), name: label, color: picked.first.color, kind: TrackKind.bus, isGroup: true);
-    edit((d) {
+    editAs('Agrupar em pasta', (d) {
       final order = <DawTrack>[];
       for (final t in d.tracks) {
         if (identical(t, picked.first)) {
@@ -261,7 +261,7 @@ extension DawGroupsController on DawController {
     final folder = doc.tracks[fi];
     final processes = ungroupKeepsRoutes(folder);
     final kept = processes || doc.tracks.any((t) => t.groupId != folderId && (t.output == folderId || t.sends.any((s) => s.target == folderId)));
-    edit((d) {
+    editAs('Desfazer a pasta', (d) {
       for (final t in d.tracks) {
         if (t.groupId != folderId) continue;
         t.groupId = null;
@@ -342,7 +342,7 @@ extension DawGroupsController on DawController {
     if (i < 0 || doc.folderOf(i) < 0) return false;
     final t = doc.tracks[i];
     final folder = doc.tracks[doc.folderOf(i)];
-    edit((d) {
+    editAs('Tirar da pasta', (d) {
       takeOutOfFolder(t, folder);
       if (t.output == folder.id) t.output = null;
     });
@@ -358,7 +358,7 @@ extension DawGroupsController on DawController {
     if (i < 0 || fi < 0 || !canJoinGroup(doc.tracks[i]) || doc.tracks[i].groupId == folderId) return false;
     final t = doc.tracks[i];
     final folder = doc.tracks[fi];
-    edit((d) {
+    editAs('Pôr na pasta', (d) {
       final order = [...d.tracks]..remove(t);
       final f = order.indexOf(folder);
       var end = f + 1;

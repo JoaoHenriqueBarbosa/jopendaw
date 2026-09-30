@@ -166,7 +166,7 @@ class _FlagState extends State<_Flag> {
         if (b == m.beat) return;
         // um checkpoint só, no primeiro passo que anda de verdade: tocar sem mover não suja o histórico
         if (!_moved) {
-          c.checkpoint();
+          c.checkpoint('Mover marcador');
           _moved = true;
         }
         c.moveMarker(m.id, b, undoable: false);

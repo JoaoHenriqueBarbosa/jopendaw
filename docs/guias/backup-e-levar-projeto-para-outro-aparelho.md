@@ -109,3 +109,7 @@ Se a outra pessoa só precisa **ouvir**, mande o WAV (`Exportar`) em vez do proj
 | No projeto importado, um clipe está em silêncio e diz `áudio fora deste aparelho` | O áudio faltava no arquivo (ver o primeiro sintoma) | Importe o som de novo naquele clipe |
 | O celular não mostra o arquivo no seletor | O filtro de extensão do Android | Renomeie para `.zip` (o app aceita) |
 | O andamento ou o compasso mudou na cópia | O espelho do servidor vira inteiro, de 20 a 999 BPM (o documento guarda o andamento com decimais), e o compasso vai de 1 a 32 | Ajuste na barra do estúdio ([capítulo 02](../manual/02-transporte.md)) |
+
+## Versões do projeto não viajam
+
+As `Versões…` do estúdio (cópias nomeadas do projeto, veja o [manual 01](../manual/01-projetos-modelos-conta.md)) ficam só no aparelho onde foram salvas e não sobem para a nuvem. Num aparelho novo a lista começa vazia. Para levar uma versão: `Versões…`, `Duplicar como novo projeto…` e exporte o projeto novo em `.jopendaw`; o `.jopendaw` de um projeto não carrega as versões dele.

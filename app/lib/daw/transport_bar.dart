@@ -15,6 +15,7 @@ import 'controller.dart';
 import 'dock.dart';
 import 'automation_mode.dart';
 import 'export.dart';
+import 'history_ui.dart' show HistoryStepButton;
 import 'midi_file_ui.dart' show importFiles;
 import 'midi_learn_ui.dart' show MidiLearnButton;
 import 'mixer_panel.dart' show recordColor;
@@ -143,8 +144,8 @@ class TransportBar extends StatelessWidget {
         ];
         // desfazer no meio da gravação poderia apagar ou mover a faixa que está recebendo o áudio
         final tools = [
-          IconButton(tooltip: 'Desfazer${shortcutHint('edit.undo')}', onPressed: c.canUndo && !recording ? c.undo : null, icon: const Icon(Icons.undo)),
-          IconButton(tooltip: 'Refazer${shortcutHint('edit.redo')}', onPressed: c.canRedo && !recording ? c.redo : null, icon: const Icon(Icons.redo)),
+          HistoryStepButton(c: c, redo: false, blocked: recording),
+          HistoryStepButton(c: c, redo: true, blocked: recording),
           IconButton(tooltip: 'Cortar no cursor${shortcutHint('edit.split')}', onPressed: () => splitClipsAtPlayhead(c), icon: const Icon(Icons.content_cut)),
           IconButton(
             tooltip: 'Duplicar${shortcutHint('edit.duplicate')}',

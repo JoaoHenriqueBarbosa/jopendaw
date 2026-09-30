@@ -104,6 +104,7 @@ final List<KeyAction> keyCatalog = [
   KeyAction('edit.split', 'Cortar no cursor', KeyCategory.edit, KeyContext.arrangement, ['S']),
   KeyAction('edit.delete', 'Apagar o clipe', KeyCategory.edit, KeyContext.arrangement, ['Delete', 'Backspace']),
   KeyAction('edit.import', 'Importar áudio ou MIDI', KeyCategory.edit, KeyContext.global, ['Mod+I']),
+  KeyAction('history.open', 'Abrir o histórico', KeyCategory.edit, KeyContext.global, ['Mod+Shift+H'], help: 'Histórico de desfazer e versões do projeto'),
   KeyAction('panel.mixer', 'Mixer', KeyCategory.panels, KeyContext.global, ['X']),
   KeyAction('panel.editor', 'Editor de notas (piano roll)', KeyCategory.panels, KeyContext.global, ['E']),
   KeyAction('panel.instrument', 'Instrumento da faixa', KeyCategory.panels, KeyContext.global, ['I']),

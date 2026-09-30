@@ -353,7 +353,7 @@ class _Fx {
   double v(int id) => slot.param(id);
   ParamSpec spec(int id) => kind.params.firstWhere((p) => p.id == id);
 
-  void begin() => c.checkpoint();
+  void begin() => c.checkpoint('Mudar parâmetro do efeito');
   void set(int id, double value, {bool undoable = false}) => c.setEffectParam(track, slot.id, id, value, undoable: undoable);
 
   /// Parâmetro de faixa-chave (vira um menu com as faixas).

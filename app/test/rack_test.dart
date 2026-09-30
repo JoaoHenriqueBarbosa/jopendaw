@@ -58,9 +58,9 @@ class RackDaw extends DawController {
   int checkpoints = 0;
 
   @override
-  void checkpoint() {
+  void checkpoint([String? label]) {
     checkpoints++;
-    super.checkpoint();
+    super.checkpoint(label);
   }
 
   @override

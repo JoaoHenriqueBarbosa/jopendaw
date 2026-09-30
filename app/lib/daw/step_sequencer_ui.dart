@@ -158,7 +158,7 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
   /// Uma edição de um gesto: o checkpoint sai na primeira mudança, as seguintes só alteram.
   void _gestureEdit(MidiClip clip, void Function(List<MidiNote> notes) fn) {
     if (!_ckpt) {
-      c.checkpoint();
+      c.checkpoint('Sequenciador de passos');
       _ckpt = true;
     }
     c.mutate((_) {
@@ -169,7 +169,7 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
 
   /// Uma ação de menu: um passo do desfazer.
   void _run(MidiClip clip, void Function(List<MidiNote> notes) fn, {String? notice}) {
-    c.checkpoint();
+    c.checkpoint('Sequenciador de passos');
     c.mutate((_) {
       fn(clip.notes);
       sortNotes(clip.notes);
