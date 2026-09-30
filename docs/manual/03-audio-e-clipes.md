@@ -52,7 +52,7 @@ O mesmo botão `Importar` (e o `Ctrl+I`) aceita os arquivos MIDI padrão, com ex
 | Outros controles | **Ignorados**: volume (CC 7), pan (CC 10), expressão (CC 11), reverb e o resto dos CC, pressão do canal, `Program Change`, letras, marcadores, SysEx. Os CC 120 em diante (all notes off) e os de `RPN`/`NRPN` (CC 6, 38 e 98 a 101, o alcance do bend) são descartados sem aviso e não entram na contagem do aviso | Aviso: `Ignorei N evento(s) de controle que o app não usa (volume, pan, expressão…).` | Quem mixou no programa de origem precisa refazer volume e pan no [mixer](06-mixer.md) |
 | Bateria (canal 10) | As notas GM vão para as peças da [bateria](04b-bateria.md) pela altura. As que o app tem entram como estão: 36 `Bumbo`, 37 `Aro`, 38 `Caixa`, 39 `Palmas`, 41 `Tom grave`, 42 `Chimbal fechado`, 45 `Tom médio`, 46 `Chimbal aberto`, 48 `Tom agudo`, 49 `Prato de ataque`, 51 `Prato de condução`, 56 `Cowbell` | Aproximadas para a peça parecida: 35→36, 40→38, 43→41, 44→42, 47→45, 50→48, 52→49, 53→51, 55→49, 57→49, 59→51 (aviso com a contagem). Sem peça (por exemplo 54 pandeiro, 58 vibraslap, qualquer nota fora de 35–59): a nota **entra no clipe mas fica sem som** (aviso: `A bateria do app não tem: <lista>. Essas notas entraram, mas ficam sem som.`) | A nota sem som pode ser movida para uma peça que existe no editor da bateria |
 
-**Andamento e compasso.** Se o arquivo traz andamento (`Set Tempo`) ou compasso (`Time Signature`) e algum dos dois difere do projeto, abre uma pergunta. O que se compara é o mapa inteiro: o BPM inicial (comparado **arredondado ao inteiro**: um arquivo em `97,5` contra um projeto em `98` não abre a pergunta e o projeto fica em `98`), cada ponto do [mapa de andamento](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos), os tempos por compasso e cada mudança do mapa de compassos. Se tudo já é igual ao projeto, a pergunta nem aparece.
+**Andamento e compasso.** Se o arquivo traz andamento (`Set Tempo`) ou compasso (`Time Signature`) e algum dos dois difere do projeto, abre uma pergunta. O que se compara é o mapa inteiro: o BPM inicial (a diferença conta a partir de **0,05 BPM**, porque o andamento entra com a fração: um arquivo em `97,5` contra um projeto em `98` **abre** a pergunta; `98,02` contra `98` não abre; até a fase 15 a comparação era pelo inteiro e o `97,5` passava sem pergunta), cada ponto do [mapa de andamento](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos), os tempos por compasso e cada mudança do mapa de compassos. Se tudo já é igual ao projeto, a pergunta nem aparece.
 
 | Situação do arquivo | Título da pergunta |
 |---|---|
@@ -109,7 +109,7 @@ Não há limite de tamanho de arquivo nem de quantidade de notas no código; a l
 | Arrastar a borda esquerda | **Apara o começo**: o clipe encurta pela esquerda e o áudio continua no mesmo lugar do tempo (o `offset` anda junto) | Limites: começo do arquivo e fim do clipe (mínimo 0,01 s) | Borda de 8 px com mouse, 16 px com o dedo (e no máximo um quarto da largura do clipe) |
 | Arrastar a borda direita | **Apara o fim** (ou estende, até o fim do arquivo) | Mínimo 0,01 s; máximo o que sobra do arquivo depois do `offset` | Não dá para esticar além do arquivo |
 | Alça de fade in (círculo branco no canto de cima à esquerda) | Arrasta para a direita para criar/alongar o **fade in** | 0 até (duração do clipe − fade out); padrão 0 | O sombreado escuro mostra o que o fade tira e uma linha branca desenha a curva escolhida (ver [Fades e crossfade](#fades-e-crossfade)). Não usa grade. Mexer na alça faz o fade deixar de ser "automático" |
-| Alça de fade out (círculo branco no canto de cima à direita) | Arrasta para a esquerda para criar/alongar o **fade out** | 0 até (duração do clipe − fade in); padrão 0 | A curva é a do item `Fade de saída: …` do menu; a de fábrica, `Linear`, é a rampa **elevada ao quadrado** (`x²`; o fade in começa bem suave e ganha força no fim; o fade out é o inverso) |
+| Alça de fade out (círculo branco no canto de cima à direita) | Arrasta para a esquerda para criar/alongar o **fade out** | 0 até (duração do clipe − fade in); padrão 0 | O tamanho também se digita no item `Fade de saída…` do menu ([abaixo](#tamanho-do-fade-por-campo)). A curva é a do item `Fade de saída: …` do menu; a de fábrica, `Suave (padrão)`, é a rampa **elevada ao quadrado** (`x²`; o fade in começa bem suave e ganha força no fim; o fade out é o inverso) |
 | Selo `W` / `+3st` / `R` / `processando…` | Aparece quando o clipe tem warp, transposição ou reverso ativos (só em clipe com 40 px ou mais de largura). Tooltip `Warp e altura` | | Detalhes em [Warp e altura](03b-warp-e-altura.md) |
 | Selo `N tomadas` | Aparece em clipe gravado em loop; tocar abre a lista de tomadas | | Detalhes em [Gravação](03c-gravacao.md) |
 
@@ -121,12 +121,14 @@ Depois de qualquer arrasto que mexeu no clipe, ele passa a ficar **por cima** do
 |---|---|---|---|
 | `Tomadas` (só em clipe gravado em loop, com o número de tomadas) | Abre a lista `TOMADAS`; escolher uma troca o áudio do clipe (posição, corte e fades ficam) | | Ver [Gravação](03c-gravacao.md) |
 | `Duplicar` | Cria uma cópia logo depois do clipe (no fim dele) e seleciona a cópia | `Ctrl+D` (`⌘+D`) | A cópia leva warp, fades (com as curvas) e ganho |
-| `Cortar no cursor` | Parte o clipe em dois no cursor. O fade out fica só no pedaço da esquerda e o fade in só no da direita | `S` | Com clipe selecionado corta ele; sem seleção, corta tudo o que o cursor cruza na faixa atual (áudio e notas). Só corta se o cursor está dentro do clipe |
+| `Cortar no cursor` | Parte o clipe em dois no cursor. O fade de entrada fica só no pedaço da esquerda e o de saída só no da direita (os fades da emenda zeram; a marca de fade automático desses lados é limpa) | `S` | Com clipe selecionado corta ele; sem seleção, corta tudo o que o cursor cruza na faixa atual (áudio e notas). Só corta se o cursor está dentro do clipe |
 | `Warp e altura…` | Abre o diálogo de warp, transposição e reverso | | [Warp e altura](03b-warp-e-altura.md) |
 | `Ganho do clipe…` | Abre o diálogo `Ganho do clipe` (ver a seção abaixo) | | Só no clipe de áudio; o volume da faixa continua no mixer |
-| `Fade de entrada: Linear`, `Fade de entrada: Potência constante`, `Fade de entrada: Exponencial`, `Fade de entrada: S (seno cosseno)` | Escolhe a **curva do fade de entrada** do clipe. Os quatro itens ficam juntos, num bloco entre dois divisores, e o da curva atual leva uma marca de visto. A rampa desenhada no clipe muda na hora | Padrão `Linear` (o envelope de sempre, `x²`). Desfazível, um passo por escolha | A curva só se ouve se o clipe tem fade de entrada (alça do canto esquerdo). Ver [Fades e crossfade](#fades-e-crossfade) |
-| `Fade de saída: Linear`, `Fade de saída: Potência constante`, `Fade de saída: Exponencial`, `Fade de saída: S (seno cosseno)` | Igual, para o **fade de saída** | Padrão `Linear` | Cada lado tem a sua curva: entrada e saída podem ser diferentes |
-| `Crossfade nas sobreposições` | Nos clipes desta faixa que se cruzam pela borda, põe fade de saída no anterior e de entrada no posterior, do tamanho da sobreposição e com curva `Potência constante`, **sem** o teto de metade e **por cima** de fades que você tenha posto | Um passo do desfazer. Se não há sobreposição, não acontece nada (não aparece aviso) | Para sobreposições que já existem; ao mover ou aparar, o crossfade já sai sozinho |
+| `Fade de entrada…`, `Fade de saída…` | Abrem o diálogo do tamanho do fade (ver [Tamanho do fade por campo](#tamanho-do-fade-por-campo)) | | Entram no desfazer como um passo |
+| `Fade de entrada: Suave (padrão)`, `Fade de entrada: Potência constante`, `Fade de entrada: Exponencial`, `Fade de entrada: S (seno cosseno)` | Escolhe a **curva do fade de entrada** do clipe. Os quatro itens ficam juntos, num bloco entre dois divisores, e o da curva atual leva uma marca de visto. Cada item tem um tooltip que explica a curva (o de `Suave (padrão)` diz que é `x²`, que os projetos antigos usam e que num crossfade o nível afunda uns 6 dB no meio). A rampa desenhada no clipe muda na hora | Padrão `Suave (padrão)` (o envelope de sempre, `x²`; até a fase 15 o rótulo era `Linear`). Desfazível, um passo por escolha | A curva só se ouve se o clipe tem fade de entrada (alça do canto esquerdo ou `Fade de entrada…`). Ver [Fades e crossfade](#fades-e-crossfade) |
+| `Fade de saída: Suave (padrão)`, `Fade de saída: Potência constante`, `Fade de saída: Exponencial`, `Fade de saída: S (seno cosseno)` | Igual, para o **fade de saída** | Padrão `Suave (padrão)` | Cada lado tem a sua curva: entrada e saída podem ser diferentes |
+| `Crossfade neste clipe` | Nos cruzamentos de borda **deste clipe** com outro da faixa, põe fade de saída no anterior e de entrada no posterior, do tamanho da sobreposição e com curva `Potência constante`, **sem** o teto de metade e **por cima** de fades que você tenha posto | Um passo do desfazer. Diz o resultado num aviso na tela (`1 crossfade aplicado.` / `N crossfades aplicados.`; sem cruzamento, o aviso explica que não há o que aplicar) | Para sobreposições que já existem; ao mover ou aparar, o crossfade já sai sozinho |
+| `Crossfade em toda a faixa` | O mesmo, para todos os pares de clipes da faixa que se cruzam pela borda | Igual | Para um projeto antigo ou de fora com várias sobreposições |
 | `Converter em notas (MIDI)` | Manda o áudio ao servidor e cria uma faixa de sintetizador com as notas | | [Áudio para MIDI](03d-audio-para-midi.md) |
 | `Apagar` | Remove o clipe (o arquivo continua guardado no projeto) | `Delete` | Desfazer traz o clipe de volta |
 
@@ -147,7 +149,7 @@ Como funciona: o ganho fica no documento do projeto (campo `gain` do clipe), é 
 
 ### Fades e crossfade
 
-Todo clipe de áudio tem dois fades, o de entrada (sobe do silêncio no começo do clipe) e o de saída (desce ao silêncio no fim). O **tamanho** de cada um se ajusta nas alças do canto de cima (tabela `O clipe na linha do tempo`, acima); a **curva** de cada um se escolhe nos itens `Fade de entrada: …` e `Fade de saída: …` do menu do clipe. Fades, curvas e ganho do clipe multiplicam o áudio juntos e vão no projeto (sincronizam e entram no WAV exportado e no congelamento).
+Todo clipe de áudio tem dois fades, o de entrada (sobe do silêncio no começo do clipe) e o de saída (desce ao silêncio no fim). O **tamanho** de cada um se ajusta nas alças do canto de cima (tabela `O clipe na linha do tempo`, acima) e também se digita, em ms ou batidas, nos itens `Fade de entrada…` e `Fade de saída…` do menu ([abaixo](#tamanho-do-fade-por-campo)); a **curva** de cada um se escolhe nos itens `Fade de entrada: …` e `Fade de saída: …` do menu do clipe. Fades, curvas e ganho do clipe multiplicam o áudio juntos e vão no projeto (sincronizam e entram no WAV exportado e no congelamento).
 
 #### As quatro curvas
 
@@ -155,7 +157,7 @@ Todo clipe de áudio tem dois fades, o de entrada (sobe do silêncio no começo 
 
 | Curva (texto do menu) | Fórmula do ganho | Em `x` = 25% | Em `x` = 50% | Em `x` = 75% | Como soa | Quando usar |
 |---|---|---|---|---|---|---|
-| `Linear` (padrão) | `x²` | 0,063 (−24 dB) | 0,25 (−12 dB) | 0,56 (−5 dB) | Entra bem devagar e ganha força no fim; a saída é o inverso | Fade simples de um clipe sozinho, como sempre foi. **Não** serve para crossfade: afunda no meio (ver a tabela seguinte) |
+| `Suave (padrão)` (era `Linear`) | `x²` | 0,063 (−24 dB) | 0,25 (−12 dB) | 0,56 (−5 dB) | Entra bem devagar e ganha força no fim; a saída é o inverso | Fade simples de um clipe sozinho, como sempre foi. **Não** serve para crossfade: afunda no meio (ver a tabela seguinte) |
 | `Potência constante` | `sin(x · π/2)` | 0,38 (−8,3 dB) | 0,71 (−3,0 dB) | 0,92 (−0,7 dB) | Sobe depressa no começo e chega suave ao topo | **Crossfade entre dois sons diferentes** (duas tomadas de voz, dois trechos de música): entrada e saída somam potência 1 em qualquer ponto |
 | `Exponencial` | `(e^(4x) − 1) / (e^4 − 1)` | 0,032 (−30 dB) | 0,12 (−18 dB) | 0,36 (−9 dB) | Na entrada, sobe devagar e acelera; na saída, cai depressa e some suave no fim | Fim natural de uma nota, pad ou cauda que "esvai"; entrada em crescendo. Não serve para crossfade |
 | `S (seno cosseno)` | `(1 − cos(π · x)) / 2` | 0,15 (−16,7 dB) | 0,50 (−6,0 dB) | 0,85 (−1,4 dB) | Suave nas duas pontas (começa e termina sem quina) | **Crossfade entre dois sons iguais ou quase** (as duas metades de um mesmo clipe, uma emenda de loop); fade de clipe sozinho sem "quina" no começo nem no topo |
@@ -166,16 +168,16 @@ Nas quatro, o ganho vale exatamente 0 em `x` = 0 e exatamente 1 em `x` = 1, e nu
 
 | Curva dos dois lados | Sons diferentes (potência no meio) | Sons iguais (amplitude no meio) |
 |---|---|---|
-| `Linear` | 0,125 (−9,0 dB): afunda | 0,50 (−6,0 dB): afunda |
+| `Suave (padrão)` | 0,125 (−9,0 dB): afunda | 0,50 (−6,0 dB): afunda |
 | `Potência constante` | 1,00 (0 dB): reta | 1,41 (+3,0 dB): estufa um pouco |
 | `Exponencial` | 0,028 (−15,5 dB): afunda muito | 0,24 (−12,5 dB): afunda muito |
 | `S (seno cosseno)` | 0,50 (−3,0 dB): afunda um pouco | 1,00 (0 dB): reta |
 
-Os números são a conta das fórmulas acima; o motor tem um teste automático que mede o crossfade de dois tons sem relação (100 Hz e 150 Hz): com `Potência constante` a potência fica a 3% da de um clipe solo, e com `Linear` e `S` ela afunda. Como soa de verdade no material do usuário **(não confirmado ao ouvido)**.
+Os números são a conta das fórmulas acima; o motor tem um teste automático que mede o crossfade de dois tons sem relação (100 Hz e 150 Hz): com `Potência constante` a potência fica a 3% da de um clipe solo, e com a curva de fábrica (`Suave (padrão)`) e com `S` ela afunda. Como soa de verdade no material do usuário **(não confirmado ao ouvido)**.
 
 **Regra prática.** Dois sons diferentes: `Potência constante` (é a que o crossfade automático usa). O mesmo som dos dois lados (emenda de duas partes do mesmo áudio, loop que cai sobre si mesmo): `S (seno cosseno)`, porque a soma das amplitudes fica constante. Não há uma rampa reta em amplitude entre as opções: no lugar dela, para material coerente, use a `S`.
 
-**Por que a curva de fábrica chama `Linear` e é `x²`.** Antes das curvas selecionáveis, o motor já fazia o fade assim: uma rampa reta de 0 a 1 **elevada ao quadrado**. O nome `Linear` e o código 0 ficaram para essa curva, e ela continua sendo o padrão, para que todo projeto que já tinha fades soe **exatamente** igual depois da atualização (o documento antigo abre com `Linear` nos dois lados e não ganha campo novo). O nome vem da rampa que é reta antes de ser elevada; a curva em si, no ganho de amplitude, não é reta.
+**Por que a curva de fábrica é `x²` e se chama `Suave (padrão)`.** Antes das curvas selecionáveis, o motor já fazia o fade assim: uma rampa reta de 0 a 1 **elevada ao quadrado**. O código 0 ficou para essa curva, e ela continua sendo o padrão, para que todo projeto que já tinha fades soe **exatamente** igual depois da atualização (o documento antigo abre com o código 0 nos dois lados e não ganha campo novo). Até a fase 15 o rótulo era `Linear`, o que enganava: a rampa é reta só antes de ser elevada ao quadrado; no ganho de amplitude a curva é suave (e afunda uns 6 dB no meio de um crossfade). Na fase 16 só o **rótulo** mudou; a curva e o código 0 são os de sempre, então nenhum projeto muda de som. A curva `S (seno cosseno)` é a que mantém o nível num crossfade de sons iguais.
 
 #### Crossfade automático
 
@@ -200,13 +202,45 @@ O resultado: o clipe da esquerda ganha um **fade de saída** e o da direita um *
 
 Esses valores vêm dos testes automáticos do controlador `(testado só por testes automáticos; não visto no navegador)`.
 
-**Os fades automáticos acompanham e se desfazem.** O app guarda, em cada fade que o crossfade gerou, o tamanho e a curva que ele tinha antes. Cada vez que o app reacomoda clipes (ao soltar um arrasto que move ou apara, ao `Duplicar` e ao gravar por cima), os fades automáticos são revistos em todas as faixas: se a sobreposição mudou de tamanho, o fade muda junto (no exemplo, de 1 s para 0,5 s ao mover para a batida 7); se ela sumiu (ou o fade já não cabe), o fade volta ao tamanho e à curva de antes. **Um fade que você mexeu deixa de ser automático:** arrastar a alça dele ou escolher a curva dele no menu tira a marca, e dali em diante ele é seu e nunca mais é revertido nem redimensionado. Só o fade que o crossfade gerou é tocado; um fade seu do outro lado do clipe fica como está.
+**Os fades automáticos acompanham e se desfazem.** O app guarda, em cada fade que o crossfade gerou, o tamanho e a curva que ele tinha antes. Cada vez que o app reacomoda clipes (ao soltar um arrasto que move ou apara, ao `Duplicar`, ao gravar por cima e ao `Apagar` um clipe), os fades automáticos são revistos em todas as faixas: se a sobreposição mudou de tamanho, o fade muda junto (no exemplo, de 1 s para 0,5 s ao mover para a batida 7); se ela sumiu (ou o fade já não cabe), o fade volta ao tamanho e à curva de antes. **Um fade que você mexeu deixa de ser automático:** arrastar a alça dele, digitar o tamanho em `Fade de entrada…`/`Fade de saída…` ou escolher a curva dele no menu tira a marca, e dali em diante ele é seu e nunca mais é revertido nem redimensionado. Só o fade que o crossfade gerou é tocado; um fade seu do outro lado do clipe fica como está.
 
 A duração de cada fade é medida em segundos do áudio original (o mesmo dos fades feitos à mão), então com warp o crossfade também acompanha o esticamento e o mapa de andamento vigente na borda `(lido do código; os testes do crossfade não usam warp)`.
 
-#### O comando `Crossfade nas sobreposições`
+#### Os comandos `Crossfade neste clipe` e `Crossfade em toda a faixa`
 
-Para clipes que **já** se sobrepõem na faixa (o app normalmente não os deixa assim, mas um projeto antigo ou um arquivo vindo de fora pode trazer), o item `Crossfade nas sobreposições` do menu do clipe faz o mesmo crossfade em **todas** as travessias de borda da faixa do clipe (não só nas do clipe onde você clicou), em um único passo do desfazer. Diferenças em relação ao automático: **não há teto** de metade do menor clipe e ele **passa por cima de fades que você tenha posto** nos dois lados do cruzamento (o tamanho e a curva anteriores ficam guardados, então mover o clipe depois ainda devolve o que era). Continua exigindo travessia de borda e que os fades caibam nos clipes. Sem nenhuma sobreposição, o item não faz nada e não avisa.
+Para clipes que **já** se sobrepõem na faixa (o app normalmente não os deixa assim, mas um projeto antigo ou um arquivo vindo de fora pode trazer), o menu do clipe tem dois itens que fazem o mesmo crossfade, em um único passo do desfazer:
+
+- `Crossfade neste clipe`: só nas travessias de borda **do clipe onde você clicou** com outro clipe da faixa.
+- `Crossfade em toda a faixa`: em **todas** as travessias de borda da faixa do clipe.
+
+(Até a fase 15 havia um item só, `Crossfade nas sobreposições`, que agia sempre na faixa toda.) Diferenças em relação ao automático: **não há teto** de metade do menor clipe e o comando **passa por cima de fades que você tenha posto** nos dois lados do cruzamento (o tamanho e a curva anteriores ficam guardados, então mover o clipe depois ainda devolve o que era). Continua exigindo travessia de borda e que os fades caibam nos clipes.
+
+O resultado aparece num aviso que não é erro (cor de destaque do tema, ícone de visto), no alto da tela do projeto, com botão para dispensar:
+
+| Situação | Aviso |
+|---|---|
+| Um crossfade aplicado | `1 crossfade aplicado.` |
+| Vários | `N crossfades aplicados.` |
+| Alguns não couberam nos fades dos clipes | `N crossfades aplicados (M não coube nos fades dos clipes).` |
+| `Crossfade neste clipe` sem cruzamento | `Este clipe não cruza a borda de outro clipe da faixa: não há crossfade a aplicar.` |
+| `Crossfade em toda a faixa` sem cruzamento | `Nenhum clipe desta faixa cruza a borda de outro: não há crossfade a aplicar.` |
+
+`(testado só por testes automáticos)`: o texto exato dos avisos é o dos testes; o aspecto do aviso vem do código (`InlineNotice`) e não foi visto no Chrome.
+
+#### Tamanho do fade por campo
+
+`Fade de entrada…` e `Fade de saída…` (menu do clipe de áudio) abrem um diálogo para digitar o tamanho exato do fade, sem depender do arraste da alça.
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Título `Fade de entrada` / `Fade de saída` | Diz o lado | | |
+| Campo `Tamanho` (sufixo `ms` ou `batidas`) | O tamanho do fade. Aceita vírgula ou ponto decimal; Enter aplica | Vem preenchido com o tamanho atual em ms | `0` tira o fade |
+| Seletor `ms` / `batidas` | Troca a unidade e converte o número que já está no campo | Padrão `ms` | Em batidas conta o andamento vigente na ponta do fade (no fim do clipe para o fade de saída), com warp ou mapa de andamento |
+| Texto de ajuda | `No máximo X ms (o que sobra do clipe depois do outro fade). 0 tira o fade. Mudar o tamanho aqui faz o fade deixar de ser o automático do crossfade.` | | |
+| `Cancelar` | Fecha sem mudar | | |
+| `Aplicar` | Aplica e fecha | | Um passo do desfazer |
+
+Um valor acima do máximo é **limitado** a ele em silêncio (a ajuda mostra o teto). Texto que não é número, ou negativo, mostra a mensagem `Digite um número, em milissegundos (0 tira o fade).` (ou `... em batidas ...`) e não fecha. Digitar o tamanho torna o fade seu: o crossfade automático deixa de redimensioná-lo ou revertê-lo. A curva do fade não muda. `(testado só por testes automáticos; o diálogo não foi visto no Chrome)`
 
 
 | Controle (tooltip) | O que faz | Valores / padrão | Dica |
@@ -244,6 +278,7 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 1. Arraste a borda esquerda para a direita para tirar o começo (o resto fica no lugar).
 2. Arraste a borda direita para tirar o final.
 3. Puxe a alça do canto de cima à esquerda para um fade in e a da direita para um fade out. Use `Alt` na hora de mover o clipe se quiser posição sem grade.
+4. Para um tamanho exato, botão direito no clipe, `Fade de entrada…` (ou `Fade de saída…`), digite o valor (por exemplo `250` ms, ou `0,5` batidas com o seletor em `batidas`) e toque em `Aplicar`.
 
 **Trocar a curva de um fade**
 1. Puxe a alça do canto de cima do clipe para criar o fade (sem fade, a curva não tem o que mudar).
@@ -259,8 +294,8 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 5. Se cobrir mais que a metade do menor clipe, o app apara o de baixo em vez de fazer crossfade: solte menos por cima.
 
 **Fazer crossfade em clipes que já se sobrepõem**
-1. Botão direito num dos clipes da faixa, `Crossfade nas sobreposições`.
-2. Cada travessia de borda da faixa ganha o fade de saída e o de entrada, do tamanho do trecho em comum e com `Potência constante`. Se nada mudar, a faixa não tem clipes que se cruzam pela borda.
+1. Botão direito num dos clipes que se cruzam e `Crossfade neste clipe` (só os cruzamentos dele) ou `Crossfade em toda a faixa`.
+2. Cada travessia de borda ganha o fade de saída e o de entrada, do tamanho do trecho em comum e com `Potência constante`. Um aviso na tela diz quantos crossfades foram aplicados (`2 crossfades aplicados.`) ou por que nenhum foi.
 3. `Ctrl+Z` desfaz tudo de uma vez.
 
 **Cortar um clipe em dois**
@@ -296,10 +331,10 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 **Sobre o clipe**
 - **O ganho do clipe** se ajusta em `Ganho do clipe…` (−40 a +12 dB, padrão 0 dB). Ele soma ao volume da faixa (fader do mixer), não o substitui. O ganho máximo é +12 dB: um valor maior vindo de um arquivo de projeto é limitado a esse teto ao ser editado no diálogo. Só clipes de áudio têm esse controle; o clipe de notas não.
 - **Fades e curvas: o que existe e o que não.** São só as quatro curvas do menu, uma por lado; não há curva desenhada à mão nem forma de ajustar a "força" de uma curva. Escolher a curva de um clipe sem fade guarda a escolha, mas não muda o som (o tamanho do fade é 0). O tamanho do fade continua limitado a 0 até a duração do clipe menos o fade do outro lado.
-- **A curva `Linear` é `x²`, não uma rampa reta em amplitude.** É proposital (mantém o som dos projetos antigos). Para crossfade em material igual dos dois lados, use `S (seno cosseno)`, que soma amplitude constante; ver [Fades e crossfade](#fades-e-crossfade).
-- **O crossfade automático só age ao soltar um arrasto de mover ou aparar.** Depois disso os fades só são revistos quando o app reacomoda clipes de novo (outro arrasto, `Duplicar`, gravar por cima). `Apagar` um dos dois clipes de um crossfade **não** revê o fade do que ficou: o fade de saída (ou de entrada) automático continua lá até o próximo arrasto de um clipe de áudio, quando volta ao que era `(lido do código; não visto no navegador)`. `Cortar no cursor` num clipe que tem fade automático também não revê as marcas das duas metades `(lido do código)`.
+- **A curva de fábrica, `Suave (padrão)`, é `x²`, não uma rampa reta em amplitude.** É proposital (mantém o som dos projetos antigos; o rótulo era `Linear` até a fase 15 e enganava). Para crossfade em material igual dos dois lados, use `S (seno cosseno)`, que soma amplitude constante; ver [Fades e crossfade](#fades-e-crossfade).
+- **O crossfade automático só age ao soltar um arrasto de mover ou aparar.** Depois disso os fades só são revistos quando o app reacomoda clipes de novo (outro arrasto, `Duplicar`, gravar por cima, `Apagar`). `Apagar` um dos dois clipes de um crossfade **revê** o fade do que ficou: o fade automático dele volta ao tamanho e à curva de antes na hora. `Cortar no cursor` num clipe que tem fade automático zera os fades da emenda (o de saída da metade da esquerda e o de entrada da direita) e **limpa a marca de automático** desses lados: o fade que virou 0 não é mais "devolvido" por uma revisão seguinte `(testado só por testes automáticos)`.
 - **Dois clipes sobrepostos na mesma faixa agora existem** (o do crossfade): a sobreposição de até metade do menor clipe toca os dois somados, com os fades. Fora o crossfade, vale a regra de que o clipe que você mexeu fica por cima.
-- **Projeto com curvas em app ou motor antigo:** o motor sem a chamada `clip_fade_shape` a ignora e o fade toca como `Linear` (`x²`); o desenho no clipe segue o que estiver salvo `(lido do código; não testado com um motor antigo de verdade)`.
+- **Projeto com curvas em app ou motor antigo:** o motor sem a chamada `clip_fade_shape` a ignora e o fade toca como `Suave (padrão)` (`x²`, o código 0); o desenho no clipe segue o que estiver salvo `(lido do código; não testado com um motor antigo de verdade)`.
 - O clipe nunca passa do fim do arquivo: aparar/estender à direita para nesse ponto.
 - Aparar não apaga nada do arquivo: o `offset` e a duração só escolhem o trecho que toca.
 - Não há arrastar-e-soltar de arquivos do sistema sobre a tela: só o botão `Importar` e `Ctrl+I`.

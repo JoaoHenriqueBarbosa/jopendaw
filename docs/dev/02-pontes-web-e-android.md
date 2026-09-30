@@ -163,7 +163,7 @@ Uma chamada comum (só números, sem ponteiro), da fase 14 D (`991c05d`). Semân
 |---|---|---|---|
 | `clip_fade_shape` | `curva in` (`u32`), `curva out` (`u32`) | `w.clip_fade_shape(in, out)`, export em `engine/wasm/src/lib.rs` (`clip_fade_shape(fade_in: u32, fade_out: u32)`) | `Call::ClipFadeShape { fade_in, fade_out }` → `Engine::set_clip_fade_shape`, pela mesma `api::apply`. Nenhuma função `jd_*` nova (o `core.rs` de teste também ganhou o ramo `"clip_fade_shape"`) |
 
-Códigos: 0 `Linear` (`x²`, o padrão), 1 `Potência constante`, 2 `Exponencial`, 3 `S (seno cosseno)`; o índice do enum `FadeShape` do Dart é o código do motor (tipo novo só entra no fim).
+Códigos: 0 `Suave (padrão)` (`x²`; antes da fase 16 o rótulo era `Linear`), 1 `Potência constante`, 2 `Exponencial`, 3 `S (seno cosseno)`; o índice do enum `FadeShape` do Dart é o código do motor (tipo novo só entra no fim).
 
 - **Ordem e quem manda.** `_docCalls` (`controller.dart`) emite `clip_fade_shape in out` **logo depois** do `clip_add` do clipe e só quando alguma das duas curvas não é `FadeShape.linear`; clipe sem curva não gera chamada nova (documento antigo manda exatamente as chamadas de antes).
 - **A chamada é relativa ao último clipe.** Não leva índice. Por isso quem filtra a lista de chamadas precisa manter o par `clip_add` + `clip_fade_shape` junto ou descartar os dois.
@@ -171,6 +171,25 @@ Códigos: 0 `Linear` (`x²`, o padrão), 1 `Potência constante`, 2 `Exponencial
 - **Android: motor antigo.** Um `.so` sem a chamada devolve erro no `apply` e o `core.rs` a conta em `diag.unknown_calls` (nome guardado em `last_unknown`) sem parar o resto do lote `(lido do código; não testado com um .so antigo)`. Os binários integrados em `48ec9e8` (`engine.wasm` e os três `.so`) contêm o nome `clip_fade_shape` (conferido por `grep` nos binários).
 - **Render offline (exportação e congelamento).** A chamada **não** está em `SKIP` nem em `renderSkip`, mas tem tratamento especial no aparo do fim do trecho, nas duas cópias da conta: `prepareCalls` (`render-worker.js`) e `prepareRenderCalls` (`engine_ffi.dart`). Ambas guardam `lastClipKept` (zerado a cada `clip_add`, ligado só se o clipe fica no trecho) e só repassam o `clip_fade_shape` se o clipe anterior ficou; um clipe que começa depois do fim é descartado **junto com** a curva dele. O clipe cortado pelo fim leva a curva de saída dele para o fade de 10 ms (ou para o que restar do fade de saída original, se maior). Teste: `o render aparado leva a curva do clipe que fica e descarta a do que sai` (`app/test/fade_test.dart`).
 - **Checklist.** A chamada seguiu o [checklist](#checklist-acrescentar-uma-chamada-nova-de-ponta-a-ponta) (passos 1 a 5 e 8), com o item 5 (render) exigindo o tratamento acima nas duas cópias.
+
+### Chamadas de modulação (`mod_clear`, `mod_source`, `mod_dest`)
+
+Três chamadas comuns (só números, sem ponteiro), da fase 16 B (`e364c48`, integrada em `53ca96d` com `engine.wasm` e os três `.so` recompilados; os quatro binários contêm os três nomes, conferido por leitura de bytes). Semântica em [01-motor.md](01-motor.md#modulação-enginesrcmodulationrs-fase-16-b); o JSON e o controlador em [10-app-flutter.md](10-app-flutter.md#modulação-fase-16-b).
+
+| Chamada | Argumentos (tipo no wasm) | Web (worklet) | Android (`jd_calls`) |
+|---|---|---|---|
+| `mod_clear` | nenhum | `w.mod_clear()` | `Call::ModClear` → `Engine::mod_clear` |
+| `mod_source` | `faixa` (`i32`, −1 master), `modulador` (`u32`, 0 a 3), `tipo` (`u32`: 0 LFO, 1 seguidor, 2 macro), `taxa` (`f32`: Hz, ou o índice da divisão com `sincronizado`), `sincronizado` (`u32`), `profundidade` (`f32`), `fase` (`f32`), `bipolar` (`u32`), `forma` (`u32`: 0 senoide, 1 triângulo, 2 serra, 3 quadrada, 4 sample&hold), `ataque em ms` (`f32`), `soltura em ms` (`f32`), `valor` (`f32`) | `w.mod_source(track, index, kind, rate, sync, depth, phase, bipolar, shape, attack, release, value)` (o wasm faz `sync != 0` e `bipolar != 0`) | `Call::ModSource { ... }` (`a.flag(4)`, `a.flag(7)`) |
+| `mod_dest` | `faixa` (`i32`), `modulador` (`u32`), `destino` (`u32`, 0 a 3), `alvo` (`u32`: o `kind` de `auto_lane`), `slot` (`u32`), `id` (`u32`), `quantidade` (`f32`, −1..1), `mínimo` (`f32`), `máximo` (`f32`), `escala` (`u32`: 0 linear, 1 log, 2 fader) | `w.mod_dest(track, index, dest, target, slot, id, amount, min, max, scale)` | `Call::ModDest { ... }` |
+
+Nenhuma função `jd_*` nova: o Android as recebe pelo `jd_calls`, e o teste de paridade confere que `Call::parse` conhece os três nomes. Em `api.rs`, `cases()` tem um caso `Changes` para cada uma (dentro de um estado montado por `modulated()`: tocando, com uma macro cheia mexendo no volume da faixa 0). `mod_source` tem 12 argumentos e `mod_dest` 10 (só `zone_add`, com 16, tem mais), dentro do limite de 16 do Android.
+
+- **Ordem no lote.** `_docCalls` (`controller.dart`) emite `mod_clear`, os `mod_source` e os `mod_dest` **depois** da automação (e depois de envios e cadeias, de que os destinos dependem) e **antes** das chamadas de observação e das notas, e só quando a lista completa difere da que o motor já tem (`_SyncCache.mod`, comparada por `_sameCalls`); a lista nova vem sempre inteira, precedida de `mod_clear`. Passar de "com modulação" para "sem" manda um `mod_clear` sozinho; num projeto que nunca teve modulação nada sai. Um motor novo (reinício do áudio, ou o render) começa de `mod = const []` e recebe tudo.
+- **Índices.** O `modulador` e o `destino` são os índices da lista do documento (`ModSource` e `ModDest`), não uma numeração compacta; um modulador sem nenhum destino que se resolva não gera `mod_source` (e o índice dele fica vago).
+- **Web: motor antigo.** Os três nomes entraram em `OPTIONAL_CALLS` do `worklet.js`: um `engine.wasm` sem os exports ignora as chamadas e o projeto toca sem modulação.
+- **Android: motor antigo.** Um `.so` sem as chamadas devolve `UnknownCall` no `apply`, contado em `diag.unknown_calls` sem parar o lote `(lido do código; não testado com um .so antigo)`. O `core.rs` não precisou de ramo próprio: o despachante de teste tenta `api::apply` primeiro.
+- **Render offline (exportação e congelamento).** Os três nomes **não** estão em `SKIP` (`render-worker.js`) nem em `renderSkip` (`engine_ffi.dart`): o render as aplica ao motor novo junto do documento e a modulação vale no arquivo. Não há tratamento especial no aparo do fim do trecho. O teste `o render (motor novo) recebe a modulação inteira` (`modulation_test.dart`) usa `debugFullSyncCalls()`.
+- **Checklist.** Seguiram o [checklist](#checklist-acrescentar-uma-chamada-nova-de-ponta-a-ponta) (passos 1 a 3, 4 e 8; o item 5 é o "não pular no render").
 
 ### Exports do wasm que não são chamadas (`HOST_ONLY`, `api.rs:226`)
 

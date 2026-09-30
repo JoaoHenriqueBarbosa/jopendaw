@@ -34,6 +34,7 @@ Comece por aqui, na ordem:
 | [06d Referência dos efeitos](manual/06d-efeitos-referencia.md) | Os 15 efeitos, parâmetro por parâmetro |
 | [06e Compensação de latência](manual/06e-compensacao-de-latencia.md) | Como o motor alinha faixas e envios quando o `Limitador` e a `Distorção` atrasam o som |
 | [06f MIDI learn](manual/06f-midi-learn.md) | Ligar knobs, faders e pedais de um controlador MIDI a controles do app |
+| [06g Modulação](manual/06g-modulacao.md) | LFO, seguidor de envelope e macro movendo os controles por cima do valor do knob, na aba `Modulação` |
 | [07 Automação](manual/07-automacao.md) | Mover parâmetros no tempo |
 | [08 Exportação](manual/08-exportacao.md) | WAV, FLAC e MP3 (pelo servidor), stems, congelar faixa |
 | [09 Configurações, atalhos e Android](manual/09-configuracoes-atalhos-android.md) | Ajustes, teclas, diferenças de plataforma |
@@ -51,6 +52,7 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Sampler multi-zona e fatiar loops](guias/sampler-multi-zona-e-fatiar-loops.md) | Piano em camadas, kit de um loop, round-robin |
 | [Expressão MIDI na prática](guias/expressao-midi-na-pratica.md) | Bend, modulação e pedal |
 | [Efeitos em combinação](guias/efeitos-em-combinacao.md) | Cadeia vocal, sidechain, delay em tempo |
+| [Modulação na prática](guias/modulacao-na-pratica.md) | Wobble de baixo preso ao andamento, tremolo de pad, auto-pan e bombeio falso com o seguidor de envelope |
 | [Mixagem e automação](guias/mixagem-e-automacao.md) | Mix do zero e automação de filtro e volume |
 | [Organizar um projeto com pastas](guias/organizar-um-projeto-com-pastas.md) | Bateria com compressor no grupo, coro com reverb no grupo, projeto grande recolhido |
 | [Loudness e master](guias/loudness-e-master.md) | Nível competitivo e seguro |

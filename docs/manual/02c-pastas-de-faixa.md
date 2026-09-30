@@ -18,7 +18,7 @@
 
 *A mesma pasta recolhida: as faixas filhas somem e seus clipes aparecem como faixas finas dentro da linha da pasta; o som continua saindo pelo grupo.*
 
-Situação de teste deste capítulo: o comportamento vem da leitura do código (`app/lib/daw/track_groups.dart`, `track_groups_ui.dart`, `timeline.dart`, `mixer_panel.dart`) e de 34 testes automáticos (`app/test/track_groups_test.dart`). O exemplo `Ritmo` (bateria e baixo, `2 faixas`) é o relato da sessão de código. Nada aqui foi ouvido por quem escreve: os pontos de som estão marcados `(testado só por testes automáticos)` ou `(não confirmado)`.
+Situação de teste deste capítulo: o comportamento vem da leitura do código (`app/lib/daw/track_groups.dart`, `track_groups_ui.dart`, `timeline.dart`, `mixer_panel.dart`) e de testes automáticos (`app/test/track_groups_test.dart` e, para as correções da fase 16, `app/test/fase16a_test.dart`). O exemplo `Ritmo` (bateria e baixo, `2 faixas`) é o relato da sessão de código. Nada aqui foi ouvido por quem escreve: os pontos de som estão marcados `(testado só por testes automáticos)` ou `(não confirmado)`.
 
 ## Onde fica
 
@@ -74,8 +74,9 @@ A linha da pasta **não tem** os botões `A` (automação), armar para gravar ne
 | `Trocar a cor` | Passa a pasta para a próxima cor da paleta (6 cores, em ciclo). As cores das faixas dela não mudam; só a tira de recuo delas acompanha a pasta. | Sempre |
 | `Mover para cima` / `Mover para baixo` | Move a pasta **com as faixas dela** uma posição. Se ela cairia dentro de outra pasta, o bloco todo pula para fora dela. | Desligado na primeira / na última faixa do projeto |
 | `Desagrupar…` | Pede confirmação e desfaz a pasta ([abaixo](#desagrupar)). | Sempre |
+| `Apagar a pasta (as faixas ficam)…` | Pede confirmação e apaga a pasta com o que há nela; as faixas ficam ([abaixo](#apagar-a-pasta)). | Sempre |
 
-A linha da pasta não se arrasta (o reordenar por toque longo é só do cabeçalho de faixa): para mover a pasta use `Mover para cima` e `Mover para baixo`. Não há `Apagar` nem `Duplicar` no menu da pasta: para tirá-la do projeto use `Desagrupar…`.
+A linha da pasta não se arrasta (o reordenar por toque longo é só do cabeçalho de faixa): para mover a pasta use `Mover para cima` e `Mover para baixo`. Não há `Duplicar` no menu da pasta. Para tirá-la do projeto use `Desagrupar…` (que pode mantê-la como barramento) ou `Apagar a pasta (as faixas ficam)…` (que a apaga sempre).
 
 ### Itens de pasta no menu da faixa
 
@@ -84,8 +85,8 @@ No menu de três pontos de uma faixa ([02b](02b-timeline-e-clipes.md#menu-opçõ
 | Item | O que faz | Aparece |
 |---|---|---|
 | `Agrupar em pasta…` | Abre o diálogo abaixo com esta faixa já marcada. Numa faixa que **não pode** entrar, abre o aviso `Não dá para agrupar` (botão `Entendi`). | Faixa fora de pasta |
-| `Tirar da pasta` | A faixa desce para logo depois da última faixa da pasta e a saída dela volta ao `Master`. | Faixa que está numa pasta |
-| `Mover para a pasta "Nome"` | Coloca a faixa no **fim** da pasta `Nome` (a saída passa a ser a pasta). Uma faixa que estava em outra pasta sai dela. Um item por pasta que não seja a atual; vale também para pasta recolhida. | Só em faixa de áudio ou de instrumento |
+| `Tirar da pasta` | A faixa desce para logo depois da última faixa da pasta e a saída dela volta ao `Master`. Se a saída dela era a pasta, abre antes a confirmação `Tirar "Nome" da pasta?` (ver [Confirmação da troca de saída](#confirmação-da-troca-de-saída)); se a saída era outra, tira direto. | Faixa que está numa pasta |
+| `Mover para a pasta "Nome"` | Coloca a faixa no **fim** da pasta `Nome` (a saída passa a ser a pasta). Uma faixa que estava em outra pasta sai dela. Um item por pasta que não seja a atual; vale também para pasta recolhida. Se a saída da faixa muda (era outro barramento e passa a ser a pasta), abre antes a confirmação `Mover "Nome" para a pasta "Pasta"?`. | Só em faixa de áudio ou de instrumento |
 
 Os avisos do diálogo `Não dá para agrupar`:
 
@@ -106,18 +107,43 @@ Os avisos do diálogo `Não dá para agrupar`:
 | Texto de ajuda | `A pasta é um barramento: o volume, o mudo, o solo e os efeitos dela valem para todas as faixas. A saída de cada faixa passa a ir para ela (os envios ficam como estão) e as faixas escolhidas ficam juntas, logo abaixo da pasta.` | | |
 | Lista vazia | `Não há faixa livre para agrupar: só faixas de áudio e de instrumento fora de pasta entram.` | | |
 | `Cancelar` | Fecha sem criar. | | |
-| `Agrupar` | Cria a pasta. Desabilitado sem nenhuma faixa marcada. | Uma faixa só vale. | Um passo só no desfazer. |
+| `Agrupar` | Cria a pasta. Desabilitado sem nenhuma faixa marcada. Se alguma faixa marcada já saía para um barramento, abre antes a confirmação `Agrupar as faixas?` (ver [abaixo](#confirmação-da-troca-de-saída)). | Uma faixa só vale. | Um passo só no desfazer. |
 
 Ao agrupar: a pasta nasce **no lugar da primeira faixa marcada** (na ordem da lista) e as outras vêm para baixo dela, contíguas; as faixas que estavam no meio, sem marcar, descem para depois do bloco. A cor da pasta é a da primeira faixa marcada. A pasta fica selecionada.
 
 ### Desagrupar
 
-`Desagrupar…` abre a confirmação `Desagrupar "Nome"?` com o texto `N faixas da pasta continuam no projeto e voltam a sair direto no Master. O barramento da pasta some; se ele tiver efeitos, automação ou receber de outras faixas, fica como um barramento comum. Dá para desfazer.` e os botões `Cancelar` e `Desagrupar` (vermelho).
+`Desagrupar…` abre a confirmação `Desagrupar "Nome"?` com os botões `Cancelar` e `Desagrupar` (vermelho). O texto depende de a pasta tratar ou não o som das faixas (ter efeitos, pontos de automação ou envios próprios):
 
-- As faixas ficam onde estão, sem pasta, e as que saíam para a pasta voltam ao `Master`. **Não voltam à saída que tinham antes de agrupar** (por exemplo, um retorno).
-- O barramento da pasta é apagado se **não tem** efeitos, pontos de automação, envios próprios, nem recebe de outras faixas (por saída ou por envio).
-- Se tem qualquer um desses, ele **fica** como barramento comum, expandido, no mesmo lugar; as faixas que estavam na pasta já não saem nele, então o efeito da pasta deixa de processar o grupo (o barramento fica sem entrada, a não ser que você religue as saídas).
+- **Pasta sem efeitos, automação nem envios:** `N faixas da pasta continuam no projeto e voltam a sair direto no Master. O barramento da pasta some; se ele receber de outras faixas, fica como um barramento comum. Dá para desfazer.`
+- **Pasta com efeitos, automação ou envios:** `N faixas da pasta continuam no projeto. Como a pasta tem efeitos, automação ou envios, ela fica como um barramento comum e as faixas seguem saindo nele (mandá-las ao Master deixaria o efeito sem entrada). Dá para desfazer.`
+
+O que acontece:
+
+- As faixas ficam onde estão, sem pasta. **Não voltam à saída que tinham antes de agrupar** (por exemplo, um retorno).
+- Pasta que trata o som (efeitos, pontos de automação ou envios próprios): o barramento **fica** como barramento comum, expandido, no mesmo lugar, e as faixas **continuam saindo nele**: o compressor ou o reverb da pasta segue processando o grupo e o som não muda. Se você quiser essas faixas no `Master`, troque a saída delas no mixer.
+- Pasta sem nada disso: as faixas que saíam para a pasta voltam ao `Master`. O barramento é apagado, a não ser que outras faixas (fora da pasta) mandem para ele por saída ou por envio; nesse caso fica como barramento comum.
 - Um passo só no desfazer.
+
+### Apagar a pasta
+
+`Apagar a pasta (as faixas ficam)…` abre a confirmação `Apagar a pasta "Nome"?`: `N faixas da pasta ficam no projeto, soltas e saindo no Master. O barramento da pasta, com os efeitos, a automação e os envios dele, é apagado (e o que outras faixas mandavam para ele). Dá para desfazer.` Botões `Cancelar` e `Apagar a pasta` (vermelho).
+
+Diferente de `Desagrupar…`, o barramento sempre some, mesmo com efeitos: é o caminho para se livrar de uma pasta com efeito sem sobrar um barramento. As faixas ficam sem pasta e com a saída no `Master`; os envios de outras faixas para a pasta e a automação desses envios também saem. Um passo só no desfazer.
+
+### Confirmação da troca de saída
+
+Entrar numa pasta ou sair dela troca a saída da faixa. Quando essa troca muda uma saída que existia, o app pergunta antes, com botão vermelho e o mesmo modelo de texto: `A pasta é um barramento: a faixa que entra ou sai dela troca de saída. Isto muda:`, uma linha `•` por faixa e `Desfazer (Ctrl+Z) traz de volta.` (`⌘` no Mac). Os botões são `Cancelar` e o da ação.
+
+| Ação | Título | Botão | Linha do que muda |
+|---|---|---|---|
+| `Tirar da pasta` (menu da faixa) | `Tirar "Nome" da pasta?` | `Tirar da pasta` | `a saída de "Nome" para a pasta "Pasta" (volta ao master)`; só quando a saída era a pasta |
+| `Mover para a pasta "Pasta"` | `Mover "Nome" para a pasta "Pasta"?` | `Mover para a pasta` | `a saída de "Nome" para "Barramento" (passa a ir para a pasta "Pasta")`; só quando a saída era um barramento |
+| `Agrupar` (diálogo) | `Agrupar as faixas?` | `Agrupar` | `a saída de "Nome" para "Barramento" (passa a ir para a pasta nova)`, uma por faixa marcada que saía para outro barramento |
+| Botão de saída do mixer, para outro destino | `Tirar "Nome" da pasta?` | `Tirar da pasta` | ver [06 Mixer](06-mixer.md#saída-e-nome) |
+| Arrastar a faixa (ou `Mover para cima`/`Mover para baixo`) | `Mover a faixa?` | `Mover mesmo assim` | as mesmas linhas de pasta; se o movimento também desfaz rotas entre barramentos, o texto traz os dois motivos, cada um com o seu título de parágrafo |
+
+Faixa que saía para o `Master` e entra numa pasta não gera pergunta (a saída "muda", mas para a pasta que é o que se pede). Os textos e o fluxo dos diálogos foram conferidos no código e em testes de widget `(testado só por testes automáticos)`; ninguém os viu numa tela real.
 
 ## Recolher e expandir
 
@@ -164,9 +190,11 @@ Mudo e solo juntos na mesma pasta ficam mudos: o mudo vence. `(testado só por t
 - **As faixas da pasta ficam juntas**, logo abaixo dela; a ordem entre elas é a da lista, e a pasta vem sempre acima.
 - **Arrastar** uma faixa (toque longo no cabeçalho): largar **logo abaixo da pasta ou entre duas faixas dela** a põe na pasta (a saída passa a ser a pasta); largar **logo depois da última faixa** já é fora e, se a saída era a pasta, ela volta ao `Master`. Uma **pasta recolhida não recebe faixa por arraste**: a faixa pula o bloco (por isso `Mover para baixo` não esconde faixa sem querer). Um barramento largado ali também pula para fora.
 - **Mover a pasta** leva as faixas junto e nunca a deixa cair dentro de outra pasta.
-- **Ordem do sinal:** a pasta é um barramento, então só manda para barramentos **abaixo** dela na lista; as faixas normais podem sair nela mesmo estando acima ou abaixo. Se mover (a pasta ou uma faixa) fizer uma rota se perder, abre `Mover a faixa?` com as linhas do que muda ([06 Mixer](06-mixer.md#como-o-som-corre-ordem-de-processamento)). Quando a faixa entra numa pasta e tinha outra saída, ou sai de uma pasta, o diálogo lista também: `a saída de "Faixa" para "Retorno" (passa a ir para a pasta "Pasta")` e `a saída de "Faixa" para a pasta "Pasta" (volta ao master)`.
+- **Ordem do sinal:** a pasta é um barramento, então só manda para barramentos **abaixo** dela na lista; as faixas normais podem sair nela mesmo estando acima ou abaixo. Se mover (a pasta ou uma faixa) fizer uma rota se perder, abre `Mover a faixa?` com as linhas do que muda ([06 Mixer](06-mixer.md#como-o-som-corre-ordem-de-processamento)). Quando a faixa entra numa pasta e tinha outra saída, ou sai de uma pasta, o diálogo lista também: `a saída de "Faixa" para "Retorno" (passa a ir para a pasta "Pasta")` e `a saída de "Faixa" para a pasta "Pasta" (volta ao master)`. Com só o motivo de pasta, o diálogo usa o texto de pasta (ver [Confirmação da troca de saída](#confirmação-da-troca-de-saída)).
 - **Duplicar** uma faixa da pasta põe a cópia na mesma pasta, logo abaixo, com a mesma saída. A pasta em si não se duplica (não há o item).
-- **Apagar** uma faixa da pasta tira só ela; a pasta continua, mesmo vazia (`0 faixas`). Apagar o barramento da pasta solta as faixas com a saída no `Master` (só é possível depois de `Desagrupar…` com o barramento mantido).
+- **`Congelar em áudio`** numa faixa da pasta cria a faixa `(áudio)` logo abaixo, **dentro da mesma pasta** (mesma saída e mesmo grupo), e o bloco da pasta segue contíguo. A recolhida é da pasta, não da faixa.
+- **Apagar** uma faixa da pasta tira só ela; a pasta continua, mesmo vazia (`0 faixas`). Para apagar a pasta, `Apagar a pasta (as faixas ficam)…` no menu da pasta: as faixas ficam soltas, com a saída no `Master`.
+- **Importar um `.jopendaw`** leva as pastas junto: os ids são refeitos e o vínculo faixa→pasta acompanha, como saídas e envios. Uma faixa que apontava para uma pasta que não está no arquivo vira faixa comum.
 - **Limite do motor de 16 efeitos** por cadeia vale para a pasta.
 
 ## Passo a passo
@@ -199,7 +227,7 @@ Modelo: um projeto com `Bateria 1`, `Baixo` (ou qualquer faixa de instrumento) e
 
 1. Menu de três pontos da **linha da pasta** (`Opções da pasta`) e `Desagrupar…`.
 2. Leia a confirmação e toque em `Desagrupar`.
-3. As faixas voltam ao `Master`. Se a pasta tinha o compressor, ela **fica** como barramento `Ritmo`, sem entrada: apague-o pelo menu dele (`Apagar a faixa`) ou religue a saída das faixas nele no mixer.
+3. Se a pasta tinha o compressor, ela **fica** como barramento `Ritmo` e as faixas continuam saindo nele (o compressor segue no som). Se não tinha efeitos, as faixas voltam ao `Master` e o barramento some. Para se livrar da pasta com o compressor, use `Apagar a pasta (as faixas ficam)…` no lugar de `Desagrupar…`: as faixas vão ao `Master` sem o compressor.
 4. `Ctrl+Z` (`⌘+Z` no Mac) traz tudo de volta, inclusive a pasta.
 
 ## Combina com
@@ -215,12 +243,11 @@ Modelo: um projeto com `Bateria 1`, `Baixo` (ou qualquer faixa de instrumento) e
 
 - **O mudo e o volume da pasta não calam os envios das faixas.** Os envios saem da faixa direto para o retorno, sem passar pela pasta. Com `M` na pasta, o reverb ligado por envio continua soando com a cauda das faixas. Para calar tudo, mude o `M` de cada faixa ou tire os envios. `(deduzido do roteamento do motor; não ouvido)`
 - **Solo numa faixa da pasta não silencia a pasta:** ela continua audível (com o fader e os efeitos dela), só as outras faixas da pasta calam. E o solo na pasta liga **todas** as faixas dela.
-- **Agrupar troca a saída das faixas** para a pasta, sem aviso: uma faixa que saía para outro barramento passa a sair na pasta (o envio dela fica). O `Desagrupar` devolve ao `Master`, não à saída anterior. Se errou, use o desfazer logo em seguida.
-- **`Tirar da pasta` e `Mover para a pasta "Nome"` não perguntam nada:** só o arraste (e os itens `Mover para cima`/`Mover para baixo`) passa pelo diálogo `Mover a faixa?`.
-- **Trocar a saída de uma faixa da pasta no mixer** (botão de saída) para `Master` ou outro barramento **não** a tira da pasta: ela continua recuada e contada em `N faixas`, mas já não passa pelo volume e pelos efeitos da pasta `(lido do código; não testado)`. Para sair de verdade, use `Tirar da pasta`. O mesmo vale para `Novo barramento` no menu da saída.
-- **`Congelar em áudio` numa faixa da pasta:** a faixa nova `(áudio)` é criada logo abaixo com a saída da original (a pasta), mas **fora** da pasta: não fica recuada, não some ao recolher, e separa as faixas da pasta em dois blocos. Para arrumar, use `Mover para a pasta "Nome"` na faixa nova `(lido do código; não testado)`.
+- **Agrupar troca a saída das faixas** para a pasta: uma faixa que saía para outro barramento passa a sair na pasta (o envio dela fica). Quando há uma saída para trocar, o app pergunta antes (`Agrupar as faixas?`). O `Desagrupar` de uma pasta sem efeitos devolve ao `Master`, não à saída anterior. Se errou, use o desfazer logo em seguida.
+- **`Tirar da pasta` e `Mover para a pasta "Nome"` perguntam só quando a saída da faixa muda** (`Tirar "Nome" da pasta?`, `Mover "Nome" para a pasta "Pasta"?`). Uma faixa que já saía para o `Master` e entra na pasta não gera pergunta. O arraste e os itens `Mover para cima`/`Mover para baixo` passam pelo diálogo `Mover a faixa?`, também com o texto de pasta.
+- **Trocar a saída de uma faixa da pasta no mixer** (botão de saída) para `Master`, outro barramento ou `Novo barramento` **tira a faixa da pasta** (ela desce para depois do bloco) depois de uma confirmação. Não fica mais uma faixa recuada, contada em `N faixas`, mas fora do volume e dos efeitos da pasta.
 - **Recolher não entra no desfazer.** `Ctrl+Z` desfaz agrupar, desagrupar, mover, entrar e sair de pasta, mas não recolher nem expandir (e um desfazer nunca muda o estado recolhido).
-- **A pasta só desaparece por `Desagrupar…`.** Não há `Apagar a faixa` no menu da pasta.
+- **A pasta desaparece por `Desagrupar…` (o barramento pode ficar, se tem efeitos, automação ou envios, ou se outras faixas mandam para ele) ou por `Apagar a pasta (as faixas ficam)…` (some sempre).** Não há `Apagar a faixa` no menu da pasta.
 - **Não há atalho de teclado** para pastas.
 - **Abrir um projeto de outro aparelho ou de versão anterior:** um documento sem pastas abre e volta igual; faixas que apontam para uma pasta que não existe mais viram faixas comuns.
 - **Web e Android:** mesmas regras e mesmos menus. A linha da pasta no celular é a versão compacta (sem `N faixas` nem volume).

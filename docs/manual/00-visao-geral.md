@@ -77,6 +77,8 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | `Instrumento da faixa (I)` | Abre/fecha o painel do instrumento | O ícone acompanha o tipo da faixa selecionada | |
 | `Efeitos da faixa (F)` | Abre/fecha o rack de efeitos | Sem faixa selecionada abre o master | |
 
+A aba `Modulação` do mesmo painel (tooltip `Modulação da faixa: LFO, seguidor de envelope e macros`) não tem botão na barra nem atalho de teclado; abre-se clicando na aba, com o painel de baixo já aberto, ou pelo `Modular…` do menu de um controle ([Capítulo 06g](06g-modulacao.md)).
+
 **Grupo 4: entradas de notas**
 
 | Controle | O que faz | Valores / padrão | Dica |
@@ -91,7 +93,7 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | `Importar áudio ou MIDI (Ctrl+I)` (rótulo `Importar` quando há largura) | Abre o seletor de arquivos de áudio ou MIDI | áudio: `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff`; MIDI: `mid`, `midi` | Desligado gravando ou com trabalho em andamento |
 | `Exportar a música (e as faixas separadas) em WAV` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
 | `Configurações: entrada de áudio, latência e contagem` | Abre `Configurações` | | [Capítulo 09](09-configuracoes-atalhos-android.md) |
-| `Atalhos do teclado (?)` | Abre `Atalhos do teclado` | | Também a tecla `?` |
+| `Atalhos do teclado (?)` | Abre `Atalhos do teclado`, com a lista das teclas de agora e, no rodapé, o botão `Personalizar` (só na web e no computador) | | Também a tecla `?`. Personalização: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
 | Texto com roda girando (por último na barra) | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
 
 O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones.
@@ -122,9 +124,9 @@ Ocupa o meio da tela. À esquerda, uma coluna de cabeçalhos de faixa; à direit
 
 Os gestos sobre os clipes (arrastar, aparar, fades, duplo clique) estão no [capítulo 02b](02b-timeline-e-clipes.md).
 
-### Painel inferior (abas Mixer / Editor / Instrumento / Efeitos)
+### Painel inferior (abas Mixer / Editor / Instrumento / Efeitos / Modulação)
 
-Um painel só, com quatro abas; mostra um conteúdo por vez.
+Um painel só, com cinco abas; mostra um conteúdo por vez.
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
@@ -132,7 +134,8 @@ Um painel só, com quatro abas; mostra um conteúdo por vez.
 | Aba `Editor` (tooltip `Editor de notas (E)`) | Piano roll do clipe de notas aberto | Vazio: `Nenhum clipe aberto` | [Capítulo 05](05-piano-roll.md) |
 | Aba `Instrumento` (tooltip `Instrumento da faixa (I)`) | Presets e controles do instrumento da faixa | Em faixa de áudio ou barramento diz `sem instrumento` | [Capítulo 04](04-painel-de-instrumento.md) |
 | Aba `Efeitos` (tooltip `Efeitos da faixa (F)`) | Cadeia de efeitos da faixa selecionada, ou do master | Subtítulo: `<faixa> · N efeitos` ou `Master · sem efeitos` | [Capítulo 06c](06c-painel-de-efeitos.md) |
-| Assunto (texto ao lado das abas) | Diz de quem é o painel: o clipe no editor, a faixa no instrumento e nos efeitos | Com ponto na cor da faixa | |
+| Aba `Modulação` (tooltip `Modulação da faixa: LFO, seguidor de envelope e macros`) | Moduladores da faixa selecionada, ou do master: LFO, seguidor de envelope e macro, cada um com até 4 destinos; `Adicionar` e `Presets` no topo | Subtítulo: `<faixa> · sem moduladores`, `<faixa> · 1 modulador` ou `<faixa> · N moduladores` | [Capítulo 06g](06g-modulacao.md) |
+| Assunto (texto ao lado das abas) | Diz de quem é o painel: o clipe no editor, a faixa no instrumento, nos efeitos e na modulação | Com ponto na cor da faixa | |
 | `Maximizar o painel` / `Restaurar a altura` | Alterna entre a altura escolhida e a máxima | Só no computador | Duplo clique na alça faz o mesmo |
 | `Fechar o painel (Esc)` | Fecha o painel | | |
 | Alça (fio fino de 6 px acima das abas; também a área vazia da barra de abas) | Arrastar muda a altura | Só no computador; mínimo 230 px; o arranjo nunca fica com menos de 150 px | A altura escolhida vale até fechar o app |
@@ -214,10 +217,12 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Grade | Ver Snap. |
 | Hash (SHA-256) | A "impressão digital" de um arquivo de áudio; identifica o áudio no aparelho e na nuvem. Arquivos iguais têm o mesmo hash e não se repetem. |
 | Latência | Atraso entre o som acontecer e ele ser ouvido ou gravado. A `Compensação de latência` ajusta a gravação; a latência de efeitos como o `Limitador` o motor compensa sozinho entre as faixas ([06e](06e-compensacao-de-latencia.md)). |
+| LFO | Oscilador de baixa frequência: uma onda lenta (0,01 a 50 Hz, ou presa ao andamento) que a aba `Modulação` usa para mover um controle. Ver [06g](06g-modulacao.md). |
 | Loop | Região repetida. |
 | Marcador | Bandeirinha na régua que nomeia um ponto ou seção. |
 | Master | O canal final onde tudo se soma antes da saída. |
 | Metrônomo | O clique do andamento. |
+| Modulação | Movimento automático, por cima do valor de um controle, dado por um LFO, um seguidor de envelope ou uma macro (aba `Modulação`); não grava nada no controle. Difere da automação, que é uma curva desenhada ou gravada. Ver [06g](06g-modulacao.md). |
 | Monitorar | Ouvir a entrada (o microfone) ao vivo pela cadeia da faixa. |
 | Motor | O programa em Rust que sintetiza, mistura e toca. |
 | MIDI | Notas e controles (não é som). Entra por teclado ou controlador, ou vem do piano roll. |
@@ -229,6 +234,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Preset | Ajuste pronto de instrumento ou efeito. |
 | Quantizar | Puxar as notas para a grade (`Q` no piano roll). |
 | Sampler | Instrumento que toca um áudio seu como notas. |
+| Seguidor de envelope | Modulador que mede o nível do som da própria faixa e o transforma num valor que sobe e desce com ele. Ver [06g](06g-modulacao.md). |
 | Semitom (`st`) | O menor passo entre notas do piano; unidade de afinação e transposição. |
 | Snap | Encaixe na grade ao arrastar. |
 | Stem | Cada faixa exportada separadamente (`Exportar a música (e as faixas separadas) em WAV`). |
@@ -258,16 +264,17 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 - O andamento e o compasso moram no servidor: mudar o `120 BPM · 4/4` da barra chama a API. Sem rede o app mostra o novo andamento nesta sessão, mas o servidor guarda o antigo, e ao reabrir o projeto vale o do servidor (lido do código; o aviso de erro na tela ao falhar não foi confirmado).
 - O botão da barra sempre escreve `/4` (`120 BPM · 4/4`), mesmo que o cadastro do projeto no servidor tenha outra figura de tempo; o card da lista mostra a fórmula do cadastro.
 - Os tooltips, o item `Duplicar` do menu do clipe e a janela `Atalhos do teclado` mostram `⌘` no Mac e no iOS e `Ctrl` nos outros sistemas (`Desfazer (⌘+Z)` no Mac). Nesta tabela do capítulo eles aparecem como `Ctrl`.
+- **Os atalhos são personalizáveis (fase 16), mas os tooltips não acompanham.** Só a janela `Atalhos do teclado` (e a tela `Personalizar` dentro dela) leem as teclas de agora. Os tooltips desta tabela (`Loop (L)`, `Metrônomo (C)`, `Parar e voltar (Enter)`, `Mixer (X)`…) e das abas do painel de baixo trazem sempre a tecla **padrão**: se você trocou a tecla, o texto continua mostrando a de fábrica. Ver [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos). `(lido do código)`
 - No menu `Visão`, `Faixas pequenas`, `Faixas médias` e `Faixas grandes` não têm atalho de teclado (antes da fase 9 o menu mostrava siglas `(P)`, `(M)` e `(G)` que pareciam atalhos; `M` cria marcador).
 - Só há motor de áudio no navegador e no Android. Em outro sistema (um build de computador nativo) a tela do projeto avisa (`O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.`) e não toca.
 - Se o som some de repente e aparece o aviso vermelho com o botão `Reiniciar o áudio`, o motor caiu; veja "Aviso de falha do áudio" acima. O projeto não é perdido.
-- Ligado o teclado do computador, letras como `S`, `L`, `C`, `X`, `Z`, `E`, `F` viram notas e deixam de ser atalho; o botão do teclado mostra `· sem atalhos` para lembrar.
+- Ligado o teclado do computador, letras como `S`, `L`, `C`, `X`, `Z`, `E`, `F` (nos atalhos padrão; a janela `?` lista o que está suspenso nas suas teclas) viram notas e deixam de ser atalho; o botão do teclado mostra `· sem atalhos` para lembrar.
 - Ao sair do projeto o estúdio é fechado: notas soando e gravação em andamento são interrompidas. No Android, sair do app (outro app na frente, tela desligada) e desplugar o fone também param o transporte, e a tela fica acesa enquanto toca ou grava ([capítulo 09](09-configuracoes-atalhos-android.md)).
 - Sem sessão, o app não abre projetos: qualquer rota fora de `/login`, `/entrar` e `/authorize/callback` manda para o login.
 
 ## Atalhos
 
-Os atalhos mais usados (a lista completa e o significado de cada um estão no [capítulo 09](09-configuracoes-atalhos-android.md)):
+Os atalhos mais usados, com as teclas **padrão** (a lista completa, a tela `Personalizar` e o significado de cada um estão no [capítulo 09](09-configuracoes-atalhos-android.md); se você trocou alguma tecla, a janela `?` mostra a de agora):
 
 | Tecla | Ação |
 |---|---|

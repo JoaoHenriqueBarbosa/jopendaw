@@ -8,7 +8,7 @@
 
 ## Onde fica
 
-O painel Efeitos é uma das quatro abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos). Ele mostra o rack de **uma** faixa por vez, ou do master.
+O painel Efeitos é uma das cinco abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos, Modulação). Ele mostra o rack de **uma** faixa por vez, ou do master.
 
 | Como abrir | O que acontece |
 |---|---|
@@ -100,7 +100,7 @@ Todas essas ações entram no histórico de desfazer (aplicar um preset seu tamb
 
 Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do instrumento (a mesma janela de nome, as mesmas regras de nome, a mesma exportação em `.jopreset`): o passo a passo de cada janela e os textos de erro estão em [04 Painel de instrumento, Meus presets](04-painel-de-instrumento.md#meus-presets). Aqui vai só o que muda para efeitos. Receita completa, com a cadeia vocal: [Presets do usuário](../guias/presets-do-usuario.md).
 
-**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `MEUS PRESETS`, a lista dos seus (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, divisor, `PRESETS` (de fábrica), divisor, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. Com problema no guardado, uma linha vermelha de aviso vem antes de `MEUS PRESETS`. Desde a fase 13 `MEUS PRESETS` fica no **topo** do menu (antes ficava entre os de fábrica e as ações do cartão), então `Salvar como preset…` e `Importar preset…` aparecem sem rolar. O menu é o mesmo nos cartões do rack do master e no de barramentos.
+**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `MEUS PRESETS`, a lista dos seus (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, `Restaurar presets do backup…` (só se o aparelho tem a cópia de um arquivo de presets que estava ilegível), divisor, `PRESETS` (de fábrica), divisor, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. Com problema no guardado (os presets não estão sendo gravados), uma linha vermelha de aviso vem antes de `MEUS PRESETS`; um aviso só informativo da abertura (arquivo ilegível guardado à parte) vem como linha cinza dispensável, também antes de `MEUS PRESETS`. Desde a fase 13 `MEUS PRESETS` fica no **topo** do menu (antes ficava entre os de fábrica e as ações do cartão), então `Salvar como preset…` e `Importar preset…` aparecem sem rolar. O menu é o mesmo nos cartões do rack do master e no de barramentos.
 
 **O que cada preset guarda, por tipo.** Todos os parâmetros do tipo, na unidade da tabela do efeito ([06d](06d-efeitos-referencia.md)), menos o `Sidechain`:
 
@@ -127,7 +127,7 @@ Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do i
 
 **Ao importar.** Um arquivo `.jopreset` de outro tipo entra no tipo dele, não no do cartão onde você importou; a janela avisa `O preset é de outro tipo (Reverb): ele foi guardado, mas só aparece no menu desse tipo.` O nome do tipo nessa mensagem é o de tela (`EQ`, `Compressor`, `Gate`, `Limitador`, `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Distorção`, `Filtro`, `Multibanda`, `De-esser`, `Imagem estéreo`; de um instrumento, `Sintetizador` e afins); só um tipo que o app não conhece aparece com o nome interno `(testado só por testes automáticos)`.
 
-**Onde ficam.** No aparelho (mesmo registro `userpresets` dos presets de instrumento), sem sincronizar com a conta e fora do `.jopendaw` do projeto; para levar a outro aparelho, `Exportar preset…` e `Importar preset…`. Se o app não conseguir guardar ou ler os presets, o menu do cartão mostra no topo, em vermelho, o mesmo aviso do painel de instrumento, e depois de salvar, renomear, apagar ou importar abre a janela `Presets não guardados`; textos, cópia `userpresets.bak` de um arquivo ilegível e o caso do arquivo de versão mais nova (só leitura) em [04 Painel de instrumento, Avisos do guardado](04-painel-de-instrumento.md#avisos-do-guardado). Um preset por cartão e por tipo: **não existe preset da cadeia inteira**, então uma cadeia favorita são vários presets (um por efeito) que você recoloca na ordem à mão.
+**Onde ficam.** No aparelho (mesmo registro `userpresets` dos presets de instrumento), sem sincronizar com a conta e fora do `.jopendaw` do projeto; para levar a outro aparelho, `Exportar preset…` e `Importar preset…`. Se o app não conseguir guardar ou ler os presets, o menu do cartão mostra no topo, em vermelho, o mesmo aviso do painel de instrumento, e depois de salvar, renomear, apagar ou importar abre a janela `Presets não guardados`. Um arquivo ilegível que foi guardado à parte com sucesso é só um aviso cinza (`toque para dispensar`), sem a janela, e `Restaurar presets do backup…` tenta recuperar os presets da cópia. Textos, a cópia `userpresets.bak` e o caso do arquivo de versão mais nova (só leitura) em [04 Painel de instrumento, Avisos do guardado](04-painel-de-instrumento.md#avisos-do-guardado) e [Restaurar do backup](04-painel-de-instrumento.md#restaurar-do-backup). Um preset por cartão e por tipo: **não existe preset da cadeia inteira**, então uma cadeia favorita são vários presets (um por efeito) que você recoloca na ordem à mão.
 
 ### Os editores dos efeitos
 
@@ -144,7 +144,7 @@ Quatro tipos de editor cobrem os 15 efeitos:
 
 | Controle | Como se mexe | Dica |
 |---|---|---|
-| Knob (giratório com o valor em cima e o nome embaixo) | Arrastar na **vertical**: 200 px percorrem a faixa toda; com `Shift`, 1000 px (ajuste fino). Roda do mouse sobre o knob: mexe o valor sem rolar a lista (com `Shift`, fino). Duplo clique: volta ao padrão. Botão direito no mouse, ou toque longo no celular: abre um menu com `Digitar o valor…` (o campo para digitar o valor), `Aprender MIDI` e, se o knob já está mapeado, `Remover mapeamento (Canal 1 · CC 74)`; ver [06f MIDI learn](06f-midi-learn.md) (o tooltip continua dizendo só `botão direito: digitar o valor`; os seletores de opção e a faixa-chave do `Sidechain` não têm o menu, e o `Sidechain` não se mapeia). Tooltip: `<nome>: arraste ou use a roda (Shift: ajuste fino) / Duplo clique: padrão (<valor>) · botão direito: digitar o valor`. | Um arraste inteiro vale um passo só no desfazer. |
+| Knob (giratório com o valor em cima e o nome embaixo) | Arrastar na **vertical**: 200 px percorrem a faixa toda; com `Shift`, 1000 px (ajuste fino). Roda do mouse sobre o knob: mexe o valor sem rolar a lista (com `Shift`, fino). Duplo clique: volta ao padrão. Botão direito no mouse, ou toque longo no celular: abre um menu com `Digitar o valor…` (o campo para digitar o valor), `Aprender MIDI`, se o knob já está mapeado, `Remover mapeamento (Canal 1 · CC 74)` e, nos knobs que se movem de forma contínua, `Modular…` (liga o parâmetro a um LFO, seguidor de envelope ou macro; o knob ganha um anel ciano por fora do trilho; ver [06g Modulação](06g-modulacao.md)); ver [06f MIDI learn](06f-midi-learn.md) (o tooltip continua dizendo só `botão direito: digitar o valor`; os seletores de opção e a faixa-chave do `Sidechain` não têm o menu, e o `Sidechain` não se mapeia). Tooltip: `<nome>: arraste ou use a roda (Shift: ajuste fino) / Duplo clique: padrão (<valor>) · botão direito: digitar o valor`. | Um arraste inteiro vale um passo só no desfazer. |
 | Campo de valor digitado | Título com o nome do parâmetro, dica `De <mín> a <máx>`, botões `Cancelar` e `Aplicar`. Aceita número com ou sem unidade: `800 Hz`, `2,5 kHz`, `-3 dB`, `150 ms`, `70%`, `1.5 oit`; vírgula vale como ponto. Sem unidade, um valor acima do máximo de um parâmetro em segundos é lido como milissegundos. Erro: `Não entendi. Use um número, com a unidade se quiser.` Fora da faixa, o valor é limitado. | Números inteiros (vozes, bits) são arredondados. |
 | Pílula liga/desliga (`Não`/`Sim` em cima, nome embaixo) | Toque ou clique alterna. | Vale para todo parâmetro de duas opções `Não`/`Sim` (`Ping-pong`, `Congelar`, `Mono`...). |
 | Seletor de opções (caixa com seta) | Abre um menu com as opções. | Tipos, ondas, notas, `Tempo` (`Livre`/`Andamento`) e `Sidechain`. |
@@ -269,6 +269,7 @@ A pasta ([02c](02c-pastas-de-faixa.md)) é um barramento: a cadeia dela processa
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): o que o motor faz quando um efeito atrasa o som.
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): espectro e níveis para julgar o que o EQ e o compressor fizeram.
 - [07 Automação](07-automacao.md): mover qualquer parâmetro de efeito ao longo da música (filtro abrindo, mistura de reverb subindo).
+- [06g Modulação](06g-modulacao.md): fazer um parâmetro de efeito andar sozinho por cima do valor do knob (o `Corte` do `Filtro` balançando no andamento). A aba `Modulação` do painel de baixo fica ao lado desta e mostra a mesma faixa.
 - [06f MIDI learn](06f-midi-learn.md): ligar um knob de efeito (o `Corte` do `Filtro`, a `Mistura` do `Reverb`) a um botão ou pedal de expressão de um controlador MIDI.
 - [Efeitos em combinação](../guias/efeitos-em-combinacao.md): cadeia vocal, compressão paralela, sidechain, delay em ping-pong, pad largo, baixo distorcido.
 - [Presets do usuário](../guias/presets-do-usuario.md): guardar os ajustes de cada efeito com nome (a cadeia vocal favorita, por exemplo) e levá-los a outro aparelho.
@@ -299,7 +300,7 @@ A pasta ([02c](02c-pastas-de-faixa.md)) é um barramento: a cadeia dela processa
 | Duplo clique num knob ou valor | Volta ao padrão |
 | Duplo clique num nó do EQ | Liga/desliga a banda |
 | Duplo clique no vazio do gráfico do EQ | Acende uma banda ali |
-| Botão direito (toque longo no celular) num knob | Menu: `Digitar o valor…`, `Aprender MIDI`, `Remover mapeamento (...)` |
+| Botão direito (toque longo no celular) num knob | Menu: `Digitar o valor…`, `Aprender MIDI`, `Remover mapeamento (...)`, `Modular…` (ver [06g](06g-modulacao.md)) |
 | Botão direito (toque longo no celular) num valor do gráfico do EQ | Digitar o valor |
 | `Shift+K` | Liga e desliga o modo `Aprender MIDI` (os knobs de efeito ganham contorno; ver [06f](06f-midi-learn.md)) |
 | Botão direito (toque longo) numa linha de insert do mixer | Menu `Abrir nos efeitos`, `Desligar (bypass)`, `Mover para cima`, `Mover para baixo`, `Remover` |

@@ -117,7 +117,7 @@ O botão fica entre a **Grade de encaixe** e o **Afastar**. Ele diz o que aconte
 | Como aparece | Quando | Tooltip (texto exato) |
 |---|---|---|
 | Só o ícone de gráfico (`show_chart`), em cinza-claro, sem nome | Modo `Ler` (o padrão): o rótulo foi tirado para a barra caber em janela de 1512 px | `Automação: Ler. Só toca a automação; mexer no controle não grava.` |
-| Ícone e nome em **vermelho** (`#F2433A`), com fundo vermelho leve: `Escrever`, `Toque` ou `Trava` | Modo que grava | `Automação: Escrever. Depois do primeiro toque no controle, grava até parar, sobrescrevendo o que já havia.` / `Automação: Toque. Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.` / `Automação: Trava. Grava enquanto você segura o controle e mantém o último valor até parar.` |
+| Ícone e nome em **vermelho** (`#F2433A`), com fundo vermelho leve: `Escrever`, `Toque` ou `Trava` | Modo que grava | `Automação: Escrever. Começa ao mexer no controle (só agarrar não basta): grava até parar, sobrescrevendo o que já havia.` / `Automação: Toque. Começa ao mexer no controle (só agarrar não basta) e grava enquanto você o segura; ao soltar, volta ao valor automatizado.` / `Automação: Trava. Começa ao mexer no controle (só agarrar não basta) e grava enquanto você o segura; mantém o último valor até parar.` |
 | Ícone e só a **inicial** em vermelho: `E`, `T` ou `V` | Modo que grava, com a janela abaixo de 800 px (celular) | O mesmo tooltip (no celular, aparece com toque longo no botão) |
 
 Tocar no botão abre o menu com quatro itens, cada um com o nome e, embaixo, uma frase em letra pequena (a mesma do tooltip, sem o `Automação: Modo.`): `Ler`, `Escrever`, `Toque`, `Trava`. O modo atual vem marcado. Mudar de modo com a música tocando fecha o que estava sendo gravado (a passada vira um passo do desfazer) e o modo novo vale dali em diante.
@@ -178,7 +178,7 @@ O painel também tem abas e botões próprios (maximizar, fechar, redimensionar)
 | **Importar** (só o ícone: tooltip **Importar áudio ou MIDI (Ctrl+I)**; com o nome à mostra não há tooltip) | Abre o seletor de arquivos (título `Importar áudio ou MIDI`) e coloca cada áudio a partir do cursor (com encaixe na grade). O primeiro vai para a faixa selecionada se ela é de áudio e está livre naquele ponto; os demais, e o primeiro nos outros casos, criam faixas de áudio novas com o nome do arquivo. Um arquivo MIDI (`.mid`, `.midi`) vira faixas de notas (`Sintetizador`; o canal 10 vira `Bateria`) e pode abrir a pergunta `Usar o andamento do arquivo (X BPM)?`. | Extensões: `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff`, `mid`, `midi`. | Desligado gravando ou ocupado. Ver [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid). |
 | **Exportar** (tooltip **Exportar a música (e as faixas separadas) em WAV**) | Abre a janela **Exportar áudio**. Gravando, o tooltip é `Pare a gravação para exportar` e o botão fica desligado. | Ver [Exportação](08-exportacao.md). | No rodapé da janela, `Projeto inteiro (.jopendaw)…` leva ao arquivo do projeto ([capítulo 01](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw)). |
 | **Configurações: entrada de áudio, latência e contagem** (engrenagem) | Abre a janela **Configurações** (tabela abaixo). | | |
-| **Atalhos do teclado (?)** (ícone de tecla de comando) | Abre a janela **Atalhos do teclado** com a lista completa, em grupos, e o botão **Fechar**. | Tecla `?`. | |
+| **Atalhos do teclado (?)** (ícone de tecla de comando) | Abre a janela **Atalhos do teclado** com a lista completa, em grupos (com as teclas de agora), e os botões **Personalizar** (só na web e no computador; troca a lista pela tela `Personalizar atalhos`) e **Fechar**. | Tecla `?`. | Como personalizar: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
 
 Depois de **Atalhos do teclado (?)** só aparece, quando há trabalho em andamento, o círculo girando com o texto (ver "Onde fica"). O indicador de nuvem não está mais na barra: mudou para o cabeçalho do projeto.
 
@@ -259,7 +259,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 - **O que não é salvo com o projeto:** o modo de automação (o da barra e o de cada raia: volta a `Ler` ao reabrir), grade, zoom, rolagem, seguir o cursor, altura das faixas, modo da régua, teclado musical (oitava e intensidade), altura do painel de baixo e a última escolha da janela de exportação (dura só a sessão). O que fica no projeto: andamento, compasso, loop (região e liga/desliga), metrônomo, contagem, compensação de latência e marcadores.
 - **Metrônomo e loop não vão para a exportação.** O arquivo sai linear, do começo ao fim, sem cliques.
 - **Web e Android:** os botões são os mesmos; no celular Importar e Exportar mostram só o ícone, a barra fica embaixo e o painel de baixo ocupa 60% da altura livre.
-- **Teclas com o teclado musical ligado:** as teclas dele (A W S E D F T G Y H U J K O L P para notas, Z e X para a oitava, C e V para a intensidade) passam na frente dos atalhos, com ou sem Shift. Ou seja, S (cortar), L e Shift+L (loop), E, F, Z (enquadrar), X (mixer) e C (metrônomo) deixam de funcionar como atalho. Continuam valendo Espaço, Enter, R, I, M, `[`, `]`, + e −, ?, Esc, Delete e tudo com Ctrl (o Ctrl+K desliga o teclado musical).
+- **Teclas com o teclado musical ligado:** as teclas dele (A W S E D F T G Y H U J K O L P para notas, Z e X para a oitava, C e V para a intensidade) passam na frente dos atalhos, com ou sem Shift. Ou seja, S (cortar), L e Shift+L (loop), E, F, Z (enquadrar), X (mixer) e C (metrônomo) deixam de funcionar como atalho. Continuam valendo Espaço, Enter, R, I, M, `[`, `]`, + e −, ?, Esc, Delete e tudo com Ctrl (o Ctrl+K desliga o teclado musical). Isto vale para as teclas **padrão**: com atalhos personalizados o que fica suspenso é o que a janela `?` lista no grupo `Suspensos enquanto o teclado do computador está ligado`, e o tooltip do botão do teclado continua com o texto de fábrica.
 - **Parar e pausar devolvem ao repouso o que se tocou ao vivo.** Espaço (pausando a música) e Enter ou Home (parar) soltam o pedal e levam o pitch bend e a roda de modulação ao centro, também nas rodas da tela, que voltam ao zero. Antes só o que o clipe dirigia era zerado, e um pedal seguro no controlador ficava preso ao trocar de faixa ou parar. `(testado só por testes automáticos)`
 - O andamento digitado nesta janela aceita decimais (20 a 999, uma casa: `92,5`; mais casas são arredondadas a uma), e o botão da barra mostra o mesmo texto (`92,5 BPM · 4/4`; um `120,04` de um ponto do mapa aparece `120`); o servidor só recebe o inicial, arredondado ao inteiro e limitado a 20 a 999.
 - **Não acompanham o mapa de andamento:** o warp dos clipes de áudio (usa só o andamento inicial) e o tempo sincronizado do delay, do tremolo e do filtro (também só o inicial). Ver o guia [Mapa de andamento e de compassos na prática](../guias/mapa-de-andamento-e-compasso.md).
@@ -267,7 +267,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 
 ## Atalhos
 
-Vale o Ctrl no Windows e no Linux e o Cmd (⌘) no Mac; a janela de atalhos mostra ⌘ no Mac. Os tooltips e menus escrevem sempre `Ctrl`.
+Vale o Ctrl no Windows e no Linux e o Cmd (⌘) no Mac; a janela de atalhos mostra ⌘ no Mac. Os tooltips e menus escrevem sempre `Ctrl` (nos que passam por `withMod`, `⌘` no Mac). Estas são as teclas **padrão**: desde a fase 16 elas podem ser trocadas em `Atalhos do teclado` > `Personalizar` ([capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos)), e os tooltips da barra (`Loop (L)`, `Metrônomo (C)`, `Cortar no cursor (S)`, `Parar e voltar (Enter)`, `Apagar o clipe (Delete)`, `Duplicar (Ctrl+D)`, `Desfazer (Ctrl+Z)`…) **não acompanham a troca**: continuam com a tecla de fábrica. A janela `?` mostra a tecla de agora.
 
 | Tecla | Ação |
 |---|---|
@@ -282,9 +282,9 @@ Vale o Ctrl no Windows e no Linux e o Cmd (⌘) no Mac; a janela de atalhos most
 | S | Cortar no cursor |
 | Ctrl+D | Duplicar o clipe |
 | Delete ou Backspace | Apagar o clipe selecionado |
-| Ctrl+I | Importar áudio ou MIDI (a janela de atalhos ainda mostra `Importar áudio`) |
-| + ou = (também Shift+=, que digita o +, e o + do teclado numérico) | Aproximar (1,25 vez, ancorado no cursor). A janela de atalhos mostra `+  (ou  =)  /  −` com a descrição `Aproximar / afastar` |
-| − (também o − do teclado numérico) | Afastar (0,8 vez, ou seja, o inverso de 1,25) |
+| Ctrl+I | Importar áudio ou MIDI (a janela de atalhos escreve `Importar áudio ou MIDI`) |
+| + ou = (também Shift+=, que digita o +, e o + do teclado numérico) | Aproximar (1,25 vez, ancorado no cursor). A janela de atalhos lista `+  ·  =` em `Aproximar` |
+| − (também o − do teclado numérico) | Afastar (0,8 vez, ou seja, o inverso de 1,25); a janela lista `−` em `Afastar` |
 | Z | Enquadrar o projeto inteiro |
 | Shift+Z | Enquadrar o clipe selecionado |
 | M | Marcador no cursor |

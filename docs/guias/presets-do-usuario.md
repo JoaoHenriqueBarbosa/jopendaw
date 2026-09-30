@@ -2,7 +2,7 @@
 
 > Guardar com nome o som que você ajustou (um instrumento ou um efeito), chamá-lo em outra faixa ou projeto com dois toques e levá-lo a outro aparelho ou a um colega num arquivo `.jopreset`; cerca de 5 minutos para o primeiro preset e mais 5 para levar um a outro aparelho.
 
-Tudo o que está aqui sai do código do app (commit `b39d3d4`; a posição da seção `MEUS PRESETS` no **topo** dos menus vem do commit `18c72f4`, da fase 13; os avisos do guardado, o backup e o `(editado)` que segue renomear e apagar vêm do `504b4b8`, da fase 14). O uso no Chrome foi relatado pela sessão de código (salvar `Meu baixo grave` e o preset aparecer marcado com o visto); o resto das receitas segue o comportamento lido do código e dos testes automáticos, e foi montado sem ouvir o resultado `(não confirmado ao ouvido)`. Os presets ficam **neste aparelho**: não sincronizam com a conta e não vão dentro do arquivo do projeto (ver [Limitações](#limitações-reais)).
+Tudo o que está aqui sai do código do app (commit `b39d3d4`; a posição da seção `MEUS PRESETS` no **topo** dos menus vem do commit `18c72f4`, da fase 13; os avisos do guardado, o backup e o `(editado)` que segue renomear e apagar vêm do `504b4b8`, da fase 14; a separação entre aviso de carga e falha de gravação e o `Restaurar presets do backup…` vêm do `ffa76ba`, da fase 16). O uso no Chrome foi relatado pela sessão de código (salvar `Meu baixo grave` e o preset aparecer marcado com o visto); o resto das receitas segue o comportamento lido do código e dos testes automáticos, e foi montado sem ouvir o resultado `(não confirmado ao ouvido)`. Os presets ficam **neste aparelho**: não sincronizam com a conta e não vão dentro do arquivo do projeto (ver [Limitações](#limitações-reais)).
 
 ## Ingredientes
 
@@ -57,6 +57,7 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 - **Ponto de partida a partir de um preset de fábrica:** aplique o de fábrica, ajuste e salve com outro nome; o de fábrica continua lá.
 - **Renomear e arrumar:** `…` da linha, `Renomear…` (título `Renomear preset`) e `Apagar…` (`Apagar o preset?`, sem desfazer). Renomear e apagar não entram no `Ctrl+Z` do projeto.
 - **Cópia de segurança:** exporte os presets de que não abre mão. Se o navegador recusar a gravação, o menu de presets mostra um aviso em vermelho e os presets valem só até fechar o app (ver [Avisos do guardado](#avisos-do-guardado)).
+- **Recuperar presets de um arquivo que estava ilegível:** se na abertura o app guardou uma cópia (`userpresets.bak`), o menu de presets ganha `Restaurar presets do backup…`; ele soma os presets da cópia aos seus (ver [Restaurar do backup](#restaurar-do-backup)).
 
 ## Por que funciona
 
@@ -69,7 +70,7 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 
 - **Só neste aparelho.** Na web, os presets ficam no IndexedDB do site (banco `jopendaw`); no Android, num arquivo do app. Outro navegador, outro perfil, janela anônima, limpar os dados do site ou desinstalar o app começam sem presets. Não sincronizam com a conta e não entram no `.jopendaw` do projeto ([Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) cobre o projeto, não os presets).
 - **Global por aparelho.** Os presets ficam na chave `userpresets`, sem id de conta: quem entra com outra conta no mesmo aparelho vê os mesmos presets. Proposta, não feita: prefixar a chave com o id do usuário (`userpresets:<id>`) e migrar a chave antiga na primeira abertura; não foi feito porque `Session.user` chega depois do carregamento e o guardado do documento também é por aparelho.
-- **A cópia de um arquivo ilegível não tem tela.** O app guarda o conteúdo em `userpresets.bak`, mas não há botão para abri-lo ou restaurá-lo (ver [Avisos do guardado](#avisos-do-guardado)).
+- **A cópia de um arquivo ilegível se recupera só pelo `Restaurar presets do backup…`.** Não há tela para abrir o arquivo `userpresets.bak` em si; o item lê os presets dele (mesmo de um arquivo cortado ao meio) e soma aos seus. Só a cópia principal é lida, não as extras `userpresets.bak.<número>`, e ela nunca é apagada (ver [Restaurar do backup](#restaurar-do-backup)).
 - **Sampler sem áudio e sem zonas.** O preset do sampler é só timbre; um multi-sample não viaja pelo preset.
 - **Sem preset de cadeia.** Um preset por efeito; a ordem, o bypass, o `Sidechain` e os envios são refeitos à mão.
 - **A seção `MEUS PRESETS` ficava no fim do menu: resolvido na fase 13 (`18c72f4`).** Ela, `Salvar como preset…` e `Importar preset…` agora abrem no topo dos menus de instrumento e de efeito. O inverso passa a valer: com muitos presets seus, os de fábrica descem e o menu (460 px de altura máxima no instrumento, 680 px no efeito) precisa rolar para chegar neles.
@@ -86,8 +87,9 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 - **A importação disse `Não foi possível importar`:** leia o motivo na janela: `O arquivo não é um preset do jopendaw.` (outro tipo de arquivo), `(não é um JSON válido)` (arquivo cortado ou editado), versão mais nova, `Tipo de preset desconhecido`, `O preset não tem nenhum valor utilizável para este tipo.` ou `O arquivo é grande demais para ser um preset.`
 - **A importação avisou `N valores fora da faixa foram limitados`:** o arquivo tinha valores que o parâmetro não aceita (por exemplo, editado à mão); eles foram encostados no limite.
 - **Importei e não vi nada:** sem avisos não abre janela. Olhe `MEUS PRESETS` do tipo certo; se o arquivo era de outro tipo, a janela teria avisado, e o preset está no menu desse outro tipo.
-- **O preset sumiu:** outro navegador ou perfil, dados do site apagados, ou o app não conseguiu gravar (o menu avisaria, em vermelho, com `Não deu para guardar seus presets neste aparelho.`). Importe de novo do `.jopreset`.
-- **O menu mostra uma linha vermelha no topo:** é um aviso do guardado; a tabela em [Avisos do guardado](#avisos-do-guardado) diz o que cada texto significa.
+- **O preset sumiu:** outro navegador ou perfil, dados do site apagados, ou o app não conseguiu gravar (o menu avisaria, em vermelho, com `Não deu para guardar seus presets neste aparelho.`). Importe de novo do `.jopreset`. Se na abertura o arquivo estava ilegível, os presets antigos podem estar na cópia: `Restaurar presets do backup…`.
+- **O menu mostra uma linha vermelha no topo:** é um problema do guardado (os presets não estão sendo gravados); a tabela em [Avisos do guardado](#avisos-do-guardado) diz o que cada texto significa.
+- **O menu mostra uma linha cinza com `(toque para dispensar)`:** é só um aviso da abertura (o arquivo estava ilegível e foi guardado à parte); os presets estão sendo gravados normalmente. Toque nela para tirar.
 - **O seletor mostra `Nome (editado)` depois de eu renomear ou apagar o preset:** renomear atualiza o nome no `(editado)` e apagar o faz sumir; se ainda vê o nome antigo, feche e reabra o painel `(testado só por testes automáticos)`.
 - **O seletor de uma faixa nova diz `Inicial` mesmo eu tendo salvo um preset todo no padrão:** é o esperado: numa faixa nova vale `Inicial`; o seu preset segue marcado com o visto no menu e passa a dar o nome ao rótulo quando você o aplica.
 - **O seletor mostra `Personalizado` depois de reabrir o projeto:** o `(editado)` não é salvo com o projeto. Os valores continuam lá; se baterem com um preset, o nome dele aparece.
@@ -95,17 +97,30 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 
 ## Avisos do guardado
 
-Quando o app não consegue guardar ou ler os seus presets, mostra uma linha **em vermelho** no topo do menu de presets (acima de `MEUS PRESETS`, no instrumento e no efeito) e, depois de salvar, renomear, apagar ou importar, a janela `Presets não guardados` com o mesmo texto. O aviso vale até fechar o app `(testado só por testes automáticos)`.
+O app separa o que **impede** de guardar (problema, em vermelho) do que só **informa** (aviso de carga, em cinza). Os dois ficam no topo do menu de presets, acima de `MEUS PRESETS`, no instrumento e no efeito.
 
-| Aviso | O que houve | O que fazer |
-|---|---|---|
-| `Não deu para guardar seus presets neste aparelho.` | O guardado local recusou a gravação (cota do navegador, disco cheio). Os presets seguem na memória | Exporte os que importam (`Exportar preset…`) e libere espaço; uma gravação seguinte que der certo tira o aviso |
-| `Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.` | Não foi possível ler o que estava guardado; por segurança nada é gravado por cima | Exporte o que criar nesta sessão |
-| `O arquivo dos seus presets estava ilegível. Guardei uma cópia dele (userpresets.bak) e a lista começou vazia.` | O conteúdo guardado estava corrompido (ou não era do app). A cópia vai para `userpresets.bak` (se já havia outra cópia diferente, `userpresets.bak.` e um número) antes de qualquer gravação por cima; o que você salvar depois é gravado normalmente | Reimporte os `.jopreset` que tiver; a cópia fica no guardado do aparelho, sem tela para abri-la |
-| `O arquivo dos seus presets está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você salvar vale só até fechar o app.` | Ilegível e a cópia também falhou | Exporte o que criar nesta sessão |
-| `Seus presets foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você salvar, renomear ou apagar vale só até fechar o app.` | Você voltou a um app mais antigo que o que escreveu o arquivo. Os presets legíveis aparecem e podem ser aplicados; nada é sobrescrito | Use o app mais novo para gravar; aqui, exporte o que criar |
+- **Vermelho (problema):** os presets não estão sendo guardados agora. Depois de salvar, renomear, apagar ou importar, abre também a janela `Presets não guardados` com o mesmo texto. Vale até fechar o app `(testado só por testes automáticos)`.
+- **Cinza (aviso de carga):** informa o que houve na abertura e a gravação funciona. Não abre a janela `Presets não guardados`. Tocar na linha (`(toque para dispensar)`) a tira.
 
-No aviso do arquivo ilegível a janela `Presets não guardados` também abre depois de cada ação, embora a gravação funcione: o título é mais assustador que o caso.
+| Aviso | Tipo | O que houve | O que fazer |
+|---|---|---|---|
+| `Não deu para guardar seus presets neste aparelho.` | Vermelho | O guardado local recusou a gravação (cota do navegador, disco cheio). Os presets seguem na memória | Exporte os que importam (`Exportar preset…`) e libere espaço; uma gravação seguinte que der certo tira o aviso |
+| `Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.` | Vermelho | Não foi possível ler o que estava guardado; por segurança nada é gravado por cima | Exporte o que criar nesta sessão |
+| `O arquivo dos seus presets estava ilegível. Guardei uma cópia dele (userpresets.bak) e a lista começou vazia.` | Cinza | O conteúdo guardado estava corrompido (ou não era do app). A cópia vai para `userpresets.bak` (se já havia outra cópia diferente, `userpresets.bak.` e um número) antes de qualquer gravação por cima; o que você salvar depois é gravado normalmente | Dispense o aviso; para recuperar presets da cópia, `Restaurar presets do backup…`; ou reimporte os `.jopreset` que tiver |
+| `O arquivo dos seus presets está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você salvar vale só até fechar o app.` | Vermelho | Ilegível e a cópia também falhou | Exporte o que criar nesta sessão |
+| `Seus presets foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você salvar, renomear ou apagar vale só até fechar o app.` | Vermelho | Você voltou a um app mais antigo que o que escreveu o arquivo. Os presets legíveis aparecem e podem ser aplicados; nada é sobrescrito | Use o app mais novo para gravar; aqui, exporte o que criar |
+
+Até a fase 15 o aviso do arquivo ilegível saía em vermelho e a janela `Presets não guardados` abria depois de cada ação, embora a gravação funcionasse; agora ele é cinza, dispensável e sem a janela. Um salvar ou renomear recusado por regra (`Nome em uso`, limite de 300) mostra só a janela `Não foi possível salvar` / `Não foi possível renomear`, sem a de gravação por cima.
+
+### Restaurar do backup
+
+`Restaurar presets do backup…` (menu de presets, depois de `Importar preset…`) aparece enquanto o aparelho tiver a cópia `userpresets.bak` e continua aparecendo depois de dispensar o aviso cinza, porque a cópia não é apagada.
+
+1. Abra o menu de presets de um instrumento ou de um efeito e escolha `Restaurar presets do backup…`.
+2. Na janela `Restaurar do backup?`, toque em `Restaurar`. O app lê a cópia preset por preset (mesmo de um arquivo cortado ao meio) e soma ao que você tem; o que tem o mesmo nome no mesmo tipo, ou passaria do limite de 300 por tipo, fica de fora.
+3. Leia a janela do resultado: `Presets restaurados` (`N presets restaurados.`), `Nada novo para restaurar` (`Todos os presets da cópia já estão na sua lista.`) ou `Não foi possível restaurar` (`Não há cópia de presets neste aparelho.`, `Não consegui recuperar nenhum preset da cópia: o arquivo está danificado demais.` ou, com o guardado só de leitura, `Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.`).
+
+Detalhes em [04 Painel de instrumento, Restaurar do backup](../manual/04-painel-de-instrumento.md#restaurar-do-backup). `(testado só por testes automáticos; não visto no navegador nem no Android)`
 
 ## O que mudou no rótulo e no campo de nome (fase 14)
 

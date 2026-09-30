@@ -58,14 +58,18 @@ O mesmo mapeamento se faz e se desfaz pelo menu, sem ligar o modo:
 
 | Onde | Como abrir | Itens |
 |---|---|---|
-| Knob de instrumento ou de efeito, fora do modo | Botão direito (toque longo no celular). O tooltip do knob já diz isso: `<nome>: arraste ou use a roda (Shift: ajuste fino)` / `Duplo clique: padrão (<valor>) · botão direito: menu (digitar o valor, Aprender MIDI)` (os knobs sem o menu, como os do mixer, dizem `botão direito: digitar o valor`) | `Digitar o valor…`, uma linha divisória, `Aprender MIDI` e, se já mapeado, `Remover mapeamento (Canal 1 · CC 74)` (a origem vem entre parênteses) |
-| Fader e pan do mixer, fora do modo | Botão direito do mouse (o toque longo só vale no modo) | `Aprender MIDI`, `Remover mapeamento (Canal 1 · CC 21)` (só se mapeado), `Mapeamentos MIDI…` |
-| Qualquer controle contornado, no modo | Botão direito ou toque longo | Os mesmos três itens do fader |
+| Knob de instrumento ou de efeito, fora do modo | Botão direito (toque longo no celular). O tooltip do knob já diz isso: `<nome>: arraste ou use a roda (Shift: ajuste fino)` / `Duplo clique: padrão (<valor>) · botão direito: menu (digitar o valor, Aprender MIDI)` (os knobs sem o menu, como os do mixer, dizem `botão direito: digitar o valor`) | `Digitar o valor…`, uma linha divisória, `Aprender MIDI`, se já mapeado, `Remover mapeamento (Canal 1 · CC 74)` (a origem vem entre parênteses) e `Modular…` (só nos knobs contínuos; ver [06g](06g-modulacao.md)) |
+| Fader e pan do mixer, fora do modo | Botão direito do mouse (o toque longo só vale no modo) | `Aprender MIDI`, `Remover mapeamento (Canal 1 · CC 21)` (só se mapeado), `Modular…`, `Mapeamentos MIDI…` |
+| Qualquer controle contornado, no modo | Botão direito ou toque longo | Os mesmos itens do fader |
 | Nível de envio do mixer, fora do modo | Botão direito é o menu do envio (ver [Mixer](06-mixer.md#envios)), que **não** tem `Aprender MIDI`: para mapear o envio, ligue o modo | |
 | Mini fader do cabeçalho da faixa, fora do modo | Não há menu; ligue o modo | |
 | Seletores de opção (`Onda`, `Tipo`, `Algoritmo`), fora do modo | Não há menu; ligue o modo | |
 
-`Aprender MIDI` (com o modo desligado) já liga o modo e arma o controle. `Remover mapeamento` apaga só o mapeamento daquele controle.
+`Aprender MIDI` (com o modo desligado) já liga o modo e arma o controle. `Remover mapeamento` apaga só o mapeamento daquele controle. `Modular…` não tem a ver com o MIDI: abre o seletor de modulador do [capítulo 06g](06g-modulacao.md) (ver a próxima seção sobre como os dois se somam).
+
+### MIDI learn e modulação no mesmo controle
+
+Um controle pode ter um mapeamento **e** modulação. O controlador move o valor **base** (o que o knob mostra e o que fica no projeto); o LFO, o seguidor ou a macro somam por cima, sem tirar o mapeamento nem mudar o valor guardado. O controle modulado leva um pontinho ciano no canto superior esquerdo (o pontinho âmbar do mapeamento fica no direito), também no modo `Aprender MIDI`. O `Suave` (takeover) compara o botão com o valor base, não com o som que sai. Os knobs dos cartões da aba `Modulação` (o `Valor` da macro, a `Taxa` do LFO...) **não** se mapeiam: a macro só se mexe com o mouse ou o toque `(lido do código; não confirmado com um controlador)`.
 
 ### O que pode ser mapeado
 
@@ -215,6 +219,7 @@ Sem mapeamento, o `CC 1` (roda de modulação), o `CC 64` (pedal de sustain) e o
 
 - [Gravação](03c-gravacao.md): o MIDI de bend, modulação e pedal que **não** foi mapeado é gravado no clipe; o mapeado não.
 - [Automação](07-automacao.md): com `Escrever`, `Toque` ou `Trava`, o fader do controlador grava pontos na raia.
+- [Modulação](06g-modulacao.md): o controlador move a base de um controle e o LFO ou o seguidor soma por cima; `Modular…` fica no mesmo menu do controle.
 - [Mixer](06-mixer.md), [Painel de instrumento](04-painel-de-instrumento.md) e [Painel de efeitos](06c-painel-de-efeitos.md): os controles mapeáveis.
 - [Transporte](02-transporte.md): o botão `Aprender MIDI` na barra.
 - [Configurações, atalhos e Android](09-configuracoes-atalhos-android.md): a lista de atalhos e a lista de atalhos suspensos.
@@ -246,4 +251,4 @@ Sem mapeamento, o `CC 1` (roda de modulação), o `CC 64` (pedal de sustain) e o
 | Clique num controle contornado | Arma o controle; o próximo CC, pitch bend ou pressão do canal vira o mapeamento |
 | Clique no controle armado | Desarma |
 | `Esc` | Desarma o controle armado; sem nenhum armado, sai do modo. Tem prioridade sobre o `Esc` que fecha o painel de baixo |
-| Botão direito · toque longo | Menu do controle: `Aprender MIDI`, `Remover mapeamento (...)` |
+| Botão direito · toque longo | Menu do controle: `Aprender MIDI`, `Remover mapeamento (...)`, `Modular…` |

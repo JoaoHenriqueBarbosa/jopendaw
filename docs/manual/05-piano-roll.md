@@ -265,7 +265,7 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 
 ## Atalhos
 
-Valem com o editor ativo (último lugar clicado) e sem estar digitando num campo. `Ctrl` vira `Cmd` no Mac.
+Valem com o editor ativo (último lugar clicado) e sem estar digitando num campo. `Ctrl` vira `Cmd` no Mac. As teclas desta tabela são as **padrão**: as 20 ações do contexto `Piano roll` (todas, menos o `Esc`) podem ser trocadas em `Atalhos do teclado` > `Personalizar`, e `Ctrl+D` pode ser a mesma tecla do `Duplicar o clipe` do arranjo, porque as camadas não conflitam ([capítulo 09](09-configuracoes-atalhos-android.md#contextos-e-camadas)). O resumo `?` do próprio editor, os tooltips (`Quantizar … na grade (Q)`) e as dicas do menu `Ferramentas` (`Shift+H`, `Shift+L`) têm o texto fixo, com a tecla padrão: se você trocou, a janela `?` mostra a de agora.
 
 | Tecla | Ação |
 |---|---|

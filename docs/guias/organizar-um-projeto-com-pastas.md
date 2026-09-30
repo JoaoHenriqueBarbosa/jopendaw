@@ -57,7 +57,8 @@ O resultado: 20 faixas viram cinco linhas, e você vai direto ao que quer mexer.
 - **Reverb comum às pastas:** em vez de um reverb por pasta, monte um retorno ([Mixagem e automação, passo 2](mixagem-e-automacao.md#2-criar-um-barramento-de-reverb-compartilhado)) e use os envios das faixas. O retorno precisa vir **depois** das pastas na lista; o retorno novo já entra no fim.
 - **Pasta com sidechain:** compressor de um baixo com `Sidechain` na faixa do bumbo continua valendo com as duas em pastas diferentes (a faixa do bumbo é uma faixa normal); ver [Efeitos em combinação, receita 3](efeitos-em-combinacao.md#receita-3-sidechain-pumping-com-o-bumbo) `(não confirmado com pastas)`.
 - **Stems por grupo:** exporte com `Stems` ligado; a pasta gera o stem `<projeto> - Bateria.wav` com o compressor e o volume dela, e as faixas geram os stems delas sem eles.
-- **Mover a faixa de família:** `Mover para a pasta "Nome"` no menu da faixa, ou arraste o cabeçalho dela para entre duas faixas da pasta.
+- **Mover a faixa de família:** `Mover para a pasta "Nome"` no menu da faixa, ou arraste o cabeçalho dela para entre duas faixas da pasta. Se a faixa saía para outro barramento, o app pergunta antes de trocar a saída (`Mover "Nome" para a pasta "Pasta"?`).
+- **Desfazer a pasta:** `Desagrupar…` mantém as faixas e, se a pasta tem efeitos, automação ou envios, mantém também o barramento com as faixas saindo nele (o compressor continua no som). Para tirar a pasta **e** o efeito dela, `Apagar a pasta (as faixas ficam)…`: as faixas ficam soltas, saindo no `Master`.
 
 ## Por que funciona
 
@@ -70,7 +71,8 @@ A pasta é um barramento: a saída de cada faixa vai para ela, então o que voc�
 | Mudei o volume ou o `M` da pasta e o reverb do retorno continua | Os envios saem das faixas, não da pasta | Baixe os envios, ou dê `M` nas faixas |
 | O item `Agrupar em pasta…` abre `Não dá para agrupar` | A faixa é um barramento | Só faixas de áudio e de instrumento entram |
 | A faixa não aparece na lista do diálogo | Já está numa pasta | `Tirar da pasta` antes, ou `Mover para a pasta "Nome"` |
-| Um efeito na pasta não faz nada depois de `Desagrupar…` | O barramento ficou, sem as faixas ligadas | Apague-o (`Apagar a faixa`) ou religue a saída das faixas nele no mixer |
-| Uma faixa congelada (`(áudio)`) ficou solta no meio da pasta | Ela nasce fora da pasta, com a saída dela | `Mover para a pasta "Nome"` na faixa nova |
-| `Mover a faixa?` avisa que uma saída vai mudar | A faixa entra ou sai de uma pasta, ou a pasta passaria de um barramento que ela alimenta | `Cancelar`, ou `Mover mesmo assim` e `Ctrl+Z` se não gostar |
+| Depois de `Desagrupar…` o efeito da pasta continua no som | Com efeitos, automação ou envios, o barramento fica e as faixas seguem saindo nele | Se não quer o efeito, `Ctrl+Z` e use `Apagar a pasta (as faixas ficam)…`, ou mande as faixas ao `Master` pelo botão de saída do mixer |
+| Mudei a saída de uma faixa da pasta no mixer e ela saiu da pasta | Fora da pasta ela não passaria mais pelo volume nem pelos efeitos dela; o app avisa antes (`Tirar "Nome" da pasta?`) | `Cancelar`, ou `Ctrl+Z` depois; para manter a faixa no grupo, deixe a saída dela na pasta |
+| Uma faixa congelada (`(áudio)`) e a original | A congelada entra na mesma pasta, logo abaixo da original (a original fica muda) | Nada a arrumar; apague uma das duas se não precisar |
+| `Mover a faixa?`, `Agrupar as faixas?` ou `Tirar "Nome" da pasta?` avisam que uma saída vai mudar | A faixa entra ou sai de uma pasta (ou a pasta passaria de um barramento que ela alimenta) e tinha outra saída | `Cancelar`, ou confirme e `Ctrl+Z` se não gostar |
 | Recolhi e não vi o retângulo da gravação | Faixas armadas dentro de pasta recolhida não desenham a gravação | Expanda a pasta antes de gravar |

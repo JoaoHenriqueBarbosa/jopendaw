@@ -2,7 +2,7 @@
 
 > O jeito de trabalhar de quem não quer soltar o teclado: as teclas do estúdio combinadas em sequências (ensaiar, marcar, cortar, gravar, escrever notas, ajustar o som), com as regras que decidem quando uma tecla pega; cerca de 15 minutos para treinar as sequências e passar a usá-las sem olhar.
 
-As tabelas de teclas estão em [02 Transporte](../manual/02-transporte.md), [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md), [05 Piano roll](../manual/05-piano-roll.md) e [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md); o que vem abaixo é a conferência delas com o código (`app/lib/screens/project_screen.dart`, `app/lib/daw/piano_roll_input.dart`, `app/lib/daw/controller.dart`) e a costura em sequências. A janela `Atalhos do teclado` (tecla `?`) lista as mesmas teclas em 8 grupos, inclusive o grupo `Suspensos enquanto o teclado do computador está ligado` (conferida com o código em `15670b7`).
+As tabelas de teclas estão em [02 Transporte](../manual/02-transporte.md), [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md), [05 Piano roll](../manual/05-piano-roll.md) e [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md); o que vem abaixo é a conferência delas com o código (`app/lib/screens/project_screen.dart`, `app/lib/daw/piano_roll_input.dart`, `app/lib/daw/controller.dart`) e a costura em sequências. A janela `Atalhos do teclado` (tecla `?`) lista as mesmas teclas em 8 grupos, inclusive o grupo `Suspensos enquanto o teclado do computador está ligado` (conferida com o código em `15670b7`; desde a fase 16 a janela é gerada de um catálogo de ações e as teclas podem ser trocadas). **Todas as teclas deste guia são as padrão**: se você personalizou alguma, leia a tecla de agora na janela `?` e veja o passo [8. Trocar uma tecla que não serve para você](#8-trocar-uma-tecla-que-não-serve-para-você).
 
 ## Ingredientes
 
@@ -119,12 +119,27 @@ Sequência para decorar: **`I`, (ajuste), `X`, (ajuste), `F`, `Esc`**.
 
 O arranjo não tem tecla para: selecionar clipe ou faixa; armar (`Armar para gravar`) ou monitorar; mudo (`M` é marcador) e solo; mover o cursor para um ponto qualquer (só `Enter`, `Home`, `[` e `]`, ou clicar na régua); criar faixa; mudar o andamento (clique em `120 BPM · 4/4`); abrir `Warp e altura…`; exportar; trocar a grade. Esses ficam no mouse (ou no toque). O ganho do fluxo é fazer o **verbo** no teclado (tocar, cortar, duplicar, quantizar, gravar) e deixar o mouse só para escolher **onde**.
 
+### 8. Trocar uma tecla que não serve para você
+
+Só na web e no computador (no app Android a lista da janela `?` é só de leitura). Bom para quem toca com o teclado do computador ligado e quer as letras de nota livres, ou para quem tem um atalho preferido de outro programa. Cerca de 2 minutos por tecla.
+
+1. Aperte `?` e toque em `Personalizar`. Digite parte do nome da ação em `Buscar ação ou tecla` (por exemplo `mixer`).
+2. Toque no chip da tecla (`X`): ele passa a dizer `Pressione a nova combinação…`. Aperte a nova (por exemplo `Ctrl+M` ou `Shift+X`). `Esc` desiste.
+3. Se a tecla já é de outra ação da mesma camada, a caixa vermelha pergunta: `Trocar` dá a nova tecla ao `Mixer` e a outra ação **fica com a tecla que o `Mixer` tinha**; `Cancelar` deixa tudo como estava. Se a tecla é reservada (`Esc`, `Tab`, `F5`, `F11`, `F12`, `Ctrl+R`/`W`/`T`/`N`/`Q`, `Ctrl+1` a `9`, `Alt+F4`), a linha vermelha explica por quê e você aperta outra.
+4. Uma ação aceita até 3 atalhos: o `+` ao lado do chip (tooltip `Adicionar outro atalho`) acrescenta, e `Backspace` ou `Delete` com o chip em gravação tira. O botão de seta circular (`Restaurar o padrão desta ação`) volta uma ação; `Restaurar tudo` volta todas.
+5. `Exportar atalhos…` guarda `atalhos.jokeys`; `Importar atalhos…` no outro aparelho traz tudo de volta (e **substitui** o que havia).
+
+Duas ideias prontas: (a) para tocar com o teclado ligado sem perder o metrônomo e o loop, mande `Metrônomo` e `Loop liga/desliga` para teclas fora de `A W S E D F T G Y H U J K O L P Z X C V`, como `B` e `N` (um `Shift+C` não adianta: o teclado tocando ignora o `Shift` e ainda vê a letra `C`); o grupo `Suspensos enquanto o teclado do computador está ligado` da janela `?` vai encolhendo à medida que você faz isso; (b) para ter o `Seguir o cursor` no teclado (ele vem sem atalho), toque no chip `Sem atalho` dessa ação e escolha uma tecla livre, como `Shift+B`.
+
+Depois de trocar, as **sequências para decorar** deste guia mudam para as suas teclas, mas os textos dos tooltips (`Metrônomo (C)`) continuam com a tecla de fábrica: confie na janela `?`.
+
 ## Variações
 
 - **Só com o toque, no celular.** Os atalhos só existem com teclado físico conectado `(não confirmado)`. No toque, os mesmos verbos estão nos botões da barra (`Cortar no cursor (S)`, `Duplicar (Ctrl+D)`, `Apagar o clipe (Delete)`, `Desfazer (Ctrl+Z)`); os tooltips guardam a tecla.
 - **Teclado sempre ligado.** Quem toca muito nas teclas pode deixar o `Ctrl+K` ligado o tempo todo e usar só os atalhos que sobram (`Espaço`, `Enter`, `Home`, `R`, `M`, `[`, `]`, `I`, `Esc`, `=`, `+`, `−`, `Delete`, `Backspace` e `Ctrl+...`): é possível gravar, marcar, voltar e apagar sem desligar.
 - **Controlador MIDI com pedal, bend e roda.** Pelo código atual, além das notas e da velocidade, o app lê o pedal de sustain (`CC 64`, ligado a partir de 64), a roda de modulação (`CC 1`) e o pitch bend, e grava os três no clipe (o teclado da tela também tem rodas de bend e modulação). O capítulo 03c ainda diz que eles não são lidos. `(não confirmado em uso)` Com o `Ctrl+K` desligado, as letras seguem livres para os atalhos.
-- **Aprender pela janela.** Com o estúdio em foco, `?` abre `Atalhos do teclado` (o botão `Fechar` sai). Funciona em qualquer layout que produza o caractere `?`.
+- **Aprender pela janela.** Com o estúdio em foco, `?` abre `Atalhos do teclado` (o botão `Fechar` sai). Funciona em qualquer layout que produza o caractere `?`. A janela mostra as **suas** teclas se você as personalizou (passo 8).
+- **Sequências com as suas teclas.** Anote as sequências deste guia com as teclas de agora da janela `?` (ou exporte o `atalhos.jokeys` e guarde junto do projeto): as sequências são de ações, não de letras.
 
 ## Por que funciona
 
@@ -152,3 +167,7 @@ O arranjo não tem tecla para: selecionar clipe ou faixa; armar (`Armar para gra
 | A bateria não soa quando toco as letras | A oitava está acima do que a bateria responde (só as notas 35 a 59; o padrão dela é `C2`), ou a faixa que toca não é a bateria (a oitava é por tipo de faixa; toca a selecionada, ou a primeira de instrumento armada) | Olhe o botão do teclado: numa bateria ele deve mostrar `C2 · sem atalhos`; volte com `Z` e confira qual faixa está selecionada ou armada |
 | No Mac o atalho não funciona | No Mac a tecla é `Cmd` (os tooltips agora escrevem `⌘`) | `Cmd+Z`, `Cmd+D`, `Cmd+K`... |
 | `Ctrl+D` adiciona o site aos favoritos | Pode acontecer em alguns navegadores se o app não consumir a tecla `(não confirmado)` | Use o botão `Duplicar (Ctrl+D)` da barra |
+| A tecla do tooltip não faz o que ele diz (`Metrônomo (C)`) | Você personalizou a ação: o texto dos tooltips não acompanha a troca | Confira a tecla de agora na janela `?`; `Restaurar o padrão desta ação` em `Personalizar` volta à de fábrica |
+| A tela `Personalizar` recusa a tecla com uma linha vermelha | É reservada do navegador ou do sistema (`F5`, `Ctrl+R`, `Ctrl+1`…) ou, no teclado tocando, é tecla de nota | Escolha outra combinação (lista em [09, Teclas reservadas](../manual/09-configuracoes-atalhos-android.md#teclas-reservadas)) |
+| Depois de importar um `.jokeys` algumas teclas voltaram ao que eram ou sumiram | O arquivo traz avisos (ação desconhecida, tecla inválida ou reservada, conflito): o aviso `Atalhos importados de <arquivo>, com avisos:` lista cada um | Leia os avisos; o resto do arquivo foi aplicado |
+| O botão `Personalizar` não aparece | Você está no app Android | Personalizar só existe na web e no computador; o Android usa os atalhos padrão (e a tela de importar também fica na personalização) `(lido do código)` |

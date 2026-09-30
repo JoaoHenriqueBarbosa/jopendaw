@@ -4,7 +4,7 @@
 
 ## Onde fica
 
-O painel é uma das quatro abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos). Ele sempre mostra o instrumento da faixa selecionada; trocar de faixa troca o conteúdo. Formas de abrir:
+O painel é uma das cinco abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos, Modulação). Ele sempre mostra o instrumento da faixa selecionada; trocar de faixa troca o conteúdo. Formas de abrir:
 
 | Como | Detalhe |
 |---|---|
@@ -110,7 +110,7 @@ Cada parâmetro é um knob giratório: em cima o valor com a unidade (`2.40 kHz`
 | Arrastar para cima ou para baixo | Sobe ou desce o valor | 200 px de arraste percorrem a faixa inteira | `Shift` durante o arraste dá ajuste fino: 1000 px para a faixa inteira (5 vezes mais fino) |
 | Roda do mouse sobre o knob | Sobe (roda para cima) ou desce | Parâmetros contínuos: 1600 px de rolagem para a faixa inteira (`Shift`: 8000 px); parâmetros inteiros (Vozes, Uníssono, Semitons, Nota base): um passo por dente da roda | O trackpad acumula a rolagem até dar um passo; a roda só rola a fileira de cartões quando o mouse não está sobre um knob |
 | Duplo clique (duplo toque no celular) | Volta ao valor padrão | O padrão aparece no tooltip: `Duplo clique: padrão (2.40 kHz)` | Se já está no padrão, nada acontece |
-| Botão direito (toque longo no celular) | Abre um menu com `Digitar o valor…` (o diálogo com o nome do parâmetro para digitar o valor), uma linha divisória, `Aprender MIDI` e, se o knob já está mapeado, `Remover mapeamento (Canal 1 · CC 74)`. Os seletores de opção (`Onda`, `Tipo`, `Algoritmo`) não têm esse menu | O diálogo diz `De X a Y`; botões `Cancelar` e `Aplicar`; `Enter` também aplica. O tooltip do knob ainda diz só `botão direito: digitar o valor` (o texto vira `menu (digitar o valor, Aprender MIDI)` nos controles que aceitam MIDI learn). Veja abaixo o que o campo aceita e, para o MIDI, [06f MIDI learn](06f-midi-learn.md) |
+| Botão direito (toque longo no celular) | Abre um menu com `Digitar o valor…` (o diálogo com o nome do parâmetro para digitar o valor), uma linha divisória, `Aprender MIDI`, se o knob já está mapeado, `Remover mapeamento (Canal 1 · CC 74)` e, nos knobs que se movem de forma contínua, `Modular…` (ver [Knobs e modulação](#knobs-e-modulação)). Os seletores de opção (`Onda`, `Tipo`, `Algoritmo`) não têm esse menu (e o `Modular…` também não aparece nos inteiros, como `Vozes`) | O diálogo diz `De X a Y`; botões `Cancelar` e `Aplicar`; `Enter` também aplica. O tooltip do knob ainda diz só `botão direito: digitar o valor` (o texto vira `menu (digitar o valor, Aprender MIDI)` nos controles que aceitam MIDI learn). Veja abaixo o que o campo aceita e, para o MIDI, [06f MIDI learn](06f-midi-learn.md) |
 | Tooltip (passar o mouse por cerca de 1 s) | Lembra os gestos: `arraste ou use a roda (Shift: ajuste fino)`, `Duplo clique: padrão (...)`, `botão direito: digitar o valor` (o texto vira `menu (digitar o valor, Aprender MIDI)` nos controles que aceitam MIDI learn) | | Não aparece no toque |
 
 O campo de digitação aceita o que o próprio painel mostra: `2.40 kHz`, `250 ms`, `70%`, `+7 st`, `×1.50`, `1.5 oit`. A vírgula vale como ponto. Sem unidade, um tempo maior que o máximo do parâmetro é lido como milissegundos (`300` num ataque de até 10 s vale 300 ms). No parâmetro `Nota base` do sampler dá para digitar o nome da nota (`C4`, `F#3`). Valor fora da faixa é limitado ao mínimo ou máximo. Se o texto não é entendido, o diálogo avisa `Não entendi. Use um número, com a unidade se quiser.`
@@ -124,6 +124,10 @@ Acessibilidade: cada knob se apresenta a leitores de tela como controle deslizan
 ### Knobs e MIDI learn
 
 Todo knob do painel, inclusive os seletores de opção (`Onda`, `Tipo`, `Algoritmo`) e os inteiros (`Vozes`), pode ser comandado por um botão ou fader de um controlador MIDI: ligue o modo `Aprender MIDI` (botão da barra ou `Shift+K`), clique no knob, que ganha contorno, e mexa no botão do controlador; ou use o botão direito no knob e `Aprender MIDI`. O knob passa a acompanhar o controlador na escala dele (logarítmica em Hz e segundos), com o mesmo desfazer e a mesma gravação de automação de um arraste do mouse. Um knob mapeado leva um pontinho âmbar no canto; com o modo ligado, o contorno mostra a etiqueta de origem (`CC74`). Com o modo ligado o knob só responde a clique. Detalhes, curva, faixa e o `Suave` (o knob não salta) em [06f MIDI learn](06f-midi-learn.md).
+
+### Knobs e modulação
+
+Botão direito (toque longo no celular) num knob contínuo e `Modular…` liga o parâmetro a um LFO, a um seguidor de envelope ou a uma macro, que balançam o valor por cima do que o knob mostra (o `Corte` do sintetizador balançando no andamento, por exemplo). O knob continua mostrando o valor base e ganha um **anel ciano** por fora do trilho, do tamanho do intervalo em que o som realmente se move; o anel é estático (não é um ponteiro ao vivo). Os moduladores moram na aba `Modulação` do painel de baixo, ao lado de `Efeitos`. Tudo em [06g Modulação](06g-modulacao.md).
 
 ### Knobs que seguem a automação (laranja)
 
@@ -174,14 +178,16 @@ O seletor de presets do cabeçalho do painel (tooltip `Presets`; na bateria, `Ki
 
 | Item do menu | O que faz |
 |---|---|
-| Aviso em vermelho (letra pequena, sem clique; só aparece quando há problema) | Fica **acima** de `MEUS PRESETS` e diz que os presets não estão sendo guardados neste aparelho ou o que houve com o arquivo deles: ver [Avisos do guardado](#avisos-do-guardado). |
-| `MEUS PRESETS` (título na cor da faixa, sem clique) | Abre a seção, a primeira do menu (ou a segunda, se há o aviso em vermelho). |
+| Aviso em vermelho (letra pequena, sem clique; só aparece quando há problema) | Fica **acima** de `MEUS PRESETS` e diz que os presets **não estão sendo guardados** neste aparelho: ver [Avisos do guardado](#avisos-do-guardado). |
+| Aviso cinza com ícone de informação e o fim `(toque para dispensar)` (só aparece quando há o que informar) | Fica acima de `MEUS PRESETS`. Só informa o que houve na abertura (arquivo ilegível guardado à parte, com a gravação funcionando); tocar nele o dispensa. Ver [Avisos do guardado](#avisos-do-guardado). |
+| `MEUS PRESETS` (título na cor da faixa, sem clique) | Abre a seção, a primeira do menu (ou depois dos avisos, se há algum). |
 | `Nenhum ainda` (cinza) | Aparece no lugar da lista enquanto você não tem nenhum preset deste tipo. |
 | Um preset seu (o nome, cortado com reticências se for longo) | Aplica na faixa, como os de fábrica. Leva o visto quando os valores da faixa batem com ele. |
 | Ícone `…` no fim da linha (tooltip `Renomear, apagar ou exportar`) | Fecha o menu e abre uma janela com o nome do preset no título e três opções: `Renomear…`, `Exportar preset…` e `Apagar…` (em vermelho). |
 | `Salvar como preset…` (ícone de marcador com `+`) | Pede um nome e guarda os parâmetros atuais do instrumento. |
 | `Importar preset…` (ícone de arquivo) | Abre o seletor de arquivos e adiciona um preset `.jopreset`. |
-| Divisor e, depois dele, as categorias de fábrica (`BÁSICO`, `BAIXOS`… no sintetizador) | Fecham a seção: `MEUS PRESETS`, a lista (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, divisor, presets de fábrica. |
+| `Restaurar presets do backup…` (ícone de restaurar; só aparece se o aparelho tem a cópia `userpresets.bak` de um arquivo que estava ilegível) | Tenta recuperar os presets dessa cópia e somá-los aos seus. Ver [Restaurar do backup](#restaurar-do-backup). |
+| Divisor e, depois dele, as categorias de fábrica (`BÁSICO`, `BAIXOS`… no sintetizador) | Fecham a seção: `MEUS PRESETS`, a lista (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, `Restaurar presets do backup…` (se houver cópia), divisor, presets de fábrica. |
 
 #### Salvar
 
@@ -268,17 +274,36 @@ Eles **não sincronizam com a conta**: não vão para a nuvem, não aparecem no 
 
 #### Avisos do guardado
 
-Quando o app não consegue guardar ou ler os seus presets, ele avisa de dois jeitos: uma linha em vermelho no **topo do menu** de presets (acima de `MEUS PRESETS`, no instrumento e no efeito) e, depois de `Salvar como preset…`, `Renomear…`, `Apagar…` ou `Importar preset…`, uma janela `Presets não guardados` com o mesmo texto. O aviso vale até fechar o app `(testado só por testes automáticos)`.
+O app separa dois casos que antes se misturavam:
 
-| Situação | Texto do aviso | O que acontece com os presets |
-|---|---|---|
-| O guardado recusou a gravação (por exemplo, sem espaço) | `Não deu para guardar seus presets neste aparelho.` | Seguem na memória e valem até fechar o app. A próxima gravação que der certo tira o aviso. |
-| Não deu nem para ler o que estava guardado | `Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.` | Nada é gravado por cima do que estava lá. |
-| O arquivo estava ilegível (corrompido, ou de outro formato) | `O arquivo dos seus presets estava ilegível. Guardei uma cópia dele (userpresets.bak) e a lista começou vazia.` | O app guarda uma cópia do conteúdo em `userpresets.bak` (se já havia outra cópia diferente, a nova vai para `userpresets.bak.` seguido de um número) antes de gravar por cima. O que você salvar depois é gravado normalmente. O app não tem tela para abrir a cópia. |
-| O arquivo estava ilegível e a cópia também falhou | `O arquivo dos seus presets está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você salvar vale só até fechar o app.` | Nada é gravado por cima. |
-| O arquivo foi guardado por uma versão **mais nova** do app (você voltou a um app antigo) | `Seus presets foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você salvar, renomear ou apagar vale só até fechar o app.` | Os presets legíveis aparecem e podem ser aplicados; nada é sobrescrito. |
+- **Problema:** os presets **não estão sendo guardados** agora (a gravação falhou, ou o arquivo local é só de leitura). Aparece uma linha **em vermelho** no topo do menu de presets (acima de `MEUS PRESETS`, no instrumento e no efeito) e, depois de `Salvar como preset…`, `Renomear…`, `Apagar…` ou `Importar preset…`, a janela `Presets não guardados` com o mesmo texto. Vale até fechar o app (a gravação seguinte que der certo tira o de falha de gravação).
+- **Aviso de carga:** só informa o que houve na abertura e a gravação funciona. Aparece como uma linha **cinza**, com ícone de informação e `(toque para dispensar)`, no mesmo lugar do menu. **Não** abre a janela `Presets não guardados`. Tocar na linha a dispensa (não mexe em nada guardado); ela some também ao restaurar presets do backup.
 
-Nota: no aviso do arquivo ilegível a janela `Presets não guardados` também abre, embora a gravação funcione; o título assusta mais que o caso.
+Quando um salvar ou renomear é recusado por regra (`Nome em uso`, limite de 300 presets), só aparece a janela `Não foi possível salvar` / `Não foi possível renomear`; a janela de gravação não abre em cima dela. `(testado só por testes automáticos)`
+
+| Situação | Tipo | Texto do aviso | O que acontece com os presets |
+|---|---|---|---|
+| O guardado recusou a gravação (por exemplo, sem espaço) | Problema (vermelho) | `Não deu para guardar seus presets neste aparelho.` | Seguem na memória e valem até fechar o app. A próxima gravação que der certo tira o aviso. |
+| Não deu nem para ler o que estava guardado | Problema (vermelho) | `Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.` | Nada é gravado por cima do que estava lá. |
+| O arquivo estava ilegível (corrompido, ou de outro formato) e a cópia foi guardada | Aviso de carga (cinza, dispensável) | `O arquivo dos seus presets estava ilegível. Guardei uma cópia dele (userpresets.bak) e a lista começou vazia.` | O app guarda uma cópia do conteúdo em `userpresets.bak` (se já havia outra cópia diferente, a nova vai para `userpresets.bak.` seguido de um número) antes de gravar por cima. O que você salvar depois é gravado normalmente. A cópia pode ser recuperada por `Restaurar presets do backup…` ([abaixo](#restaurar-do-backup)). |
+| O arquivo estava ilegível e a cópia também falhou | Problema (vermelho) | `O arquivo dos seus presets está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você salvar vale só até fechar o app.` | Nada é gravado por cima. |
+| O arquivo foi guardado por uma versão **mais nova** do app (você voltou a um app antigo) | Problema (vermelho) | `Seus presets foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você salvar, renomear ou apagar vale só até fechar o app.` | Os presets legíveis aparecem e podem ser aplicados; nada é sobrescrito. |
+
+#### Restaurar do backup
+
+`Restaurar presets do backup…` aparece no menu de presets (instrumento e efeito, logo depois de `Importar preset…`) enquanto o aparelho tiver a cópia `userpresets.bak` de um arquivo que estava ilegível. Ela fica **mesmo depois** de dispensar o aviso cinza e nas aberturas seguintes, porque a cópia continua guardada.
+
+1. Escolha `Restaurar presets do backup…`.
+2. Na janela `Restaurar do backup?` leia o texto (`Na abertura, o arquivo dos seus presets estava ilegível e uma cópia dele foi guardada. Vou tentar recuperar os presets dessa cópia e somá-los aos que você tem agora (os que têm o mesmo nome no mesmo tipo ficam como estão). A cópia continua guardada.`) e toque em `Restaurar` (ou `Cancelar`).
+3. O app lê a cópia preset por preset, mesmo de um arquivo cortado ao meio, e soma ao que você tem. A janela de resultado é uma destas:
+
+| Título | Texto |
+|---|---|
+| `Presets restaurados` | `N presets restaurados.` (`1 preset restaurado.` no singular), e, se houve, `M já existia (mesmo nome) e ficou como estava.` |
+| `Nada novo para restaurar` | `Todos os presets da cópia já estão na sua lista.` e a mesma frase dos que já existiam |
+| `Não foi possível restaurar` | `Não há cópia de presets neste aparelho.`, ou `Não consegui recuperar nenhum preset da cópia: o arquivo está danificado demais.`, ou `Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.` |
+
+Ficam de fora os presets da cópia que já existem (mesmo nome no mesmo tipo) e os que passariam do limite de 300 por tipo (a frase os conta junto). Um preset restaurado cujo identificador já estava em uso ganha um novo. Restaurar não apaga a cópia; se a gravação depois falhar, a janela `Presets não guardados` abre. Só lê a cópia principal `userpresets.bak`, não as extras `userpresets.bak.<número>` `(lido do código)`. `(testado só por testes automáticos; não visto no navegador nem no Android)`
 
 No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de arquivos do sistema `(não confirmado no aparelho; testado só por testes automáticos com o seletor e o salvar simulados)`.
 
@@ -321,6 +346,7 @@ No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de a
 
 - [04a Sintetizador](04a-sintetizador.md), [04b Bateria](04b-bateria.md), [04c Sampler](04c-sampler.md), [04d FM](04d-fm.md), [04e Wavetable](04e-wavetable.md): os controles de cada instrumento.
 - [05 Piano roll](05-piano-roll.md): as notas do clipe tocam o instrumento; a prévia das notas ao editar usa este mesmo instrumento.
+- [06g Modulação](06g-modulacao.md): LFO, seguidor de envelope e macro movendo os knobs do instrumento (o anel ciano); a aba `Modulação` fica ao lado de `Instrumento`.
 - [03c Gravação](03c-gravacao.md): gravar notas ao vivo com o teclado da tela, o do computador ou o MIDI, junto de bend, modulação e pedal.
 - [05 Piano roll, faixa de controle](05-piano-roll.md#faixa-de-controle): editar depois os pontos de bend, modulação e sustain gravados (ou desenhá-los).
 - [Expressão MIDI na prática](../guias/expressao-midi-na-pratica.md): receitas com as rodas, o alcance do bend e o pedal.
@@ -359,7 +385,7 @@ No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de a
 | `C` / `V` (teclado ligado) | Intensidade das notas menor / maior, em passos de 10% (10% a 100%, padrão 80%) |
 | `Shift` ao arrastar ou rolar sobre um knob | Ajuste fino (5 vezes mais fino) |
 | Duplo clique num knob | Valor padrão |
-| Botão direito num knob | Menu: `Digitar o valor…`, `Aprender MIDI`, `Remover mapeamento (...)` |
+| Botão direito num knob | Menu: `Digitar o valor…`, `Aprender MIDI`, `Remover mapeamento (...)`, `Modular…` (ver [06g](06g-modulacao.md)) |
 | `Shift+K` | Liga e desliga o modo `Aprender MIDI` (suspenso com o teclado do computador ligado) |
 | `Enter` no diálogo de valor | Aplica |
 

@@ -444,4 +444,6 @@ Os fantasmas se alinham pelo tempo do arranjo, não pelo início do clipe; só c
 | `J` | Unir notas iguais adjacentes |
 | `Q` | Quantizar (não é do menu, mas combina com ele) |
 
+Estas são as teclas **padrão**: `Humanizar`, `Legato`, `Dividir as notas no cursor`, `Unir notas iguais adjacentes` e `Quantizar` são ações do catálogo e podem ser trocadas em `Atalhos do teclado` > `Personalizar` ([capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos)). As dicas do menu `Ferramentas` (`Shift+H`, `Shift+L`) são texto fixo e não acompanham a troca.
+
 Com o teclado musical do computador ligado (`Ctrl+K`), `K`, `J`, `Shift+H` e `Shift+L` tocam notas em vez de acionar as ferramentas; use o menu `Ferramentas` nesse caso.

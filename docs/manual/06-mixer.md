@@ -73,6 +73,8 @@ Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo a
 
 **Fader, pan e nível de envio aceitam MIDI learn.** Com um controlador ligado, o fader, o knob de pan e o knob de envio (do canal, do `Master` e o mini fader do cabeçalho da faixa) podem ser comandados por um botão ou fader do teclado: ligue o modo `Aprender MIDI` (botão da barra ou `Shift+K`), clique no controle contornado e mexa no botão do controlador. Botão direito do mouse no fader ou no pan, fora do modo, abre o menu do controle com `Aprender MIDI`, `Remover mapeamento (...)` e `Mapeamentos MIDI…` (no envio o botão direito continua sendo o menu do envio: para mapeá-lo ligue o modo). Com o modo ligado o controle só responde a clique (não arrasta). Tudo em [06f MIDI learn](06f-midi-learn.md).
 
+**Fader e pan aceitam modulação.** O botão direito do mouse no fader ou no pan (também os do `Master`) traz ainda `Modular…`, que liga o controle a um LFO, seguidor de envelope ou macro; o fader e o pan não se mexem sozinhos na tela (mostram o valor base) e ganham só um pontinho ciano no canto superior esquerdo, sem o anel dos knobs. No celular o fader e o pan não têm esse menu por toque, e o nível de envio e o mini fader do cabeçalho também não têm `Modular…`: a aba `Modulação` liga qualquer um deles pela lista `Destino` do cartão. Tudo em [06g Modulação](06g-modulacao.md).
+
 ### Gravação, mudo e solo
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
@@ -87,9 +89,9 @@ Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo a
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Botão de saída, com o nome do destino (tooltip `Saída: Master`) | Para onde a faixa sai: `Master` ou um barramento. Abre um menu. | Padrão `Master`. O item marcado é o atual. | A saída é *no lugar* do master: a faixa deixa de ir direto para ele. |
-| Menu da saída: `Master` | Volta a faixa para o master. | | |
-| Menu da saída: nome de um barramento | Manda a faixa para ele (só lista os que não fecham ciclo). Uma pasta aparece aqui pelo nome, como qualquer barramento. | | Use para grupos (bateria, vozes); para agrupar de uma vez, com linha própria na timeline, use `Agrupar em pasta…` ([02c](02c-pastas-de-faixa.md)). Mudar a saída de uma faixa de pasta por aqui não a tira da pasta. |
-| Menu da saída: `Novo barramento` | Cria um barramento no fim da lista e já liga a saída da faixa nele. | | |
+| Menu da saída: `Master` | Volta a faixa para o master. Numa faixa de pasta, ela sai da pasta (ver a linha abaixo). | | |
+| Menu da saída: nome de um barramento | Manda a faixa para ele (só lista os que não fecham ciclo). Uma pasta aparece aqui pelo nome, como qualquer barramento. | | Use para grupos (bateria, vozes); para agrupar de uma vez, com linha própria na timeline, use `Agrupar em pasta…` ([02c](02c-pastas-de-faixa.md)). Numa faixa que está numa pasta, escolher qualquer destino que não seja a própria pasta **tira a faixa da pasta**: ela não passaria mais pelo volume nem pelos efeitos da pasta, então desce para logo depois do bloco dela. Antes disso abre a confirmação `Tirar "Nome" da pasta?` com o texto `A pasta "Pasta" só afeta o que sai nela. Com outra saída, "Nome" deixa de passar pelo volume e pelos efeitos da pasta, então sai da pasta (desce para logo depois dela). Isto muda:` e a linha `a saída de "Nome" para a pasta "Pasta" (passa a ir para o Master)` (ou `"Barramento"`, ou `um barramento novo`), com `Cancelar` e `Tirar da pasta`. Um passo só no desfazer. Escolher de novo a própria pasta não pergunta nada. |
+| Menu da saída: `Novo barramento` | Cria um barramento no fim da lista e já liga a saída da faixa nele. | | Numa faixa de pasta, vale a mesma confirmação e a faixa também sai da pasta. |
 | Ícone do tipo + nome, no pé do canal | Mostra o tipo da faixa (tooltip: `Áudio`, `Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable`, `Barramento`, `Grupo` para uma pasta). Tocar no ícone de uma faixa de instrumento abre o instrumento (`Sintetizador: abrir o instrumento`); no de um barramento abre os efeitos (`Barramento: abrir os efeitos`); no de uma pasta (ícone de pasta) também, com o tooltip `Grupo: abrir os efeitos`. | Nome truncado com reticências; o tooltip mostra inteiro. | Renomear é pelo menu da faixa na linha do tempo. |
 
 ### Coluna `Faixa` (fim da lista)
@@ -182,6 +184,7 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 - [08 Exportação](08-exportacao.md): o arquivo sai depois do limitador do master (`Normalizar o loudness` leva a mixagem ao alvo de LUFS); "Congelar em áudio" leva volume, pan, saída e envios para a faixa nova.
 - [03c Gravação](03c-gravacao.md): armar e monitorar.
 - [06f MIDI learn](06f-midi-learn.md): ligar o fader, o pan e os envios a um controlador MIDI.
+- [06g Modulação](06g-modulacao.md): tremolo no volume, auto-pan e envio que respira com um LFO ou um seguidor de envelope (aba `Modulação`, ao lado de `Efeitos`).
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): como o motor alinha faixas, envios e sidechain quando há `Limitador` ou `Distorção`.
 - [Guia: mixagem e automação](../guias/mixagem-e-automacao.md): mix do zero, retorno de reverb, fades.
 - [Guia: loudness e master](../guias/loudness-e-master.md): levar o master a −14, −16 ou −23 LUFS sem estourar, e conferir o arquivo.
@@ -227,4 +230,4 @@ Ele existe para **nunca deixar passar nada acima do teto**, não para dar volume
 | Duplo clique no pan | Centro |
 | Botão direito (ou toque longo no celular) num efeito ou num envio | Menu do item |
 | `Shift+K` | Liga e desliga o modo `Aprender MIDI` (fader, pan e envios ganham contorno; ver [06f](06f-midi-learn.md)) |
-| Botão direito do mouse no fader ou no pan | Menu do controle: `Aprender MIDI`, `Remover mapeamento (...)`, `Mapeamentos MIDI…` |
+| Botão direito do mouse no fader ou no pan | Menu do controle: `Aprender MIDI`, `Remover mapeamento (...)`, `Modular…`, `Mapeamentos MIDI…` |

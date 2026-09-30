@@ -1,11 +1,11 @@
 # Configurações, atalhos e Android
 
-> Tudo o que se ajusta uma vez e se esquece: a janela `Configurações` (entrada de áudio, contagem, latência), a lista completa de atalhos de teclado, as permissões de microfone e MIDI, e o que muda entre usar o jopendaw no navegador ou no app Android.
+> Tudo o que se ajusta uma vez e se esquece: a janela `Configurações` (entrada de áudio, contagem, latência), a lista completa de atalhos de teclado (e como personalizá-los), as permissões de microfone e MIDI, e o que muda entre usar o jopendaw no navegador ou no app Android.
 
 ## Onde fica
 
 - **Configurações:** botão de engrenagem na barra de transporte (tooltip `Configurações: entrada de áudio, latência e contagem`), ou a seta ao lado do botão de gravar (`Opções de gravação`) e o item `Configurações de gravação…`.
-- **Atalhos:** botão de teclado com o símbolo de comando na barra de transporte (tooltip `Atalhos do teclado (?)`), ou a tecla `?` com o estúdio em foco.
+- **Atalhos:** botão de teclado com o símbolo de comando na barra de transporte (tooltip `Atalhos do teclado (?)`), ou a tecla `?` com o estúdio em foco. Para **personalizar**, o botão `Personalizar` no rodapé dessa janela (só na web e no computador; no app Android ele não aparece). Passo a passo em [Personalizar os atalhos](#personalizar-os-atalhos).
 - **Permissões:** aparecem sozinhas na primeira vez que o app precisa do microfone ou do MIDI (ver abaixo).
 - **Barra de transporte:** no computador fica no topo do projeto; no celular, embaixo ([capítulo 00](00-visao-geral.md)).
 
@@ -43,134 +43,332 @@ A contagem e a latência valem para **este projeto** (ficam no documento do proj
 
 ### Janela `Atalhos do teclado`
 
-Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fechar`. Os títulos dos grupos aparecem em maiúsculas. Nesta tabela `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). A tabela abaixo foi conferida contra `app/lib/daw/shortcuts_dialog.dart` e `app/lib/screens/project_screen.dart` na versão `15670b7`; a janela tem 8 grupos.
+Abre com a tecla `?` (ou `Shift+/`, que o teclado digita como `?`) ou com o botão da barra. **A lista é gerada do catálogo de ações** (`app/lib/daw/keymap.dart`) e das teclas de agora: se você personalizar um atalho, a janela já mostra o novo (fase 16). O rodapé tem `Personalizar` (só na web e no computador; ver [Personalizar os atalhos](#personalizar-os-atalhos)) e `Fechar`. Os títulos dos grupos aparecem em maiúsculas. Cada linha mostra as teclas (várias separadas por `·`; ação sem tecla mostra `—`) e o texto da ação; com a tela abaixo de 520 px de largura as teclas ficam em cima do texto.
+
+São 8 grupos, nesta ordem: `Transporte`, `Marcadores e loop`, `Visão`, `Edição`, `Painéis`, `Aprender MIDI`, `Teclado do computador (Ctrl+K liga)` (o título escreve as teclas de agora do `Teclado do computador liga/desliga`; no Mac, `⌘+K liga`) e `Piano roll`. Depois vem o grupo `Suspensos enquanto o teclado do computador está ligado`. Antes da fase 16 o grupo `Aprender MIDI` vinha entre `Edição` e `Painéis`.
+
+Nesta página `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). As tabelas abaixo foram conferidas contra `app/lib/daw/keymap.dart` (o catálogo, com as **54 ações** e as teclas padrão), `shortcuts_dialog.dart` e `project_screen.dart` na versão `53ca96d` `(testado só por testes automáticos: a janela nova, gerada do catálogo, não foi vista no navegador)`. Cada tabela é um grupo da janela: **Ação** é o rótulo do catálogo, **Contexto** diz onde a ação vale (ver [Contextos e camadas](#contextos-e-camadas)), **Texto na janela** só aparece quando a janela escreve algo mais longo que o rótulo, e **Id** é o nome estável da ação no arquivo `.jokeys` ([Formato do arquivo](#exportar-e-importar-o-arquivo-jokeys)).
 
 **Transporte**
 
-| Tecla | Ação |
-|---|---|
-| `Espaço` | Tocar / pausar |
-| `Enter` · `Home` | Parar e voltar ao começo (ou ao início do loop) |
-| `R` | Gravar (com faixas armadas) |
-| `L` | Loop liga/desliga (arraste na régua para marcar a região) |
-| `C` | Metrônomo |
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Tocar / pausar | Geral | `Espaço` | | `transport.play` |
+| Parar | Geral | `Enter` · `Home` | Parar e voltar ao começo (ou ao início do loop) | `transport.stop` |
+| Gravar | Geral | `R` | Gravar (com faixas armadas) | `transport.record` |
+| Loop liga/desliga | Geral | `L` | Loop liga/desliga (arraste na régua para marcar a região) | `transport.loop` |
+| Metrônomo | Geral | `C` | | `transport.metronome` |
 
 **Marcadores e loop**
 
-| Tecla | Ação |
-|---|---|
-| `M` | Marcador no cursor (`Shift+M`: pede o nome) |
-| `[` / `]` | Cursor no marcador anterior / seguinte |
-| `Shift+L` | Loop no clipe selecionado (ou na seção do cursor) |
-| Arrastar · duplo clique | Move (com encaixe) · renomeia o marcador na régua |
-| Botão direito | Menu do marcador: cor, loop da seção, apagar |
-| Menu `Seções` | Lista de marcadores, loop entre marcadores e da seção |
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Marcador no cursor | Geral | `M` | | `marker.add` |
+| Marcador no cursor, pedindo o nome | Geral | `Shift+M` | | `marker.rename` |
+| Cursor no marcador anterior | Geral | `[` | | `marker.prev` |
+| Cursor no marcador seguinte | Geral | `]` | | `marker.next` |
+| Loop no clipe selecionado | Arranjo | `Shift+L` | Loop no clipe selecionado (ou na seção do cursor) | `loop.clip` |
 
 **Visão**
 
-| Tecla | Ação |
-|---|---|
-| `Z` | Enquadrar o projeto inteiro |
-| `Shift+Z` | Enquadrar o clipe selecionado |
-| Menu `Visão` | Altura das faixas (pequena, média, grande), seguir o cursor, régua em mm:ss |
-| Clique em `comp.` / `mm:ss` | Alterna a régua entre compassos e tempo |
-| `Visão geral` (embaixo) | Clique ou arraste para rolar o projeto |
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Enquadrar o projeto inteiro | Geral | `Z` | | `view.fitAll` |
+| Enquadrar o clipe selecionado | Arranjo | `Shift+Z` | | `view.fitClip` |
+| Aproximar | Geral | `+` · `=` | | `view.zoomIn` |
+| Afastar | Geral | `−` | | `view.zoomOut` |
+| Seguir o cursor | Geral | (sem atalho: a janela mostra `—`) | | `view.follow` |
+
+O `+` e o `−` andam em passos de 1,25 vez (aproximar) e 0,8 (afastar), ancorados no cursor. O `−` da tabela é a tecla de menos; o `+` também vale com `Shift+=` e o teclado numérico tem o seu `+` e `−` (mesmas ações).
 
 **Edição**
 
-| Tecla | Ação |
-|---|---|
-| `Ctrl+Z` | Desfazer |
-| `Ctrl+Shift+Z` ou `Ctrl+Y` | Refazer |
-| `Ctrl+D` | Duplicar o clipe |
-| `S` | Cortar no cursor |
-| `Delete` · `Backspace` | Apagar o clipe |
-| `Ctrl+I` | Importar áudio (a janela de atalhos diz só isso, mas o atalho abre o mesmo seletor do botão, que também aceita arquivos MIDI `.mid` e `.midi`) |
-| `+` (ou `=`) / `−` | Aproximar / afastar (passos de 1,25 vez, ancorados no cursor). O `+` também vale com `Shift+=` e no teclado numérico. A janela de atalhos mostra `+  (ou  =)  /  −` |
-| `Ctrl` + roda | Zoom no ponto do mouse |
-| `Shift` + roda | Rolar na horizontal |
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Desfazer | Geral | `Ctrl+Z` | | `edit.undo` |
+| Refazer | Geral | `Ctrl+Shift+Z` · `Ctrl+Y` | | `edit.redo` |
+| Duplicar o clipe | Arranjo | `Ctrl+D` | | `edit.duplicate` |
+| Cortar no cursor | Arranjo | `S` | | `edit.split` |
+| Apagar o clipe | Arranjo | `Delete` · `Backspace` | | `edit.delete` |
+| Importar áudio ou MIDI | Geral | `Ctrl+I` | | `edit.import` |
 
-**Aprender MIDI**
-
-Grupo novo da janela, entre `Edição` e `Painéis`. Capítulo próprio: [06f MIDI learn](06f-midi-learn.md).
-
-| Tecla | Ação |
-|---|---|
-| `Shift+K` | Liga o modo: os controles ganham contorno; clique num e mexa no botão do teclado |
-| Botão direito · toque longo | Menu do controle: aprender ou remover o mapeamento |
-| `Esc` | Cancela o controle armado; de novo, sai do modo |
+`Importar áudio ou MIDI` abre o mesmo seletor do botão da barra (que aceita áudio e arquivos MIDI `.mid` e `.midi`).
 
 **Painéis**
 
-| Tecla | Ação |
-|---|---|
-| `X` | Mixer |
-| `E` | Editor de notas (piano roll) |
-| `I` | Instrumento da faixa |
-| `F` | Efeitos da faixa |
-| `Esc` | Fechar o painel |
-| `?` | Esta janela |
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Mixer | Geral | `X` | | `panel.mixer` |
+| Editor de notas (piano roll) | Geral | `E` | | `panel.editor` |
+| Instrumento da faixa | Geral | `I` | | `panel.instrument` |
+| Efeitos da faixa | Geral | `F` | | `panel.effects` |
+| Fechar o painel | Geral | `Esc` (fixa: não muda) | | `panel.close` |
+| Janela de atalhos | Geral | `?` | Esta janela | `help.shortcuts` |
+
+**Aprender MIDI**
+
+Capítulo próprio: [06f MIDI learn](06f-midi-learn.md).
+
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Cancelar o controle armado | Geral | `Esc` (fixa: não muda) | Cancela o controle armado; de novo, sai do modo | `midilearn.cancel` |
+| Aprender MIDI liga/desliga | Geral | `Shift+K` | Liga o modo: os controles ganham contorno; clique num e mexa no botão do teclado | `midilearn.toggle` |
 
 **Teclado do computador (`Ctrl+K` liga)**
 
-O título do grupo escreve o modificador do sistema (`⌘+K liga` no Mac).
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Teclado do computador liga/desliga | Geral | `Ctrl+K` | | `kbd.toggle` |
+| Oitava abaixo | Teclado tocando | `Z` | Oitava abaixo (só da faixa que está tocando: a bateria começa no C2) | `kbd.octaveDown` |
+| Oitava acima | Teclado tocando | `X` | | `kbd.octaveUp` |
+| Velocidade menor | Teclado tocando | `C` | | `kbd.velocityDown` |
+| Velocidade maior | Teclado tocando | `V` | | `kbd.velocityUp` |
 
-| Tecla | Ação |
-|---|---|
-| `A W S E D F T G Y H U J K O L P` | Notas: do dó até o ré# da oitava de cima |
-| `Z` / `X` | Oitava abaixo / acima (só da faixa que está tocando: a bateria começa no C2) |
-| `C` / `V` | Velocidade menor / maior |
-
-**Suspensos enquanto o teclado do computador está ligado**
-
-Grupo novo: lista os atalhos de letra que deixam de agir (a letra vira nota, oitava ou velocidade) até o teclado ser desligado. Vem do valor `suspendedShortcuts` do código, e um teste confere que cada letra listada é mesmo uma tecla do teclado musical.
-
-| Tecla | Ação suspensa (e no que a tecla se transforma) |
-|---|---|
-| `C` | Metrônomo (vira velocidade menor) |
-| `L` | Loop liga/desliga (vira nota) |
-| `S` | Cortar no cursor (vira nota) |
-| `X` | Mixer (vira oitava acima) |
-| `Z` · `Shift+Z` | Enquadrar projeto / clipe (vira oitava abaixo) |
-| `E` | Editor de notas (vira nota) |
-| `F` | Efeitos da faixa (vira nota) |
-| `K` · `J` | Dividir / unir notas no piano roll (viram nota) |
-| `Shift+H` · `Shift+L` | Humanizar e legato no piano roll; `Shift+L` também faz o loop no clipe (viram nota) |
-| `Shift+K` | Aprender MIDI liga/desliga (vira nota) |
-| Com `Ctrl` (`⌘`) | Os atalhos com `Ctrl` continuam valendo (desfazer, duplicar, importar; `Ctrl+K` desliga o teclado) |
+As 16 teclas de nota (`A W S E D F T G Y H U J K O L P`, do dó até o ré# da oitava de cima) **não fazem parte do catálogo e não se personalizam**: a janela as lista numa linha à parte (ver "Linhas de mouse e menu" abaixo). As quatro ações do contexto `Teclado tocando` são presas à **posição física** da tecla, como as notas.
 
 **Piano roll**
 
+Valem com o editor ativo (ver as regras de prioridade abaixo).
+
+| Ação | Contexto | Teclas padrão | Texto na janela | Id |
+|---|---|---|---|---|
+| Selecionar tudo | Piano roll | `Ctrl+A` | | `pr.selectAll` |
+| Copiar | Piano roll | `Ctrl+C` | | `pr.copy` |
+| Recortar | Piano roll | `Ctrl+X` | | `pr.cut` |
+| Colar no cursor | Piano roll | `Ctrl+V` | | `pr.paste` |
+| Duplicar as notas | Piano roll | `Ctrl+D` | | `pr.duplicate` |
+| Apagar as notas | Piano roll | `Delete` · `Backspace` | | `pr.delete` |
+| Limpar a seleção | Piano roll | `Esc` (fixa: não muda) | | `pr.deselect` |
+| Quantizar | Piano roll | `Q` | | `pr.quantize` |
+| Dividir as notas no cursor | Piano roll | `K` | Dividir as notas no cursor (a seleção, ou todas) | `pr.split` |
+| Unir notas iguais adjacentes | Piano roll | `J` | | `pr.join` |
+| Humanizar | Piano roll | `Shift+H` | Humanizar com os últimos ajustes | `pr.humanize` |
+| Legato | Piano roll | `Shift+L` | Legato: cada nota vai até a próxima | `pr.legato` |
+| Transpor um semitom acima | Piano roll | `↑` | | `pr.up` |
+| Transpor um semitom abaixo | Piano roll | `↓` | | `pr.down` |
+| Transpor uma oitava acima | Piano roll | `Shift+↑` | | `pr.octaveUp` |
+| Transpor uma oitava abaixo | Piano roll | `Shift+↓` | | `pr.octaveDown` |
+| Mover para a esquerda (grade) | Piano roll | `←` | | `pr.left` |
+| Mover para a direita (grade) | Piano roll | `→` | | `pr.right` |
+| Mover um compasso para a esquerda | Piano roll | `Shift+←` | | `pr.barLeft` |
+| Mover um compasso para a direita | Piano roll | `Shift+→` | | `pr.barRight` |
+
+As setas só agem com notas selecionadas; na bateria as linhas são peças, então a oitava anda uma linha, como o semitom. Os detalhes de cada ação estão em [05 Piano roll](05-piano-roll.md) e [05b Ferramentas MIDI](05b-ferramentas-midi.md).
+
+**Linhas de mouse e menu (fixas, não são do catálogo)**
+
+A janela acrescenta ao fim de alguns grupos estas linhas, que descrevem gestos e menus e **não se personalizam**:
+
+| Grupo | Linha (teclas) | Texto |
+|---|---|---|
+| `Marcadores e loop` | Arrastar · duplo clique | Move (com encaixe) · renomeia o marcador na régua |
+| `Marcadores e loop` | Botão direito | Menu do marcador: cor, loop da seção, apagar |
+| `Marcadores e loop` | Menu `Seções` | Lista de marcadores, loop entre marcadores e da seção |
+| `Visão` | Menu `Visão` | Altura das faixas (pequena, média, grande), seguir o cursor, régua em mm:ss |
+| `Visão` | Clique em `comp.` / `mm:ss` | Alterna a régua entre compassos e tempo |
+| `Visão` | `Visão geral` (embaixo) | Clique ou arraste para rolar o projeto |
+| `Edição` | `Ctrl + roda` | Zoom no ponto do mouse |
+| `Edição` | `Shift + roda` | Rolar na horizontal |
+| `Aprender MIDI` | Botão direito · toque longo | Menu do controle: aprender ou remover o mapeamento |
+| `Teclado do computador` | `A W S E D F T G Y H U J K O L P` | Notas: do dó até o ré# da oitava de cima |
+| `Piano roll` | Clique no vazio | Nova nota (arraste para a duração) |
+| `Piano roll` | `Alt` ao arrastar | Sem grade; no começo do arraste, duplica |
+| `Piano roll` | Menu `Ferramentas` | Escala, acordes, arpejador, rampa de velocidade, inverter, escalar o tempo, fantasmas |
+
+**Suspensos enquanto o teclado do computador está ligado**
+
+Este grupo é **calculado** a cada abertura (`suspendedShortcutsOf` em `shortcuts_dialog.dart`) a partir das teclas de agora: entra cada ação do estúdio ou do piano roll que tenha uma tecla **sem `Ctrl`/`⌘` nem `Alt`** que seja letra de nota (`A W S E D F T G Y H U J K O L P`) ou tecla do teclado tocando (as de oitava e velocidade). Se você tirar `Mixer` do `X`, ele sai da lista; se puser `Gravar` no `Y`, ele entra. Com os padrões são estas 14 linhas (o texto é o rótulo da ação e o que a tecla vira):
+
+| Tecla | Ação suspensa (e no que a tecla se transforma) |
+|---|---|
+| `L` | Loop liga/desliga (vira nota) |
+| `C` | Metrônomo (vira velocidade menor) |
+| `Shift+L` | Loop no clipe selecionado (vira nota) |
+| `Z` | Enquadrar o projeto inteiro (vira oitava abaixo) |
+| `Shift+Z` | Enquadrar o clipe selecionado (vira oitava abaixo) |
+| `S` | Cortar no cursor (vira nota) |
+| `X` | Mixer (vira oitava acima) |
+| `E` | Editor de notas (piano roll) (vira nota) |
+| `F` | Efeitos da faixa (vira nota) |
+| `Shift+K` | Aprender MIDI liga/desliga (vira nota) |
+| `K` | Dividir as notas no cursor (vira nota) |
+| `J` | Unir notas iguais adjacentes (vira nota) |
+| `Shift+H` | Humanizar (vira nota) |
+| `Shift+L` | Legato (vira nota) |
+
+A última linha do grupo é `Com Ctrl` (`Com ⌘` no Mac): `Os atalhos com Ctrl continuam valendo (desfazer, duplicar, importar, Ctrl+K desliga o teclado)`, e o `Ctrl+K` que ela escreve é a tecla de agora do `Teclado do computador liga/desliga`. O teclado tocando ignora o `Shift`: `Shift+L` também é a letra `L`, então com o teclado ligado ele toca nota em vez de fazer o loop do clipe.
+
+**O que a janela não escreve, mas o código aceita**
+
 | Tecla | Ação |
 |---|---|
-| Clique no vazio | Nova nota (arraste para a duração) |
-| `Alt` ao arrastar | Sem grade; no começo do arraste, duplica |
-| `Ctrl+A` · `Ctrl+C`/`X`/`V` · `Ctrl+D` | Tudo · copiar/recortar/colar no cursor · duplicar |
-| `↑` `↓` (`Shift`: oitava) | Transpor |
-| `←` `→` (`Shift`: compasso) | Mover pela grade |
-| `Q` | Quantizar |
-| `K` | Dividir as notas no cursor (a seleção, ou todas) |
-| `J` | Unir notas iguais adjacentes |
-| `Shift+H` | Humanizar com os últimos ajustes |
-| `Shift+L` | Legato: cada nota vai até a próxima |
-| Menu `Ferramentas` | Escala, acordes, arpejador, rampa de velocidade, inverter, escalar o tempo, fantasmas |
-
-**O que a janela ainda não lista, mas o código aceita**
-
-| Tecla | Ação |
-|---|---|
-| `+` e `−` do teclado numérico | Aproximar / afastar (o `+` e o `−` do teclado principal estão na janela) |
-| `+` do teclado principal (`Shift` + `=`) | A janela escreve `+  (ou  =)  /  −`. O código aceita a tecla `=`, a tecla `+`, o `+` do teclado numérico e qualquer tecla que digite o caractere `+` (o `Shift` + `=` de um teclado em que ele digita `+`), e, para afastar, a tecla `-`, o `−` do teclado numérico e qualquer tecla que digite `-`. `(lido do código; não testado com outros layouts de teclado)` |
-| `Ctrl+K` | Liga/desliga o teclado do computador (aparece só no título do grupo e nos tooltips) |
+| `+` e `−` do teclado numérico | Aproximar / afastar (mesmas ações de `+` e `−` do teclado principal) |
+| `Shift` + `=` (ou qualquer tecla que digite o caractere `+`) | Aproximar: o app trata o caractere digitado `+` como a tecla `+`. Do mesmo modo, qualquer tecla que digite `-` afasta. `(lido do código; não testado com outros layouts de teclado)` |
+| `Shift` ou `Alt` a mais | Se nenhuma combinação exata casa, o `Shift` e o `Alt` que sobraram não contam: `Shift+R` também grava, como sempre foi. Exceção: `Q`, `K` e `J` do piano roll não valem com `Shift` (com `Shift+K` o piano roll não age e a tecla cai no `Aprender MIDI`, do arranjo). E `Espaço`, `Enter`, `Home`, `Delete`, `Backspace`, `Esc`, `=`, `+`, `-` e `?` valem também com `Ctrl`/`⌘` a mais. Uma combinação exata de outra ação sempre vence |
 
 **Regras de prioridade (quando duas coisas usam a mesma tecla)**
 
 - As teclas só valem com o foco no estúdio e **não** valem enquanto você digita num campo de texto.
-- Com o **teclado do computador ligado**, as letras dele (`A W S E D F T G Y H U J K O L P`, mais `Z`, `X`, `C`, `V`) viram nota, oitava e velocidade e passam à frente dos outros atalhos; a lista exata do que fica suspenso é o grupo acima (`C`, `L`, `S`, `X`, `Z`, `E`, `F`, e no piano roll `K`, `J` e `Shift+H`/`Shift+L`). `R`, `I`, `M`, `Espaço`, `Enter`, `Home`, `Esc` e todos os atalhos com `Ctrl`/`⌘` continuam funcionando. Com `Ctrl`, `⌘` ou `Alt` apertados a letra deixa de ser nota. Na barra, o botão do teclado avisa o estado: fica com o rótulo `C4 · sem atalhos` (a oitava e o aviso) e o tooltip lista os atalhos suspensos.
+- Com o **teclado do computador ligado**, as letras dele (`A W S E D F T G Y H U J K O L P`, mais `Z`, `X`, `C`, `V` nos atalhos padrão) viram nota, oitava e velocidade e passam à frente dos outros atalhos; a lista exata do que fica suspenso é o grupo acima (com os padrões: `C`, `L`, `S`, `X`, `Z`, `E`, `F`, e no piano roll `K`, `J` e `Shift+H`/`Shift+L`; se você personalizou, a lista muda junto). `R`, `I`, `M`, `Espaço`, `Enter`, `Home`, `Esc` e todos os atalhos com `Ctrl`/`⌘` continuam funcionando. Com `Ctrl`, `⌘` ou `Alt` apertados a letra deixa de ser nota. Na barra, o botão do teclado avisa o estado: fica com o rótulo `C4 · sem atalhos` (a oitava e o aviso) e o tooltip lista os atalhos suspensos **de fábrica** (`C L S X Z E F K J e Shift+H/K/L`): esse texto é fixo e não acompanha a personalização; a lista fiel é o grupo `Suspensos enquanto o teclado do computador está ligado` da janela `?`.
 - **A oitava do teclado é uma por tipo de faixa.** O botão mostra a oitava da faixa que ele toca (a selecionada, ou a primeira faixa de instrumento armada). Cada tipo (áudio, sintetizador, bateria, sampler, FM, wavetable) guarda a sua; todas partem de `C4` (a tecla `A` é o dó central, nota 60), menos a bateria, que parte de `C2` (a tecla `A` toca a nota 36, o `Bumbo`, porque a bateria só responde às notas 35 a 59). Mudar a oitava numa bateria não muda a do sintetizador, e vice-versa; ao trocar de faixa o botão passa a mostrar a oitava do tipo novo. A oitava vai de 0 a 8 e não é gravada no projeto (volta ao padrão ao reabrir o projeto).
 - Os atalhos do **piano roll** só respondem depois que você clica dentro do editor (ele precisa ser o último lugar clicado); senão `Delete` e `Ctrl+D` continuam sendo do arranjo. `Shift+L` fora do editor faz o loop do clipe/seção; dentro dele, `Legato`.
 - **Gravando**, `Ctrl+Z`, `Ctrl+Y` e `Ctrl+I` são engolidos (não fazem nada) para não apagar ou deslocar a faixa que está recebendo o áudio. `Ctrl+R` fica para o navegador.
 - **Tooltips e menus usam o símbolo do sistema.** Os textos `Desfazer (Ctrl+Z)`, `Refazer (Ctrl+Shift+Z)`, `Duplicar (Ctrl+D)`, `Importar áudio ou MIDI (Ctrl+I)`, o tooltip do teclado (`Ctrl+K`), o atalho do item `Duplicar` do menu do clipe e a ajuda do piano roll passam por `withMod` (`app/lib/widgets/format.dart`): no Mac e no iOS o `Ctrl` vira `⌘` (`⌘+Z`), nos outros continua `Ctrl`.
+- **Tooltips e dicas não acompanham a personalização.** Só a janela `?` (e a tela `Personalizar`) leem as teclas de agora. Os tooltips da barra e dos painéis (`Loop (L)`, `Metrônomo (C)`, `Cortar no cursor (S)`, `Mixer (X)`, `Fechar o painel (Esc)`, `Parar e voltar (Enter)`…), os itens de menu com dica (`Loop no clipe selecionado (Shift+L)`, `Enquadrar a seleção (Shift+Z)`, `Humanizar…`/`Legato` no menu `Ferramentas`) e o resumo `?` do piano roll trazem o atalho **padrão** escrito no texto: se você trocou a tecla, o texto continua mostrando a antiga. `(lido do código: nenhum desses textos consulta o catálogo)`
+
+### Contextos e camadas
+
+Cada ação do catálogo tem um **contexto**, que diz em que camada de teclas ela vale:
+
+| Contexto | Onde vale | Camada | Ações |
+|---|---|---|---|
+| `Geral` | Em toda a tela do projeto | Camada do estúdio | 25 |
+| `Arranjo` | Em toda a tela do projeto, mas a ação é sobre clipes (duplicar, cortar, apagar, loop e enquadrar o clipe) | A mesma camada do `Geral`: `Geral` e `Arranjo` **conflitam entre si** | 5 |
+| `Piano roll` | Só com o editor ativo (o último lugar clicado) e sem digitar num campo | Camada própria, que vem **antes** da do estúdio | 20 |
+| `Teclado tocando` | Só com o teclado do computador ligado; a tecla vale pela posição física | Camada própria, que vem antes de tudo | 4 |
+
+O tratamento de uma tecla segue esta ordem: (1) teclado tocando, se ligado; (2) editor de notas, se ativo; (3) atalhos do estúdio. Por isso o mesmo `Ctrl+D` pode ser `Duplicar o clipe` (`Arranjo`) e `Duplicar as notas` (`Piano roll`): as camadas são separadas e **não há conflito** entre elas; o que decide é onde foi o último clique. Se o piano roll não usa a tecla naquele momento (setas sem nota selecionada, por exemplo), ela segue para a camada do estúdio.
+
+### Personalizar os atalhos
+
+Cada ação tem até 3 atalhos, e você pode trocar, acrescentar, tirar, restaurar, exportar e importar. Vale para a web e o computador; no app Android o botão não existe (ver [Web e Android](#web-e-android)). Não há personalização por projeto: os atalhos são do aparelho.
+
+**Onde fica.** Abra a janela `Atalhos do teclado` (`?` ou o botão da barra) e toque em `Personalizar` no rodapé. A janela passa a se chamar `Personalizar atalhos` e o botão vira `Voltar à lista`; `Fechar` continua ao lado. As personalizações valem na hora e ficam guardadas sem apertar nada.
+
+**A tela.** De cima para baixo:
+
+| Elemento (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Texto de ajuda: `Clique num atalho para regravar. Esc cancela; Backspace ou Delete remove. Cada ação aceita até 3 atalhos.` | Resume os gestos | Fixo | |
+| Aviso vermelho (`InlineNotice`) | Mostra o problema de guardado, se houver: `Não deu para ler seus atalhos guardados neste aparelho. O que você mudar agora vale só até fechar o app.`, `Seus atalhos foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você mudar vale só até fechar o app.`, `O arquivo dos seus atalhos estava ilegível. Guardei uma cópia dele (keymap.bak) e voltei aos atalhos padrão.`, `O arquivo dos seus atalhos está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você mudar vale só até fechar o app.` ou, se a gravação falhar, `Não deu para guardar seus atalhos neste aparelho. Eles valem só até fechar o app.` | Só aparece quando há problema | Veja [Armazenamento](#armazenamento-e-alcance) |
+| Aviso do resultado de exportar ou importar | Mostra o que aconteceu (textos em [Exportar e importar](#exportar-e-importar-o-arquivo-jokeys)) | Com botão para dispensar; vermelho quando é erro | |
+| Campo `Buscar ação ou tecla` (lupa) | Filtra a lista enquanto você digita; botão `Limpar a busca` (tooltip) aparece com texto | Ignora maiúsculas e acentos; várias palavras: a ação tem de casar com todas | Casa o rótulo, o título do grupo, o contexto e as teclas de agora (`ctrl`, `piano`, `arranjo`, `mixer`…) |
+| `Restaurar tudo` | Descarta todas as personalizações (pede confirmação) | Desligado (cinza) enquanto nada foi personalizado | |
+| `Exportar atalhos…` | Salva um arquivo `atalhos.jokeys` | Sempre ligado | |
+| `Importar atalhos…` | Lê um `.jokeys` e **substitui** as personalizações de agora | Sempre ligado | |
+| Título de grupo (`TRANSPORTE`, `MARCADORES E LOOP`…) | Agrupa as ações na ordem do catálogo | Só aparece o grupo que tem ação encontrada | |
+| Rótulo da ação, com o contexto embaixo em cinza (`Geral`, `Arranjo`, `Piano roll`, `Teclado tocando`) | Nome da ação | | |
+| "Chip" de atalho (a tecla, por exemplo `Ctrl+Z`) | Toque para **regravar** esse atalho | Cada atalho da ação é um chip; com a tela abaixo de 460 px de largura os chips ficam embaixo do nome | Ação sem tecla mostra o chip `Sem atalho` (em itálico), que também é clicável |
+| `+` ao lado dos chips (tooltip `Adicionar outro atalho`) | Acrescenta um atalho à ação | Só aparece com pelo menos 1 e menos de 3 atalhos | |
+| Cadeado (tooltip `Tecla fixa: não pode ser mudada`) | Marca as ações fixas: `Fechar o painel`, `Cancelar o controle armado` e `Limpar a seleção` (as três são `Esc`) | Os chips delas não são clicáveis | |
+| Botão de seta circular (tooltip `Restaurar o padrão desta ação`) | Volta só aquela ação aos atalhos padrão | Só aparece nas ações personalizadas; sem confirmação | |
+
+**Passo a passo**
+
+*Trocar uma tecla*
+
+1. Em `Personalizar`, ache a ação (role, ou digite no campo `Buscar ação ou tecla`, por exemplo `mixer`).
+2. Toque no chip da tecla: o texto dele vira `Pressione a nova combinação…` e ele ganha o destaque na cor do app (turquesa).
+3. Aperte a nova combinação (tecla com `Ctrl`/`⌘`, `Shift` e `Alt` como quiser). Teclas de modificador sozinhas são ignoradas: a tela espera uma tecla de verdade.
+4. Se a combinação está livre, o chip mostra a nova tecla e o app guarda. Se não vale, aparece uma linha vermelha embaixo da ação com o motivo ([teclas reservadas](#teclas-reservadas)) e a tela continua esperando outra tecla. Se já é de outra ação, abre o aviso de conflito (abaixo).
+5. `Esc` cancela e deixa o atalho como estava.
+
+*Acrescentar um segundo ou terceiro atalho:* toque no `+` (tooltip `Adicionar outro atalho`) e aperte a combinação. Numa ação sem nenhum atalho, toque no chip `Sem atalho`.
+
+*Tirar um atalho:* toque no chip e aperte `Backspace` ou `Delete` (sem `Ctrl`, `Shift` nem `Alt`). A ação pode ficar sem atalho nenhum: fica `Sem atalho` (na janela `?` aparece `—`). Sobre um chip novo (o do `+`) essas teclas só cancelam.
+
+*Resolver um conflito:* se a combinação já pertence a outra ação da mesma camada, aparece uma caixa vermelha embaixo da ação: `<tecla> já é de "<outra ação>" (<contexto da outra>). Trocar? …` e o fim da frase depende do caso: `"<outra ação>" passa a usar <a tecla que este chip tinha>.` (a outra ação **recebe o atalho que você está substituindo**) ou, quando o chip era novo, `"<outra ação>" fica sem esse atalho.` Dois botões: `Trocar` aplica; `Cancelar` deixa tudo como estava (`Esc` também cancela). Enquanto a caixa está aberta as outras teclas são ignoradas.
+
+*Restaurar:* o botão de seta circular da ação (`Restaurar o padrão desta ação`) volta só aquela. Se o padrão dela foi tomado por outra ação, o padrão volta e **a outra perde essa tecla**. `Restaurar tudo` abre a confirmação `Restaurar todos os atalhos?` (`Todas as suas personalizações serão descartadas e os atalhos padrão voltam.`) com `Cancelar` e `Restaurar tudo`.
+
+*Buscar:* digite no campo. `Nenhuma ação encontrada para "<texto>".` aparece quando nada casa.
+
+*Levar para outro aparelho:* `Exportar atalhos…` num, `Importar atalhos…` no outro.
+
+**Regras**
+
+- **Até 3 atalhos por ação** (`maxBindingsPerAction`). Com 3, o `+` some; para trocar um deles, toque no chip.
+- **Regravar com a mesma tecla que a ação já tem** não muda nada (a tela só sai do modo de gravação).
+- **Ações fixas** (as três `Esc`) não mudam nem entram em conflito: `Esc` continua fechando o painel, cancelando o controle armado e limpando a seleção.
+- **Teclado tocando:** ali a tecla vale **pela posição** (como as notas) e vale **sozinha**, sem `Ctrl`, `Shift` nem `Alt`. As 16 teclas de nota não se personalizam e são recusadas.
+
+#### Teclas reservadas
+
+Estas combinações **não podem** ser atribuídas (`reservedReason`); a tela mostra o texto em vermelho e continua esperando. Vale o mesmo no arquivo importado (a combinação é descartada com aviso).
+
+| Combinação | Mensagem exata | Por quê |
+|---|---|---|
+| `Esc` | `Esc é reservado: cancela e fecha painéis.` | Tecla de cancelar do app |
+| `Tab` | `Tab é reservado para a navegação por foco.` | Foco |
+| `F5`, `F11`, `F12` (com qualquer modificador) | `<tecla> é do navegador (recarregar, tela cheia, ferramentas) e o app não consegue capturá-la.` | Navegador |
+| `Alt+F4` (com ou sem outras) | `Alt+F4 fecha a janela: o sistema não deixa o app usá-lo.` | Sistema |
+| `Ctrl`/`⌘` + `R`, `W`, `T`, `N` ou `Q` (com ou sem `Shift`; sem `Alt`) | `<combinação> é do navegador ou do sistema (recarregar, fechar, nova aba ou janela, sair) e o app não consegue capturá-la.` | Navegador e sistema |
+| `Ctrl`/`⌘` + `1` a `9` | `<combinação> troca de aba no navegador.` | Navegador |
+| No `Teclado tocando`: qualquer modificador | `No teclado tocando a tecla vale sozinha, sem Ctrl, Shift nem Alt.` | Posição física |
+| No `Teclado tocando`: tecla que não é letra nem dígito | `O teclado tocando só usa letras e dígitos.` (na tela, uma tecla que não tem posição de letra ou dígito mostra antes `Essa tecla não pode ser usada em atalhos. Tente outra.`) | |
+| No `Teclado tocando`: letra de nota | `<letra> já toca uma nota no teclado do computador.` | As 16 notas |
+
+Também é recusada, na tela, a tecla que o app não conhece: `Essa tecla não pode ser usada em atalhos. Tente outra.` As teclas conhecidas são letras `A` a `Z`, dígitos `0` a `9`, `Espaço`, `Enter`, `Home`, `End`, `PageUp`, `PageDown`, `Delete`, `Backspace`, `Esc`, `Tab`, as quatro setas, `F1` a `F12`, `[`, `]`, `=`, `-`, `+`, `?`, `/`, `,`, `.`, `;`, `'`, `\` e a crase (`` ` ``).
+
+`Ctrl`/`⌘`: as duas teclas valem como a mesma coisa, em qualquer sistema (`Mod` no arquivo).
+
+#### Exportar e importar o arquivo `.jokeys`
+
+- **`Exportar atalhos…`:** gera `atalhos.jokeys` (JSON em UTF-8, tipo `application/octet-stream`) só com o que **difere dos padrões**. Na web é um download direto do navegador (que não avisa se você o cancelar). Resultados: `Atalhos exportados em atalhos.jokeys.`; onde o sistema informa o cancelamento da janela de salvar, `Exportação cancelada: nada foi salvo.`; se falhar, `Não foi possível exportar: <motivo>`.
+- **`Importar atalhos…`:** abre o seletor de arquivos (título `Importar atalhos`; aceita `.jokeys` e `.json`). **Substitui todas as personalizações de agora** pelas do arquivo, sem pedir confirmação, e grava. Quem quiser voltar atrás precisa ter exportado antes (não há desfazer; `Restaurar tudo` volta aos padrões, não ao estado anterior). Resultados: `Atalhos importados de <arquivo>.` ou, quando algo foi ignorado, `Atalhos importados de <arquivo>, com avisos:` seguido de uma linha `•` por aviso.
+- **Formato:** um objeto com `format` = `jopendaw-keymap-file`, `version` = `1` e `bindings`, que mapeia o id da ação para a lista de teclas em texto (`Mod+Shift+Z`, `Space`, `[`…). Exemplo:
+
+```json
+{
+  "format": "jopendaw-keymap-file",
+  "version": 1,
+  "bindings": {
+    "panel.mixer": ["B"],
+    "edit.redo": ["Mod+Shift+Z"],
+    "view.follow": ["Shift+F"],
+    "transport.metronome": []
+  }
+}
+```
+
+Uma lista vazia (`"transport.metronome": []`) quer dizer "sem atalho". Ação que não aparece em `bindings` fica com os padrões. Modificadores: `Mod` (Ctrl ou ⌘), `Shift` e `Alt`, antes da tecla e com `+` entre eles; as teclas escritas como na lista acima (`Space`, `Enter`, `Up`, `Down`, `Left`, `Right`, `Escape`, `F1`…). Maiúsculas e minúsculas importam (`ctrl+z` e `z` são inválidos). Campo a campo e tratamento de erros: [dev/10 App Flutter](../dev/10-app-flutter.md#atalhos-personalizáveis-keymapdart-keymap_uidart).
+- **O que acontece com o que o arquivo traz de errado** (o resto é aproveitado, cada item vira uma linha `•` de aviso):
+
+| Problema no arquivo | O que o app faz | Aviso (exato) |
+|---|---|---|
+| Ação que este app não conhece (por exemplo, de uma versão mais nova) | Ignora a ação | `Ação desconhecida "<id>" ignorada.` |
+| Ação de tecla fixa (`Esc`) | Ignora | `"<ação>" tem tecla fixa e não muda; ignorada.` |
+| Valor que não é lista | Ignora aquela ação | `Os atalhos de "<ação>" não são uma lista; ignorados.` |
+| Tecla que não existe ou está mal escrita | Descarta a tecla | `Tecla inválida "<texto>" em "<ação>" descartada.` |
+| Tecla reservada | Descarta a tecla | `<tecla> em "<ação>" descartada: <mensagem da tabela de reservadas>` |
+| Mais de 3 teclas numa ação | Guarda as 3 primeiras, descarta o resto | `"<ação>" aceita até 3 atalhos; <tecla> descartado.` |
+| Mesma tecla repetida na lista da ação | Guarda uma vez | Sem aviso |
+| Tecla que outra ação importada (da mesma camada) já ficou | Vale a primeira do catálogo; a outra perde a tecla | `<tecla> já é de "<ação>"; descartada em "<outra>".` |
+| Tecla que é padrão de uma ação **não** citada no arquivo | O arquivo vence: a ação não citada perde a tecla padrão | `"<ação>" perdeu <tecla>, que agora é de "<outra>".` |
+
+**O arquivo inteiro é recusado** (nada muda; a mensagem vem depois de `Não foi possível importar: `) quando:
+
+| Situação | Mensagem |
+|---|---|
+| Mais de 256 KB | `O arquivo é grande demais para ser de atalhos.` |
+| Não é JSON (ou não é UTF-8) | `O arquivo não é de atalhos do jopendaw (não é um JSON válido).` |
+| `format` diferente de `jopendaw-keymap-file` | `O arquivo não é de atalhos do jopendaw.` |
+| `version` que não é inteiro `>= 1` | `O arquivo tem uma versão de formato inválida.` |
+| `version` maior que 1 | `Os atalhos são de uma versão mais nova do jopendaw. Atualize o app para importá-los.` |
+| `bindings` ausente ou não é objeto | `O arquivo não tem a lista de atalhos.` |
+
+#### Armazenamento e alcance
+
+- **Chave `keymap`** do guardado local do aparelho, um JSON só com o que difere dos padrões (`format` = `jopendaw-keymap`, `version` = 1, `bindings`). Na **web** é o IndexedDB do navegador (banco `jopendaw`, repositório `kv`), por site e perfil do navegador; no **Android**, o arquivo `keymap.txt` na pasta `jopendaw/` do app (o botão de personalizar não existe lá, então o arquivo só existiria se algo o gravasse); em **outros sistemas** nada é guardado e o que você mudar vale só até fechar o app. `(lido do código)`
+- **É do aparelho e do navegador**, não do projeto nem da conta: não sobe para a nuvem, não vai no arquivo `.jopendaw` nem na sincronização. Para levar para outro aparelho, use `Exportar atalhos…` e `Importar atalhos…`.
+- **Arquivo local ilegível:** o app guarda uma cópia (chave `keymap.bak`; no Android, o arquivo `keymap%2Ebak.txt`), volta aos atalhos padrão e avisa. Se já existia uma cópia diferente, a nova vai para `keymap.bak.<milissegundos>`. Nada no app lê a cópia de volta. **Arquivo de uma versão mais nova do app:** as personalizações legíveis entram, mas o guardado fica só para leitura (o que você mudar vale só até fechar o app). Se a leitura ou a gravação falha, o app segue com os atalhos na memória e mostra o aviso.
+- Ao abrir a tela do projeto o app carrega os atalhos guardados (antes disso valem os padrões, por instantes).
+
+#### O que não muda de tecla
+
+- As **16 teclas de nota** (`A W S E D F T G Y H U J K O L P`).
+- `Esc` (três ações fixas).
+- O que não é do catálogo: as teclas da **raia de automação** (`Delete`, `Ctrl+A`, `Esc` depois de clicar nela), as do editor de zonas do sampler, os gestos de mouse (`Alt` ao arrastar, `Shift` e `Ctrl` com a roda…) e os menus. `(lido do código: só essas 54 ações consultam o catálogo)`
+
+#### Web × Android
+
+| | Web e computador | App Android |
+|---|---|---|
+| Botão `Personalizar` | Aparece | **Não aparece**, mesmo com teclado físico ligado por Bluetooth ou USB (o app decide pela plataforma, não pela presença de teclado) |
+| Janela `?` | Lista gerada do catálogo | A mesma lista, só para leitura |
+| Guardado | IndexedDB do navegador | Arquivo `keymap.txt` (só leitura na prática) |
+
+No **navegador do celular** (web) o botão `Personalizar` aparece, embora sem teclado físico ele não sirva de muito.
 
 ### Permissões
 
@@ -211,7 +409,7 @@ O app é o mesmo; o motor de áudio e o acesso ao aparelho é que mudam.
 | Importar áudio ou MIDI (`.mid`) | Seletor de arquivos do navegador | Seletor de arquivos do Android |
 | Exportar notas em MIDI (`.mid`) | Download do navegador | Janela `Salvar <nome>` do Android (ou o compartilhar do sistema, se a janela não estiver disponível) |
 | Menu do botão direito | Usado pelo app nos clipes (o do navegador é desligado no projeto) | Não há botão direito; o toque longo faz o papel (não confirmado) |
-| Teclado | Todos os atalhos | Só com teclado físico (não confirmado) |
+| Teclado | Todos os atalhos, e o botão `Personalizar` na janela `?` | Só com teclado físico (não confirmado); a lista da janela `?` é só de leitura, sem o botão `Personalizar` (ver [Personalizar os atalhos](#personalizar-os-atalhos)) |
 | Instalar como app | Navegadores que oferecem instalar sites (o site tem manifesto `standalone` e abre a casca sem rede) | App do Android |
 | Exigências | Navegador atual, `https` para gravar | Android 8.0 (API 26) ou mais novo; ABIs `arm64-v8a`, `armeabi-v7a` e `x86_64` |
 | Ajustar áudio ao andamento (warp) | Progresso durante o processamento | Só avisa o fim (sem barra de progresso) |
@@ -289,12 +487,21 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 1. Aperte `?` ou o botão de atalhos da barra.
 2. Role a lista, e feche em `Fechar`.
 
+**Personalizar um atalho (só na web e no computador)**
+
+1. Aperte `?` e toque em `Personalizar`.
+2. Digite parte do nome da ação em `Buscar ação ou tecla` (por exemplo `metr`) e toque no chip da tecla dela (`C`).
+3. Quando o chip mostrar `Pressione a nova combinação…`, aperte a nova tecla (por exemplo `B`). Se a tecla for de outra ação, escolha `Trocar` ou `Cancelar`; se for reservada, a linha vermelha explica e você aperta outra.
+4. `Voltar à lista` mostra a janela `?` já com a tecla nova; `Fechar` sai. Para desfazer, o botão de seta circular da ação (`Restaurar o padrão desta ação`) ou `Restaurar tudo`.
+5. Para guardar uma cópia ou levar para outro aparelho: `Exportar atalhos…` (arquivo `atalhos.jokeys`) e, no outro, `Importar atalhos…`.
+
 ## Combina com
 
 - [00 Visão geral](00-visao-geral.md): onde fica cada botão citado aqui.
 - [03c Gravação](03c-gravacao.md): usar a entrada, a contagem e a latência numa tomada de verdade.
 - [02 Transporte](02-transporte.md): metrônomo, loop e o menu `Opções de gravação`.
-- [05 Piano roll](05-piano-roll.md) e [05b Ferramentas MIDI](05b-ferramentas-midi.md): os atalhos do grupo `Piano roll`.
+- [05 Piano roll](05-piano-roll.md) e [05b Ferramentas MIDI](05b-ferramentas-midi.md): os atalhos do grupo `Piano roll` (todos personalizáveis, menos o `Esc`).
+- [Atalhos e fluxo rápido](../guias/atalhos-e-fluxo-rapido.md): sequências de teclas prontas e, no fim, como adaptá-las depois de personalizar.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o que sobe e o que fica só no aparelho.
 - [08 Exportação](08-exportacao.md): salvar arquivos na web e no Android.
 - [06f MIDI learn](06f-midi-learn.md): o grupo `Aprender MIDI` da janela de atalhos e o `Shift+K`.
@@ -305,7 +512,13 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 - **A entrada de áudio é do aparelho; a latência e a contagem são do projeto.** Se você calibrar a latência num aparelho e abrir o projeto em outro, a versão da nuvem não troca o valor de cada aparelho, então calibre em cada um.
 - **A latência está limitada a −200 a 500 ms.** O valor é guardado no projeto e entra na sincronização, mas não no desfazer.
 - **Trocar a entrada no meio da gravação não é permitido:** o seletor fica desligado e o texto pede `Pare a gravação para trocar de entrada.`
-- **Um atalho que "não pega"** costuma ser: campo de texto com foco, teclado do computador ligado (as letras viram notas; o botão da barra mostra `C4 · sem atalhos` e a janela de atalhos tem um grupo que lista o que ficou suspenso), ou o piano roll sem ter sido o último lugar clicado.
+- **Um atalho que "não pega"** costuma ser: campo de texto com foco, teclado do computador ligado (as letras viram notas; o botão da barra mostra `C4 · sem atalhos` e a janela de atalhos tem um grupo que lista o que ficou suspenso), o piano roll sem ter sido o último lugar clicado, ou **você personalizou aquela ação** (abra `?`: a janela mostra a tecla de agora; o tooltip do botão ainda mostra a de fábrica).
+- **Personalizar não muda os tooltips.** `Loop (L)`, `Mixer (X)`, `Humanizar…` (`Shift+H`) e os outros textos com tecla escrita continuam com o padrão; a fonte confiável é a janela `?`.
+- **Importar substitui tudo, sem perguntar.** As personalizações de agora somem e entram as do arquivo; exporte antes se quiser guardar as atuais.
+- **Duas ações na mesma tecla só em camadas diferentes.** `Ctrl+D` duplica o clipe (`Arranjo`) e as notas (`Piano roll`); dentro de uma mesma camada a tela pede `Trocar` ou `Cancelar`. Já o `Teclado tocando` (oitava e velocidade) tem camada própria: nele a tecla pode ser a mesma de uma ação do estúdio (por exemplo `X` é `Mixer` e `Oitava acima`), e com o teclado ligado ganha a do teclado tocando, o que a janela `?` mostra no grupo `Suspensos…`.
+- **Teclas do navegador não dá para tomar.** `F5`, `F11`, `F12`, `Ctrl`+`R`/`W`/`T`/`N`/`Q`, `Ctrl`+`1` a `9` e `Alt+F4` são recusadas na tela; `Ctrl+D` (favoritos) e `Ctrl+B`, por exemplo, são aceitas mas o navegador pode reagir a elas antes do app `(não confirmado)`.
+- **Os atalhos são do aparelho e do navegador.** Trocar de navegador, de perfil ou limpar os dados do site volta aos padrões; exporte para não perder.
+- **Personalizar não existe no app Android**, mesmo com teclado físico.
 - **Ao sair do app no Android o transporte para sozinho, e ao desplugar o fone também.** Isto é intencional (ver "O aparelho no Android"); a tela fica acesa só enquanto toca ou grava. `(testado só por testes automáticos)`
 - **Sair do app no meio de uma gravação a encerra.** O que já foi gravado fica salvo, mas a gravação não continua em segundo plano (sem serviço em primeiro plano o Android poderia matar o processo).
 - **Se o som some e aparece o aviso `O motor de áudio parou de responder e o som ficou mudo...`,** o projeto está intacto: use o botão `Reiniciar o áudio` do aviso (ver o [capítulo 00](00-visao-geral.md)).
@@ -313,11 +526,11 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 
 ## Atalhos
 
-Os atalhos deste assunto:
+Os atalhos deste assunto (as teclas **padrão**; a janela `?` mostra as suas, se você personalizou; a lista completa está em [Janela `Atalhos do teclado`](#janela-atalhos-do-teclado)):
 
 | Tecla | Ação |
 |---|---|
-| `?` | Abrir a janela `Atalhos do teclado` |
+| `?` | Abrir a janela `Atalhos do teclado` (dentro dela, `Personalizar`) |
 | `Ctrl+K` (`⌘+K` no Mac) | Ligar/desligar o teclado do computador |
 | `Shift+K` | Ligar/desligar o modo `Aprender MIDI` (com o teclado do computador ligado vira nota e fica listado em `Suspensos enquanto o teclado do computador está ligado`) |
 | `R` | Gravar |
