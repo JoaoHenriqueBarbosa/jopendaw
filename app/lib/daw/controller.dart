@@ -199,7 +199,7 @@ MidiClip? splitMidiClip(MidiClip clip, double at) {
   // os eventos de controle se dividem junto: o pedal que estava embaixo no corte começa o clipe da
   // direita embaixo
   final (leftCc, rightCc) = splitControls(clip.controls, cut);
-  final r = MidiClip(id: newId(), name: clip.name, start: at, length: clip.length - cut, notes: right, controls: rightCc);
+  final r = MidiClip(id: newId(), name: clip.name, start: at, length: clip.length - cut, notes: right, controls: rightCc, swingHint: clip.swingHint);
   clip
     ..length = cut
     ..notes = left
@@ -2170,11 +2170,16 @@ class DawController extends ChangeNotifier {
   static const tapSlowBpm = 40.0;
   static const tapMinCommitTaps = 3;
 
+  /// Folga (ms) da espera além do maior intervalo que o tap aceita ([TapTempo.resetAfter]).
+  static const tapCommitSlack = 100;
+
   /// A espera até aplicar o andamento [bpm]: 1,3 intervalo, no mínimo [tapCommitDelay] e no máximo
-  /// [TapTempo.resetAfter]: além disso a batida seguinte recomeçaria a sequência de qualquer jeito,
-  /// então a espera não passa do limite em que ela ainda conta (o mais lento é [TapTempo.slowestBpm]).
+  /// [TapTempo.resetAfter] + [tapCommitSlack]. Ela é ESTRITAMENTE maior que o maior intervalo aceito:
+  /// com igual (24 BPM regulares: 2,5 s), a aplicação e a batida seguinte empatavam. Uma batida que
+  /// chega depois do limite e antes da espera acabar recomeça a sequência, mas antes aplica a que
+  /// estava pendente ([tapTempo]).
   static Duration tapCommitWait(double bpm) {
-    final ms = math.min(60000 / math.max(bpm, 1) * 1.3, TapTempo.resetAfter * 1000).round();
+    final ms = math.min(60000 / math.max(bpm, 1) * 1.3, TapTempo.resetAfter * 1000 + tapCommitSlack).round();
     return Duration(milliseconds: math.max(ms, tapCommitDelay.inMilliseconds));
   }
 
@@ -2187,6 +2192,9 @@ class DawController extends ChangeNotifier {
   double? tapTempo() {
     if (recording || _recBusy || _disposed) return null;
     final now = debugTapClock?.call() ?? _tapClock.elapsedMicroseconds / 1e6;
+    // a batida que recomeça a sequência não a joga fora: o que estava pendente é aplicado antes
+    final last = _tap.last;
+    if (last != null && now - last > TapTempo.resetAfter && _tap.bpm != null) commitTap();
     final v = _tap.tap(now);
     tapBpm.value = v;
     _tapTimer?.cancel();
@@ -2732,6 +2740,8 @@ class DawController extends ChangeNotifier {
   /// (metrônomo, contagem, latência, armar e monitorar) também. Devolve false se o usuário
   /// editou no meio do caminho: aí os dois lados mudaram e quem decide é a pessoa.
   Future<bool> _applyRemote(Map<String, dynamic> json, void Function(int done, int total) progress, bool Function() canSwap) async {
+    final newer = DawDoc.newerVersionMessage(json);
+    if (newer != null) throw SyncFailure(newer);
     final DawDoc next;
     try {
       next = DawDoc.fromJson(json);
@@ -5066,6 +5076,10 @@ class DawController extends ChangeNotifier {
     return math.max(0.0, e);
   }
 
+  /// Menos que isto entre começar e parar, sem chegar áudio suficiente (50 ms): um toque duplo no gravar,
+  /// não uma gravação.
+  static const shortRecording = Duration(milliseconds: 300);
+
   Future<void> _finishRecording() async {
     final r = _rec;
     if (r == null || !recording || _recBusy) return;
@@ -5233,7 +5247,11 @@ class DawController extends ChangeNotifier {
     final (notes, wrapped) = _recordedNotes(r, notesData);
     final ccs = _recordedControls(r, notesData, wrapped);
     if (plans.isEmpty && notes.isEmpty && ccs.isEmpty) {
-      if (r.punch != null && (r.frames > 0 || r.midiIds.isNotEmpty)) {
+      if ((r.elapsed ?? r.clock.elapsed) < shortRecording && r.frames - r.skip < r.rate * 0.05) {
+        // apertou gravar e parou na hora, já no ponto de gravar (sem contagem nem pré-roll): não é falha da
+        // entrada nem falta de notas, e nenhum clipe é criado
+        notice = 'Gravação muito curta (menos de ${shortRecording.inMilliseconds} ms): nada foi gravado.';
+      } else if (r.punch != null && (r.frames > 0 || r.midiIds.isNotEmpty)) {
         error = 'Nada foi gravado dentro da região de punch: a gravação parou antes do punch in, ou nada foi tocado nela.';
       } else if (r.audio && r.frames == 0) {
         error = 'A entrada não mandou áudio durante a gravação: confira o microfone e a entrada escolhida.';

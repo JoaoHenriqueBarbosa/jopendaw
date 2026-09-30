@@ -296,7 +296,12 @@ class MidiClip {
   /// Escala escolhida no editor ("tônica:id", ver `ClipScale` em `midi_tools.dart`); null = sem escala.
   String? scale;
 
-  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes, List<MidiCc>? controls, this.scale})
+  /// Dica do swing que o sequenciador de passos aplicou ("1/16:40": resolução e %, ver
+  /// `encodeSwingHint`). Só uma dica: vale enquanto as notas batem com ela (`validSwingHint`), senão é
+  /// ignorada. Fica de fora do JSON quando null (documentos antigos e sem swing continuam idênticos).
+  String? swingHint;
+
+  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes, List<MidiCc>? controls, this.scale, this.swingHint})
     : notes = notes ?? [],
       controls = controls ?? [];
 
@@ -307,7 +312,8 @@ class MidiClip {
       length = (j['length'] as num).toDouble(),
       notes = [for (final n in j['notes'] as List) MidiNote.fromJson(n)],
       controls = [for (final e in (j['cc'] as List?) ?? const []) MidiCc.fromJson(e)],
-      scale = j['scale'] as String?;
+      scale = j['scale'] as String?,
+      swingHint = j['swing_hint'] as String?;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -318,6 +324,7 @@ class MidiClip {
     if (controls.isNotEmpty) 'cc': [for (final e in controls) e.toJson()],
     // só quando há escala: documentos sem escala continuam idênticos
     if (scale != null) 'scale': scale,
+    if (swingHint != null) 'swing_hint': swingHint,
   };
 
   double get end => start + length;
@@ -902,7 +909,7 @@ class DawDoc {
       recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
       metronomeOptions = MetronomeOptions.fromJson(
         j['metronome_options'],
-        fallbackVolume: ((j['version'] as num?)?.toInt() ?? 1) < 2 ? MetronomeOptions.legacyDefaultVolume : MetronomeOptions.defaultVolume,
+        fallbackVolume: _legacyVolumeOf(j),
       ),
       preRollBars = ((j['pre_roll'] as num?)?.toInt() ?? 0).clamp(0, maxPreRollBars),
       punchIn = _punchOf(j)?.$1,
@@ -914,6 +921,37 @@ class DawDoc {
       markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat)),
       midiMap = MidiMap.fromJson(j['midi_map']) {
     _repairGroups();
+  }
+
+  /// O aviso de um documento de versão MAIS NOVA que a deste app ([version]), ou null. Um app velho não
+  /// pode abrir (nem regravar, rebaixando a versão) esse documento: o .jopendaw e a sincronização
+  /// recusam com esta mesma mensagem.
+  static String? newerVersionMessage(Object? json) {
+    final v = json is Map ? json['version'] : null;
+    if (v is! int || v <= version) return null;
+    return 'O documento do projeto é de uma versão mais nova do jopendaw (documento $v; esta versão lê até o $version). Atualize o app.';
+  }
+
+  /// O volume do metrônomo de um documento que não o traz. Versão 2 em diante: o padrão (60%). Versão
+  /// 1 é ambíguo: o padrão foi 50% até o commit c09b153 (fase 19B) e 60% dali até a versão 2 (janela de
+  /// ~30 min), e o documento só guarda o que foge do padrão. Como quase todo documento de versão 1 é
+  /// do tempo de 50%, vale 50%, salvo quando o documento traz marcas de quem só existe depois do
+  /// c09b153 (áudio mudo, fase invertida ou loop por clipe, faixa congelada, dica de swing): aí foi
+  /// gravado na janela de 60% e fica com 60%. Salvar de novo grava a versão 2 e o volume explícito
+  /// quando foge do padrão, então a dúvida some.
+  static double _legacyVolumeOf(Map<String, dynamic> j) {
+    if (((j['version'] as num?)?.toInt() ?? 1) >= 2) return MetronomeOptions.defaultVolume;
+    for (final t in (j['tracks'] as List?) ?? const []) {
+      if (t is! Map) continue;
+      if (t['frozen'] != null) return MetronomeOptions.defaultVolume;
+      for (final c in (t['clips'] as List?) ?? const []) {
+        if (c is Map && (c['muted'] == true || c['invert'] == true || c['loop_length'] != null)) return MetronomeOptions.defaultVolume;
+      }
+      for (final c in (t['midi'] as List?) ?? const []) {
+        if (c is Map && c['swing_hint'] != null) return MetronomeOptions.defaultVolume;
+      }
+    }
+    return MetronomeOptions.legacyDefaultVolume;
   }
 
   /// A região de punch do JSON; null se faltar um lado, não for número ou não valer (início ≥ 0 antes do fim).

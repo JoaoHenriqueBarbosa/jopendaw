@@ -387,7 +387,11 @@ void main() {
     test('sem a entrada mandar nada: avisa em vez de criar clipe vazio', () async {
       final c = fakeController(e);
       c.doc.countIn = false;
-      await recordAudio(c, e, 0, (i) => 0);
+      c.setArmed(0, true);
+      await settle();
+      await c.toggleRecord();
+      c.debugRecordingElapsed(const Duration(seconds: 2)); // uma gravação de verdade, não um toque duplo
+      await c.toggleRecord();
       expect(c.doc.tracks[0].clips, isEmpty);
       expect(c.error, contains('não mandou áudio'));
     });

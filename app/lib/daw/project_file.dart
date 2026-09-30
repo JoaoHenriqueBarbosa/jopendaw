@@ -266,12 +266,8 @@ ProjectBundle parseProjectFile(Uint8List bytes, {ProjectFileLimits limits = cons
 
   final docJson = project['doc'];
   if (docJson is! Map<String, dynamic>) throw const ProjectFileException('O arquivo está corrompido: o project.json não traz o documento.');
-  final docVersion = docJson['version'];
-  if (docVersion is int && docVersion > DawDoc.version) {
-    throw ProjectFileException(
-      'O documento do projeto é de uma versão mais nova do jopendaw (documento $docVersion; esta versão lê até o ${DawDoc.version}). Atualize o app.',
-    );
-  }
+  final newer = DawDoc.newerVersionMessage(docJson);
+  if (newer != null) throw ProjectFileException(newer);
   final DawDoc doc;
   try {
     doc = DawDoc.fromJson(docJson);

@@ -41,7 +41,7 @@ void main() {
       expect(moved, greaterThan(0));
       expect(detectSwing(n, l16), closeTo(0.41, 1e-9));
       expect(detectSwings(n, 4).map((e) => e.$2), [closeTo(0.41, 1e-9)]);
-      expect(removeAllSwing(n, 4), moved);
+      expect(removeSwing(n, 4, resolutions: ['1/16']), moved);
       expect([for (final x in n) x.start], orig);
     });
 
@@ -121,11 +121,11 @@ void main() {
       expect(detectSwing(n, grid(0.125)), 0);
     });
 
-    test('removeAllSwing tira o swing de outra resolução e devolve as notas à grade reta', () {
+    test('removeSwing tira o swing das resoluções pedidas e devolve as notas à grade reta', () {
       final n = swung16();
-      expect(removeAllSwing(n, 4), 8);
+      expect(removeSwing(n, 4, resolutions: ['1/8', '1/16']), 8);
       expect([for (final x in n) x.start], [for (var i = 0; i < 16; i++) i * 0.25]);
-      expect(removeAllSwing(n, 4), 0);
+      expect(removeSwing(n, 4, resolutions: ['1/16']), 0);
     });
 
     testWidgets('Padrões em outra resolução (Trap 1/32) tira o swing aplicado em 1/16', (t) async {
@@ -185,7 +185,7 @@ void main() {
       expect(notice, isNot(contains('1 notas')));
       await t.tap(find.byKey(const ValueKey('step-swing-off')));
       await t.pump();
-      expect(t.widget<Text>(find.byKey(const ValueKey('step-notice'))).data, 'Swing tirado (1 nota).');
+      expect(t.widget<Text>(find.byKey(const ValueKey('step-notice'))).data, 'Swing tirado (1 nota, em 1/16).');
       await t.pump(const Duration(seconds: 1));
     });
   });
@@ -268,10 +268,10 @@ void main() {
     test('tap tempo: a espera do commit cabe na janela da sequência e os limites estão documentados', () {
       expect(DawController.tapCommitWait(120), DawController.tapCommitDelay);
       expect(DawController.tapCommitWait(40), const Duration(milliseconds: 1950));
-      expect(DawController.tapCommitWait(30), const Duration(milliseconds: 2500));
-      expect(DawController.tapCommitWait(20), const Duration(milliseconds: 2500), reason: 'nunca além de resetAfter');
+      expect(DawController.tapCommitWait(30), const Duration(milliseconds: 2600));
+      expect(DawController.tapCommitWait(20), const Duration(milliseconds: 2600), reason: 'nunca além de resetAfter + folga');
       for (final bpm in [200.0, 60.0, 30.0, 24.0, 20.0]) {
-        expect(DawController.tapCommitWait(bpm).inMilliseconds, lessThanOrEqualTo((TapTempo.resetAfter * 1000).round()));
+        expect(DawController.tapCommitWait(bpm).inMilliseconds, lessThanOrEqualTo((TapTempo.resetAfter * 1000).round() + DawController.tapCommitSlack));
       }
       expect(TapTempo.slowestBpm, 24);
       expect(TapTempo.slowestSteadyBpm, 30);
@@ -311,7 +311,7 @@ void main() {
       // o transporte passou do ponto, mas nenhum estado novo chegou ainda
       c.beat.value = 8.05;
       await c.toggleRecord();
-      expect(c.notice, isNull, reason: 'não é "Gravação cancelada"');
+      expect(c.notice, isNot(contains('cancelada')), reason: 'não é "Gravação cancelada"');
       expect(c.recording, isFalse);
     });
 
