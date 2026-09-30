@@ -23,6 +23,7 @@ import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
 import 'structure_menu.dart';
 import 'tempo_lane.dart' show showMeterChangeDialog;
+import 'tap_tempo.dart';
 import 'tempo_map.dart';
 import 'tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
 import 'warp_dialog.dart' show parseBpm;
@@ -119,6 +120,15 @@ class TransportBar extends StatelessWidget {
             ),
           ),
           _RecordButton(c: c, onError: onError),
+          // só o ícone: a barra já é apertada; o nome e as opções estão no menu ao lado do gravar
+          _Toggle(
+            icon: Icons.compare_arrows,
+            on: d.punchActive,
+            tooltip: d.punchRegion == null
+                ? 'Punch (P): grava só numa região. Ligue e ajuste as pontas na régua'
+                : 'Punch (P): a gravação só vale entre o punch in e o punch out da régua',
+            onTap: c.togglePunch,
+          ),
           const SizedBox(width: 4),
           _Position(c: c),
           const SizedBox(width: 8),
@@ -304,6 +314,19 @@ class _TempoButton extends StatelessWidget {
   Widget build(BuildContext context) {
     const style = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
     final d = c.doc;
+    // batendo o tap tempo, o botão mostra o andamento que as batidas dão (o projeto muda quando elas param)
+    return ValueListenableBuilder<double?>(
+      valueListenable: c.tapBpm,
+      builder: (context, tap, _) => tap == null
+          ? _plain(context, d, style)
+          : TextButton(
+              onPressed: onPressed,
+              child: Text('Tap · ${formatBpm(tap)} BPM', style: style.copyWith(color: Palette.accent)),
+            ),
+    );
+  }
+
+  Widget _plain(BuildContext context, DawDoc d, TextStyle style) {
     if (d.tempo.isSingle && d.meter.isSingle) {
       return TextButton(
         onPressed: onPressed,
@@ -352,7 +375,7 @@ class _RecordButton extends StatefulWidget {
   State<_RecordButton> createState() => _RecordButtonState();
 }
 
-enum _RecordMenu { countIn, settings }
+enum _RecordMenu { countIn, punch, settings }
 
 class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderStateMixin {
   /// Um ciclo por batida: aceso na primeira metade, apagado na segunda.
@@ -397,6 +420,8 @@ class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderS
     switch (v) {
       case _RecordMenu.countIn:
         c.toggleCountIn();
+      case _RecordMenu.punch:
+        c.togglePunch();
       case _RecordMenu.settings:
         showSettingsDialog(context, c);
     }
@@ -406,7 +431,10 @@ class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderS
     if (c.countingIn) return 'Contando o compasso de entrada: toque para cancelar (R)';
     if (c.recording) return 'Gravando: toque para parar (R)';
     final armed = c.doc.tracks.where((t) => t.armed && t.kind.hasClips).length;
-    final count = c.doc.countIn ? ', com um compasso de contagem' : '';
+    final count =
+        '${c.doc.countIn ? ', com um compasso de contagem' : ''}'
+        '${c.doc.preRollBars > 0 ? ', ${c.doc.preRollBars} de pré-roll' : ''}'
+        '${c.doc.punchActive ? ', só na região de punch' : ''}';
     return switch (armed) {
       0 => 'Gravar (R): nenhuma faixa armada; arme no mixer (●)',
       1 => 'Gravar (R) na faixa armada$count',
@@ -442,14 +470,24 @@ class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderS
             ),
           ),
         ),
-        PopupMenuButton<_RecordMenu>(
+        PopupMenuButton<Object>(
           tooltip: 'Opções de gravação',
           position: PopupMenuPosition.under,
-          onSelected: _menu,
+          // o menu leva o pré-roll (o número de compassos) e as ações
+          onSelected: (v) => v is int ? c.setPreRoll(v) : _menu(v as _RecordMenu),
           itemBuilder: (_) => [
-            CheckedPopupMenuItem(value: _RecordMenu.countIn, checked: c.doc.countIn, child: const Text('Contagem de um compasso')),
+            CheckedPopupMenuItem<Object>(value: _RecordMenu.countIn, checked: c.doc.countIn, child: const Text('Contagem de um compasso')),
+            CheckedPopupMenuItem<Object>(value: _RecordMenu.punch, checked: c.doc.punchActive, child: const Text('Punch in/out (P)')),
             const PopupMenuDivider(),
-            const PopupMenuItem(
+            const PopupMenuItem<Object>(enabled: false, height: 28, child: Text('Pré-roll: toca a música antes de gravar')),
+            for (var n = 0; n <= DawDoc.maxPreRollBars; n++)
+              CheckedPopupMenuItem<Object>(
+                value: n,
+                checked: c.doc.preRollBars == n,
+                child: Text(n == 0 ? 'Sem pré-roll' : (n == 1 ? '1 compasso' : '$n compassos')),
+              ),
+            const PopupMenuDivider(),
+            const PopupMenuItem<Object>(
               value: _RecordMenu.settings,
               child: Row(
                 children: [
@@ -568,6 +606,19 @@ class _TempoDialogState extends State<_TempoDialog> {
   // 0: o compasso inicial (que não é n/4) como está
   late int _bpb = _custom ? 0 : widget.beatsPerBar;
   String? _error;
+  final _tap = TapTempo();
+  final _tapClock = Stopwatch()..start();
+
+  /// Uma batida do tap: o BPM do campo acompanha a média das últimas (salvar aplica ao projeto).
+  void _tapped() {
+    final v = _tap.tap(_tapClock.elapsedMicroseconds / 1e6);
+    if (v == null) return;
+    setState(() {
+      _error = null;
+      _bpm.text = formatBpm(v);
+      _bpm.selection = TextSelection(baseOffset: 0, extentOffset: _bpm.text.length);
+    });
+  }
 
   void _save() {
     final v = parseBpm(_bpm.text);
@@ -598,6 +649,14 @@ class _TempoDialogState extends State<_TempoDialog> {
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
           decoration: InputDecoration(labelText: widget.mapped ? 'BPM inicial' : 'BPM', errorText: _error),
           onSubmitted: (_) => _save(),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Tooltip(
+            message: 'Bata no ritmo: o BPM acima segue a média das últimas batidas (a tecla T faz o mesmo fora desta janela)',
+            child: OutlinedButton.icon(onPressed: _tapped, icon: const Icon(Icons.touch_app_outlined), label: const Text('Tap tempo')),
+          ),
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(

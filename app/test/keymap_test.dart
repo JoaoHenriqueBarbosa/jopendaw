@@ -57,6 +57,9 @@ String? legacyGlobal(
   if (!mod && k == LogicalKeyboardKey.bracketRight) return 'marker.next';
   if (!mod && k == LogicalKeyboardKey.keyZ) return shift ? 'view.fitClip' : 'view.fitAll';
   if (!mod && k == LogicalKeyboardKey.keyC) return 'transport.metronome';
+  // da fase 17 (punch e tap tempo): teclas que antes não faziam nada
+  if (!mod && k == LogicalKeyboardKey.keyP) return 'transport.punch';
+  if (!mod && k == LogicalKeyboardKey.keyT) return 'transport.tap';
   if (!mod && k == LogicalKeyboardKey.keyX) return 'panel.mixer';
   if (!mod && k == LogicalKeyboardKey.keyE) return 'panel.editor';
   if (!mod && k == LogicalKeyboardKey.keyI) return 'panel.instrument';

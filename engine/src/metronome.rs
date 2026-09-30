@@ -524,6 +524,7 @@ mod tests {
     }
 
     /// O clique de antes das opções, copiado como estava: o que o padrão tem de continuar produzindo.
+    #[allow(clippy::needless_range_loop, reason = "cópia literal do laço de antes, para a equivalência bit a bit")]
     fn legacy(l: &mut [f32], pos: f64, tempo: &TempoMap, meter: &MeterMap, rate: f64, gain: f32, st: &mut (usize, f64, f64)) {
         let total = (CLICK_SECS * rate) as usize;
         let end = pos + l.len() as f64;

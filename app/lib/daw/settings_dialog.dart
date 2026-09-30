@@ -14,6 +14,7 @@ import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'mixer_panel.dart' show InputLevelMeter;
+import 'model.dart';
 import 'transport_bar.dart' show describeActionError;
 
 /// Curso do ajuste de latência (ms). Negativo cobre o navegador que informa latência a mais.
@@ -56,6 +57,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
   String? _latencyError;
 
   static String _ms(double v) => '${v.round()}';
+
+  /// A região de punch em compassos (ou o que fazer para ela existir).
+  static String _punchText(DawDoc d) {
+    final r = d.punchRegion;
+    if (r == null) return 'Ligue para marcar a região na régua (arraste as pontas vermelhas)';
+    return 'Da posição ${formatPosition(r.$1, d.beatsPerBar, meter: d.meter)} à ${formatPosition(r.$2, d.beatsPerBar, meter: d.meter)}: só isso é gravado';
+  }
 
   @override
   void initState() {
@@ -282,6 +290,39 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   },
                 ),
                 const SizedBox(height: 8),
+                Text('Pré-roll', style: theme.textTheme.bodyLarge),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (var n = 0; n <= DawDoc.maxPreRollBars; n++)
+                      ChoiceChip(label: Text(n == 0 ? 'Não' : '$n'), selected: c.doc.preRollBars == n, onSelected: (_) => c.setPreRoll(n)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Compassos que tocam a música antes de a gravação valer (com punch, antes do punch in). É independente da contagem: '
+                  'a contagem são os cliques, o pré-roll é o arranjo tocando.',
+                  style: muted,
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Punch in/out'),
+                  subtitle: Text(_punchText(c.doc), style: muted),
+                  value: c.doc.punchOn,
+                  onChanged: (v) {
+                    if (v != c.doc.punchOn) c.togglePunch();
+                  },
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: c.recording || !(c.doc.loopEnd - c.doc.loopStart > 0.01) ? null : () => c.setPunchRegion(c.doc.loopStart, c.doc.loopEnd),
+                    child: const Text('Usar a região do loop'),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text('Compensação de latência', style: theme.textTheme.bodyLarge),
                 Row(
                   children: [
@@ -333,12 +374,141 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   'Entrada do aparelho, motor com a compensação dos efeitos e saída, somados: o atraso que quem toca ouve entre o gesto e o som.',
                   style: muted,
                 ),
+                const SizedBox(height: 20),
+                Text('METRÔNOMO', style: section),
+                const SizedBox(height: 8),
+                _MetronomeSection(c: c, muted: muted),
               ],
             );
           },
         ),
       ),
       actions: [FilledButton(onPressed: _close, child: const Text('Fechar'))],
+    );
+  }
+}
+
+/// As opções do metrônomo: timbre, subdivisão, quando soa e os volumes. Cada mudança vai ao documento
+/// (fora do desfazer) e ao motor uma vez.
+class _MetronomeSection extends StatelessWidget {
+  final DawController c;
+  final TextStyle muted;
+  const _MetronomeSection({required this.c, required this.muted});
+
+  Widget _dropdown<T>(String label, T value, List<T> values, String Function(T) name, void Function(T) onChanged) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: InputDecorator(
+      decoration: InputDecoration(labelText: label, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          isDense: true,
+          items: [
+            for (final v in values)
+              DropdownMenuItem(
+                value: v,
+                child: Text(name(v), overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final o = c.doc.metronomeOptions;
+    String pct(double v) => '${(v * 100).round()}%';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _dropdown<MetronomeTimbre>('Timbre', o.timbre, MetronomeTimbre.values, (v) => v.label, (v) => c.setMetronomeOptions((o) => o.timbre = v)),
+        _dropdown<MetronomeSubdivision>(
+          'Subdivisão',
+          o.subdivision,
+          MetronomeSubdivision.values,
+          (v) => v.label,
+          (v) => c.setMetronomeOptions((o) => o.subdivision = v),
+        ),
+        _dropdown<MetronomeMode>('Quando soa', o.mode, MetronomeMode.values, (v) => v.label, (v) => c.setMetronomeOptions((o) => o.mode = v)),
+        OptionSlider(label: 'Volume', value: o.volume, min: 0, max: 1, format: pct, onCommit: (v) => c.setMetronomeOptions((o) => o.volume = v)),
+        OptionSlider(
+          label: 'Acento do primeiro tempo',
+          value: o.accentLevel,
+          min: 0,
+          max: 2,
+          format: pct,
+          onCommit: (v) => c.setMetronomeOptions((o) => o.accentLevel = v),
+        ),
+        OptionSlider(
+          label: 'Altura do acento',
+          value: o.accentPitch,
+          min: 0.5,
+          max: 4,
+          format: (v) => '×${v.toStringAsFixed(2).replaceAll('.', ',')}',
+          onCommit: (v) => c.setMetronomeOptions((o) => o.accentPitch = v),
+        ),
+        if (o.subdivision != MetronomeSubdivision.beat && o.subdivision != MetronomeSubdivision.accentOnly)
+          OptionSlider(
+            label: 'Volume das subdivisões',
+            value: o.subLevel,
+            min: 0,
+            max: 2,
+            format: pct,
+            onCommit: (v) => c.setMetronomeOptions((o) => o.subLevel = v),
+          ),
+        Text(
+          o.mode == MetronomeMode.recording
+              ? 'Liga e desliga pelo botão do metrônomo (C); nesse modo ele só soa gravando, na contagem e no pré-roll.'
+              : 'Liga e desliga pelo botão do metrônomo (C). O clique acompanha o compasso e o andamento do projeto.',
+          style: muted,
+        ),
+      ],
+    );
+  }
+}
+
+/// Um controle deslizante com o valor à direita; só entrega o valor ao soltar (arrastar não manda uma
+/// mudança de estilo ao motor a cada passo).
+class OptionSlider extends StatefulWidget {
+  final String label;
+  final double value, min, max;
+  final String Function(double) format;
+  final void Function(double) onCommit;
+  const OptionSlider({super.key, required this.label, required this.value, required this.min, required this.max, required this.format, required this.onCommit});
+
+  @override
+  State<OptionSlider> createState() => _OptionSliderState();
+}
+
+class _OptionSliderState extends State<OptionSlider> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = (_drag ?? widget.value).clamp(widget.min, widget.max).toDouble();
+    return Row(
+      children: [
+        Expanded(flex: 5, child: Text(widget.label, overflow: TextOverflow.ellipsis)),
+        Expanded(
+          flex: 6,
+          child: Slider(
+            value: v,
+            min: widget.min,
+            max: widget.max,
+            onChanged: (x) => setState(() => _drag = x),
+            onChangeEnd: (x) {
+              setState(() => _drag = null);
+              widget.onCommit(x);
+            },
+          ),
+        ),
+        SizedBox(width: 44, child: Text(widget.format(v), textAlign: TextAlign.end)),
+      ],
     );
   }
 }

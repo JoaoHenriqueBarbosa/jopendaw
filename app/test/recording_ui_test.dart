@@ -437,6 +437,10 @@ void main() {
       expect(find.text('De -200 a 500 ms'), findsOneWidget);
       expect(c.doc.recLatencyMs, 35);
       await t.enterText(find.byType(TextField), '-12');
+      // a janela ficou mais longa (pré-roll, punch e metrônomo): traz o interruptor para longe da borda de cima da rolagem
+      await t.ensureVisible(find.text('Contagem de um compasso'));
+      await t.drag(find.byType(SingleChildScrollView).last, const Offset(0, 80));
+      await t.pump();
       await tapVisible(t, find.text('Contagem de um compasso'));
       await t.pump();
       expect(c.doc.countIn, isFalse);

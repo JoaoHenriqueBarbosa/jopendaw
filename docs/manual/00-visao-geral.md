@@ -283,6 +283,8 @@ Os atalhos mais usados, com as teclas **padrão** (a lista completa, a tela `Per
 | `R` | Gravar |
 | `L` | Loop liga/desliga |
 | `C` | Metrônomo |
+| `P` | Punch liga/desliga (fase 17) |
+| `T` | Tap tempo: bata no ritmo (fase 17) |
 | `X` / `E` / `I` / `F` | Mixer / editor de notas / instrumento / efeitos |
 | `Esc` | Fechar o painel |
 | `Z` | Enquadrar o projeto |

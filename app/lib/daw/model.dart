@@ -571,8 +571,115 @@ class Marker {
   Map<String, dynamic> toJson() => {'id': id, 'beat': beat, 'name': name, 'color': color};
 }
 
+/// Timbres do clique do metrônomo; o índice é o código do motor.
+enum MetronomeTimbre {
+  click('Clique'),
+  wood('Madeira'),
+  beep('Bipe agudo'),
+  cowbell('Cowbell'),
+  hihat('Hi-hat');
+
+  final String label;
+  const MetronomeTimbre(this.label);
+}
+
+/// Subdivisões do metrônomo; o índice é o código do motor. Dividem o tempo do compasso (a semínima
+/// em x/4, a colcheia em 6/8 e 7/8).
+enum MetronomeSubdivision {
+  beat('Um clique por tempo'),
+  eighth('Colcheias'),
+  triplet('Tercinas'),
+  sixteenth('Semicolcheias'),
+  accentOnly('Só o acento do compasso');
+
+  final String label;
+  const MetronomeSubdivision(this.label);
+}
+
+/// Quando o metrônomo soa: sempre que estiver ligado, ou só na gravação (contagem e pré-roll inclusos).
+enum MetronomeMode {
+  always('Sempre que ligado'),
+  recording('Só ao gravar');
+
+  final String label;
+  const MetronomeMode(this.label);
+}
+
+/// Como o metrônomo soa (preferência do projeto). Os padrões são o clique de sempre: o documento só
+/// leva o campo quando alguma coisa foge deles.
+class MetronomeOptions {
+  MetronomeTimbre timbre;
+  MetronomeSubdivision subdivision;
+  MetronomeMode mode;
+
+  /// Volume do clique comum (0 a 1), o `ganho` da chamada `metronome`.
+  double volume;
+
+  /// Nível do acento do primeiro tempo em relação ao volume (0 a 2) e quanto ele é mais agudo que o
+  /// clique comum (razão de frequência, 0,5 a 4).
+  double accentLevel, accentPitch;
+
+  /// Nível das subdivisões em relação ao volume (0 a 2).
+  double subLevel;
+
+  static const defaultVolume = 0.5, defaultAccentLevel = 1.0, defaultAccentPitch = 1.6, defaultSubLevel = 0.5;
+
+  MetronomeOptions({
+    this.timbre = MetronomeTimbre.click,
+    this.subdivision = MetronomeSubdivision.beat,
+    this.mode = MetronomeMode.always,
+    this.volume = defaultVolume,
+    this.accentLevel = defaultAccentLevel,
+    this.accentPitch = defaultAccentPitch,
+    this.subLevel = defaultSubLevel,
+  });
+
+  /// Lê o JSON; ausente, ruim ou fora da faixa vale o padrão (um documento de versão anterior não tem o campo).
+  factory MetronomeOptions.fromJson(Object? j) {
+    if (j is! Map) return MetronomeOptions();
+    T byName<T extends Enum>(List<T> values, Object? v, T fallback) {
+      for (final e in values) {
+        if (e.name == v) return e;
+      }
+      return fallback;
+    }
+
+    double number(Object? v, double lo, double hi, double fallback) => v is num && v.isFinite ? v.toDouble().clamp(lo, hi).toDouble() : fallback;
+    return MetronomeOptions(
+      timbre: byName(MetronomeTimbre.values, j['timbre'], MetronomeTimbre.click),
+      subdivision: byName(MetronomeSubdivision.values, j['subdivision'], MetronomeSubdivision.beat),
+      mode: byName(MetronomeMode.values, j['mode'], MetronomeMode.always),
+      volume: number(j['volume'], 0, 1, defaultVolume),
+      accentLevel: number(j['accent_level'], 0, 2, defaultAccentLevel),
+      accentPitch: number(j['accent_pitch'], 0.5, 4, defaultAccentPitch),
+      subLevel: number(j['sub_level'], 0, 2, defaultSubLevel),
+    );
+  }
+
+  bool get isDefault => toJson().isEmpty;
+
+  /// Só o que foge do padrão.
+  Map<String, dynamic> toJson() => {
+    if (timbre != MetronomeTimbre.click) 'timbre': timbre.name,
+    if (subdivision != MetronomeSubdivision.beat) 'subdivision': subdivision.name,
+    if (mode != MetronomeMode.always) 'mode': mode.name,
+    if (volume != defaultVolume) 'volume': volume,
+    if (accentLevel != defaultAccentLevel) 'accent_level': accentLevel,
+    if (accentPitch != defaultAccentPitch) 'accent_pitch': accentPitch,
+    if (subLevel != defaultSubLevel) 'sub_level': subLevel,
+  };
+
+  MetronomeOptions copy() => MetronomeOptions.fromJson(toJson());
+
+  /// A chamada do estilo ao motor (`metronome_style`): o que ele precisa para soar assim.
+  List<Object> get styleCall => ['metronome_style', timbre.index, subdivision.index, accentLevel, accentPitch, subLevel];
+}
+
 class DawDoc {
   static const version = 1;
+
+  /// Teto do pré-roll em compassos.
+  static const maxPreRollBars = 4;
 
   /// O andamento inicial (o do ponto da batida 0 do mapa de andamento) e o compasso inicial
   /// (`beatsPerBar`/4, a menos que o mapa de compassos diga outro).
@@ -594,6 +701,23 @@ class DawDoc {
 
   /// Contagem de um compasso de metrônomo antes de gravar.
   bool countIn;
+
+  /// Como o metrônomo soa (timbre, subdivisão, acento, volume, quando). Só vai ao JSON o que foge do padrão.
+  MetronomeOptions metronomeOptions;
+
+  /// Compassos que a gravação começa antes do ponto de gravar, tocando sem gravar (0 a 4).
+  int preRollBars;
+
+  /// Região de punch (batidas): com [punchOn], a gravação só vale entre [punchIn] e [punchOut]. A região
+  /// existe mesmo desligada (null sem região). Ausentes nos documentos antigos.
+  double? punchIn, punchOut;
+  bool punchOn;
+
+  /// A região de punch válida (início < fim), ou null.
+  (double, double)? get punchRegion => punchIn != null && punchOut != null && punchOut! > punchIn! + 1e-9 ? (punchIn!, punchOut!) : null;
+
+  /// O punch está valendo: ligado e com região.
+  bool get punchActive => punchOn && punchRegion != null;
 
   /// Compensação da latência de gravação em milissegundos (o que o áudio gravado chega atrasado
   /// em relação ao que tocava), somada à que o navegador informa. Ajustável nas configurações.
@@ -629,6 +753,11 @@ class DawDoc {
     this.masterPan = 0,
     this.countIn = true,
     this.recLatencyMs = 0,
+    MetronomeOptions? metronomeOptions,
+    this.preRollBars = 0,
+    this.punchIn,
+    this.punchOut,
+    this.punchOn = false,
     List<EffectSlot>? masterEffects,
     List<AutoLane>? masterLanes,
     TrackModulation? masterModulation,
@@ -639,6 +768,7 @@ class DawDoc {
        tracks = tracks ?? [],
        markers = markers ?? [],
        midiMap = midiMap ?? MidiMap(),
+       metronomeOptions = metronomeOptions ?? MetronomeOptions(),
        samples = samples ?? {},
        masterEffects = masterEffects ?? [],
        masterLanes = masterLanes ?? [],
@@ -660,12 +790,24 @@ class DawDoc {
       masterPan = (j['master_pan'] as num).toDouble(),
       countIn = j['count_in'] ?? true,
       recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
+      metronomeOptions = MetronomeOptions.fromJson(j['metronome_options']),
+      preRollBars = ((j['pre_roll'] as num?)?.toInt() ?? 0).clamp(0, maxPreRollBars),
+      punchIn = _punchOf(j)?.$1,
+      punchOut = _punchOf(j)?.$2,
+      punchOn = j['punch_on'] == true && _punchOf(j) != null,
       masterEffects = _effects(j['master_effects']),
       masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)],
       masterModulation = TrackModulation.fromJson(j['master_modulation']),
       markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat)),
       midiMap = MidiMap.fromJson(j['midi_map']) {
     _repairGroups();
+  }
+
+  /// A região de punch do JSON; null se faltar um lado, não for número ou não valer (início ≥ 0 antes do fim).
+  static (double, double)? _punchOf(Map<String, dynamic> j) {
+    final a = j['punch_in'], b = j['punch_out'];
+    if (a is! num || b is! num || !a.isFinite || !b.isFinite || a < 0 || b <= a) return null;
+    return (a.toDouble(), b.toDouble());
   }
 
   /// Solta as filhas cuja pasta não existe (documento editado à mão ou de uma versão que perdeu a
@@ -697,6 +839,10 @@ class DawDoc {
     'master_pan': masterPan,
     'count_in': countIn,
     'rec_latency_ms': recLatencyMs,
+    // só o que foge do padrão: um documento sem essas opções sai igual ao de antes
+    if (!metronomeOptions.isDefault) 'metronome_options': metronomeOptions.toJson(),
+    if (preRollBars > 0) 'pre_roll': preRollBars,
+    if (punchRegion case (final a, final b)) ...{'punch_in': a, 'punch_out': b, if (punchOn) 'punch_on': true},
     'master_effects': [for (final e in masterEffects) e.toJson()],
     'master_lanes': [for (final l in masterLanes) l.toJson()],
     if (!masterModulation.isEmpty) 'master_modulation': masterModulation.toJson(),

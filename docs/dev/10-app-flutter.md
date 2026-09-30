@@ -137,6 +137,9 @@ Regras gerais de leitura e escrita:
 | `master_pan` | número | sim | `0` | pan do master |
 | `count_in` | bool | não | `true` | contagem de um compasso antes de gravar |
 | `rec_latency_ms` | número | não | `0` | compensação manual da latência de gravação, −500..500 (`setRecLatency`) |
+| `metronome_options` | objeto | não | **(omitido no padrão)** | fase 17: `timbre`, `subdivision`, `mode` (nomes dos enums), `volume`, `accent_level`, `accent_pitch`, `sub_level`; só o que foge do padrão (`MetronomeOptions`). Valor ruim cai no padrão ou no limite |
+| `pre_roll` | inteiro | não | **(omitido em 0)** | fase 17: compassos de pré-roll, 0..4 (`setPreRoll`) |
+| `punch_in`, `punch_out`, `punch_on` | número (batidas), número, `true` | não | **(omitidos sem região)** | fase 17: região de punch (início ≥ 0 antes do fim; senão some) e se está ligado. `_travel` e `_applyRemote` preservam os quatro campos novos como preferência do aparelho |
 | `master_effects` | lista de efeito | não | `[]` | cadeia de inserts do master (depois dele vem o volume e o limitador de segurança do motor) |
 | `master_lanes` | lista de lane | não | `[]` | automação do master (alvos volume, pan e efeito) |
 | `markers` | lista de marcador | não | `[]` (reordenada por `beat` ao ler) | marcadores da régua |

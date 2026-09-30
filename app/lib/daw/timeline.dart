@@ -257,6 +257,14 @@ class Timeline extends StatelessWidget {
                   ),
                 ],
               ),
+              // a região de punch por cima das raias (translúcida, sem pegar cliques)
+              Positioned(
+                left: headerWidth,
+                top: 0,
+                bottom: 0,
+                width: laneWidth,
+                child: IgnorePointer(child: _PunchBand(c: c)),
+              ),
               // cursor de reprodução por cima de régua e raias
               Positioned(
                 left: headerWidth,
@@ -460,6 +468,8 @@ class _RulerState extends State<_Ruler> {
                   loopOn: c.doc.loopOn,
                   loopStart: c.doc.loopStart,
                   loopEnd: c.doc.loopEnd,
+                  punch: c.doc.punchRegion,
+                  punchOn: c.doc.punchOn,
                   timeMode: c.rulerTime,
                   style: Theme.of(context).textTheme.labelSmall!,
                 ),
@@ -467,6 +477,7 @@ class _RulerState extends State<_Ruler> {
               ),
             ),
             MarkerFlags(c: c),
+            if (c.doc.punchRegion != null) _PunchHandles(c: c),
             IgnorePointer(
               child: _HoverLabel(c: c, hover: _hover),
             ),
@@ -476,6 +487,129 @@ class _RulerState extends State<_Ruler> {
       ),
     );
   }
+}
+
+/// As alças do punch in e do punch out na régua: arrastar move a ponta (com o encaixe da grade). Travadas gravando.
+class _PunchHandles extends StatelessWidget {
+  final DawController c;
+  const _PunchHandles({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = c.doc.punchRegion;
+    if (r == null) return const SizedBox.shrink();
+    return Stack(
+      children: [
+        _PunchHandle(c: c, isIn: true, beat: r.$1),
+        _PunchHandle(c: c, isIn: false, beat: r.$2),
+      ],
+    );
+  }
+}
+
+class _PunchHandle extends StatefulWidget {
+  final DawController c;
+  final bool isIn;
+  final double beat;
+  const _PunchHandle({required this.c, required this.isIn, required this.beat});
+
+  @override
+  State<_PunchHandle> createState() => _PunchHandleState();
+}
+
+class _PunchHandleState extends State<_PunchHandle> {
+  double _dx = 0, _from = 0;
+
+  static const _width = 14.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final x = (widget.beat - c.scrollBeat) * c.pxPerBeat;
+    // a alça do in fica à direita do fio e a do out à esquerda: as duas ficam dentro da região
+    final left = widget.isIn ? x : x - _width;
+    return Positioned(
+      left: left,
+      top: 0,
+      width: _width,
+      height: 18,
+      child: Tooltip(
+        message: widget.isIn ? 'Punch in: arraste para mover' : 'Punch out: arraste para mover',
+        child: MouseRegion(
+          cursor: c.recording ? MouseCursor.defer : SystemMouseCursors.resizeLeftRight,
+          child: GestureDetector(
+            key: ValueKey(widget.isIn ? 'punch-in' : 'punch-out'),
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: c.recording
+                ? null
+                : (_) {
+                    _dx = 0;
+                    _from = widget.beat;
+                  },
+            onHorizontalDragUpdate: c.recording
+                ? null
+                : (d) {
+                    _dx += d.delta.dx;
+                    final b = math.max(0.0, c.snapBeat(_from + _dx / c.pxPerBeat));
+                    final r = c.doc.punchRegion;
+                    if (r == null) return;
+                    // as pontas não se cruzam: a região tem ao menos uma fração de batida
+                    if (widget.isIn) {
+                      c.setPunchRegion(math.min(b, r.$2 - 0.05), r.$2);
+                    } else {
+                      c.setPunchRegion(r.$1, math.max(b, r.$1 + 0.05));
+                    }
+                  },
+            child: Container(
+              decoration: BoxDecoration(
+                color: _recordColor,
+                borderRadius: BorderRadius.horizontal(left: Radius.circular(widget.isIn ? 4 : 0), right: Radius.circular(widget.isIn ? 0 : 4)),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                widget.isIn ? 'IN' : 'OUT',
+                style: const TextStyle(fontSize: 7, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A faixa vermelha translúcida da região de punch sobre as raias (a mais forte com o punch ligado).
+class _PunchBand extends StatelessWidget {
+  final DawController c;
+  const _PunchBand({required this.c});
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: c,
+    builder: (context, _) {
+      final r = c.doc.punchRegion;
+      if (r == null) return const SizedBox.shrink();
+      return CustomPaint(painter: _PunchBandPainter(c.scrollBeat, c.pxPerBeat, r.$1, r.$2, c.doc.punchOn), size: Size.infinite);
+    },
+  );
+}
+
+class _PunchBandPainter extends CustomPainter {
+  final double scroll, ppb, from, to;
+  final bool on;
+  _PunchBandPainter(this.scroll, this.ppb, this.from, this.to, this.on);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final x0 = (from - scroll) * ppb, x1 = (to - scroll) * ppb;
+    canvas.drawRect(Rect.fromLTRB(x0, 0, x1, size.height), Paint()..color = _recordColor.withValues(alpha: on ? 0.10 : 0.04));
+    final edge = Paint()..color = _recordColor.withValues(alpha: on ? 0.8 : 0.35);
+    canvas.drawRect(Rect.fromLTWH(x0, 0, 1, size.height), edge);
+    canvas.drawRect(Rect.fromLTWH(x1 - 1, 0, 1, size.height), edge);
+  }
+
+  @override
+  bool shouldRepaint(_PunchBandPainter o) => o.scroll != scroll || o.ppb != ppb || o.from != from || o.to != to || o.on != on;
 }
 
 /// Posição sob o mouse na régua: compasso.tempo e mm:ss, com um fio no ponto.
@@ -589,9 +723,10 @@ int _barStep(double ppb, num beatsPerBar) {
 
 class _RulerPainter extends CustomPainter {
   final double scroll, ppb, loopStart, loopEnd;
+  final (double, double)? punch;
   final MeterMap meter;
   final TempoMap tempo;
-  final bool loopOn, timeMode;
+  final bool loopOn, punchOn, timeMode;
   final TextStyle style;
 
   _RulerPainter({
@@ -602,6 +737,8 @@ class _RulerPainter extends CustomPainter {
     required this.loopOn,
     required this.loopStart,
     required this.loopEnd,
+    this.punch,
+    this.punchOn = false,
     required this.timeMode,
     required this.style,
   });
@@ -614,6 +751,13 @@ class _RulerPainter extends CustomPainter {
       final color = loopOn ? Palette.accent : Colors.white24;
       canvas.drawRect(Rect.fromLTRB(lx, 0, rx, size.height), Paint()..color = color.withValues(alpha: loopOn ? 0.22 : 0.08));
       canvas.drawRect(Rect.fromLTRB(lx, size.height - 3, rx, size.height), Paint()..color = color);
+    }
+    // região de punch: faixa vermelha no alto da régua (as pontas são as alças)
+    final pr = punch;
+    if (pr != null) {
+      final px = (pr.$1 - scroll) * ppb, qx = (pr.$2 - scroll) * ppb;
+      canvas.drawRect(Rect.fromLTRB(px, 0, qx, size.height), Paint()..color = _recordColor.withValues(alpha: punchOn ? 0.22 : 0.08));
+      canvas.drawRect(Rect.fromLTRB(px, 0, qx, 3), Paint()..color = punchOn ? _recordColor : _recordColor.withValues(alpha: 0.4));
     }
     final tick = Paint()..color = Colors.white24;
     final visibleEnd = scroll + size.width / ppb;
@@ -690,6 +834,8 @@ class _RulerPainter extends CustomPainter {
       o.loopOn != loopOn ||
       o.loopStart != loopStart ||
       o.loopEnd != loopEnd ||
+      o.punch != punch ||
+      o.punchOn != punchOn ||
       o.timeMode != timeMode;
 }
 

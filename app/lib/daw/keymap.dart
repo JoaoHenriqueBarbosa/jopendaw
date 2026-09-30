@@ -80,6 +80,12 @@ final List<KeyAction> keyCatalog = [
     'L',
   ], help: 'Loop liga/desliga (arraste na régua para marcar a região)'),
   KeyAction('transport.metronome', 'Metrônomo', KeyCategory.transport, KeyContext.global, ['C']),
+  KeyAction('transport.punch', 'Punch liga/desliga', KeyCategory.transport, KeyContext.global, [
+    'P',
+  ], help: 'Punch liga/desliga: com ele, a gravação só vale na região marcada na régua'),
+  KeyAction('transport.tap', 'Tap tempo', KeyCategory.transport, KeyContext.global, [
+    'T',
+  ], help: 'Tap tempo: bata no ritmo; o andamento vale quando você para de bater'),
   KeyAction('marker.add', 'Marcador no cursor', KeyCategory.markers, KeyContext.global, ['M']),
   KeyAction('marker.rename', 'Marcador no cursor, pedindo o nome', KeyCategory.markers, KeyContext.global, ['Shift+M']),
   KeyAction('marker.prev', 'Cursor no marcador anterior', KeyCategory.markers, KeyContext.global, ['[']),

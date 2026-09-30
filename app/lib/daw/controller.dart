@@ -44,6 +44,7 @@ import 'midi_learn.dart';
 import 'model.dart';
 import 'modulation.dart';
 import 'sync.dart';
+import 'tap_tempo.dart';
 import 'tempo_map.dart';
 import 'templates.dart';
 import 'track_groups.dart' show DawGroupsController, planTrackMove;
@@ -330,6 +331,9 @@ class _SyncCache {
   /// O mapa de andamento e o de compassos que o motor tem, como texto ('' = um andamento e um
   /// compasso só): só reenvia quando muda.
   String tempoSig = '', meterSig = '';
+
+  /// O estilo do metrônomo que o motor tem ('' = o padrão): só reenvia quando muda.
+  String metroSig = '';
 }
 
 /// Um slot de efeito como o motor o conhece.
@@ -370,6 +374,8 @@ class _Recording {
     required this.skip,
     required this.metronomeTemp,
     this.startFromCapture = false,
+    this.preBeats = 0,
+    this.punch,
     TempoMap? tempo,
   }) : stopBeat = start,
        tempo = tempo ?? TempoMap.constant(bpm);
@@ -401,6 +407,12 @@ class _Recording {
 
   /// Batidas de contagem antes de [start] (0: sem contagem).
   final double countBeats;
+
+  /// Batidas de pré-roll: a música toca (sem gravar) durante elas antes de [start].
+  final double preBeats;
+
+  /// A região de punch (início, fim) em batidas: só o que cai nela é gravado. Null: sem punch.
+  final (double, double)? punch;
 
   /// Contagem fora do lugar (cursor antes do fim do primeiro compasso, ou o fim do loop dentro do
   /// compasso da contagem): a batida do motor onde ela começa, numa região vazia bem depois do fim
@@ -452,9 +464,10 @@ class _Recording {
   /// Batidas gravadas depois da contagem, pelo relógio: as notas não dizem em que passada caíram.
   double get recordedBeats {
     final secs = (elapsed ?? clock.elapsed).inMicroseconds / 1e6;
-    if (tempo.isSingle) return secs * bpm / 60 - countBeats;
+    // a contagem e o pré-roll tocam antes do começo da gravação (o pré-roll no andamento de onde estiver)
+    if (tempo.isSingle) return secs * bpm / 60 - countBeats - preBeats;
     // a contagem toca no andamento de onde estiver; aqui basta o do começo da gravação
-    return tempo.beatAt(tempo.secondsAt(start) + secs - countBeats * 60 / tempo.bpmAt(start)) - start;
+    return tempo.beatAt(tempo.secondsAt(start) + secs - (countBeats + preBeats) * 60 / tempo.bpmAt(start)) - start;
   }
 }
 
@@ -464,7 +477,9 @@ typedef _Piece = ({int from, int to, int pad});
 
 /// Um clipe da gravação: começa em [start] (batidas) e dura [seconds]; uma peça é um clipe comum,
 /// várias são as tomadas dele, e [active] é a que toca (a última passada completa).
-typedef _ClipPlan = ({double start, double seconds, List<_Piece> pieces, int active});
+///
+/// [fadeIn] e [fadeOut] (s) são os fades curtos das emendas do punch (0 fora dele).
+typedef _ClipPlan = ({double start, double seconds, List<_Piece> pieces, int active, double fadeIn, double fadeOut});
 
 /// Uma nota gravada, em batidas absolutas.
 typedef _RecNote = ({int pitch, double start, double end, double velocity});
@@ -1117,6 +1132,8 @@ class DawController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _tapTimer?.cancel();
+    tapBpm.dispose();
     autoRec.dispose();
     _learn?.dispose();
     // o motor sobrevive à tela: nada pode ficar soando nem preso para o próximo projeto, nem
@@ -1189,17 +1206,25 @@ class DawController extends ChangeNotifier {
       _cache.auto = null;
     }
     final loop = _loopOverride ?? (doc.loopOn, doc.loopStart, doc.loopEnd);
-    final calls = _docCalls(
-      _cache,
-      loop: loop,
-      metronome: doc.metronome || _countMetronome,
-      automation: !_autoSuppressed,
-      release: release,
-      observe: _watchCalls(),
-    );
+    final calls = _docCalls(_cache, loop: loop, metronome: _metronomeWanted, automation: !_autoSuppressed, release: release, observe: _watchCalls());
+    // o estilo do metrônomo antes da monitoração: um motor sem a chamada nova (o `.so` velho) para aqui, e o
+    // metrônomo segue no clique de sempre. Só quando muda: com as opções no padrão nada é enviado.
+    calls.addAll(_metronomeStyleCalls());
     // por último: um motor que ainda não conheça a entrada para aqui sem perder o resto
     calls.addAll(_monitorCalls());
     _engine.calls(calls);
+  }
+
+  /// O metrônomo soa agora: ligado (e, no modo "só ao gravar", gravando) ou a contagem que o liga por um tempo.
+  bool get _metronomeWanted => (doc.metronome && (doc.metronomeOptions.mode == MetronomeMode.always || recording)) || _countMetronome;
+
+  /// A chamada do estilo do metrônomo quando ele difere do que o motor tem (o padrão de um motor novo).
+  List<List<Object>> _metronomeStyleCalls() {
+    final o = doc.metronomeOptions;
+    final sig = o.isDefault ? '' : o.styleCall.skip(1).join(',');
+    if (sig == _cache.metroSig) return const [];
+    _cache.metroSig = sig;
+    return [o.styleCall];
   }
 
   // ------------------------------------------------------------------ warp
@@ -1319,7 +1344,7 @@ class DawController extends ChangeNotifier {
       ['tracks', d.tracks.length],
       ['master', d.masterGain, d.masterPan],
       ['loop_set', loop.$1, loop.$2, loop.$3],
-      ['metronome', metronome, 0.5],
+      ['metronome', metronome, d.metronomeOptions.volume],
       ['clips_clear'],
     ];
     // o mapa de andamento e o de compassos vêm logo depois do `tempo` (as posições em batidas do
@@ -1912,6 +1937,99 @@ class DawController extends ChangeNotifier {
   /// Contagem de um compasso antes de gravar; preferência do projeto, fora do desfazer.
   void toggleCountIn() => edit((d) => d.countIn = !d.countIn, undoable: false);
 
+  /// Muda as opções do metrônomo (timbre, subdivisão, acento, volume, quando soa) por [change], sobre uma
+  /// cópia; preferência do projeto, fora do desfazer. O motor recebe o estilo uma vez por mudança.
+  void setMetronomeOptions(void Function(MetronomeOptions o) change) {
+    final next = doc.metronomeOptions.copy();
+    change(next);
+    // passa pela leitura do JSON: os limites valem também para quem chama direto
+    final clean = MetronomeOptions.fromJson(next.toJson());
+    if (jsonEncode(clean.toJson()) == jsonEncode(doc.metronomeOptions.toJson())) return;
+    edit((d) => d.metronomeOptions = clean, undoable: false);
+  }
+
+  /// Compassos de pré-roll (0 a [DawDoc.maxPreRollBars]): a gravação começa esse tanto antes do ponto
+  /// de gravar, tocando a música sem gravar. Independe da contagem. Fora do desfazer.
+  void setPreRoll(int bars) {
+    final v = bars.clamp(0, DawDoc.maxPreRollBars);
+    if (v == doc.preRollBars) return;
+    edit((d) => d.preRollBars = v, undoable: false);
+  }
+
+  /// Liga/desliga o punch. Ligando sem região, ela nasce da região do loop (se houver) ou de dois
+  /// compassos a partir do cursor.
+  void togglePunch() {
+    if (_blockedByRecording('ligar ou desligar o punch')) return;
+    edit((d) {
+      d.punchOn = !d.punchOn;
+      if (d.punchOn && d.punchRegion == null) {
+        final loop = d.loopEnd - d.loopStart > 0.01 && d.loopOn;
+        final from = loop ? d.loopStart : snapBeat(math.max(0.0, beat.value));
+        d.punchIn = from;
+        d.punchOut = loop ? d.loopEnd : from + 2 * d.meter.barBeatsAt(from);
+      }
+    }, undoable: false);
+  }
+
+  /// Define a região de punch (as pontas trocadas se preciso); sem largura, a região some. Não liga o punch.
+  void setPunchRegion(double a, double b) {
+    if (recording || !a.isFinite || !b.isFinite) return;
+    final lo = math.max(0.0, math.min(a, b)), hi = math.max(a, b);
+    edit((d) {
+      if (hi - lo < 0.01) {
+        d.punchIn = d.punchOut = null;
+        d.punchOn = false;
+      } else {
+        d.punchIn = lo;
+        d.punchOut = hi;
+      }
+    }, undoable: false);
+  }
+
+  // ------------------------------------------------------------------ tap tempo
+
+  final _tap = TapTempo();
+  final _tapClock = Stopwatch()..start();
+  Timer? _tapTimer;
+
+  /// O andamento que a sequência de batidas dá agora (null sem sequência), para a tela mostrar ao vivo.
+  final tapBpm = ValueNotifier<double?>(null);
+
+  /// Quanto tempo depois da última batida o andamento é aplicado ao projeto.
+  static const tapCommitDelay = Duration(milliseconds: 1500);
+
+  /// O relógio do tap (s); os testes trocam.
+  @visibleForTesting
+  double Function()? debugTapClock;
+
+  /// Uma batida do tap tempo (o botão e o atalho). Mostra o andamento ao vivo em [tapBpm] e o aplica ao
+  /// projeto ([commitTap]) quando as batidas param. Não faz nada gravando (o andamento não muda no meio).
+  double? tapTempo() {
+    if (recording || _recBusy || _disposed) return null;
+    final now = debugTapClock?.call() ?? _tapClock.elapsedMicroseconds / 1e6;
+    final v = _tap.tap(now);
+    tapBpm.value = v;
+    _tapTimer?.cancel();
+    if (v != null) _tapTimer = Timer(tapCommitDelay, commitTap);
+    return v;
+  }
+
+  /// Aplica o andamento do tap ao projeto (com mapa de andamento, o ponto inicial) e recomeça a sequência.
+  /// Devolve o andamento aplicado, ou null se não havia.
+  double? commitTap() {
+    _tapTimer?.cancel();
+    final v = _tap.bpm;
+    _tap.reset();
+    tapBpm.value = null;
+    if (v == null || recording || _disposed) return null;
+    if (v != doc.bpm) {
+      unawaited(setTempo(v, doc.beatsPerBar, keepMeter: true));
+      notice = 'Andamento: ${v.toStringAsFixed(1).replaceAll('.', ',')} BPM (tap).';
+      notifyListeners();
+    }
+    return v;
+  }
+
   /// Compensação manual da latência de gravação (ms, −500..500), fora do desfazer.
   void setRecLatency(double ms) {
     final v = ms.isFinite ? ms.clamp(-500.0, 500.0).toDouble() : 0.0;
@@ -2209,6 +2327,12 @@ class DawController extends ChangeNotifier {
       ..metronome = before.metronome
       ..countIn = before.countIn
       ..recLatencyMs = before.recLatencyMs
+      // as opções de gravação e do metrônomo também são preferência: desfazer uma nota não mexe nelas
+      ..metronomeOptions = before.metronomeOptions
+      ..preRollBars = before.preRollBars
+      ..punchIn = before.punchIn
+      ..punchOut = before.punchOut
+      ..punchOn = before.punchOn
       // mapear não entra no histórico: desfazer uma nota não desfaz os mapeamentos
       ..midiMap = before.midiMap;
     if (doc.loopStart == before.loopStart && doc.loopEnd == before.loopEnd) doc.loopOn = before.loopOn;
@@ -2342,7 +2466,12 @@ class DawController extends ChangeNotifier {
     next
       ..metronome = old.metronome
       ..countIn = old.countIn
-      ..recLatencyMs = old.recLatencyMs;
+      ..recLatencyMs = old.recLatencyMs
+      ..metronomeOptions = old.metronomeOptions
+      ..preRollBars = old.preRollBars
+      ..punchIn = old.punchIn
+      ..punchOut = old.punchOut
+      ..punchOn = old.punchOn;
     final live = {for (final t in old.tracks) t.id: t};
     for (final t in next.tracks) {
       final now = live[t.id];
@@ -4365,14 +4494,25 @@ class DawController extends ChangeNotifier {
   void _beginRecording({required Set<String> audioIds, required Set<String> midiIds, required bool audio}) {
     final d = doc;
     final wasPlaying = playing.value;
-    final start = wasPlaying ? _estimatedBeat() : math.max(0.0, beat.value);
+    final punch = d.punchActive ? d.punchRegion : null;
+    var start = wasPlaying ? _estimatedBeat() : math.max(0.0, beat.value);
+    // com punch e pré-roll, o ponto de gravar é o punch in: o pré-roll o antecede (o cursor só vale sem pré-roll)
+    if (punch != null && !wasPlaying && d.preRollBars > 0 && start < punch.$1) start = punch.$1;
+    if (punch != null && start >= punch.$2 - 1e-9 && !_punchWraps(d, start, punch)) {
+      error = 'O cursor está depois do punch out: nada seria gravado. Mova o cursor ou a região de punch.';
+      notifyListeners();
+      return;
+    }
     // a contagem tem o tamanho do compasso do cursor (com mapa de compassos, o dele)
     final bar = d.meter.isSingle ? d.beatsPerBar.toDouble() : d.meter.barBeatsAt(start);
     final count = !wasPlaying && d.countIn;
+    // o pré-roll: N compassos de música antes de gravar (o que cabe antes do zero; sem ele se o fim do loop cai no meio)
+    var preBeats = wasPlaying ? 0.0 : _preRollBeats(d, start, d.preRollBars);
+    if (preBeats > 0 && d.loopOn && d.loopEnd > d.loopStart && d.loopEnd > start - preBeats + 1e-9 && d.loopEnd <= start + 1e-9) preBeats = 0;
     double? zone;
-    var from = start;
+    var from = start - preBeats;
     if (count) {
-      final before = start - bar;
+      final before = start - preBeats - bar;
       // o fim do loop no compasso da contagem: o transporte voltaria ao começo do loop e nunca
       // chegaria ao cursor
       final loopInside = d.loopOn && d.loopEnd > d.loopStart && d.loopEnd > before + 1e-9 && d.loopEnd <= start + 1e-9;
@@ -4405,11 +4545,17 @@ class DawController extends ChangeNotifier {
       zone: zone,
       latency: latency.isFinite ? latency : 0,
       midiLatency: outLatency,
-      // a contagem e a latência saem do começo do que a entrada mandou (latência negativa, da
-      // compensação manual, acrescenta silêncio)
-      skip: (count ? _countFrames(d.tempo, d.bpm, rate, bar, zone ?? start - bar) : 0) + (latency.isFinite ? (latency * rate).round() : 0),
+      // a contagem, o pré-roll e a latência saem do começo do que a entrada mandou (latência negativa, da
+      // compensação manual, acrescenta silêncio). Fora do lugar a contagem toca lá longe e o pré-roll vem depois dela.
+      skip:
+          (zone != null
+              ? _countFrames(d.tempo, d.bpm, rate, bar, zone) + (preBeats > 0 ? _countFrames(d.tempo, d.bpm, rate, preBeats, start - preBeats) : 0)
+              : (start - from > 1e-9 ? _countFrames(d.tempo, d.bpm, rate, start - from, from) : 0)) +
+          (latency.isFinite ? (latency * rate).round() : 0),
       metronomeTemp: count && !d.metronome,
       startFromCapture: wasPlaying,
+      preBeats: preBeats,
+      punch: punch,
       tempo: d.tempo,
     );
     _rec = r;
@@ -4417,7 +4563,8 @@ class DawController extends ChangeNotifier {
     countingIn = count;
     _countMetronome = r.metronomeTemp;
     if (zone != null) {
-      _loopOverride = (true, start, zone + bar);
+      // depois da contagem lá longe o transporte volta ao começo do pré-roll (ou ao cursor, sem ele)
+      _loopOverride = (true, start - preBeats, zone + bar);
       // a automação do master vale para o clique, e lá no fim de tudo ela pode estar num fade que o
       // calaria: fica de fora até meio tempo antes da volta
       _autoSuppressed = true;
@@ -4458,8 +4605,21 @@ class DawController extends ChangeNotifier {
       return;
     }
     playing.value = true;
-    beat.value = zone != null ? start - bar : from;
+    beat.value = zone != null ? start - preBeats - bar : from;
     notifyListeners();
+  }
+
+  /// O punch alcança o cursor mesmo depois do punch out: com loop, a volta traz o transporte de novo à região.
+  static bool _punchWraps(DawDoc d, double start, (double, double) punch) =>
+      d.loopOn && d.loopEnd > d.loopStart && start < d.loopEnd - 1e-9 && punch.$1 >= d.loopStart - 1e-9 && punch.$2 <= d.loopEnd + 1e-9;
+
+  /// Batidas de [bars] compassos antes de [from], pelo mapa de compassos (o que cabe antes do zero).
+  static double _preRollBeats(DawDoc d, double from, int bars) {
+    var b = from;
+    for (var i = 0; i < bars && b > 1e-9; i++) {
+      b = math.max(0.0, b - d.meter.barBeatsAt(math.max(0.0, b - 1e-6)));
+    }
+    return from - b;
   }
 
   /// Compassos até a região da contagem fora do lugar: longe o bastante para nenhuma gravação
@@ -4536,6 +4696,8 @@ class DawController extends ChangeNotifier {
       _restoreCountIn();
     }
 
+    // no modo "só ao gravar" o metrônomo cala com a gravação
+    if (doc.metronome && doc.metronomeOptions.mode == MetronomeMode.recording) _sync();
     try {
       if (cancel) {
         // parou na contagem: nada foi gravado
@@ -4678,7 +4840,9 @@ class DawController extends ChangeNotifier {
     final (notes, wrapped) = _recordedNotes(r, notesData);
     final ccs = _recordedControls(r, notesData, wrapped);
     if (plans.isEmpty && notes.isEmpty && ccs.isEmpty) {
-      if (r.audio && r.frames == 0) {
+      if (r.punch != null && (r.frames > 0 || r.midiIds.isNotEmpty)) {
+        error = 'Nada foi gravado dentro da região de punch: a gravação parou antes do punch in, ou nada foi tocado nela.';
+      } else if (r.audio && r.frames == 0) {
         error = 'A entrada não mandou áudio durante a gravação: confira o microfone e a entrada escolhida.';
       } else if (!r.audio && r.midiIds.isNotEmpty) {
         error = 'Nenhuma nota foi tocada na faixa armada durante a gravação.';
@@ -4698,11 +4862,16 @@ class DawController extends ChangeNotifier {
             sample: takes[plans[p].active],
             start: plans[p].start,
             length: plans[p].seconds,
+            fadeIn: plans[p].fadeIn,
+            fadeOut: plans[p].fadeOut,
+            fadeInShape: plans[p].fadeIn > 0 ? FadeShape.equalPower : FadeShape.linear,
+            fadeOutShape: plans[p].fadeOut > 0 ? FadeShape.equalPower : FadeShape.linear,
             takes: takes.length > 1 ? List.of(takes) : null,
           );
           t.clips.add(clip);
           // gravar por cima substitui o que estava embaixo, como nos DAWs
           placeOnTop(clip.id);
+          if (plans[p].fadeIn > 0 || plans[p].fadeOut > 0) _punchCrossfade(t, clip);
         }
       }
       for (final id in {...notes.keys, ...ccs.keys}) {
@@ -4712,11 +4881,81 @@ class DawController extends ChangeNotifier {
     });
   }
 
+  /// A emenda do punch vira crossfade: o clipe de antes (e o de depois) que sobrou do corte do clipe
+  /// gravado por cima entra [punchFade] embaixo dele, com o fade complementar, se o áudio dele tem esse
+  /// pedaço a mais. Sem warp, sem reverso e só onde o fade do clipe novo existe.
+  void _punchCrossfade(DawTrack t, AudioClip clip) {
+    final xf = punchFade;
+    final tempo = doc.tempo;
+    bool plain(AudioClip o) => !o.warp && !o.reverse && o.pitch == 0;
+    final end = doc.clipEnd(clip);
+    for (final o in t.clips.toList()) {
+      if (identical(o, clip) || !plain(o)) continue;
+      final total = doc.samples[o.sample]?.duration;
+      if (clip.fadeIn > 0 && (doc.clipEnd(o) - clip.start).abs() < 1e-6 && o.fadeOut == 0 && total != null && o.offset + o.length + xf <= total + 1e-9) {
+        o
+          ..length += xf
+          ..fadeOut = xf
+          ..fadeOutShape = FadeShape.equalPower;
+      } else if (clip.fadeOut > 0 && (o.start - end).abs() < 1e-6 && o.fadeIn == 0 && o.offset >= xf - 1e-9) {
+        o
+          ..start = tempo.beatAt(tempo.secondsAt(end) - xf)
+          ..offset -= xf
+          ..length += xf
+          ..fadeIn = xf
+          ..fadeInShape = FadeShape.equalPower;
+      }
+    }
+  }
+
   /// Onde cada pedaço de áudio da gravação vai. Sem volta de loop, um clipe do cursor até onde
   /// parou. Com voltas, cada passada é uma tomada de um clipe que cobre o loop (a ativa é a
   /// última); a primeira começa no cursor (silêncio antes, se ele estava no meio do loop) e o que
   /// veio antes do loop, se começou antes dele, fica num clipe comum.
-  static List<_ClipPlan> _planAudio(_Recording r) {
+  static List<_ClipPlan> _planAudio(_Recording r) => _cropToPunch(_planAudioFull(r), r);
+
+  /// Fade de cada lado de uma emenda do punch (s): curto o bastante para não comer a nota, longo o
+  /// bastante para não estalar.
+  static const punchFade = 0.007;
+
+  /// Com punch, cada clipe (e cada tomada dele) fica só com o trecho da região: o que a gravação
+  /// pegou fora dela some. As pontas cortadas ganham fade curto (a emenda com o que já estava lá é
+  /// um crossfade, ver [_punchCrossfade]). Sem punch devolve os planos como estão.
+  static List<_ClipPlan> _cropToPunch(List<_ClipPlan> plans, _Recording r) {
+    final punch = r.punch;
+    if (punch == null) return plans;
+    final tempo = r.tempo;
+    final out = <_ClipPlan>[];
+    for (final plan in plans) {
+      final t0 = tempo.secondsAt(plan.start);
+      final endBeat = tempo.beatAt(t0 + plan.seconds);
+      final s = math.max(plan.start, punch.$1), e = math.min(endBeat, punch.$2);
+      if (e - s < 1e-6) continue;
+      final f0 = ((tempo.secondsAt(s) - t0) * r.rate).round();
+      final secs = tempo.secondsAt(e) - tempo.secondsAt(s);
+      final f1 = f0 + (secs * r.rate).round();
+      final pieces = <_Piece>[];
+      final at = <int, int>{};
+      for (var k = 0; k < plan.pieces.length; k++) {
+        final p = plan.pieces[k];
+        // o trecho [f0, f1) do clipe dentro do que esta tomada gravou (que começa depois de p.pad quadros)
+        final lo = math.max(f0, p.pad), hi = math.min(f1, p.pad + p.to - p.from);
+        if (hi - lo < 1) continue;
+        at[k] = pieces.length;
+        pieces.add((from: p.from + lo - p.pad, to: p.from + hi - p.pad, pad: math.max(0, p.pad - f0)));
+      }
+      if (pieces.isEmpty) continue;
+      // a tomada que toca: a última que cobre a região inteira (a passada que só pegou um pedaço fica guardada)
+      bool complete(_Piece x) => x.pad == 0 && x.to - x.from >= (f1 - f0) * 0.98;
+      var active = pieces.lastIndexWhere(complete);
+      if (active < 0) active = at[plan.active] ?? pieces.length - 1;
+      final fade = math.min(punchFade, secs / 3);
+      out.add((start: s, seconds: secs, pieces: pieces, active: active, fadeIn: s > plan.start + 1e-9 ? fade : 0.0, fadeOut: e < endBeat - 1e-9 ? fade : 0.0));
+    }
+    return out;
+  }
+
+  static List<_ClipPlan> _planAudioFull(_Recording r) {
     final frames = r.frames - r.skip;
     // menos de 50 ms depois da latência: um toque no gravar e parar, não uma gravação
     if (frames < r.rate * 0.05) return const [];
@@ -4738,14 +4977,14 @@ class DawController extends ChangeNotifier {
     if (kept == 1) {
       final end = endOf(0);
       return [
-        (start: r.start, seconds: end / r.rate, pieces: [(from: 0, to: end, pad: 0)], active: 0),
+        (start: r.start, seconds: end / r.rate, pieces: [(from: 0, to: end, pad: 0)], active: 0, fadeIn: 0, fadeOut: 0),
       ];
     }
     final plans = <_ClipPlan>[];
     final _Piece first;
     if (r.start < r.loopStart) {
       final head = r.framesBetween(r.start, r.loopStart).round();
-      plans.add((start: r.start, seconds: head / r.rate, pieces: [(from: 0, to: head, pad: 0)], active: 0));
+      plans.add((start: r.start, seconds: head / r.rate, pieces: [(from: 0, to: head, pad: 0)], active: 0, fadeIn: 0, fadeOut: 0));
       first = (from: head, to: endOf(0), pad: 0);
     } else {
       first = (from: 0, to: endOf(0), pad: r.framesBetween(r.loopStart, r.start).round());
@@ -4765,6 +5004,8 @@ class DawController extends ChangeNotifier {
       seconds: r.tempo.isSingle ? (r.loopEnd - r.loopStart) * 60 / r.bpm : r.tempo.secondsAt(r.loopEnd) - r.tempo.secondsAt(r.loopStart),
       pieces: pieces,
       active: active,
+      fadeIn: 0,
+      fadeOut: 0,
     ));
     return plans;
   }
@@ -4809,10 +5050,13 @@ class DawController extends ChangeNotifier {
         if (n.start.isFinite && n.end.isFinite && n.pitch < ccPitchBase) (n.track, n.pitch, n.start, n.end, n.velocity),
     ];
     final zone = r.zone;
+    // depois da contagem fora do lugar o transporte volta ao começo do pré-roll (ao cursor, sem ele)
+    final back = r.start - r.preBeats;
+    final punch = r.punch;
     // o motor parte a nota segurada num salto do transporte: ela termina no ponto do salto e
     // recomeça do outro lado. A volta da contagem fora do lugar (do fim dela ao cursor) não é
     // passada nenhuma: ali a nota segurada volta a ser uma só
-    if (zone != null) _joinAcross(raw, zone + r.countBeats, r.start);
+    if (zone != null) _joinAcross(raw, zone + r.countBeats, back);
     // a volta do loop na contagem fora do lugar é a da contagem, não uma passada. A nota segurada
     // na volta do loop chega partida nele (de um motor que não parte, com o fim antes do começo)
     final heldAcross =
@@ -4829,6 +5073,13 @@ class DawController extends ChangeNotifier {
         s = math.max(r.shiftBeat(s), math.min(s, floor));
         e = math.max(r.shiftBeat(e), s);
       }
+      // punch: só o que cai na região fica; a nota que entra antes do punch in começa nele e a que passa do
+      // punch out é cortada nele
+      if (punch != null) {
+        if (e <= punch.$1 + minLength || s >= punch.$2 - 1e-9) return;
+        s = math.max(s, punch.$1);
+        e = math.min(e, punch.$2);
+      }
       if (e - s < minLength) e = s + minLength;
       out.putIfAbsent(id, () => []).add((pitch: pitch, start: math.max(0.0, s), end: e, velocity: v.isFinite ? v.clamp(0.0, 1.0).toDouble() : 0.8));
     }
@@ -4843,13 +5094,13 @@ class DawController extends ChangeNotifier {
       if (zone != null) {
         // tocada na contagem, lá longe: vem para antes do cursor
         if (s >= zone - 1e-9) {
-          s = s - (zone + r.countBeats) + r.start;
+          s = s - (zone + r.countBeats) + back;
           counted = true;
         }
-        if (e >= zone - 1e-9) e = e - (zone + r.countBeats) + r.start;
-      } else if (r.countBeats > 0 && s < r.start - 1e-9 && !(wrapped && s >= ls - 1e-9)) {
-        counted = true;
+        if (e >= zone - 1e-9) e = e - (zone + r.countBeats) + back;
       }
+      // o que soou antes do ponto de gravar (a contagem, o pré-roll) não é da gravação
+      if (((zone == null && r.countBeats > 0) || r.preBeats > 0) && s < r.start - 1e-9 && !(wrapped && s >= ls - 1e-9)) counted = true;
       if (!counted && wrapped && e < s - 1e-9) {
         add(id, pitch, s, le, v);
         if (e > ls + minLength) add(id, pitch, ls, e, v);
@@ -4890,6 +5141,8 @@ class DawController extends ChangeNotifier {
       byTrack.putIfAbsent(n.track, () => []).add((cc: cc, beat: beat, value: MidiCc.clampValue(cc, n.velocity)));
     }
     final zone = r.zone, ls = r.loopStart;
+    final punch = r.punch;
+    final lead = (zone == null && r.countBeats > 0) || r.preBeats > 0;
     for (final e in byTrack.entries) {
       if (e.key < 0 || e.key >= r.trackIds.length) continue;
       final id = r.trackIds[e.key];
@@ -4906,11 +5159,9 @@ class DawController extends ChangeNotifier {
         list = list.sublist(from);
       }
       for (final ev in list) {
-        if (zone != null) {
-          if (ev.beat >= zone - 1e-9) continue;
-        } else if (r.countBeats > 0 && ev.beat < r.start - 1e-9 && !(wrapped && ev.beat >= ls - 1e-9)) {
-          continue;
-        }
+        if (zone != null && ev.beat >= zone - 1e-9) continue;
+        if (lead && ev.beat < r.start - 1e-9 && !(wrapped && ev.beat >= ls - 1e-9)) continue;
+        if (punch != null && (ev.beat < punch.$1 - 1e-9 || ev.beat > punch.$2 + 1e-9)) continue;
         out.putIfAbsent(id, () => []).add((cc: ev.cc, beat: math.max(0.0, ev.beat), value: ev.value));
       }
     }
@@ -4971,7 +5222,11 @@ class DawController extends ChangeNotifier {
     final minStart = starts.reduce(math.min);
     final maxEnd = ends.reduce(math.max);
     MidiNote rel(_RecNote n, double origin) => MidiNote(pitch: n.pitch, start: n.start - origin, length: n.end - n.start, velocity: n.velocity);
-    final target = t.midi.where((c) => c.start <= r.start + 1e-9 && c.end > r.start + 1e-9).firstOrNull;
+    // com punch, o que vale é a região: o clipe sob o punch in (ou o cursor, já dentro dela)
+    final punch = r.punch;
+    final anchor = punch == null ? r.start : math.max(r.start, punch.$1);
+    final stop = punch == null ? r.stopBeat : math.min(r.stopBeat, punch.$2);
+    final target = t.midi.where((c) => c.start <= anchor + 1e-9 && c.end > anchor + 1e-9).firstOrNull;
     if (target != null) {
       var start = target.start, end = target.end;
       if (minStart < start - 1e-9) start = floorBar(minStart);
@@ -4988,16 +5243,21 @@ class DawController extends ChangeNotifier {
       target
         ..length = end - start
         ..notes.addAll([for (final n in notes) rel(n, start)]);
-      _mergeControls(target, ccs, start, r.stopBeat);
+      _mergeControls(target, ccs, start, stop);
       if (grew) placeOnTop(target.id);
       return;
     }
-    final from = wrapped ? math.min(r.start, r.loopStart) : r.start;
-    final to = wrapped ? r.loopEnd : math.max(r.stopBeat, maxEnd);
+    var from = wrapped ? math.min(r.start, r.loopStart) : r.start;
+    var to = wrapped ? r.loopEnd : math.max(stop, maxEnd);
+    // com punch o clipe novo cobre só a região gravada: o resto do arranjo fica onde estava
+    if (punch != null) {
+      from = math.max(from, punch.$1);
+      to = math.max(math.min(to, punch.$2), maxEnd);
+    }
     final start = floorBar(math.min(from, minStart));
     final end = math.max(ceilBar(math.max(to, maxEnd)), start + meter.barBeatsAt(start));
     final clip = MidiClip(id: newId(), name: t.name, start: start, length: end - start, notes: [for (final n in notes) rel(n, start)]);
-    _mergeControls(clip, ccs, start, r.stopBeat);
+    _mergeControls(clip, ccs, start, stop);
     t.midi.add(clip);
     placeOnTop(clip.id);
   }

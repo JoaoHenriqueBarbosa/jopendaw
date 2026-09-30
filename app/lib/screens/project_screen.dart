@@ -182,6 +182,10 @@ class _DawStudioState extends State<DawStudio> {
         return c.toggleFollow;
       case 'transport.metronome':
         return c.toggleMetronome;
+      case 'transport.punch':
+        return c.togglePunch;
+      case 'transport.tap':
+        return c.tapTempo;
       case 'panel.mixer':
         return () => toggleDock(c, Dock.mixer);
       case 'panel.editor':

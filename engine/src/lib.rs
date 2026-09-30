@@ -2726,6 +2726,44 @@ mod tests {
     }
 
     #[test]
+    fn metronomo_com_estilo_pelo_motor_tem_mais_cliques_e_soa_diferente() {
+        // colcheias no 4/4 a 120 BPM (a 48 kHz: um clique a cada 12000 quadros): 3 cliques em 30000 quadros
+        let clicks = |style: Option<(u32, u32)>| {
+            let mut e = engine();
+            e.set_metronome(true, 1.0);
+            if let Some((timbre, sub)) = style {
+                e.set_metronome_style(timbre, sub, 1.0, 1.6, 0.5);
+            }
+            e.play();
+            let (l, _) = run(&mut e, 30_000);
+            let mut n = 0;
+            let mut quiet = 100;
+            for s in &l {
+                if s.abs() > 1e-4 {
+                    if quiet > 40 {
+                        n += 1;
+                    }
+                    quiet = 0;
+                } else {
+                    quiet += 1;
+                }
+            }
+            (n, l)
+        };
+        let (plain, a) = clicks(None);
+        let (eighths, b) = clicks(Some((0, 1)));
+        let (wood, c) = clicks(Some((1, 0)));
+        assert_eq!(plain, 2);
+        assert_eq!(eighths, 3);
+        assert_eq!(wood, 2);
+        assert_ne!(a, c);
+        assert_ne!(a, b);
+        // as opções padrão explícitas são o clique de sempre, bit a bit
+        let (_, d) = clicks(Some((0, 0)));
+        assert!(a.iter().zip(&d).all(|(x, y)| x.to_bits() == y.to_bits()));
+    }
+
+    #[test]
     fn hermite_reproduz_retas_e_passa_pelos_pontos() {
         assert!((hermite(1.0, 2.0, 3.0, 4.0, 0.25) - 2.25).abs() < 1e-6);
         assert_eq!(hermite(0.3, -0.7, 0.9, 0.1, 0.0), -0.7);
