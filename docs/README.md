@@ -32,6 +32,7 @@ Comece por aqui, na ordem:
 | [06c Painel de efeitos](manual/06c-painel-de-efeitos.md) | Cadeia de efeitos |
 | [06d Referência dos efeitos](manual/06d-efeitos-referencia.md) | Os 12 efeitos, parâmetro por parâmetro |
 | [06e Compensação de latência](manual/06e-compensacao-de-latencia.md) | Como o motor alinha faixas e envios quando o `Limitador` e a `Distorção` atrasam o som |
+| [06f MIDI learn](manual/06f-midi-learn.md) | Ligar knobs, faders e pedais de um controlador MIDI a controles do app |
 | [07 Automação](manual/07-automacao.md) | Mover parâmetros no tempo |
 | [08 Exportação](manual/08-exportacao.md) | WAV, stems, congelar faixa |
 | [09 Configurações, atalhos e Android](manual/09-configuracoes-atalhos-android.md) | Ajustes, teclas, diferenças de plataforma |
@@ -57,6 +58,7 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Mapa de andamento e compasso](guias/mapa-de-andamento-e-compasso.md) | Virada de andamento, ritardando em rampa, 4/4 para 3/4 e 6/8 |
 | [MIDI de e para outros programas](guias/midi-de-e-para-outros-programas.md) | Exportar e importar `.mid`: melodia para outro DAW, pacote de acordes, backup das notas |
 | [Atalhos e fluxo rápido](guias/atalhos-e-fluxo-rapido.md) | Trabalhar sem tirar a mão do teclado |
+| [Controlador MIDI e MIDI learn](guias/controlador-midi-e-midi-learn.md) | Knobs no mixer, pedal de expressão no filtro, faders gravando automação |
 
 ## Para quem mexe no código
 

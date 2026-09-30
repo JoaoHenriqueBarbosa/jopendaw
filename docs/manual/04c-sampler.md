@@ -238,7 +238,7 @@ O seletor de presets (categoria `SAMPLER`) tem cinco ajustes de envelope. Nenhum
 
 O rótulo do seletor compara só os parâmetros de timbre: como a `Nota base` e a `Afinação` são ignoradas, o preset continua marcado mesmo depois de você mudá-las.
 
-Você também pode guardar os seus (`Salvar como preset…`, seção `MEUS PRESETS` no fim do menu; ver [Meus presets](04-painel-de-instrumento.md#meus-presets)). O preset do sampler guarda **só o timbre**: `Modo`, `Ataque`, `Decaimento`, `Sustentação`, `Soltura`, `Sens. vel.`, `Volume`, `Alcance do bend` e `Vibrato da roda`. **Não guarda o áudio escolhido, as zonas, a `Nota base` nem a `Afinação`**: o app não tem preset de zonas, então um multi-sample montado numa faixa não vai junto para outra pelo preset. Ao aplicar um preset seu, o áudio, as zonas, a `Nota base` e a `Afinação` da faixa ficam como estão.
+Você também pode guardar os seus (`Salvar como preset…`, seção `MEUS PRESETS` no topo do menu; ver [Meus presets](04-painel-de-instrumento.md#meus-presets)). O preset do sampler guarda **só o timbre**: `Modo`, `Ataque`, `Decaimento`, `Sustentação`, `Soltura`, `Sens. vel.`, `Volume`, `Alcance do bend` e `Vibrato da roda`. **Não guarda o áudio escolhido, as zonas, a `Nota base` nem a `Afinação`**: o app não tem preset de zonas, então um multi-sample montado numa faixa não vai junto para outra pelo preset. Ao aplicar um preset seu, o áudio, as zonas, a `Nota base` e a `Afinação` da faixa ficam como estão.
 
 ## Relação com os clipes de áudio
 

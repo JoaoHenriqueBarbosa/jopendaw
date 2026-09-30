@@ -220,7 +220,7 @@ O limitador trabalha com o pico das amostras; não achei no código detecção d
 ### Cuidados
 
 - Além deste efeito, o master tem um **limitador de segurança sempre ligado** no fim (teto −0,3 dBFS, lookahead de 1,5 ms); ele não aparece na cadeia e não tem controle na interface.
-- A latência é igual ao `Lookahead` e é compensada pelo motor nas outras faixas ([06e](06e-compensacao-de-latencia.md)); o bypass não tira a latência (só `Lookahead` 0 ou remover o efeito). Mudá-lo com som passando abaixa a saída por um instante (fade de 4 ms) e volta, e o motor refaz a compensação com um crossfade de 10 ms. Automatizar o `Lookahead` não refaz a compensação a cada valor (ver 06e).
+- A latência é igual ao `Lookahead` e é compensada pelo motor nas outras faixas ([06e](06e-compensacao-de-latencia.md)); o bypass não tira a latência (só `Lookahead` 0 ou remover o efeito). Mudá-lo com som passando abaixa a saída por um instante (fade de 4 ms) e volta, e o motor refaz a compensação com um crossfade de 10 ms. Automatizar o `Lookahead` refaz a compensação no máximo a cada 20 ms (ver 06e), mas o limitador abaixa a saída a cada valor novo: prefira degraus a rampas.
 - Lookahead 0 = sem latência, mas o ataque do limitador passa a ser bruto.
 
 ---
@@ -620,7 +620,8 @@ Os efeitos processam bloco a bloco, sem alocar nem travar no meio do áudio. Alg
 - **Quanto:** a latência do projeto é a maior soma que existe de um lado a outro (uma faixa com `Limitador` de 3 ms: 3 ms para todas). Cada efeito e o total ficam limitados a 1 s. Em números inteiros de quadros: 3 ms a 48 kHz são exatamente 144 quadros; a 44,1 kHz, 132.
 - **Exportar** descarta essa latência no começo: o arquivo sai alinhado com a linha do tempo, tanto a mixagem quanto cada stem.
 - **Ao vivo** o som sai esse tanto depois do cursor (uns poucos ms). Trocar o tipo de um efeito, mudar o `Lookahead` ou mexer no roteamento com o som tocando refaz a compensação com um crossfade de 10 ms.
-- **Limites:** a gravação do app compensa só a latência do aparelho, não a dos efeitos (para gravar por cima, ponha o `Lookahead` em 0 ou some a latência à `Compensação de latência`; ver [06e](06e-compensacao-de-latencia.md#gravar-por-cima-de-um-projeto-com-efeitos-de-latência)); o volume automatizado age uns ms adiantado em relação ao som de uma faixa com efeito de latência; o clique do metrônomo não é atrasado; automatizar o `Lookahead` não refaz a conta. Nada disto foi ouvido no navegador `(testado só por testes automáticos)`.
+- **Gravação e metrônomo:** a gravação do app soma a latência do motor (esta compensação, mais a cadeia do `Master` e o limitador de segurança) à do aparelho, no áudio e nas notas MIDI, sem você somar nada à `Compensação de latência` ([06e](06e-compensacao-de-latencia.md#gravar-por-cima-de-um-projeto-com-efeitos-de-latência)); o clique do metrônomo é atrasado da mesma latência e soa junto das faixas.
+- **Limites:** o volume automatizado age uns ms adiantado em relação ao som de uma faixa com efeito de latência; automatizar o `Lookahead` refaz a conta com até 20 ms de atraso. Nada disto foi ouvido no navegador `(testado só por testes automáticos)`.
 
 Custo de CPU não foi medido para este manual. Por construção, o `Reverb` (rede de 8 linhas com difusores e reflexões) e a `Distorção` em `4×` (processa a taxa quadruplicada) fazem mais conta que os demais. Um efeito em bypass assentado não processa nada (o motor o pula).
 

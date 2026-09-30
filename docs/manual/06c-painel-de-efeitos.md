@@ -83,8 +83,8 @@ Itens do menu de três pontos:
 
 | Item | O que faz |
 |---|---|
-| `PRESETS` e a lista de presets do tipo | Aplica o preset com **todos** os valores: o que o preset não cita volta ao padrão do efeito. O que bate com os parâmetros atuais leva um visto. Só o `Sidechain` do compressor e do gate é preservado (é roteamento, não timbre). |
-| `MEUS PRESETS`, `Nenhum ainda`, a lista dos seus, `Salvar como preset…` e `Importar preset…` | Logo abaixo dos presets de fábrica: presets seus para este tipo de efeito (o EQ guarda as 8 bandas; o `Sidechain` do compressor e do gate não entra). O `…` de cada linha renomeia, exporta (`.jopreset`) e apaga. Detalhes em [Presets do usuário](#presets-do-usuário). |
+| `MEUS PRESETS`, `Nenhum ainda`, a lista dos seus, `Salvar como preset…` e `Importar preset…` | **No topo do menu**, acima dos de fábrica (desde a fase 13; antes ficavam depois deles): presets seus para este tipo de efeito (o EQ guarda as 8 bandas; o `Sidechain` do compressor e do gate não entra). O `…` de cada linha renomeia, exporta (`.jopreset`) e apaga. Detalhes em [Presets do usuário](#presets-do-usuário). |
+| `PRESETS` e a lista de presets do tipo | Vêm logo depois da seção `MEUS PRESETS`. Aplica o preset com **todos** os valores: o que o preset não cita volta ao padrão do efeito. O que bate com os parâmetros atuais leva um visto. Só o `Sidechain` do compressor e do gate é preservado (é roteamento, não timbre). |
 | `Reiniciar (valores padrão)` | Volta todos os parâmetros ao padrão. Fica apagado se o efeito já está no padrão. |
 | `Desligar (bypass)` / `Ligar` | O mesmo do botão de energia. |
 | `Mover para a esquerda` / `Mover para a direita` (computador); `Mover para cima` / `Mover para baixo` (celular) | Troca de lugar com o vizinho. Apagado na ponta da cadeia. |
@@ -96,7 +96,7 @@ Todas essas ações entram no histórico de desfazer (aplicar um preset seu tamb
 
 Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do instrumento (a mesma janela de nome, as mesmas regras de nome, a mesma exportação em `.jopreset`): o passo a passo de cada janela e os textos de erro estão em [04 Painel de instrumento, Meus presets](04-painel-de-instrumento.md#meus-presets). Aqui vai só o que muda para efeitos. Receita completa, com a cadeia vocal: [Presets do usuário](../guias/presets-do-usuario.md).
 
-**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `PRESETS` (de fábrica), `MEUS PRESETS`, `Salvar como preset…`, `Importar preset…`, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. `MEUS PRESETS` fica no fim da parte de presets, mas antes das ações do cartão. O menu é o mesmo nos cartões do rack do master e no de barramentos.
+**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `MEUS PRESETS`, a lista dos seus (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, divisor, `PRESETS` (de fábrica), divisor, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. Desde a fase 13 `MEUS PRESETS` fica no **topo** do menu (antes ficava entre os de fábrica e as ações do cartão), então `Salvar como preset…` e `Importar preset…` aparecem sem rolar. O menu é o mesmo nos cartões do rack do master e no de barramentos.
 
 **O que cada preset guarda, por tipo.** Todos os parâmetros do tipo, na unidade da tabela do efeito ([06d](06d-efeitos-referencia.md)), menos o `Sidechain`:
 
@@ -139,7 +139,7 @@ Três tipos de editor cobrem os 12 efeitos:
 
 | Controle | Como se mexe | Dica |
 |---|---|---|
-| Knob (giratório com o valor em cima e o nome embaixo) | Arrastar na **vertical**: 200 px percorrem a faixa toda; com `Shift`, 1000 px (ajuste fino). Roda do mouse sobre o knob: mexe o valor sem rolar a lista (com `Shift`, fino). Duplo clique: volta ao padrão. Botão direito no mouse, ou toque longo no celular: abre um campo para digitar o valor. Tooltip: `<nome>: arraste ou use a roda (Shift: ajuste fino) / Duplo clique: padrão (<valor>) · botão direito: digitar o valor`. | Um arraste inteiro vale um passo só no desfazer. |
+| Knob (giratório com o valor em cima e o nome embaixo) | Arrastar na **vertical**: 200 px percorrem a faixa toda; com `Shift`, 1000 px (ajuste fino). Roda do mouse sobre o knob: mexe o valor sem rolar a lista (com `Shift`, fino). Duplo clique: volta ao padrão. Botão direito no mouse, ou toque longo no celular: abre um menu com `Digitar o valor…` (o campo para digitar o valor), `Aprender MIDI` e, se o knob já está mapeado, `Remover mapeamento (Canal 1 · CC 74)`; ver [06f MIDI learn](06f-midi-learn.md) (o tooltip continua dizendo só `botão direito: digitar o valor`; os seletores de opção e a faixa-chave do `Sidechain` não têm o menu, e o `Sidechain` não se mapeia). Tooltip: `<nome>: arraste ou use a roda (Shift: ajuste fino) / Duplo clique: padrão (<valor>) · botão direito: digitar o valor`. | Um arraste inteiro vale um passo só no desfazer. |
 | Campo de valor digitado | Título com o nome do parâmetro, dica `De <mín> a <máx>`, botões `Cancelar` e `Aplicar`. Aceita número com ou sem unidade: `800 Hz`, `2,5 kHz`, `-3 dB`, `150 ms`, `70%`, `1.5 oit`; vírgula vale como ponto. Sem unidade, um valor acima do máximo de um parâmetro em segundos é lido como milissegundos. Erro: `Não entendi. Use um número, com a unidade se quiser.` Fora da faixa, o valor é limitado. | Números inteiros (vozes, bits) são arredondados. |
 | Pílula liga/desliga (`Não`/`Sim` em cima, nome embaixo) | Toque ou clique alterna. | Vale para todo parâmetro de duas opções `Não`/`Sim` (`Ping-pong`, `Congelar`, `Mono`...). |
 | Seletor de opções (caixa com seta) | Abre um menu com as opções. | Tipos, ondas, notas, `Tempo` (`Livre`/`Andamento`) e `Sidechain`. |
@@ -237,13 +237,14 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): o que o motor faz quando um efeito atrasa o som.
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): espectro e níveis para julgar o que o EQ e o compressor fizeram.
 - [07 Automação](07-automacao.md): mover qualquer parâmetro de efeito ao longo da música (filtro abrindo, mistura de reverb subindo).
+- [06f MIDI learn](06f-midi-learn.md): ligar um knob de efeito (o `Corte` do `Filtro`, a `Mistura` do `Reverb`) a um botão ou pedal de expressão de um controlador MIDI.
 - [Efeitos em combinação](../guias/efeitos-em-combinacao.md): cadeia vocal, compressão paralela, sidechain, delay em ping-pong, pad largo, baixo distorcido.
 - [Presets do usuário](../guias/presets-do-usuario.md): guardar os ajustes de cada efeito com nome (a cadeia vocal favorita, por exemplo) e levá-los a outro aparelho.
 
 ## Limites e pegadinhas
 
 - **Máximo de 16 efeitos por cadeia** (faixa ou master), o que o motor comporta. Com 16 efeitos, o botão `Adicionar efeito` (computador), o botão `Efeito` (celular), o bloco `Adicionar efeito` no fim da fileira e a linha `Efeito` do mixer ficam desabilitados, e o tooltip diz `Limite de 16 efeitos por faixa`. Remova um efeito para liberar lugar (testado só por testes automáticos).
-- **Latência dos efeitos é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo, e o motor atrasa as outras faixas, barramentos, envios (pré e pós-fader) e a chave do sidechain para tudo chegar alinhado ao master, com o efeito ligado ou em bypass (a luz do efeito não muda o alinhamento). Ficam de fora: a gravação do app, que só compensa a latência do aparelho, e a automação, que age alguns ms adiantada numa faixa com efeito de latência. Para tirar a latência de um `Limitador`, ponha o `Lookahead` em 0 ou remova o efeito. Capítulo [06e](06e-compensacao-de-latencia.md); tabela em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito) `(testado só por testes automáticos)`.
+- **Latência dos efeitos é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo, e o motor atrasa as outras faixas, barramentos, envios (pré e pós-fader) e a chave do sidechain para tudo chegar alinhado ao master, com o efeito ligado ou em bypass (a luz do efeito não muda o alinhamento). A gravação do app soma essa latência à do aparelho (áudio e notas MIDI) e o clique do metrônomo é atrasado junto. Fica de fora a automação, que age alguns ms adiantada numa faixa com efeito de latência; a automação do `Lookahead` do `Limitador` refaz a conta com até 20 ms de atraso. Para tirar a latência de um `Limitador`, ponha o `Lookahead` em 0 ou remova o efeito. Capítulo [06e](06e-compensacao-de-latencia.md); tabela em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito) `(testado só por testes automáticos)`.
 - **Trocar a ordem, ligar, desligar, adicionar e remover** fazem crossfade de 10 ms: sem estalo. Mudar a ordem recria, no motor, os efeitos dos lugares que trocaram de tipo (pelo que o código de sincronização faz): o estado interno deles, como a cauda de um reverb ou os ecos de um delay, recomeça do zero. Trocar o **tipo** de efeito num slot não existe no painel: remova e adicione.
 - **Sidechain** só existe no `Compressor` e no `Gate`; não é automatizável; presets, de fábrica ou seus, não o alteram (o preset seu nem o guarda); a faixa apagada aparece como `Faixa N (removida)` e o efeito volta a usar a própria entrada.
 - **Cauda:** com a entrada calada a cadeia continua rodando enquanto o efeito tem o que devolver (eco do delay de até 4 s, cauda do reverb). Parar o transporte não corta a cauda de imediato.
@@ -265,6 +266,8 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 | Duplo clique num knob ou valor | Volta ao padrão |
 | Duplo clique num nó do EQ | Liga/desliga a banda |
 | Duplo clique no vazio do gráfico do EQ | Acende uma banda ali |
-| Botão direito (toque longo no celular) num knob ou valor | Digitar o valor |
+| Botão direito (toque longo no celular) num knob | Menu: `Digitar o valor…`, `Aprender MIDI`, `Remover mapeamento (...)` |
+| Botão direito (toque longo no celular) num valor do gráfico do EQ | Digitar o valor |
+| `Shift+K` | Liga e desliga o modo `Aprender MIDI` (os knobs de efeito ganham contorno; ver [06f](06f-midi-learn.md)) |
 | Botão direito (toque longo) numa linha de insert do mixer | Menu `Abrir nos efeitos`, `Desligar (bypass)`, `Mover para cima`, `Mover para baixo`, `Remover` |
 | Roda do mouse sobre o cartão (fora de um controle) | Rola a fileira de efeitos na horizontal |

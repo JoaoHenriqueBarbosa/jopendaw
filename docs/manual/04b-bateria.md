@@ -93,7 +93,7 @@ A força do toque também molda o som: golpes fortes ficam mais brilhantes e mai
 
 ## Kits (presets)
 
-O seletor `Kits de bateria` (categoria `KITS`) tem 7 kits. Cada kit fixa os quatro knobs das 12 peças e o `Volume` geral; escolher um kit sobrescreve tudo (ver [Presets](04-painel-de-instrumento.md#presets)). Valores de exemplo entre parênteses. Um kit seu (`Salvar como preset…`, seção `MEUS PRESETS` no fim do menu) guarda os mesmos 49 valores (as 12 peças e o `Volume` geral), sem as notas do piano roll: ver [Meus presets](04-painel-de-instrumento.md#meus-presets).
+O seletor `Kits de bateria` (categoria `KITS`) tem 7 kits. Cada kit fixa os quatro knobs das 12 peças e o `Volume` geral; escolher um kit sobrescreve tudo (ver [Presets](04-painel-de-instrumento.md#presets)). Valores de exemplo entre parênteses. Um kit seu (`Salvar como preset…`, seção `MEUS PRESETS` no topo do menu) guarda os mesmos 49 valores (as 12 peças e o `Volume` geral), sem as notas do piano roll: ver [Meus presets](04-painel-de-instrumento.md#meus-presets).
 
 | Kit | Caráter |
 |---|---|

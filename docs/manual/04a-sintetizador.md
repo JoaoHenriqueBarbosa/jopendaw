@@ -127,7 +127,7 @@ Visor de texto: `Mono · legato` (com `Vozes` em 1) ou `Poli · N vozes`, e emba
 
 ## Presets
 
-O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categorias. Todos são polifônicos, exceto onde dito "mono". Lembre: escolher um preset devolve ao padrão tudo o que ele não cita (ver [Presets](04-painel-de-instrumento.md#presets)). Além dos 22 de fábrica, você pode guardar os seus (todos os parâmetros do sintetizador) na seção `MEUS PRESETS`, no fim do menu: ver [Meus presets](04-painel-de-instrumento.md#meus-presets).
+O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categorias. Todos são polifônicos, exceto onde dito "mono". Lembre: escolher um preset devolve ao padrão tudo o que ele não cita (ver [Presets](04-painel-de-instrumento.md#presets)). Além dos 22 de fábrica, você pode guardar os seus (todos os parâmetros do sintetizador) na seção `MEUS PRESETS`, no topo do menu: ver [Meus presets](04-painel-de-instrumento.md#meus-presets).
 
 ### Básico
 

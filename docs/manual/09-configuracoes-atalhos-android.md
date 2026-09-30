@@ -89,6 +89,16 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 | `Ctrl` + roda | Zoom no ponto do mouse |
 | `Shift` + roda | Rolar na horizontal |
 
+**Aprender MIDI**
+
+Grupo novo da janela, entre `Edição` e `Painéis`. Capítulo próprio: [06f MIDI learn](06f-midi-learn.md).
+
+| Tecla | Ação |
+|---|---|
+| `Shift+K` | Liga o modo: os controles ganham contorno; clique num e mexa no botão do teclado |
+| Botão direito · toque longo | Menu do controle: aprender ou remover o mapeamento |
+| `Esc` | Cancela o controle armado; de novo, sai do modo |
+
 **Painéis**
 
 | Tecla | Ação |
@@ -286,6 +296,7 @@ No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_star
 - [05 Piano roll](05-piano-roll.md) e [05b Ferramentas MIDI](05b-ferramentas-midi.md): os atalhos do grupo `Piano roll`.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o que sobe e o que fica só no aparelho.
 - [08 Exportação](08-exportacao.md): salvar arquivos na web e no Android.
+- [06f MIDI learn](06f-midi-learn.md): o grupo `Aprender MIDI` da janela de atalhos e o `Shift+K`.
 
 ## Limites e pegadinhas
 
@@ -307,6 +318,7 @@ Os atalhos deste assunto:
 |---|---|
 | `?` | Abrir a janela `Atalhos do teclado` |
 | `Ctrl+K` (`⌘+K` no Mac) | Ligar/desligar o teclado do computador |
+| `Shift+K` | Ligar/desligar o modo `Aprender MIDI` (com o teclado do computador ligado vira nota e fica listado em `Suspensos enquanto o teclado do computador está ligado`) |
 | `R` | Gravar |
 | `C` | Metrônomo (com o teclado do computador ligado, vira "velocidade menor" e fica listado em `Suspensos enquanto o teclado do computador está ligado`) |
 | `Z` / `X` | Com o teclado ligado: oitava abaixo / acima da faixa que toca (a bateria começa no `C2`) |
@@ -318,4 +330,4 @@ Os atalhos deste assunto:
 
 ## Aprender MIDI
 
-Botão com o ícone de controle remoto na barra (aparece com a entrada MIDI ligada) ou `Shift+K`. No modo, os controles mapeáveis (knobs de instrumento e de efeito, volume, pan e envios) ganham contorno; clique num deles e mexa num botão do teclado ou controlador (CC, pitch bend ou pressão do canal): o controle passa a acompanhá-lo, na mesma escala da automação, e grava automação se o modo de gravação de automação estiver armado. `Esc` desarma; de novo, sai do modo. Botão direito (ou toque longo) no controle: `Aprender MIDI` e `Remover mapeamento`. `Mapeamentos (n)` na faixa do modo, ou botão direito no botão da barra, abre a lista: origem, alvo, invertido, curva linear ou logarítmica, faixa mín/máx e remover; ali também ficam a opção **Suave** (o controle só assume quando o botão cruza o valor que ele já tem; ligada por padrão) e **Salvar como padrão para novos projetos** (só neste aparelho; leva volume, pan e parâmetros de instrumento, faixas pela posição; efeitos e envios ficam de fora). Os mapeamentos moram no projeto (`midi_map` no documento). CC 1, pedal e pitch bend seguem sendo expressão do instrumento a menos que você os mapeie; CC 120 a 127 (pânico, reset) nunca são mapeados. Mapeamento cujo alvo sumiu (faixa apagada, efeito removido) é ignorado e aparece em vermelho na lista.
+Resumo; o capítulo completo é o [06f MIDI learn](06f-midi-learn.md). Botão com o ícone de controle remoto na barra (aparece com a entrada MIDI ligada, com o modo ligado ou com mapeamentos no projeto; tooltip `Aprender MIDI (Shift+K): clique num controle e mexa no botão do seu teclado`) ou `Shift+K` (que pede o MIDI se ele estava desligado; com o teclado do computador ligado a tecla vira nota). No modo, os controles mapeáveis (knobs de instrumento e de efeito, volume, pan e envios) ganham contorno; clique num deles e mexa num botão do teclado ou controlador (CC, pitch bend ou pressão do canal): o controle passa a acompanhá-lo, na mesma escala da automação, e grava automação se o modo de gravação de automação estiver armado. `Esc` desarma; de novo, sai do modo. Botão direito (ou toque longo) no controle: `Aprender MIDI` e `Remover mapeamento`. `Mapeamentos (n)` na faixa do modo, ou botão direito no botão da barra, abre a lista: origem, alvo, invertido, curva linear ou logarítmica, faixa mín/máx e remover; ali também ficam a opção **Suave** (o controle só assume quando o botão cruza o valor que ele já tem; ligada por padrão) e **Salvar como padrão para novos projetos** (só neste aparelho; leva volume, pan e parâmetros de instrumento, faixas pela posição; efeitos e envios ficam de fora). Os mapeamentos moram no projeto (`midi_map` no documento). CC 1, pedal e pitch bend seguem sendo expressão do instrumento a menos que você os mapeie; CC 120 a 127 (pânico, reset) nunca são mapeados. Mapeamento cujo alvo sumiu (faixa apagada, efeito removido) é ignorado e aparece em vermelho na lista.

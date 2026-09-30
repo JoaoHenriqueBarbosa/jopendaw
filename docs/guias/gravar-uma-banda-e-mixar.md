@@ -47,7 +47,7 @@ Se o navegador negar: `O navegador negou o acesso ao microfone. Libere o microfo
 
 ### 3. Calibrar a latência (uma vez por aparelho)
 
-O app já desconta sozinho do começo do áudio a latência que o navegador informa (`baseLatency` mais `outputLatency`) e a da entrada; a `Compensação de latência` é um ajuste manual por cima disso, de −200 a 500 ms.
+O app já desconta sozinho do começo do áudio a latência que o navegador informa (`baseLatency` mais `outputLatency`), a da entrada e a do próprio motor (a dos efeitos com `Lookahead`, a da cadeia do `Master` e 1,5 ms do limitador de segurança; [06e](../manual/06e-compensacao-de-latencia.md)); a `Compensação de latência` é um ajuste manual por cima disso, de −200 a 500 ms. As notas MIDI gravadas também voltam pela latência do motor e da saída, sem a manual. O clique do metrônomo sai atrasado da latência das faixas, então soa junto delas. Meça com o projeto no estado em que vai gravar: a latência é lida ao começar cada gravação.
 
 1. Deixe o metrônomo ligado (`C`; o modelo já o liga) e arme uma faixa de áudio. Ponha o microfone perto do alto-falante (ou use um cabo de retorno); nada de fones nesta medida.
 2. Grave 4 compassos só com o clique (`R`, contagem, `R`).
@@ -127,7 +127,7 @@ Siga a ordem de [Mixagem e automação](mixagem-e-automacao.md): níveis, pan, e
 - **Camadas, com a bateria de guia.** Bateria tocada nas teclas e quantizada dá um relógio firme para o resto; o violão e a voz gravados por cima ficam colados nele. Como a gravação é a entrada crua, nenhuma decisão de som (compressor, EQ, reverb) é definitiva: dá para refazer a mixagem depois.
 - **Andamento antes de gravar.** As notas MIDI acompanham o andamento; o áudio gravado não. Por isso o andamento se fecha antes da primeira tomada.
 - **Tomadas no loop.** Cada volta é um arquivo de áudio guardado no clipe; trocar de tomada só troca o arquivo (com o mesmo corte e os mesmos fades), então escolher é barato e desfazível.
-- **Latência compensada uma vez.** O app soma o que o navegador informa e o ajuste manual; calibrado, o áudio novo cai na grade e o cortar/mover dos clipes fica exato.
+- **Latência compensada uma vez.** O app soma o que o navegador informa, a latência da entrada, a do motor (efeitos com `Lookahead`, `Master`, limitador de segurança) e o ajuste manual; calibrado, o áudio novo cai na grade e o cortar/mover dos clipes fica exato. As notas MIDI recebem a parte do motor e da saída, sem o ajuste manual `(testado só por testes automáticos; não confirmado ao ouvido)`.
 - **Reverb num só barramento.** Um `Reverb` com `Mistura` 100% dá o mesmo espaço para todos; a quantidade de cada faixa é o envio. O baixo, sem envio, fica firme.
 - **Stems depois do fader.** Você leva para outro programa o que cada faixa soava, com o nível da sua mixagem, e pode refazer o master lá.
 
@@ -140,6 +140,8 @@ Siga a ordem de [Mixagem e automação](mixagem-e-automacao.md): níveis, pan, e
 | `Arme uma faixa para gravar (o botão de gravação dela)...` | Nenhuma faixa armada | Arme a faixa (nenhuma vem armada no modelo) |
 | `Nenhuma nota foi tocada na faixa armada durante a gravação.` | A `Bateria` estava armada e você não tocou | Toque, ou desarme a faixa antes de gravar as de áudio |
 | O clipe gravado cai atrasado em relação à grade | Falta a compensação de latência | Passo 3: positiva quando o áudio chega depois da linha |
+| A voz gravada fica fora da grade depois de pôr um `Limitador` ou `Distorção` no projeto | O app já soma a latência do motor, mas só a que existia ao começar a gravação (ou uma página ou APK antigos, sem a chamada de latência, compensam só a do aparelho) | Recarregue a página (ou atualize o app), não mude o `Lookahead` durante a tomada e, se sobrar desvio, ajuste a `Compensação de latência` (passo 3) |
+| As notas do teclado gravadas caem um pouco adiantadas | O app as devolve pela latência do motor e da saída do aparelho; se a escuta que você usou foi por outra saída (fone Bluetooth, por exemplo), o valor informado pode não ser o real | Edite as notas no piano roll (`Quantizar`) ou grave com a saída de menor latência `(não confirmado)` |
 | Eco ou microfonia | O microfone capta o alto-falante (monitor ou clique do metrônomo) | Fones; desligue o metrônomo (`C`) depois da contagem |
 | As notas do teclado do computador não tocam a bateria | A oitava do teclado está em `C4`, fora do mapa da bateria | `Z` duas vezes até o botão mostrar `C2` |
 | As teclas `S`, `E`, `L`, `C` e `X` não fazem o que se espera | O teclado do computador está ligado (viram notas e oitava) | `Ctrl+K` desliga |

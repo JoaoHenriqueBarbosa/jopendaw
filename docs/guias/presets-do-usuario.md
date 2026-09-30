@@ -2,7 +2,7 @@
 
 > Guardar com nome o som que você ajustou (um instrumento ou um efeito), chamá-lo em outra faixa ou projeto com dois toques e levá-lo a outro aparelho ou a um colega num arquivo `.jopreset`; cerca de 5 minutos para o primeiro preset e mais 5 para levar um a outro aparelho.
 
-Tudo o que está aqui sai do código do app (commit `b39d3d4`). O uso no Chrome foi relatado pela sessão de código (salvar `Meu baixo grave` e o preset aparecer marcado com o visto); o resto das receitas segue o comportamento lido do código e dos testes automáticos, e foi montado sem ouvir o resultado `(não confirmado ao ouvido)`. Os presets ficam **neste aparelho**: não sincronizam com a conta e não vão dentro do arquivo do projeto (ver [Limitações](#limitações-reais)).
+Tudo o que está aqui sai do código do app (commit `b39d3d4`; a posição da seção `MEUS PRESETS` no **topo** dos menus vem do commit `18c72f4`, da fase 13). O uso no Chrome foi relatado pela sessão de código (salvar `Meu baixo grave` e o preset aparecer marcado com o visto); o resto das receitas segue o comportamento lido do código e dos testes automáticos, e foi montado sem ouvir o resultado `(não confirmado ao ouvido)`. Os presets ficam **neste aparelho**: não sincronizam com a conta e não vão dentro do arquivo do projeto (ver [Limitações](#limitações-reais)).
 
 ## Ingredientes
 
@@ -20,9 +20,9 @@ Tudo o que está aqui sai do código do app (commit `b39d3d4`). O uso no Chrome 
 
 1. Crie uma faixa `Sintetizador`, tecle `I` para abrir o painel `Instrumento` e, no seletor de presets, escolha `Baixo Moog` (categoria `BAIXOS`, mono).
 2. Ajuste do seu jeito. Valores de partida do [04a](../manual/04a-sintetizador.md#um-baixo-mono): `Sub` em 40%, `Ressonância` em 45%, `Corte` entre 300 e 500 Hz (por exemplo 400 Hz) e, para um baixo mais curto, `Sustentação` da `AMPLITUDE` em 40%. O seletor passa a mostrar `Baixo Moog (editado)`.
-3. Abra o seletor de presets e **role o menu até o fim**: a seção `MEUS PRESETS` fica depois das sete categorias de fábrica (o menu do sintetizador tem uns 30 itens e rola). Escolha `Salvar como preset…`.
+3. Abra o seletor de presets: a seção `MEUS PRESETS` é a **primeira** do menu, acima das sete categorias de fábrica, e não precisa de rolagem (antes da fase 13 ficava no fim do menu de uns 30 itens). Escolha `Salvar como preset…`, logo abaixo da lista dos seus.
 4. Na janela `Salvar como preset`, digite `Meu baixo grave` no campo `Nome` e toque em `Salvar` (ou `Enter`). O preset entra na seção e o seletor mostra `Meu baixo grave`, com o visto na linha dele.
-5. Numa segunda faixa `Sintetizador` (pode ser em outro projeto), abra o seletor, role até `MEUS PRESETS` e escolha `Meu baixo grave`. Todos os parâmetros do sintetizador vêm de uma vez e `Ctrl+Z` desfaz a troca.
+5. Numa segunda faixa `Sintetizador` (pode ser em outro projeto), abra o seletor e escolha `Meu baixo grave` na seção `MEUS PRESETS`, no topo. Todos os parâmetros do sintetizador vêm de uma vez e `Ctrl+Z` desfaz a troca.
 6. Mexeu no baixo e gostou mais? Repita `Salvar como preset…` com o **mesmo** nome: a janela `Substituir o preset?` pergunta `Já existe um preset chamado "Meu baixo grave". Substituir pelos valores atuais?`; `Substituir` troca os valores e mantém o nome.
 
 Valores que o preset leva: todos os parâmetros do sintetizador (osciladores, mistura, filtro, amplitude, envelope do filtro, LFO e `Geral`). Não leva as notas do clipe nem a automação; um knob automatizado entra com o valor fixo dele, não com a curva.
@@ -71,14 +71,14 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 - **Sem aviso se a gravação falhar.** O app guarda o erro internamente, mas nenhuma tela o mostra.
 - **Sampler sem áudio e sem zonas.** O preset do sampler é só timbre; um multi-sample não viaja pelo preset.
 - **Sem preset de cadeia.** Um preset por efeito; a ordem, o bypass, o `Sidechain` e os envios são refeitos à mão.
-- **A seção `MEUS PRESETS` fica no fim do menu.** No sintetizador (22 presets e 7 títulos) o menu rola e é preciso ir até o fim; achado sem correção no app.
+- **A seção `MEUS PRESETS` ficava no fim do menu: resolvido na fase 13 (`18c72f4`).** Ela, `Salvar como preset…` e `Importar preset…` agora abrem no topo dos menus de instrumento e de efeito. O inverso passa a valer: com muitos presets seus, os de fábrica descem e o menu (460 px de altura máxima no instrumento, 680 px no efeito) precisa rolar para chegar neles.
 - **Máximo de 300 presets por tipo** e nomes de até 60 caracteres, únicos por tipo sem diferenciar maiúsculas.
 - **Um arquivo por vez** na importação (só o primeiro arquivo escolhido é lido).
 - **Android e o seletor de arquivos reais:** `(testado só por testes automáticos)`, com o seletor e o "salvar como" simulados; não foi visto no aparelho.
 
 ## Se der errado
 
-- **Não acho `Salvar como preset…`:** role o menu de presets até o fim; ele vem depois de `MEUS PRESETS`.
+- **Não acho `Salvar como preset…`:** ele fica no topo do menu, logo abaixo da lista de `MEUS PRESETS` (ou de `Nenhum ainda`). Com muitos presets seus, a lista deles empurra o item para baixo: role o menu.
 - **O botão `Salvar` está apagado:** o nome está vazio (ou só tinha espaços e caracteres invisíveis).
 - **`Nome em uso` ao renomear:** já existe outro preset do mesmo tipo com esse nome (maiúsculas não contam).
 - **`Limite de 300 presets para este tipo. Apague algum antes.`:** apague os que não usa (`…`, `Apagar…`).

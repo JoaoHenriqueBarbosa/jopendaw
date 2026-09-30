@@ -47,7 +47,7 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | Gravar (círculo vermelho, `R`) | Liga e desliga a gravação nas faixas armadas. Na contagem pisca no andamento do projeto; gravando fica cheio | Tooltip diz quantas faixas estão armadas | Sem faixa armada o tooltip avisa `nenhuma faixa armada; arme no mixer (●)` |
 | Seta ao lado do gravar (`Opções de gravação`) | Menu com `Contagem de um compasso` (marcável) e `Configurações de gravação…` | | Abre a janela do [capítulo 09](09-configuracoes-atalhos-android.md) |
 | Posição | Mostra `compasso.tempo.semicolcheia` (ex.: `1.1.1`) e, embaixo, `m:ss.cc` | Antes do zero (contagem) mostra `−N` em vermelho | |
-| `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM de 20 a 999, com uma casa decimal; `Tempos por compasso` de `1/4` a `12/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. Vale na hora, com ou sem rede; o servidor recebe um espelho depois |
+| `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM de 20 a 999, com uma casa decimal; `Tempos por compasso` de `1/4` a `32/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. Vale na hora, com ou sem rede; o servidor recebe um espelho depois |
 | `Loop (L) · arraste na régua para marcar` | Liga e desliga o loop | | |
 | `Metrônomo (C)` | Liga e desliga o clique | | |
 
@@ -183,7 +183,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 **Clipe.** Um trecho de conteúdo numa faixa: de áudio (aponta para um arquivo; pode ser cortado, ter fades, warp) ou de notas MIDI (as notas do piano roll). Posições em batidas, de modo que o clipe acompanha o andamento; o corte de um clipe de áudio é em segundos do arquivo original.
 
-**Batida, compasso e posição.** A batida é a unidade de tempo da música. O compasso agrupa as batidas: `4/4` são quatro batidas por compasso (o app só oferece `1/4` a `12/4`). A posição é mostrada como `compasso.tempo.semicolcheia` (`1.1.1` é o começo). O andamento (BPM) diz quantas batidas por minuto; mudá-lo estica ou encolhe todo o arranjo.
+**Batida, compasso e posição.** A batida é a unidade de tempo da música. O compasso agrupa as batidas: `4/4` são quatro batidas por compasso (a janela `Andamento e compasso` oferece `1/4` a `32/4`). A posição é mostrada como `compasso.tempo.semicolcheia` (`1.1.1` é o começo). O andamento (BPM) diz quantas batidas por minuto; mudá-lo estica ou encolhe todo o arranjo.
 
 **Snap (grade de encaixe).** Ao arrastar clipes, o app puxa a posição para a grade escolhida: `Compasso`, `1/4` (uma batida), `1/8` (meia batida), `1/16` (um quarto de batida) ou `Livre`. Segurar `Alt` ao arrastar ignora a grade naquele gesto.
 

@@ -43,7 +43,7 @@ Durante a gravação ficam **travados**: mover o cursor e marcar/arrastar o loop
 | Botão de recarregar (tooltip `Procurar as entradas de novo (depois de conectar um microfone ou interface)`) | Relê a lista de entradas (pede a permissão do microfone se ainda não tem) | | Vira um círculo girando enquanto procura |
 | `Nível` | Medidor de entrada (o mesmo do mixer) | | Só se mexe com a entrada aberta (faixa de áudio armada ou monitorando) |
 | Seção `GRAVAÇÃO`, interruptor `Contagem de um compasso` | O metrônomo conta um compasso antes de a gravação começar | Padrão ligado | Se o metrônomo estava desligado, ele soa só durante a contagem |
-| Controle deslizante e campo `ms`: `Compensação de latência` | Ajuste manual, somado à latência que o navegador informa | **−200 a +500 ms**, passo de 1 ms, padrão 0. Positivo adianta o que foi gravado; negativo atrasa | Vale para o projeto; fora do desfazer. Campo aceita só números inteiros (`De -200 a 500 ms` se sair da faixa) |
+| Controle deslizante e campo `ms`: `Compensação de latência` | Ajuste manual, somado à latência que o navegador (ou o sistema, no Android) informa e à do motor, que o app soma sozinho ([06e](06e-compensacao-de-latencia.md)) | **−200 a +500 ms**, passo de 1 ms, padrão 0. Positivo adianta o que foi gravado; negativo atrasa | Só vale para o **áudio** gravado, não para as notas MIDI. Vale para o projeto; fora do desfazer. Campo aceita só números inteiros (`De -200 a 500 ms` se sair da faixa) |
 | `Fechar` | Fecha (leva junto um número digitado e ainda não confirmado) | | |
 
 ### Teclado do computador e MIDI
@@ -53,7 +53,7 @@ Durante a gravação ficam **travados**: mover o cursor e marcar/arrastar o loop
 | Ícone de teclado (tooltip `Tocar com o teclado do computador (Ctrl+K)`; ligado: `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga`) | Liga as teclas como piano. Ligado, mostra a oitava no ícone (`C4`) | `A W S E D F T G Y H U J K O L P` = dó a ré# da oitava seguinte. Oitava **0 a 8**, padrão 4 (tecla `A` = dó central, nota 60). Intensidade **10% a 100%**, passo de 10%, padrão 80% | `Z`/`X` baixam/sobem a oitava; `C`/`V` diminuem/aumentam a intensidade. Segurar a tecla não reataca |
 | Ícone de cabo (tooltip `Entrada MIDI: ligar teclado ou controlador`; depois `Entrada MIDI: <nomes>` ou `MIDI ligado, nenhum aparelho conectado: conecte e ele aparece aqui sozinho`) | Pede acesso ao MIDI e passa a ouvir todos os aparelhos. O número no ícone é a quantidade de aparelhos conectados | Web MIDI **sem sysex**; aparelho que entra ou sai com a página aberta é detectado sozinho | Precisa de um clique (gesto). Negado ou sem suporte: aviso em texto |
 
-O MIDI entende, em qualquer canal (o número do canal é ignorado):
+O MIDI entende, em qualquer canal (o número do canal é ignorado na expressão; só o [MIDI learn](06f-midi-learn.md) distingue o canal):
 
 | Mensagem | O que faz | Valores |
 |---|---|---|
@@ -65,9 +65,11 @@ O MIDI entende, em qualquer canal (o número do canal é ignorado):
 | `CC 120` (all sound off) | Corta tudo na hora, inclusive as caudas, e zera bend, roda e pedal | |
 | `CC 123` (todas as notas desligadas) | Solta as notas que o MIDI estava tocando | |
 
-Outros controles não são lidos. O bend, a roda e o pedal vão para a mesma faixa das notas (regra abaixo) e, com uma gravação em andamento, são gravados junto (ver "Gravar bend, modulação e pedal"). O pedal agora é resolvido dentro do motor: as notas soltas com o pedal embaixo ficam soando até ele subir, também as tocadas pelas teclas do teclado da tela e do computador. A bateria ignora bend, roda e pedal: o app nem os manda a uma faixa de bateria (as rodas da tela não aparecem nela) e a gravação não os registra nela.
+Outros controles não são lidos como expressão (só agem se você os mapear com o MIDI learn; ver "MIDI learn e o que se grava", abaixo). O bend, a roda e o pedal vão para a mesma faixa das notas (regra abaixo) e, com uma gravação em andamento, são gravados junto (ver "Gravar bend, modulação e pedal"). O pedal agora é resolvido dentro do motor: as notas soltas com o pedal embaixo ficam soando até ele subir, também as tocadas pelas teclas do teclado da tela e do computador. A bateria ignora bend, roda e pedal: o app nem os manda a uma faixa de bateria (as rodas da tela não aparecem nela) e a gravação não os registra nela.
 
 Seja qual for a origem (controlador MIDI, rodas da tela ou os pontos desenhados na faixa de controle), o valor tem a mesma resolução: o bend em passos de 1/8192 (14 bits, o centro exato), a modulação em passos de 1/127 e o pedal só solto ou embaixo. Assim, o que se grava e o que se desenha soam iguais.
+
+**MIDI learn e o que se grava.** Os outros controles (CC de knobs e faders) só agem se você os mapeou com o [MIDI learn](06f-midi-learn.md), e nunca são gravados como notas nem como pontos de controle do clipe: o que um CC mapeado faz é mexer num controle do app (fader, pan, envio, knob), e isso só vira dado gravado se o botão `Automação` estiver em `Escrever`, `Toque` ou `Trava`, com a música **tocando e sem gravar áudio ou MIDI** (gravando, o app mostra `A automação não grava junto com a gravação de áudio ou MIDI.` e só muda o valor). Se você mapeia de propósito o `CC 1`, o `CC 64` ou o pitch bend, aquela origem (canal + controle) deixa de ser expressão do instrumento: a mensagem é consumida e **não vira ponto de bend, modulação ou pedal no clipe** enquanto o mapeamento existir, mesmo com o alvo removido. Os `CC 120` a `CC 127` nunca são mapeados e seguem o caminho da tabela acima. `(testado só por testes automáticos; não visto com um controlador de verdade)`
 
 **Qual faixa toca:** a faixa **selecionada**, se for de instrumento; mas havendo faixa de instrumento **armada** e a selecionada não estando armada, toca (e grava) a **primeira armada**. Armar leva a entrada para a faixa. Se a entrada muda de faixa com a roda de modulação, o bend ou o pedal fora do repouso, a faixa antiga volta ao repouso.
 
@@ -119,6 +121,7 @@ As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrument
 - [Editor de notas (piano roll)](05-piano-roll.md): limpar, quantizar e editar as notas gravadas e, na faixa de controle, os pontos de bend, modulação e pedal.
 - [Painel de instrumento](04-painel-de-instrumento.md): as rodas do teclado da tela e o `Alcance do bend` de cada instrumento.
 - [Expressão MIDI na prática](../guias/expressao-midi-na-pratica.md): receitas de gravação com teclado MIDI, bend e pedal.
+- [MIDI learn](06f-midi-learn.md): ligar knobs e faders do controlador a controles do app; o `CC 1`, o pedal e o bend mapeados deixam de ser expressão gravada.
 
 ## Limites e pegadinhas
 
@@ -132,10 +135,13 @@ As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrument
 - O clipe de tomadas dura o tamanho do loop em segundos no andamento em que foi gravado.
 
 **Latência e compensação**
-- O app desconta sozinho do começo do áudio a soma de: latência do contexto e da saída do navegador (`baseLatency` + `outputLatency`), latência do próprio motor (efeitos com latência, cadeia do `Master` e limitador de segurança do master, que o motor informa às pontes), latência da entrada que o aparelho informa e a `Compensação de latência` da janela `Configurações`. O clipe sai alinhado com a grade. As notas MIDI e os controles gravados voltam para antes da latência do motor mais a de saída do aparelho, sem passar do começo da gravação. `(precisa do motor recompilado; testado só por testes automáticos)`
-- **Limites dessa conta:** com um motor de antes da fase 13 (sem a chamada de latência nas pontes) a latência dos efeitos ([06e](06e-compensacao-de-latencia.md)) não entra e o clipe cai esse tanto atrasado; com o motor novo entra sozinha. O clique do metrônomo é atrasado da mesma latência, então soa junto das faixas.
-- **Se ainda sobrar um desvio:** ajuste a `Compensação de latência`. Passo a passo em [06e](06e-compensacao-de-latencia.md#gravar-por-cima-de-um-projeto-com-efeitos-de-latência).
-- Para calibrar: grave o metrônomo (ou um clique) pelo microfone e ajuste a compensação até a batida gravada cair na grade. Positivo adianta, negativo atrasa. Calibre com os efeitos de latência tirados ou zerados, para medir só a do aparelho.
+- **Áudio.** O app desconta sozinho do começo do áudio a soma de: latência do contexto e da saída do navegador (`baseLatency` + `outputLatency`; no Android, a de saída que o sistema informa), latência do próprio motor (PDC dos efeitos com latência, cadeia de inserts do `Master` e limitador de segurança de 1,5 ms, que o motor informa às pontes), latência da entrada que o aparelho informa e a `Compensação de latência` da janela `Configurações`. O clipe sai alinhado com a grade.
+- **Notas MIDI e controles.** As notas e os pontos de bend, modulação e pedal gravados voltam para antes da latência do motor mais a de saída do aparelho: quem toca ouvindo o som chega atrasado desse tanto, e o app devolve a nota para onde você a ouviu. A latência da entrada e a `Compensação de latência` não entram no MIDI (só a do motor e a de saída do aparelho). As notas não recuam para antes do começo da gravação (com o loop ligado, do que vier primeiro entre o começo da gravação e o do loop), e uma nota recuada mantém pelo menos 1/64 de batida. Os pontos de bend, modulação e pedal não têm esse piso: com a contagem ligada, um ponto tocado nos primeiros milissegundos depois do começo pode recuar para antes dele e ser descartado (o filtro da contagem roda depois do recuo) `(lido do código; não confirmado por uso)`. Antes da fase 13 o MIDI não tinha compensação nenhuma. `(testado só por testes automáticos)`
+- **Quando é lida.** A latência do motor e a do aparelho são lidas uma vez, ao começar a gravação. Mudar o `Lookahead` de um `Limitador` ou o roteamento no meio de uma tomada não muda a compensação dela.
+- **Metrônomo.** O clique é atrasado da mesma latência total das faixas ([06e](06e-compensacao-de-latencia.md)), então soa junto delas (antes da fase 13 ele soava adiantado). Tocando junto do clique, a gravação cai na grade.
+- **Limites dessa conta:** o `engine.wasm` e os `.so` commitados já trazem a chamada de latência; uma página web em cache ou um APK de antes da fase 13 fica com a latência do motor valendo 0 e a gravação volta a compensar só a do aparelho (e o MIDI não recua nada). Na web o valor chega do worklet só quando muda, a cada ~32 ms.
+- **Se ainda sobrar um desvio no áudio:** ajuste a `Compensação de latência`. Passo a passo em [06e](06e-compensacao-de-latencia.md#gravar-por-cima-de-um-projeto-com-efeitos-de-latência).
+- Para calibrar: grave o metrônomo (ou um clique) pelo microfone e ajuste a compensação até a batida gravada cair na grade. Positivo adianta, negativo atrasa. A latência do motor já entra sozinha; calibre com o projeto no estado em que vai gravar. O texto de ajuda da janela `Configurações` só cita o que o navegador (ou o sistema) já informa e não menciona a latência do motor.
 - Ao parar, o app espera uma fração de segundo (a latência total mais 20 ms) para a entrada terminar de chegar, antes de encerrar.
 
 **Contagem**

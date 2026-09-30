@@ -166,7 +166,7 @@ O visor diz `Mono · legato` ou `Poli · N vozes` e `Glide` com o tempo ou `Sem 
 
 ### Presets do wavetable
 
-O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Próximo (preset)` no computador) lista 16 presets em 7 categorias. Aplicar um preset **substitui todos os parâmetros**: o que ele não cita volta ao padrão (inclusive `Volume`, `Vozes` e o LFO). É um passo só no desfazer. Depois de mexer num knob o seletor mostra o nome do preset seguido de `(editado)`. Presets próprios: `Salvar como preset…` (seção `MEUS PRESETS`, no fim do menu) guarda todos os parâmetros do wavetable (osciladores com série e posição, filtro, envelopes, LFO e `Geral`) com um nome, para chamar em qualquer faixa Wavetable deste aparelho; ver [Meus presets](04-painel-de-instrumento.md#meus-presets).
+O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Próximo (preset)` no computador) lista 16 presets em 7 categorias. Aplicar um preset **substitui todos os parâmetros**: o que ele não cita volta ao padrão (inclusive `Volume`, `Vozes` e o LFO). É um passo só no desfazer. Depois de mexer num knob o seletor mostra o nome do preset seguido de `(editado)`. Presets próprios: `Salvar como preset…` (seção `MEUS PRESETS`, no topo do menu) guarda todos os parâmetros do wavetable (osciladores com série e posição, filtro, envelopes, LFO e `Geral`) com um nome, para chamar em qualquer faixa Wavetable deste aparelho; ver [Meus presets](04-painel-de-instrumento.md#meus-presets).
 
 **Baixos** (mono, `Vozes` 1)
 

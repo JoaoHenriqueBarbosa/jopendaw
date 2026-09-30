@@ -30,7 +30,7 @@ Os instrumentos também nascem pelo botão `Nova faixa` da coluna de faixas do a
 | Barra colorida e ícone do tipo | Cor da faixa e tipo do instrumento | A cor é a da faixa; ela também pinta os knobs e as teclas acesas | Serve para ver a qual faixa o painel pertence |
 | Nome da faixa e, embaixo, o tipo (`Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable`) | Identifica a faixa | Até 220 px, com reticências | Para renomear use o menu `Opções da faixa` |
 | Seta esquerda, tooltip `Anterior (preset)` (na bateria, `Anterior (kit)`) | Aplica o preset anterior da lista, dando a volta do primeiro para o último | Sem preset atual, parte do fim da lista | Percorra timbres com o teclado da tela tocando |
-| Seletor de presets, tooltip `Presets` (na bateria, `Kits de bateria`) | Abre o menu de presets agrupado por categoria, com um visto no preset que bate com os valores atuais | Largura fixa de 200 px; ver [Presets](#presets). No fim do menu, a seção `MEUS PRESETS` ([Meus presets](#meus-presets)) | O rótulo mostra o nome do preset ou `Inicial`, `Personalizado`, `Nome (editado)` |
+| Seletor de presets, tooltip `Presets` (na bateria, `Kits de bateria`) | Abre o menu de presets agrupado por categoria, com um visto no preset que bate com os valores atuais | Largura fixa de 200 px; ver [Presets](#presets). No **topo** do menu, acima dos de fábrica, a seção `MEUS PRESETS` ([Meus presets](#meus-presets)) | O rótulo mostra o nome do preset ou `Inicial`, `Personalizado`, `Nome (editado)` |
 | Seta direita, tooltip `Próximo (preset)` (na bateria, `Próximo (kit)`) | Aplica o próximo preset, dando a volta do último para o primeiro | Sem preset atual, parte do começo | A largura do seletor é fixa para o botão não andar a cada nome |
 | Ícone de teclado, tooltip `Tocar com o teclado do computador (Ctrl+K)` (ligado: `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga`, com a oitava e a intensidade de agora no lugar de `C4` e `80%`) | Liga e desliga o teclado do computador | Desligado ao abrir | É o mesmo interruptor do botão da barra superior e de `Ctrl+K`, e o tooltip é o **mesmo texto** nos dois (vem de uma função só, `keyboardTooltip`; antes o do painel era uma versão curta); no Mac o tooltip mostra `⌘+K` no lugar de `Ctrl+K`. Ligado, os atalhos de letra do estúdio ficam suspensos (ver [Limites e pegadinhas](#limites-e-pegadinhas)) |
 | Ícone USB, tooltip `Tocar com um teclado MIDI` (conectado: `MIDI: nome do aparelho`) | Pede acesso ao MIDI do aparelho e liga a entrada | Fica colorido quando há aparelho conectado | O navegador pede permissão na primeira vez |
@@ -110,7 +110,7 @@ Cada parâmetro é um knob giratório: em cima o valor com a unidade (`2.40 kHz`
 | Arrastar para cima ou para baixo | Sobe ou desce o valor | 200 px de arraste percorrem a faixa inteira | `Shift` durante o arraste dá ajuste fino: 1000 px para a faixa inteira (5 vezes mais fino) |
 | Roda do mouse sobre o knob | Sobe (roda para cima) ou desce | Parâmetros contínuos: 1600 px de rolagem para a faixa inteira (`Shift`: 8000 px); parâmetros inteiros (Vozes, Uníssono, Semitons, Nota base): um passo por dente da roda | O trackpad acumula a rolagem até dar um passo; a roda só rola a fileira de cartões quando o mouse não está sobre um knob |
 | Duplo clique (duplo toque no celular) | Volta ao valor padrão | O padrão aparece no tooltip: `Duplo clique: padrão (2.40 kHz)` | Se já está no padrão, nada acontece |
-| Botão direito (toque longo no celular) | Abre um diálogo com o nome do parâmetro para digitar o valor | O texto de ajuda diz `De X a Y`; botões `Cancelar` e `Aplicar`; `Enter` também aplica | Veja abaixo o que o campo aceita |
+| Botão direito (toque longo no celular) | Abre um menu com `Digitar o valor…` (o diálogo com o nome do parâmetro para digitar o valor), uma linha divisória, `Aprender MIDI` e, se o knob já está mapeado, `Remover mapeamento (Canal 1 · CC 74)`. Os seletores de opção (`Onda`, `Tipo`, `Algoritmo`) não têm esse menu | O diálogo diz `De X a Y`; botões `Cancelar` e `Aplicar`; `Enter` também aplica. O tooltip do knob ainda diz só `botão direito: digitar o valor`. Veja abaixo o que o campo aceita e, para o MIDI, [06f MIDI learn](06f-midi-learn.md) |
 | Tooltip (passar o mouse por cerca de 1 s) | Lembra os gestos: `arraste ou use a roda (Shift: ajuste fino)`, `Duplo clique: padrão (...)`, `botão direito: digitar o valor` | | Não aparece no toque |
 
 O campo de digitação aceita o que o próprio painel mostra: `2.40 kHz`, `250 ms`, `70%`, `+7 st`, `×1.50`, `1.5 oit`. A vírgula vale como ponto. Sem unidade, um tempo maior que o máximo do parâmetro é lido como milissegundos (`300` num ataque de até 10 s vale 300 ms). No parâmetro `Nota base` do sampler dá para digitar o nome da nota (`C4`, `F#3`). Valor fora da faixa é limitado ao mínimo ou máximo. Se o texto não é entendido, o diálogo avisa `Não entendi. Use um número, com a unidade se quiser.`
@@ -120,6 +120,10 @@ Escalas: frequências e tempos usam curva logarítmica (o meio do curso é a mé
 Desfazer: um arraste ou uma rajada da roda vale um passo só no `Ctrl+Z`. Clicar num knob sem mexer não cria passo. Cada escolha numa caixa de opções é um passo próprio. Duplo clique e valor digitado também são um passo cada.
 
 Acessibilidade: cada knob se apresenta a leitores de tela como controle deslizante, com ações de aumentar e diminuir (um passo em parâmetros inteiros, 5% do curso nos demais). O knob não recebe foco de teclado, então não há como ajustá-lo só com o teclado físico.
+
+### Knobs e MIDI learn
+
+Todo knob do painel, inclusive os seletores de opção (`Onda`, `Tipo`, `Algoritmo`) e os inteiros (`Vozes`), pode ser comandado por um botão ou fader de um controlador MIDI: ligue o modo `Aprender MIDI` (botão da barra ou `Shift+K`), clique no knob, que ganha contorno, e mexa no botão do controlador; ou use o botão direito no knob e `Aprender MIDI`. O knob passa a acompanhar o controlador na escala dele (logarítmica em Hz e segundos), com o mesmo desfazer e a mesma gravação de automação de um arraste do mouse. Um knob mapeado leva um pontinho âmbar no canto; com o modo ligado, o contorno mostra a etiqueta de origem (`CC74`). Com o modo ligado o knob só responde a clique. Detalhes, curva, faixa e o `Suave` (o knob não salta) em [06f MIDI learn](06f-midi-learn.md).
 
 ### Knobs que seguem a automação (laranja)
 
@@ -148,7 +152,7 @@ O nome `(editado)` é lembrado só enquanto o painel está aberto: fechar o pain
 
 ### Setas anterior e próximo
 
-As setas percorrem a lista na ordem do menu (as categorias em sequência) e dão a volta nas pontas. Partindo de `Personalizado` sem preset lembrado, `Próximo` vai para o primeiro da lista e `Anterior` para o último. Depois do último de fábrica as setas seguem pelos seus (`MEUS PRESETS`, na ordem em que foram criados) e só então dão a volta. Como cada passo aplica o preset inteiro, dá para "folhear" timbres com o teclado da tela ou o teclado do computador tocando.
+As setas percorrem a lista na ordem do menu (as categorias em sequência) e dão a volta nas pontas. Partindo de `Personalizado` sem preset lembrado, `Próximo` vai para o primeiro da lista e `Anterior` para o último. Depois do último de fábrica as setas seguem pelos seus (`MEUS PRESETS`, na ordem em que foram criados) e só então dão a volta. Isso vale mesmo com os seus aparecendo no **topo** do menu: a ordem das setas não acompanha a ordem visual do menu. Como cada passo aplica o preset inteiro, dá para "folhear" timbres com o teclado da tela ou o teclado do computador tocando.
 
 ### Listas por tipo
 
@@ -166,21 +170,22 @@ Você pode guardar o timbre de um instrumento com um nome e chamá-lo depois em 
 
 #### Onde fica o menu
 
-O seletor de presets do cabeçalho do painel (tooltip `Presets`; na bateria, `Kits de bateria`) abre o menu dos presets de fábrica e, **no fim dele**, depois de todas as categorias, a seção `MEUS PRESETS`. O menu do sintetizador tem 22 presets em 7 categorias e rola (altura máxima de 460 px): para chegar em `MEUS PRESETS` role até o fim do menu. A seção só lista os presets do **tipo** do instrumento (um preset de sintetizador não aparece no FM); um instrumento sem presets de fábrica (`Áudio`, `Barramento`) não tem o seletor, e por isso não tem presets do usuário. O menu é o mesmo no computador e no celular; só as setas anterior e próximo faltam no celular.
+O seletor de presets do cabeçalho do painel (tooltip `Presets`; na bateria, `Kits de bateria`) abre um menu que começa pela seção `MEUS PRESETS` (com `Salvar como preset…` e `Importar preset…`) e, **abaixo dela**, separados por um divisor, os presets de fábrica por categoria. Antes da fase 13 essa seção ficava no fim do menu, atrás de todas as categorias; agora fica no **topo**, e não é preciso rolar para achá-la. O menu do sintetizador tem 22 presets em 7 categorias e rola (altura máxima de 460 px): quem tem muitos presets seus empurra os de fábrica para baixo, e são estes que passam a exigir rolagem. A seção só lista os presets do **tipo** do instrumento (um preset de sintetizador não aparece no FM); um instrumento sem presets de fábrica (`Áudio`, `Barramento`) não tem o seletor, e por isso não tem presets do usuário. O menu é o mesmo no computador e no celular; só as setas anterior e próximo faltam no celular.
 
 | Item do menu | O que faz |
 |---|---|
-| `MEUS PRESETS` (título cinza, sem clique) | Abre a seção. |
+| `MEUS PRESETS` (título na cor da faixa, sem clique) | Abre a seção, a primeira do menu. |
 | `Nenhum ainda` (cinza) | Aparece no lugar da lista enquanto você não tem nenhum preset deste tipo. |
 | Um preset seu (o nome, cortado com reticências se for longo) | Aplica na faixa, como os de fábrica. Leva o visto quando os valores da faixa batem com ele. |
 | Ícone `…` no fim da linha (tooltip `Renomear, apagar ou exportar`) | Fecha o menu e abre uma janela com o nome do preset no título e três opções: `Renomear…`, `Exportar preset…` e `Apagar…` (em vermelho). |
 | `Salvar como preset…` (ícone de marcador com `+`) | Pede um nome e guarda os parâmetros atuais do instrumento. |
 | `Importar preset…` (ícone de arquivo) | Abre o seletor de arquivos e adiciona um preset `.jopreset`. |
+| Divisor e, depois dele, as categorias de fábrica (`BÁSICO`, `BAIXOS`… no sintetizador) | Fecham a seção: `MEUS PRESETS`, a lista (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, divisor, presets de fábrica. |
 
 #### Salvar
 
 1. Ajuste o instrumento até gostar.
-2. Abra o seletor de presets, role até o fim e escolha `Salvar como preset…`.
+2. Abra o seletor de presets e escolha `Salvar como preset…` (está no topo do menu, logo abaixo da lista de `MEUS PRESETS`).
 3. Na janela `Salvar como preset`, digite o nome no campo `Nome` e toque em `Salvar` (ou `Enter`). `Cancelar` fecha sem guardar.
 4. O preset entra na lista da seção e, como os valores da faixa são os dele, já aparece marcado com o visto e o nome dele no seletor.
 
@@ -274,7 +279,7 @@ No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de a
 ### Guardar o timbre como preset seu
 
 1. Deixe o instrumento no timbre que quer guardar.
-2. Abra o seletor de presets, role o menu até o fim e escolha `Salvar como preset…`.
+2. Abra o seletor de presets e escolha `Salvar como preset…` (no topo do menu).
 3. Digite o nome (até 60 caracteres) e toque em `Salvar`.
 4. Em outra faixa do mesmo tipo, abra o seletor e escolha o nome na seção `MEUS PRESETS`. Receita completa: [Presets do usuário](../guias/presets-do-usuario.md).
 
@@ -307,13 +312,14 @@ No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de a
 - [06c Painel de efeitos](06c-painel-de-efeitos.md): os efeitos da faixa ficam na aba `Efeitos`, não neste painel; lá os efeitos também têm `MEUS PRESETS`.
 - [Presets do usuário](../guias/presets-do-usuario.md): salvar o som que você ajustou, montar a cadeia de efeitos favorita e levar os presets a outro aparelho.
 - [07 Automação](07-automacao.md): qualquer knob do painel pode ser automatizado; os knobs laranja mostram a curva tocando.
+- [06f MIDI learn](06f-midi-learn.md): ligar os knobs a botões e faders de um controlador MIDI.
 - [06 Mixer](06-mixer.md): volume, pan e envios da faixa; o `Volume` do instrumento é outro controle, dentro do instrumento.
 
 ## Limites e pegadinhas
 
 - **Uma faixa por vez.** O painel só mostra a faixa selecionada; para comparar dois timbres, troque a seleção.
 - **Preset apaga o que não é dele.** Aplicar um preset devolve ao padrão todo parâmetro que ele não cita. Se você ajustou um knob e quer guardá-lo, não troque de preset sem antes salvar o timbre com `Salvar como preset…` (ver [Meus presets](#meus-presets)) ou usar `Ctrl+Z` depois.
-- **`MEUS PRESETS` fica no fim do menu.** No sintetizador, o menu tem cerca de 30 linhas (22 presets e 7 títulos de categoria) e rola: `Salvar como preset…` e `Importar preset…` ficam abaixo de tudo, então é preciso rolar o menu até o fim para achá-los.
+- **`MEUS PRESETS` fica no topo do menu (desde a fase 13).** `Salvar como preset…` e `Importar preset…` aparecem logo ao abrir, sem rolar (antes ficavam abaixo das ~30 linhas do menu do sintetizador). O custo é o inverso: com muitos presets seus, os de fábrica descem e é preciso rolar o menu para chegar neles.
 - **Presets seus são do aparelho, não do projeto nem da conta.** Não sincronizam, não vão no `.jopendaw` e não aparecem em outro navegador; para levá-los, `Exportar preset…` e `Importar preset…` (ver [Onde os presets ficam guardados](#onde-os-presets-ficam-guardados)). O projeto guarda os valores dos knobs, então um projeto aberto em outro aparelho soa igual mesmo sem o preset lá.
 - **Teclado do computador e MIDI tocam a faixa armada.** Eles tocam a faixa selecionada, a não ser que exista uma faixa de instrumento armada para gravar e a selecionada não seja uma delas; aí tocam a primeira armada. O teclado da tela sempre toca a faixa selecionada na hora do toque.
 - **A oitava do teclado do computador é uma por tipo de faixa**, como a do teclado da tela: sintetizador, sampler, FM e wavetable abrem em C4; a bateria abre em C2 (nota 36), onde ficam as peças, então `A` a `P` já tocam a bateria sem mexer na oitava (ver [04b](04b-bateria.md)). A oitava vale para o tipo da faixa que está tocando (a selecionada ou a armada) e é lembrada só na memória do controlador do projeto aberto, não vai para o arquivo do projeto (não confirmado em uso); o botão do teclado na barra superior mostra a oitava atual (por exemplo `C4 · sem atalhos`, ou `C2 · sem atalhos` numa bateria).
@@ -338,7 +344,8 @@ No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de a
 | `C` / `V` (teclado ligado) | Intensidade das notas menor / maior, em passos de 10% (10% a 100%, padrão 80%) |
 | `Shift` ao arrastar ou rolar sobre um knob | Ajuste fino (5 vezes mais fino) |
 | Duplo clique num knob | Valor padrão |
-| Botão direito num knob | Digitar o valor |
+| Botão direito num knob | Menu: `Digitar o valor…`, `Aprender MIDI`, `Remover mapeamento (...)` |
+| `Shift+K` | Liga e desliga o modo `Aprender MIDI` (suspenso com o teclado do computador ligado) |
 | `Enter` no diálogo de valor | Aplica |
 
 Com o teclado do computador ligado, as letras acima ganham dos atalhos gerais que usam as mesmas teclas (`X` mixer, `E` editor, `F` efeitos, `C` metrônomo, `Z` enquadrar): o atalho só vale com o teclado desligado, ou com `Ctrl`/`Cmd`/`Alt` apertado. Enquanto você digita num campo de texto, as teclas não tocam notas. Segurar uma tecla não reataca a nota nem repete o `Z`, `X`, `C` ou `V`.

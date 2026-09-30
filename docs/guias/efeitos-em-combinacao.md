@@ -90,6 +90,7 @@ Duas convenções para todas as receitas:
 - **A bateria perde o punch:** o barramento está alto demais; baixe o fader em 3 dB.
 - **O barramento "bombeia" de modo audível:** aumente a `Soltura` para 150 ms.
 - **Efeito de pente ou som oco ao combinar seco e cópia:** o `Compressor` não tem latência, então não é a causa. Se você pôs `Distorção` ou `Limitador` no barramento, eles atrasam a cópia (0,67 ms e o `Lookahead`), mas o motor atrasa o seco e as outras entradas do barramento do mesmo tanto, então isso não deveria fazer pente (ver [06e](../manual/06e-compensacao-de-latencia.md) e [latência](../manual/06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito); sem escuta no navegador) `(testado só por testes automáticos)`. Se mesmo assim soar oco, confira que o envio é mesmo o caminho do som e não duas cópias da faixa, tire o efeito de latência do barramento (`Lookahead` 0 no `Limitador`) para comparar, ou use o `Mistura` do próprio efeito no lugar do envio. Bypass do efeito não muda o alinhamento.
+- **Vai gravar uma voz ou um instrumento por cima desta mixagem:** a latência de `Distorção` e `Limitador` (também a do `Master` e o limitador de segurança) entra sozinha na compensação da gravação, no áudio e nas notas MIDI, e o clique do metrônomo soa junto das faixas ([06e](../manual/06e-compensacao-de-latencia.md#gravar-por-cima-de-um-projeto-com-efeitos-de-latência)). Não some nada à mão na `Compensação de latência`; se sobrar desvio no áudio, ajuste-a `(testado só por testes automáticos)`.
 
 ---
 
