@@ -1,0 +1,317 @@
+# Sincronização entre aparelhos
+
+> O protocolo de ponta a ponta que mantém o mesmo projeto em vários aparelhos (Chrome e Android) sem nunca atrapalhar quem edita: documento versionado no servidor, áudios por SHA-256, a máquina de estados do `SyncService` e o que acontece nos conflitos. Para quem mexe em `app/lib/daw/sync.dart`, `app/lib/api/` ou em `server/src/routes/{docs,samples}.rs`.
+
+## Visão geral
+
+Princípios (de `app/lib/daw/sync.dart:1`):
+
+1. **Local primeiro.** O documento e os áudios moram no aparelho; o projeto abre na hora e edita offline. O servidor é um espelho versionado, não a fonte que o app precisa consultar para funcionar.
+2. **Nunca sobrescrever sozinho.** Se os dois lados mudaram, o serviço para e a pessoa escolhe.
+3. **Áudios antes do documento.** O servidor nunca recebe um documento que cita áudio que ele não tem (salvo cota estourada, ver abaixo).
+4. **Um documento por projeto, versão inteira.** Não há mesclagem nem histórico: a versão vencedora substitui a outra por completo.
+
+```
+ Aparelho A                                                    Servidor                     Aparelho B
+ ┌───────────────────────────────┐                      ┌────────────────────┐         ┌───────────────────────────────┐
+ │ DawController                 │                      │ project_docs        │         │ DawController                 │
+ │  doc:<id>   (LocalStore)      │   PUT doc base_version│  version  N         │  GET doc │  doc:<id>                     │
+ │  sample:<hash> (LocalStore)   │ ────────────────────► │  doc     JSONB      │ ◄─────── │  sample:<hash>                │
+ │ SyncService                   │   ◄── 200 {version}   │ samples (por conta) │ ───────► │ SyncService                   │
+ │  sync:<id> = {version, dirty} │   ◄── 409 {version,doc}│ blobs/<2>/<sha256>  │  GET     │  sync:<id> = {version, dirty} │
+ └───────────────────────────────┘   PUT /api/samples/h  └────────────────────┘  sample  └───────────────────────────────┘
+```
+
+## Peças e responsabilidades
+
+| Arquivo | Papel |
+|---|---|
+| `app/lib/daw/sync.dart` | `SyncService` (máquina de estados), `SyncPhase`, `SyncFailure`, a interface `SyncHost` |
+| `app/lib/daw/controller.dart` | `_SyncBridge` (implementa `SyncHost`), `_save` (marca pendente), `_applyRemote`, `_obtainSample`, `_fetchMissing`, a espera na abertura (`open`) |
+| `app/lib/api/sync_api.dart` | interface `SyncApi`, `ServerDoc`, `DocConflict` |
+| `app/lib/api/client.dart` | implementação HTTP (`projectDoc`, `putProjectDoc`, `missingSamples`, `putSample`, `getSample`) |
+| `app/lib/daw/sync_ui.dart` | `SyncIndicator` (ícone de nuvem na barra do transporte) e `showSyncConflictDialog` |
+| `server/src/routes/docs.rs` | `GET`/`PUT /api/projects/{id}/doc` |
+| `server/src/routes/samples.rs`, `storage.rs` | `POST /api/samples/missing`, `PUT`/`GET /api/samples/{hash}`, cota |
+| `app/test/sync_test.dart`, `app/test/fake_sync_api.dart` | testes com servidor de mentira |
+
+## Contratos
+
+### Servidor (resumo; detalhes em [11 Servidor](11-servidor.md))
+
+| Chamada | Corpo | Resposta |
+|---|---|---|
+| `GET /api/projects/{id}/doc` | | `{"version": N, "doc": {...}\|null, "updated_at"}`; projeto sem documento: `version: 0`, `doc: null` |
+| `PUT /api/projects/{id}/doc` | `{"base_version": N, "doc": {...}}` | `200 {"version": N+1, "updated_at"}` |
+| (conflito) | | `409 {"error", "version": atual, "doc": atual}` |
+| `POST /api/samples/missing` | `{"hashes": [...]}` (até 2000) | `{"missing": [...]}` |
+| `PUT /api/samples/{hash}` | bytes | `204` (idempotente; confere o SHA-256) |
+| `GET /api/samples/{hash}` | | bytes; `404` se a conta não tem |
+
+Regras do `PUT` do documento: `base_version = 0` é a primeira gravação (só uma de várias concorrentes vence: as outras recebem 409); qualquer outro valor só vale se for **exatamente** a versão atual (`UPDATE ... WHERE version = base`); a versão sobe de 1 em 1 e o `updated_at` do projeto acompanha na mesma transação; teto de 8 MB; nada de `\u0000`. O servidor não interpreta o documento.
+
+### Estado local por projeto (`sync:<projectId>` no `LocalStore`)
+
+```json
+{"version": 7, "dirty": true}
+```
+
+| Campo | Significado |
+|---|---|
+| `version` | a versão do servidor **em que o documento local se baseia** (a `base_version` do próximo `PUT`) |
+| `dirty` | há mudanças locais ainda não enviadas |
+
+Sobrevive a fechar o app no meio. Sem estado guardado (primeira abertura) vale `version = 0` e `dirty = localExisted` (havia documento local): assim o documento criado a partir de um modelo conta como pendente, e o projeto vazio que só foi aberto não (`SyncService._start`, `sync.dart:118`).
+
+### Como o documento vira "pendente"
+
+`DawController._save` (`controller.dart:1411`, chamado 400 ms depois de cada mudança, e no `dispose`) compara o JSON inteiro do documento com o último gravado (`_lastSaved`). Se mudou, chama `sync.markDirty()` **antes** de gravar `doc:<id>`: se o app morrer entre os dois passos, sobra um pendente a mais (inofensivo), nunca uma mudança que ninguém vai enviar. `markDirty` incrementa a geração (`_gen`), persiste `dirty: true` e agenda o envio em **3 s** (`debounce`) depois da última edição.
+
+### O que o outro aparelho ignora ao aplicar um documento remoto
+
+`_applyRemote` (`controller.dart:1467`) troca o documento, mas mantém os do aparelho: `bpm` e `beats_per_bar` (vêm do projeto no servidor, `PATCH /api/projects/{id}`), `metronome`, `count_in`, `rec_latency_ms` e, por faixa (pelo `id`), `armed` e `monitor`. O histórico de desfazer é apagado.
+
+## A máquina de estados do `SyncService`
+
+### Fases (`SyncPhase`) e o que o usuário vê
+
+| Fase | Quando | Ícone e tooltip (`sync_ui.dart`) |
+|---|---|---|
+| `off` | sem sessão, ou ainda não começou, ou a sessão morreu (`Unauthenticated`) | nenhum (o indicador some) |
+| `syncing` | trazendo, enviando ou esperando o envio do pendente | nuvem com setas (cor de destaque): "Sincronizando" ou "Sincronizando (x/y arquivos)" |
+| `synced` | nada pendente e a última conversa deu certo | nuvem com visto: "Sincronizado" |
+| `offline` | rede fora, timeout, `5xx`, `408` ou `429`: tenta de novo sozinho | nuvem cortada (âmbar): "Offline (tentando de novo em N s)" |
+| `conflict` | os dois lados mudaram | ícone de alerta (vermelho): "Conflito: o projeto mudou em outro aparelho. Toque para resolver" (clicável) |
+| `error` | falha que repetir não resolve: `4xx` (menos 408 e 429), documento do servidor ilegível, áudio recusado por cota ou tamanho | ícone de erro (vermelho) com a mensagem |
+
+### Diagrama de estados
+
+```mermaid
+stateDiagram-v2
+    [*] --> off
+    off --> syncing: start() com sessão (lê o estado guardado e roda syncNow)
+    syncing --> synced: pull ok e nada pendente / push ok
+    synced --> syncing: markDirty (edição) ou volta ao primeiro plano
+    syncing --> offline: exceção de rede, 5xx, 408, 429 (recuo 2s..2min)
+    offline --> syncing: temporizador do recuo, ou volta ao primeiro plano
+    syncing --> error: 4xx, SyncFailure, áudio recusado (cota)
+    error --> syncing: próxima edição (debounce) ou volta ao primeiro plano
+    syncing --> conflict: servidor mais novo com pendente local, ou PUT devolve 409
+    conflict --> synced: useServer()
+    conflict --> syncing: keepLocal()
+    syncing --> off: Unauthenticated (o pendente segue guardado)
+```
+
+### Uma rodada (`syncNow` → `_step`)
+
+`syncNow` nunca lança e não roda duas rodadas ao mesmo tempo (`_busy`; pedido durante uma rodada só liga `_again`, e a rodada repete ao terminar). Ordem em `_step`:
+
+1. Em `conflict`, não faz nada.
+2. Se ainda não trouxe (`!_pulled`): `_pull()`.
+3. Se `_dirty`: `_push()`. Senão, vai a `synced`.
+
+`_pull()` (`sync.dart:234`), comparando a versão do servidor `s.version` com a conhecida `_version`:
+
+| Situação | Ação |
+|---|---|
+| `s.version > _version` e há documento, **sem** pendente local | `host.applyRemote(...)`: baixa os áudios que faltam (`progress`) e **só então** troca o documento. Se a pessoa editou no meio do caminho (`canSwap` falso, ou um salvamento agendado), não troca: vira **conflito** |
+| `s.version > _version` **com** pendente local | **conflito** (guarda `s` em `conflict`) |
+| `s.version < _version` | o servidor voltou atrás (restauração): o local é a verdade; `_version = s.version`, `dirty = true` e vai por cima |
+| igual | nada |
+
+Depois: `_pulled = true` e `host.fetchMissing()` (tenta baixar áudios que o documento cita e faltam; falha aqui não atrapalha).
+
+`_push()` (`sync.dart:272`):
+
+1. `gen = _gen`; `json = host.docJson()` (o documento de agora).
+2. `uploadSamples(host.sampleHashes())`: pergunta ao servidor quais faltam (`POST /api/samples/missing`, só dos que este serviço ainda não confirmou em `_serverHas`), e envia **um por vez** (`PUT /api/samples/{hash}`) os que este aparelho tem em `sample:<hash>`. Áudio que o aparelho também não tem fica de fora. Erro `4xx` de áudio (cota, tamanho) **não trava o documento**: ele segue e o estado final é `error` com "Alguns áudios não foram enviados: ..." (o outro aparelho verá esses áudios como faltando). `5xx`, `408` e `429` sobem para o recuo.
+3. `_version = await api.putProjectDoc(projectId, _version, json)`: manda `base_version = _version` e guarda a versão nova.
+4. Se `gen == _gen` (ninguém editou durante o envio), `dirty = false`; senão continua pendente e agenda outra rodada (`_again`): **um envio que termina depois de outra edição não zera o pendente**.
+5. `_persist()` e fase `synced` (ou `syncing` se ficou pendente).
+
+### Recuo e retomada
+
+- Rede fora, timeout, `5xx`, `408`, `429`: `_backoff()` → fase `offline`, espera `min(120, 2^falhas)` segundos (2, 4, 8, 16, 32, 64, 120, 120...; `maxBackoff` 2 min), depois `syncNow`. `retryIn` mostra o tempo no tooltip. Uma edição durante o recuo **não** agenda o envio (o recuo decide), só marca pendente.
+- Voltar ao primeiro plano (`AppLifecycleState.resumed`): se `offline`, `error`, `dirty` ou `!_pulled`, roda `syncNow`. Necessário no Android, onde o aparelho dorme e os temporizadores param.
+- Sem sessão (`canSync()` falso): `off`; o pendente fica guardado e a próxima abertura com sessão o envia.
+- `SyncService.timeScale` encurta as esperas nos testes.
+
+### Conflito e as duas resoluções
+
+Estado: `conflict` guarda em `conflict` o `ServerDoc` (versão e documento do servidor). O diálogo (`showSyncConflictDialog`) aparece **uma vez sozinho** e depois só pelo clique no ícone; "Decidir depois" deixa o conflito de pé. Nada é sobrescrito antes da escolha. Enquanto há conflito, `markDirty` só persiste o pendente e não agenda envio.
+
+| Botão | Método | O que faz |
+|---|---|---|
+| Usar a versão do servidor | `useServer()` (`sync.dart:337`) | `applyRemote` do documento do servidor (baixando áudios); `_version = c.version`, `dirty = false`, `_gen++`, `_pulled = true`, fase `synced`. **Descarta as mudanças deste aparelho, sem desfazer** (o histórico também é apagado). Se o download falha (rede), o conflito segue de pé com a mensagem "Não deu para baixar a versão do servidor agora." |
+| Manter esta e enviar | `keepLocal()` (`sync.dart:361`) | `_version = c.version` (toma a do servidor como **base**), `dirty = true`, `_gen++`, e roda `syncNow`: o `PUT` com `base_version` = a do servidor **substitui** a versão do servidor por esta. As mudanças do outro aparelho se perdem (não há histórico no servidor) |
+
+## Diagramas de sequência
+
+### 1. Criar num aparelho (A)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Aparelho A (app)
+    participant S as Servidor
+
+    A->>S: POST /api/projects {name}
+    S-->>A: 201 Project {id: P}
+    Note over A: modelo diferente de "Vazio": LocalStore template:P = nome
+    A->>S: GET /api/projects/P
+    S-->>A: 200 Project
+    Note over A: open(): sem doc:P, monta o modelo (templated), sync:P = {0, dirty: true}
+    A->>S: GET /api/projects/P/doc
+    S-->>A: 200 {version: 0, doc: null}
+    Note over A: _pulled = true (nada a trazer)
+    A->>S: POST /api/samples/missing (só se o documento cita áudios)
+    S-->>A: {missing: [...]}
+    loop cada áudio que falta
+        A->>S: PUT /api/samples/{hash} (bytes)
+        S-->>A: 204
+    end
+    A->>S: PUT /api/projects/P/doc {base_version: 0, doc}
+    S-->>A: 200 {version: 1}
+    Note over A: sync:P = {1, dirty: false}, fase synced
+```
+
+Com o modelo `Vazio` o `template:P` não é gravado: a abertura não conta como pendente (`localExisted = false`), o app só faz o `GET` do documento (versão 0) e o primeiro `PUT` acontece na primeira edição, depois do debounce de 3 s. Nesse caso o `open` ainda passa pela espera de até 25 s (é um projeto sem documento local e sem modelo), que na prática termina logo porque o servidor responde `version: 0`.
+
+### 2. Abrir no outro aparelho (B)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Aparelho B (app)
+    participant S as Servidor
+
+    B->>S: GET /api/projects/P (nome, andamento e compasso)
+    S-->>B: 200 Project
+    Note over B: open(): sem doc:P e sem modelo, com sessão → waitServer (até 25 s, spinner)
+    B->>S: GET /api/projects/P/doc
+    S-->>B: 200 {version: 1, doc}
+    Note over B: 1 > 0 e nada pendente → applyRemote
+    loop cada hash do documento que não está aqui
+        B->>S: GET /api/samples/{hash}
+        S-->>B: 200 bytes (ou 404 → fica em "missing")
+        Note over B: guarda sample:hash, decodifica e registra no motor
+    end
+    Note over B: troca o documento (bpm e compasso do projeto), sync:P = {1, dirty: false}
+    Note over B: ready = true, o estúdio aparece já com tudo
+```
+
+Sem rede ou lento demais (mais de 25 s), o `open` segue com o documento vazio e a sincronização continua atrás; quando o documento chega, `applyRemote` só troca se a pessoa **não editou** nesse meio-tempo (senão vira conflito).
+
+### 3. Editar nos dois (conflito)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Aparelho A
+    participant S as Servidor (versão 1)
+    participant B as Aparelho B
+
+    Note over A,B: os dois têm sync:P = {1, dirty: false}
+    A->>A: edita (dirty, incrementa _gen)
+    B->>B: edita (dirty, incrementa _gen), talvez offline
+    A->>S: (3 s depois) PUT doc {base_version: 1}
+    S-->>A: 200 {version: 2}
+    Note over A: sync:P = {2, dirty: false}
+    B->>S: PUT doc {base_version: 1}
+    S-->>B: 409 {version: 2, doc: doc de A}
+    Note over B: DocConflict → fase conflict, diálogo "O projeto mudou em outro aparelho"
+    Note over B: mesmo desfecho se B só abrir o projeto depois: GET doc traz version 2 > 1 com pendente local
+```
+
+O outro caminho para o mesmo conflito: B estava offline, reabre o projeto, o `_pull` traz `version = 2 > 1` com `dirty = true` e já entra em conflito **sem** tentar o `PUT`.
+
+### 4a. Resolução "Usar a versão do servidor"
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Aparelho B (em conflito)
+    participant S as Servidor (versão 2)
+
+    Note over B: usuário toca em "Usar a versão do servidor"
+    B->>B: useServer() - fase syncing
+    loop áudios do documento de A que B não tem
+        B->>S: GET /api/samples/{hash}
+        S-->>B: 200 bytes
+    end
+    B->>B: applyRemote(doc de A): troca o documento, apaga o desfazer
+    B->>B: _version = 2, dirty = false, conflict = null
+    Note over B: fase synced, as edições de B foram descartadas
+```
+
+### 4b. Resolução "Manter esta e enviar"
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Aparelho B (em conflito)
+    participant S as Servidor (versão 2)
+
+    Note over B: usuário toca em "Manter esta e enviar"
+    B->>B: keepLocal(): _version = 2 (base), dirty = true, conflict = null
+    B->>S: POST /api/samples/missing (áudios novos de B)
+    S-->>B: {missing: [...]}
+    B->>S: PUT /api/samples/{hash} ...
+    B->>S: PUT /api/projects/P/doc {base_version: 2, doc de B}
+    S-->>B: 200 {version: 3}
+    Note over S: a versão 2 (de A) foi substituída, sem histórico
+    Note over B: sync:P = {3, dirty: false}, fase synced
+    Note over B: A só vê a versão 3 na próxima vez que abrir o projeto (não há pull ao vivo)
+```
+
+Se o servidor avançar de novo entre a resolução e o `PUT`, o `PUT` recebe outro `409` e o conflito reaparece com a versão nova.
+
+## Fluxo de dados: o que atravessa cada camada
+
+| Dado | Aparelho | Servidor | Identidade |
+|---|---|---|---|
+| Documento (JSON do `DawDoc`) | `doc:<projectId>` | `project_docs.doc` (JSONB), versão em `project_docs.version` | id do projeto + versão inteira |
+| Áudio (arquivo original ou WAV gravado) | `sample:<sha256>` | objeto `blobs/<2 hex>/<sha256>` (disco ou S3) + linha em `samples` da conta | SHA-256 do conteúdo |
+| Estado de sincronização | `sync:<projectId>` | (não existe; a versão está no documento) | |
+| Andamento e compasso | cópia em `doc.bpm/beats_per_bar` | `projects.bpm/beats_per_bar` (**fonte de verdade**) | aplicado ao documento por `open()` e `_applyRemote` |
+| Sons derivados do warp | `warp:<chave>` (cache) | nunca vão ao servidor | |
+
+Áudio "faltando": o documento cita um hash que nem o aparelho nem o servidor têm. Fica em `DawController.missing`; o clipe não toca (`_clipSound` devolve `null`) e o estado continua tentando (`fetchMissing`) nas rodadas seguintes.
+
+## Decisões e por quê
+
+- **Concorrência otimista por versão inteira.** Simples e segura para 2 ou 3 aparelhos de uma pessoa só; evita mesclar JSON de música (que não tem semântica de merge óbvia). O preço: no conflito, uma das versões inteira se perde. Colaboração em tempo real está no roteiro (não implementada).
+- **Áudios primeiro, documento depois.** Um aparelho que baixa o documento sempre encontra os áudios; e, se o envio do documento falhar, o áudio já enviado não é perdido (é idempotente e por hash).
+- **Não trocar o documento com a pessoa editando.** `applyRemote` baixa os áudios com o documento antigo à mostra e só troca no fim, e só se nada mudou (por isso `_gen`/`canSwap`). O spinner na abertura sem documento local existe justamente para não mostrar uma faixa vazia que depois troca por tudo (achado no Android, commit `6e41240`).
+- **Pendente marcado antes de gravar o documento.** Tolera o app morrer no meio.
+- **Erro de áudio não trava o documento.** Cota ou tamanho não podem impedir o resto do trabalho de sincronizar.
+- **Recuo exponencial silencioso.** Falha de rede nunca vira exceção na interface; vira o ícone de nuvem cortada.
+
+## Como testar
+
+`app/test/sync_test.dart` (`flutter test test/sync_test.dart`) usa o `FakeSyncApi` (`test/fake_sync_api.dart`), que guarda documento e áudios, anota cada chamada em ordem (`doc`, `put_doc:<base>`, `missing`, `put_sample:<hash>`, `get_sample:<hash>`) e permite injetar falhas, um `409` no próximo `PUT` e um roteiro de jobs. Cobre:
+
+- servidor mais novo e nada pendente: aplica, baixa os áudios e mantém o andamento do projeto;
+- sem documento local: o `open` só termina com o documento e os áudios do servidor (nunca a faixa vazia); sem rede, abre vazio (não fica no spinner);
+- abre na hora com o local mesmo sem rede (offline);
+- conflitos: servidor mais novo com pendente local; "usar a do servidor" descarta o local; "manter esta" usa a versão do servidor como base; `409` no envio vira conflito sem perder o local;
+- primeiro envio (servidor sem documento): áudios antes do documento; projeto novo e vazio não vira pendente só por ter sido aberto e fechado;
+- uma edição envia os áudios novos antes do documento, com a versão conhecida como base;
+- recuo de 2, 4, 8 s até 2 min, sem lançar, e volta sozinho; sem usuário nada vai ao servidor mas o pendente fica guardado; áudio recusado (cota) não trava o documento.
+
+O lado do servidor está em `server/src/routes/tests.rs` (`documento_versionado`, `documento_gravacoes_simultaneas_so_uma_vence`, `documento_grande_demais`, `samples_ida_e_volta`, `samples_limites_de_tamanho_e_cota`; ver [11 Servidor](11-servidor.md)).
+
+Teste de uso obrigatório para qualquer mudança aqui (regra do dono: testar **os dois lados**): criar e editar no Chrome, abrir o mesmo projeto no Android (ou o inverso, com `adb shell pm clear tech.johnenrique.jopendaw` para simular aparelho novo), editar de volta, e provocar o conflito de propósito (as duas edições antes de sincronizar). Duas abas do Chrome no mesmo projeto geram conflito **legítimo**.
+
+## Armadilhas conhecidas
+
+- **Não há pull ao vivo.** O serviço só traz na abertura do projeto (`!_pulled`). Uma edição em A **não aparece** em B enquanto B está aberto; B só descobre ao reabrir ou ao tentar enviar (`409`). Voltar ao primeiro plano só reroda o que já estava pendente, offline ou com erro.
+- **`PUT` perdido vira conflito com você mesmo.** Se o `PUT` chega ao servidor mas a resposta se perde (timeout, queda), o app recua e repete com a `base_version` velha: o servidor responde `409` com o documento **que este aparelho acabou de mandar**. O código não compara o conteúdo, então mostra o diálogo de conflito entre duas versões idênticas. `(deduzido da leitura de _push e putProjectDoc; não reproduzido)`
+- **`useServer()` ignora o retorno de `applyRemote`.** `_applyRemote` devolve `false` sem trocar o documento quando há um salvamento agendado (`_saveTimer` ativo, isto é, edição nos últimos 400 ms); `useServer` não confere e mesmo assim zera o pendente e adota a versão do servidor. O caso exige clicar no botão menos de 400 ms depois de uma edição. `(deduzido do código; não reproduzido)`
+- **Preferências contam como mudança.** `metronome`, `count_in`, `rec_latency_ms`, `armed` e `monitor` estão no JSON e mudam o texto comparado por `_save`; ligar o metrônomo gera versão nova e pode gerar conflito com outro aparelho, mesmo que o outro descarte esses campos ao aplicar.
+- **Sem histórico no servidor.** "Manter esta e enviar" e "Usar a versão do servidor" são definitivos. Uma cópia de segurança do projeto é a do Postgres do dono.
+- **Muitos áudios.** `uploadSamples` pergunta todos os hashes ausentes num só `missing`, e o servidor recusa mais de 2000 por pedido (`400`); o app trataria como erro de áudio. Os envios são um por vez, e o `PUT` do cliente tem timeout de 120 s: um áudio grande em conexão lenta pode estourar e cair no recuo.
+- **`applyRemote` durante a gravação** lança `StateError('gravando: ...')`, que o serviço trata como falha genérica (recuo): o projeto novo entra depois.
+- **Tipos novos em app velho.** Um aparelho com app antigo lê `fm`/`wavetable` como `audio` e, se salvar, **regrava assim** e envia para o servidor (ver [10 App Flutter](10-app-flutter.md)). `AutoKind` desconhecido derruba a abertura: "A versão do servidor não abre nesta versão do app. Atualize o jopendaw." (`SyncFailure`, fase `error`).
+- **Sem limpeza local.** Apagar o projeto no servidor não apaga `doc:`, `sync:` nem `sample:` do aparelho.
+- **Sessão morta no meio.** `Unauthenticated` leva à fase `off` e o roteador manda ao login; o pendente segue guardado em `sync:<id>` e sai quando houver sessão de novo.
