@@ -122,10 +122,10 @@ Sobre o que foi conferido: o `Toque` com o fader de uma faixa no mixer foi usado
 
 1. Na barra, toque em `Automação` (o ícone de gráfico, sem nome enquanto está em `Ler`) e escolha `Trava`: `Grava enquanto você segura o controle e mantém o último valor até parar.` O botão passa a mostrar `Trava` em vermelho.
 2. Abra o mixer (`X`). Ponha o cursor uns dois compassos antes de onde o fade deve começar e aperte Espaço.
-3. Quando chegar a hora, segure o fader (o da faixa ou o do canal `Master`) e desça-o devagar, num movimento só, até o fundo (`−∞ dB`), e solte. A `Trava` mantém o valor em que você soltou até o transporte parar.
+3. Quando chegar a hora, segure o fader (o da faixa, o do canal `Master` ou o mini fader da linha `Master` da linha do tempo, que também grava) e desça-o devagar, num movimento só, até o fundo (`−∞ dB`), e solte. A `Trava` mantém o valor em que você soltou até o transporte parar.
 4. Espaço para parar. A raia `Volume` existe, aberta, com poucos pontos (o movimento é afinado, com no máximo 0,8% da faixa de erro na escala do fader). Como não havia pontos depois, ela fica no último valor gravado até o fim da música. `Ctrl+Z` desfaz a passada inteira.
 
-Variação: no modo `Toque` o fader volta sozinho ao valor de antes (numa rampa de 1/4 de batida) assim que você solta. Serve para "dar uma abaixadinha" numa passagem, não para um fade que deve ficar.
+Variação: no modo `Toque` o fader volta sozinho ao valor de antes (numa rampa de 1/4 de batida) assim que você solta, e o valor fixo que ele mostra parado também volta ao de antes da sua mão (em `Trava` e `Escrever` ele fica onde a mão largou). Serve para "dar uma abaixadinha" numa passagem, não para um fade que deve ficar. Com um loop ligado (`L`), o `Toque` só grava na volta em que você mexe: na volta seguinte ele para e devolve o valor, até o controle se mexer de novo; a `Trava` só segue gravando na volta seguinte se você ainda está segurando o controle `(testado só por testes automáticos)`.
 
 **Varredura de filtro com o knob (`Trava`)**
 
@@ -144,7 +144,7 @@ Se preferir uma raia só gravando, escolha o modo no seletor `L` do cabeçalho d
 - **Retorno em vez de efeito em cada faixa.** Um reverb só no barramento economiza processamento e dá a impressão de um mesmo espaço; a dose fica por conta do envio de cada faixa. Por isso `Mistura` é 100%: o seco não passa pelo retorno.
 - **Pré e pós.** Pós-fader (o padrão) é o reverb que acompanha a faixa; pré-fader é o que continua depois de você mexer no fader.
 - **A raia de automação não desenha em ganho nem em Hz.** O volume e o nível dos envios seguem a curva do fader (ganho = 2 × posição³) e os parâmetros em Hz seguem a escala logarítmica do knob. Uma reta na tela vira um fade parelho (−7,5 dB, −18 dB e −36 dB em 25%, 50% e 75% do trecho) e uma varredura constante em oitavas; a mesma reta em ganho linear despencaria no fim (−2,5, −6 e −12 dB) e em Hz linear acabaria a maior parte da abertura na primeira metade.
-- **Valor fixo por baixo.** A automação sobrepõe o fader ou o knob sem apagá-lo; parado, vale o valor fixo. É por isso que a raia continua no lugar ao parar.
+- **Valor fixo por baixo.** A automação sobrepõe o fader ou o knob sem apagá-lo; parado, vale o valor fixo. É por isso que a raia continua no lugar ao parar. Em `Escrever` e `Trava` o valor fixo fica onde a mão largou; no `Toque` ele volta ao de antes da mão.
 - **Gravar é desenhar por outro caminho.** O movimento da mão vira pontos na mesma raia, na mesma escala do controle, e depois você edita como qualquer raia (mover pontos, entortar a curva). O `Toque` só sobrescreve onde você segurou o controle; o resto da curva antiga fica.
 
 ## Se der errado
@@ -161,7 +161,8 @@ Se preferir uma raia só gravando, escolha o modo no seletor `L` do cabeçalho d
 | A automação não soa com o transporte parado | Parado vale o valor fixo | Toque para ouvir; a leitura no cabeçalho da raia mostra o valor da curva no cursor mesmo parado |
 | Arrasto o fader durante o play e nada muda | O botão `Automação` está em `Ler` e a curva passa por cima do valor fixo | Em `Ler` arrastar muda só o valor fixo (que volta ao parar). Para gravar, escolha `Toque`, `Trava` ou `Escrever` (receita 5); para mudar a curva, edite os pontos ou remova a raia (`X` no cabeçalho) |
 | Mexo no controle com o modo em `Toque` e nenhum ponto novo aparece | O transporte estava parado, ou há gravação de áudio/MIDI em curso (aviso vermelho ao lado do botão `Automação`), ou você soltou o controle antes de ele mudar de valor | Aperte Espaço antes de mexer; os pontos aparecem na raia ao soltar (`Toque`) ou ao parar (`Trava`, `Escrever`) |
-| Regravei uma raia e a curva antiga sumiu no trecho | `Escrever` (principalmente com o seletor `E` da raia, que grava desde o play) sobrescreve a região inteira | Use `Toque` para trocar só o trecho; `Ctrl+Z` desfaz a passada |
+| Regravei uma raia e a curva antiga sumiu no trecho | `Escrever` (pela barra ou pelo seletor `E` da raia) grava sem parar depois do primeiro toque no controle e sobrescreve a região inteira, até você parar | Use `Toque` para trocar só o trecho; `Ctrl+Z` desfaz a passada |
+| Deixei a raia em `Escrever`, dei play e não gravou nada | O `Escrever` só começa depois do primeiro toque no controle (um play sem mexer em nada nunca apaga a curva) | Mexa no controle do alvo com a música tocando `(testado só por testes automáticos)` |
 | O knob do envio não anda com a automação do envio | O knob de envio não segue a automação | Olhe o valor na raia (cabeçalho) |
 | O filtro "pula" no começo do play | Antes do primeiro ponto vale o valor do primeiro ponto | Ponha o primeiro ponto no início do trecho, no valor de partida |
 | A raia sumiu | Ela foi ocultada (o olho riscado): continua valendo | `A` no cabeçalho, `Mostrar as ocultas` |

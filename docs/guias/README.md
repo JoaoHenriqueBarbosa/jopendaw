@@ -11,7 +11,7 @@
 - **Links.** `../manual/...` são capítulos; os nomes sem pasta são guias desta mesma pasta. Rótulos em `crase` são os do app.
 - **Deduções.** Quando uma célula junta dois fatos dos capítulos sem que haja receita testada, ela diz `(dedução)`.
 
-Guias desta pasta, por ordem de uso comum: [Primeira batida do zero](primeira-batida-do-zero.md) · [Gravar uma banda e mixar](gravar-uma-banda-e-mixar.md) · [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md) · [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [Sampler multi-zona e fatiar loops](sampler-multi-zona-e-fatiar-loops.md) · [Expressão MIDI na prática](expressao-midi-na-pratica.md) · [Efeitos em combinação](efeitos-em-combinacao.md) · [Mixagem e automação](mixagem-e-automacao.md) · [Loudness e master](loudness-e-master.md) · [Remix com warp e altura](remix-com-warp-e-altura.md) · [Trabalhar em dois aparelhos](trabalhar-em-dois-aparelhos.md) · [Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) · [Mapa de andamento e compasso](mapa-de-andamento-e-compasso.md) · [MIDI de e para outros programas](midi-de-e-para-outros-programas.md) · [Presets do usuário](presets-do-usuario.md) · [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md) · [Controlador MIDI e MIDI learn](controlador-midi-e-midi-learn.md).
+Guias desta pasta, por ordem de uso comum: [Primeira batida do zero](primeira-batida-do-zero.md) · [Gravar uma banda e mixar](gravar-uma-banda-e-mixar.md) · [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md) · [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [Sampler multi-zona e fatiar loops](sampler-multi-zona-e-fatiar-loops.md) · [Expressão MIDI na prática](expressao-midi-na-pratica.md) · [Efeitos em combinação](efeitos-em-combinacao.md) · [Mixagem e automação](mixagem-e-automacao.md) · [Organizar um projeto com pastas](organizar-um-projeto-com-pastas.md) · [Loudness e master](loudness-e-master.md) · [Remix com warp e altura](remix-com-warp-e-altura.md) · [Fades e crossfades na prática](fades-e-crossfades.md) · [Trabalhar em dois aparelhos](trabalhar-em-dois-aparelhos.md) · [Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) · [Mapa de andamento e compasso](mapa-de-andamento-e-compasso.md) · [MIDI de e para outros programas](midi-de-e-para-outros-programas.md) · [Presets do usuário](presets-do-usuario.md) · [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md) · [Controlador MIDI e MIDI learn](controlador-midi-e-midi-learn.md).
 
 ---
 
@@ -55,6 +55,7 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Fazer um pad largo sem embolar os graves | [Efeitos em combinação, receita 5](efeitos-em-combinacao.md#receita-5-pad-largo-com-chorus-e-reverb) · [04a Sintetizador](../manual/04a-sintetizador.md) |
 | Fazer um baixo com dentes e mordida | [Efeitos em combinação, receita 6](efeitos-em-combinacao.md#receita-6-distorção-de-baixo-com-filtro-e-eq) · [06d Distorção](../manual/06d-efeitos-referencia.md#11-distorção-sobreamostragem) |
 | Agrupar faixas num barramento (bateria, vozes) | [06 Mixer, saída](../manual/06-mixer.md#saída-e-nome) · [Mixagem e automação, variações](mixagem-e-automacao.md#variações) |
+| Reunir faixas numa pasta com volume, mudo, solo e efeitos do grupo, e recolhê-las na timeline | [Organizar um projeto com pastas](organizar-um-projeto-com-pastas.md) · [02c Pastas de faixa](../manual/02c-pastas-de-faixa.md) |
 | Ouvir só uma faixa com o reverb dela | [06 Mixer, solo e mudo](../manual/06-mixer.md#solo-e-mudo) |
 | Fazer uma subida de filtro até o refrão | [Mixagem e automação, passo 3](mixagem-e-automacao.md#3-automatizar-um-filtro-para-a-subida-da-música) · [07 Automação](../manual/07-automacao.md) |
 | Fazer um fade-out da música | [Mixagem e automação, passo 4](mixagem-e-automacao.md#4-fazer-um-fade-de-volume-por-automação) · [07 Automação](../manual/07-automacao.md) |
@@ -84,6 +85,7 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Transpor um sample sem mudar a duração | [Remix, passo 6](remix-com-warp-e-altura.md#6-transpor-o-tom) · [03b Warp e altura, seção `ALTURA`](../manual/03b-warp-e-altura.md) |
 | Tocar um trecho de trás para frente (subida de prato antes da virada) | [Remix, passo 7](remix-com-warp-e-altura.md#7-reverso-como-efeito-subida-antes-da-virada) |
 | Fazer um remix por cima de outra música | [Remix com warp e altura](remix-com-warp-e-altura.md) · [03 Áudio e clipes](../manual/03-audio-e-clipes.md) |
+| Emendar duas tomadas de voz, repetir um loop sem clique ou fazer um pad entrar e sair suave | [Fades e crossfades na prática](fades-e-crossfades.md) · [03 Fades e crossfade](../manual/03-audio-e-clipes.md#fades-e-crossfade) |
 
 ### Entrega: exportar e volume
 
@@ -310,7 +312,7 @@ O que evitar juntos, por quê, o que fazer no lugar e onde está registrado. Tud
 | Evite juntar | Por quê | Em vez disso | Ver |
 |---|---|---|---|
 | Automação de volume e arrastar o fader durante o play com o botão `Automação` em `Ler` | Arrastar muda só o **valor fixo**, que a curva cobre; nada se ouve até parar | Escolher `Toque`, `Trava` ou `Escrever` para gravar por cima, ou editar os pontos, ou remover a raia (`X` no cabeçalho dela) | [07, limites](../manual/07-automacao.md#limites-e-pegadinhas) · [mixagem, se der errado](mixagem-e-automacao.md#se-der-errado) |
-| Gravar automação no modo `Escrever` (principalmente pelo seletor `E` da raia) sobre uma curva que se quer manter | Grava o tempo todo e substitui a curva antiga de onde passa (o seletor `E` começa no play, com o valor fixo do controle) | `Toque` para trocar só o trecho segurado; `Ctrl+Z` desfaz a passada | [07, Gravar automação](../manual/07-automacao.md#gravar-automação) |
+| Gravar automação no modo `Escrever` (principalmente pelo seletor `E` da raia) sobre uma curva que se quer manter | Grava o tempo todo e substitui a curva antiga de onde passa (o seletor `E` só começa a gravar depois do primeiro toque no controle) | `Toque` para trocar só o trecho segurado; `Ctrl+Z` desfaz a passada | [07, Gravar automação](../manual/07-automacao.md#gravar-automação) |
 | Gravar automação junto com a gravação de áudio ou MIDI | Não grava: aviso vermelho ao lado do botão `Automação` | Gravar o áudio primeiro e a automação numa passada só de reprodução | [07](../manual/07-automacao.md#limites-da-gravação) |
 | Esperar a curva com o transporte parado ou tocando notas ao vivo | Parado, o motor não aplica a curva: o som usa o valor fixo. A leitura no cabeçalho da raia mostra o valor da curva no cursor | Tocar o projeto para ouvir | [07](../manual/07-automacao.md#limites-e-pegadinhas) |
 | Automação de nível de envio e o knob do mixer | O knob de envio **não** anda com a automação | Ler o valor na raia | [06](../manual/06-mixer.md#limites-e-pegadinhas) |
@@ -378,7 +380,8 @@ O que evitar juntos, por quê, o que fazer no lugar e onde está registrado. Tud
 | Detector em pad, tom puro, ruído ou trecho de menos de 3 s | Devolve "sem andamento"; nos extremos (por volta de 65 ou acima de 170 BPM) pode dar o dobro ou a metade | Digitar o BPM; `÷2` ou `×2` | [03b, detector](../manual/03b-warp-e-altura.md) |
 | Mudar o andamento **depois** de gravar áudio | Um clipe de áudio sem warp mantém a duração em segundos: o fim dele anda em batidas, enquanto as notas MIDI acompanham | Fechar o andamento antes da primeira tomada | [gravar uma banda, passo 1](gravar-uma-banda-e-mixar.md#1-o-projeto-e-o-andamento-antes-de-gravar) |
 | Mexer em warp, andamento, loop, importar, exportar ou desfazer **gravando** | Tudo isso fica travado durante a gravação (`Pare a gravação para…`) | Parar antes | [03c](../manual/03c-gravacao.md) · [02](../manual/02-transporte.md#limites-e-pegadinhas) |
-| Dois clipes de áudio sobrepostos na mesma faixa | O clipe que você mexeu ganha e o que ele cobre é aparado, partido ou removido | Outra faixa; `Duplicar a faixa` em vez de `Duplicar` o clipe | [02b, sobreposição](../manual/02b-timeline-e-clipes.md#cortar-duplicar-apagar-e-sobreposição) · [remix, passo 7](remix-com-warp-e-altura.md#7-reverso-como-efeito-subida-antes-da-virada) |
+| Dois clipes de áudio sobrepostos na mesma faixa | O clipe que você mexeu ganha e o que ele cobre é aparado, partido ou removido. **Exceção:** travessia de borda de até metade do menor clipe, sem fade seu no cruzamento, vira crossfade e os dois tocam juntos | Outra faixa; `Duplicar a faixa` em vez de `Duplicar` o clipe; para emendar, o crossfade automático ([fades e crossfades](fades-e-crossfades.md)) |
+| Crossfade com a curva `Linear` (ou `Exponencial`) | A soma dos dois clipes afunda no meio: −9 dB de potência (sons diferentes) ou −6 dB de amplitude (sons iguais) na `Linear`, −15 e −12 dB na `Exponencial` | `Potência constante` (sons diferentes) ou `S (seno cosseno)` (sons iguais) | [03 Fades e crossfade](../manual/03-audio-e-clipes.md#as-quatro-curvas) | [02b, sobreposição](../manual/02b-timeline-e-clipes.md#cortar-duplicar-apagar-e-sobreposição) · [remix, passo 7](remix-com-warp-e-altura.md#7-reverso-como-efeito-subida-antes-da-virada) |
 | Microfone, alto-falante e clique do metrônomo durante a gravação | Microfonia; o clique vaza para o microfone | Fones; metrônomo desligado depois da contagem (a contagem continua) | [gravar uma banda, passo 5](gravar-uma-banda-e-mixar.md#5-violão-e-baixo-uma-tomada-com-contagem) |
 | Duas faixas de áudio armadas ao mesmo tempo | A entrada é uma só: cada faixa recebe um clipe com o mesmo áudio | Armar uma de cada vez | [03c](../manual/03c-gravacao.md) |
 | Começar a gravar em loop no meio do loop | A primeira tomada fica com silêncio na frente e não é escolhida como ativa | Cursor no começo do loop | [gravar uma banda, passo 6](gravar-uma-banda-e-mixar.md#6-voz-monitor-e-tomadas-em-loop) |
@@ -450,6 +453,10 @@ Formato: "faça X → use Y com Z=valor". Os números são pontos de partida; o 
 | Baixo em mono | `Utilitário` `Mono` `Sim` na faixa do baixo | [06d Utilitário](../manual/06d-efeitos-referencia.md#5-utilitário) |
 | Ouvir só uma faixa com o reverb dela | `S` na faixa (o retorno é alimentado só por quem está em solo) | [06, solo e mudo](../manual/06-mixer.md#solo-e-mudo) |
 | Agrupar a bateria | Botão de saída de cada faixa em `Novo barramento` e depois o mesmo; `Compressor` no barramento | [mixagem, variações](mixagem-e-automacao.md#variações) |
+| Agrupar a bateria com linha própria na timeline | Menu da faixa `Agrupar em pasta…`, `Nome da pasta` `Bateria`, marcar as faixas; `Efeitos da pasta` com `Compressor` preset `Bateria cola` | [organizar com pastas, cenário 1](organizar-um-projeto-com-pastas.md#1-bateria-em-várias-faixas-com-compressor-no-grupo) |
+| Dar um só espaço ao coro | Pasta `Coro` com `Reverb` preset `Sala` (`Mistura` 20 a 30%, é insert) e `EQ` `Passa-alta` 120 Hz antes | [organizar com pastas, cenário 2](organizar-um-projeto-com-pastas.md#2-coro-de-vozes-com-reverb-no-grupo) |
+| Achar o caminho num projeto de 20 faixas | Uma pasta por família e `Recolher todas as pastas` (menu `Opções da pasta`); a miniatura mostra os clipes | [organizar com pastas, cenário 3](organizar-um-projeto-com-pastas.md#3-projeto-grande-recolhido-para-navegar) |
+| Abaixar o grupo sem mexer nos faders internos | Volume da linha da pasta; os envios das faixas para retornos não acompanham (saem da faixa) | [02c, pegadinhas](../manual/02c-pastas-de-faixa.md#limites-e-pegadinhas) |
 
 ### Automação
 
@@ -528,6 +535,15 @@ Números calculados das fórmulas do app; nada foi conferido com um controlador 
 | Subir um sample 3 semitons sem mudar o tempo | Seção `ALTURA`, botão `+` três vezes (`+3 st`); não precisa ligar o warp | [03b](../manual/03b-warp-e-altura.md) |
 | Subida de prato antes da virada | `Duplicar a faixa`, cortar um compasso com o prato, `Inverter o áudio` e terminar o clipe no compasso da virada, com fade in curto | [remix, passo 7](remix-com-warp-e-altura.md#7-reverso-como-efeito-subida-antes-da-virada) |
 | Dar folga à batida sobre uma música | `Ganho do clipe…` −3 dB só no trecho, ou fader −3 dB; `Compressor` com `Sidechain` no bumbo | [remix, passo 8](remix-com-warp-e-altura.md#8-sobrepor-uma-batida) |
+
+### Fades e crossfades
+
+| Faça… | Use… | Ver |
+|---|---|---|
+| Emendar duas tomadas de voz | Cortar (`S`) e apagar o trecho ruim, arrastar (com `Alt`) a tomada 2 para a faixa da 1 até entrar uns 30 ms na cauda dela: o crossfade automático põe fade de saída e de entrada de 30 ms em `Potência constante` | [fades e crossfades, cenário 1](fades-e-crossfades.md#cenário-1-emendar-duas-tomadas-de-voz) · [03](../manual/03-audio-e-clipes.md#crossfade-automático) |
+| Emendar dentro de uma nota sustentada (o mesmo som dos dois lados) | `Fade de saída: S (seno cosseno)` no primeiro e `Fade de entrada: S (seno cosseno)` no segundo: soma de amplitude constante | [fades e crossfades, variações do cenário 1](fades-e-crossfades.md#variações) |
+| Tirar o estalo da repetição de um loop | Fade de saída de 5 ms (e de entrada de 5 ms, se o loop não abre num ataque) com `S (seno cosseno)`, depois `Ctrl+D` | [fades e crossfades, cenário 2](fades-e-crossfades.md#cenário-2-um-loop-repetido-sem-clique) |
+| Fazer um pad entrar do nada e sumir | Fade de entrada `S (seno cosseno)` de 2 compassos (`Exponencial` para um crescendo dramático) e fade de saída `Exponencial` | [fades e crossfades, cenário 3](fades-e-crossfades.md#cenário-3-a-entrada-suave-de-um-pad-e-a-saída) |
 
 ### Exportação e volume
 

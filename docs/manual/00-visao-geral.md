@@ -106,7 +106,8 @@ Ocupa o meio da tela. À esquerda, uma coluna de cabeçalhos de faixa; à direit
 |---|---|---|---|
 | Canto da régua: `N faixas` e `comp.` / `mm:ss` | Mostra quantas faixas há; clicar alterna a régua entre compassos e minutos:segundos | Tooltip: `Régua em compassos: clique para alternar` | Mesmo efeito do item `Régua em minutos e segundos` |
 | Régua | Escala de compassos (ou tempo); arrastar nela marca a região do loop; abriga os marcadores | | |
-| Cabeçalho da faixa: nome | Nome da faixa; o menu `Opções da faixa` (três pontos) tem `Abrir o instrumento`, `Efeitos`, `Monitorar a entrada`, `Renomear`, `Duplicar a faixa`, `Congelar em áudio`, `Mover para cima`, `Mover para baixo`, `Trocar a cor`, `Apagar a faixa` | Alguns itens só existem conforme o tipo da faixa | Apagar uma faixa com conteúdo pede confirmação e dá para desfazer |
+| Cabeçalho da faixa: nome | Nome da faixa; o menu `Opções da faixa` (três pontos) tem `Abrir o instrumento`, `Efeitos`, `Monitorar a entrada`, `Renomear`, `Duplicar a faixa`, `Congelar em áudio`, `Mover para cima`, `Mover para baixo`, `Agrupar em pasta…` (ou `Tirar da pasta`, `Mover para a pasta "Nome"`), `Trocar a cor`, `Apagar a faixa` | Alguns itens só existem conforme o tipo da faixa | Apagar uma faixa com conteúdo pede confirmação e dá para desfazer |
+| Linha de pasta (seta, ícone de pasta, nome, `M`, `S`, `Efeitos da pasta`, `N faixas`, volume) | Reúne as faixas logo abaixo sob um barramento de grupo; a seta (`Recolher a pasta` / `Expandir a pasta`) esconde as faixas | Criada por `Agrupar em pasta…` no menu da faixa | [Capítulo 02c](02c-pastas-de-faixa.md) |
 | `M` (`Mudo`) | Silencia a faixa | | |
 | `S` (`Solo`) | Só as faixas em solo tocam | | |
 | Bolinha `●` (armar) | Arma a faixa para gravar. Tooltips: `Armar para gravar a entrada de áudio`, `Armar para gravar as notas (teclado ou MIDI)`, `Desarmar` | Não existe em barramento | Bloqueada durante a gravação |
@@ -179,7 +180,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 **Projeto.** Uma música. Guarda o andamento, o compasso, as faixas, os clipes, a mixagem, os marcadores e a lista de áudios usados. Nome, andamento, compasso e taxa cadastrada (`48.0 kHz` nos projetos criados pelo app) ficam no servidor; o resto forma o documento do projeto.
 
-**Faixa.** Uma linha do arranjo com o seu canal no mixer. Tipos: `Áudio` (recebe gravações e arquivos), `Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable` (tocam notas) e `Barramento` (não tem clipes: recebe o som de outras faixas por envio ou por saída, como um retorno de reverb). Cada faixa tem volume, pan, mudo, solo, cadeia de efeitos, envios e, opcionalmente, automação.
+**Faixa.** Uma linha do arranjo com o seu canal no mixer. Tipos: `Áudio` (recebe gravações e arquivos), `Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable` (tocam notas) e `Barramento` (não tem clipes: recebe o som de outras faixas por envio ou por saída, como um retorno de reverb). Cada faixa tem volume, pan, mudo, solo, cadeia de efeitos, envios e, opcionalmente, automação. Faixas de áudio e de instrumento podem ser reunidas numa **pasta** (um barramento de grupo com linha própria, que recolhe as faixas): ver [02c Pastas de faixa](02c-pastas-de-faixa.md).
 
 **Clipe.** Um trecho de conteúdo numa faixa: de áudio (aponta para um arquivo; pode ser cortado, ter fades, warp) ou de notas MIDI (as notas do piano roll). Posições em batidas, de modo que o clipe acompanha o andamento; o corte de um clipe de áudio é em segundos do arquivo original.
 
@@ -223,6 +224,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Mudo (`M`) / Solo (`S`) | Silenciar uma faixa / deixar tocar só as faixas em solo. |
 | Nuvem | O servidor do jopendaw, onde o documento e os áudios ficam para outros aparelhos. |
 | Pan | Posição da faixa entre a esquerda e a direita. |
+| Pasta (grupo) | Linha que reúne faixas de áudio e de instrumento sob um barramento de grupo: um volume, um mudo, um solo e uma cadeia de efeitos para o conjunto, e uma seta para recolher as faixas. Ver [02c Pastas de faixa](02c-pastas-de-faixa.md). |
 | Piano roll | O editor de notas (aba `Editor`). |
 | Preset | Ajuste pronto de instrumento ou efeito. |
 | Quantizar | Puxar as notas para a grade (`Q` no piano roll). |
@@ -246,7 +248,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 - [01 Projetos, modelos e conta](01-projetos-modelos-conta.md): entrar e criar o primeiro projeto.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): vários aparelhos, conflitos e cotas.
-- [02 Transporte](02-transporte.md) e [02b Timeline e clipes](02b-timeline-e-clipes.md): as duas áreas que você mais usa.
+- [02 Transporte](02-transporte.md) e [02b Timeline e clipes](02b-timeline-e-clipes.md): as duas áreas que você mais usa. [02c Pastas de faixa](02c-pastas-de-faixa.md): agrupar e recolher faixas.
 - [06 Mixer](06-mixer.md) e [08 Exportação](08-exportacao.md): fechar a mixagem e tirar o WAV.
 - [09 Configurações, atalhos e Android](09-configuracoes-atalhos-android.md): teclas e diferenças de plataforma.
 - Receitas prontas: pasta `../guias/`.

@@ -174,7 +174,8 @@ O seletor de presets do cabeçalho do painel (tooltip `Presets`; na bateria, `Ki
 
 | Item do menu | O que faz |
 |---|---|
-| `MEUS PRESETS` (título na cor da faixa, sem clique) | Abre a seção, a primeira do menu. |
+| Aviso em vermelho (letra pequena, sem clique; só aparece quando há problema) | Fica **acima** de `MEUS PRESETS` e diz que os presets não estão sendo guardados neste aparelho ou o que houve com o arquivo deles: ver [Avisos do guardado](#avisos-do-guardado). |
+| `MEUS PRESETS` (título na cor da faixa, sem clique) | Abre a seção, a primeira do menu (ou a segunda, se há o aviso em vermelho). |
 | `Nenhum ainda` (cinza) | Aparece no lugar da lista enquanto você não tem nenhum preset deste tipo. |
 | Um preset seu (o nome, cortado com reticências se for longo) | Aplica na faixa, como os de fábrica. Leva o visto quando os valores da faixa batem com ele. |
 | Ícone `…` no fim da linha (tooltip `Renomear, apagar ou exportar`) | Fecha o menu e abre uma janela com o nome do preset no título e três opções: `Renomear…`, `Exportar preset…` e `Apagar…` (em vermelho). |
@@ -194,7 +195,7 @@ Regras do nome:
 | Regra | Valor |
 |---|---|
 | Tamanho | Até 60 caracteres (o campo para de aceitar no 60). |
-| Limpeza | O campo não aceita caracteres de controle nem separadores de linha ou de parágrafo (nem digitados nem colados). Ao guardar, esses caracteres e as marcas invisíveis (largura zero, direção do texto) viram espaço; espaços seguidos viram um só; espaços nas pontas somem. |
+| Limpeza | O campo não aceita (nem digitados nem colados) caracteres de controle, separadores de linha ou de parágrafo, marcas de largura zero (U+200B a U+200F, U+FEFF) e marcas de direção do texto (U+202A a U+202E): o nome guardado é o que você vê digitado. Ao guardar, espaços seguidos viram um só e espaços nas pontas somem (um arquivo importado com essas marcas no nome tem cada uma trocada por espaço). `(testado só por testes automáticos)` |
 | Vazio | O botão `Salvar` fica desabilitado enquanto o nome, depois da limpeza, estiver vazio. |
 | Repetido | Único **por tipo de instrumento**, sem diferenciar maiúsculas de minúsculas (`Baixo` e `baixo` são o mesmo nome). Nome já usado abre o diálogo `Substituir o preset?` com o texto `Já existe um preset chamado "Nome". Substituir pelos valores atuais?` e os botões `Cancelar` e `Substituir`. Substituir troca só os valores; o nome (com as maiúsculas de antes) e a data de criação do preset antigo ficam. |
 | Quantidade | No máximo 300 presets por tipo. No 301º, a janela `Não foi possível salvar` diz `Limite de 300 presets para este tipo. Apague algum antes.` |
@@ -218,8 +219,8 @@ O rótulo do seletor segue a tabela de [O rótulo do seletor](#o-rótulo-do-sele
 | Situação | Rótulo |
 |---|---|
 | Os valores da faixa batem com um preset seu | O nome dele, sem `(editado)`, e o visto na linha dele. Se batem com um preset seu **e** com um de fábrica, vale o seu. Se dois presets seus têm valores idênticos, o primeiro criado. |
-| Você aplicou um preset seu e depois mexeu em algum parâmetro | `Nome (editado)` (só até fechar o painel ou trocar de aba; depois volta a `Personalizado`, como nos de fábrica) `(não confirmado em uso)`. |
-| Faixa recém-criada, sem nenhum parâmetro mexido | `Inicial`, a não ser que você tenha salvo um preset com todos os valores no padrão: aí aparece o nome dele. |
+| Você aplicou um preset seu e depois mexeu em algum parâmetro | `Nome (editado)` (só até fechar o painel ou trocar de aba; depois volta a `Personalizado`, como nos de fábrica) `(não confirmado em uso)`. Se você **renomear** esse preset, o rótulo passa a mostrar o nome novo; se você o **apagar**, o `(editado)` some (o rótulo vira `Personalizado`, ou `Inicial` se a faixa ainda está toda no padrão) `(testado só por testes automáticos)`. |
+| Faixa recém-criada, sem nenhum parâmetro mexido e sem preset aplicado nesta sessão do painel | `Inicial`, mesmo que você tenha salvo um preset com todos os valores no padrão (o menu continua marcando o seu com o visto). Se você aplicar esse seu preset, o rótulo passa a ser o nome dele. `(testado só por testes automáticos)` |
 | Faixa com valores que não batem com nada e nenhum preset aplicado nesta sessão do painel | `Personalizado`. |
 
 #### Renomear, exportar e apagar
@@ -229,7 +230,7 @@ Toque no `…` da linha do preset.
 | Opção | O que faz |
 |---|---|
 | `Renomear…` | Janela `Renomear preset` com o nome atual preenchido; o botão é `Renomear`. Nome já usado por **outro** preset do tipo abre `Nome em uso` (`Já existe outro preset chamado "Nome".`) e nada muda; trocar só as maiúsculas do próprio nome é permitido. |
-| `Exportar preset…` | Gera um arquivo `.jopreset` com esse preset. No navegador o arquivo é baixado direto (pasta de downloads); no Android abre o seletor de "salvar como" e cancelar volta sem mensagem. Se o sistema não sabe salvar arquivo, a janela `Não foi possível exportar` mostra o motivo. |
+| `Exportar preset…` | Gera um arquivo `.jopreset` com esse preset. No navegador o arquivo é baixado direto (pasta de downloads); no Android abre o seletor de "salvar como" e, se você cancelar, a janela `Exportação cancelada` diz `O preset "Nome" não foi exportado.` `(testado só por testes automáticos)`. Se o sistema não sabe salvar arquivo, a janela `Não foi possível exportar` mostra o motivo. |
 | `Apagar…` | Janela `Apagar o preset?` com `O preset "Nome" será apagado deste aparelho. Isso não pode ser desfeito.`, botões `Cancelar` e `Apagar` (vermelho). Faixas que já usam o timbre não mudam: o projeto guarda valores, não uma ligação com o preset. |
 
 O nome do arquivo exportado é o nome do preset mais `.jopreset`; os caracteres `\ / : * ? " < > |` viram `_` e pontos no começo saem (um nome que fica vazio vira `preset.jopreset`).
@@ -248,7 +249,7 @@ Renomear, apagar e salvar presets **não entram no desfazer** do projeto (`Ctrl+
 | Valores fora da faixa | Limitados à faixa do parâmetro, com aviso (`N valores fora da faixa foram limitados.`). |
 | Parâmetros que o arquivo não cita | Voltam ao padrão do tipo. |
 | Nome ausente, vazio ou com caracteres estranhos | Entra como `Preset importado`, ou com o nome limpo, com aviso. |
-| Arquivo de outro tipo (por exemplo um preset de `reverb` importado pelo menu do sintetizador) | É guardado no tipo dele e só aparece no menu desse tipo; a janela avisa `O preset é de outro tipo (reverb): ele foi guardado, mas só aparece no menu desse tipo.` |
+| Arquivo de outro tipo (por exemplo um preset de `reverb` importado pelo menu do sintetizador) | É guardado no tipo dele e só aparece no menu desse tipo; a janela avisa `O preset é de outro tipo (Reverb): ele foi guardado, mas só aparece no menu desse tipo.` (o tipo vem pelo nome em português, como `Reverb` ou `Sintetizador`). |
 | Arquivo recusado | A janela `Não foi possível importar "arquivo"` mostra o motivo: `O arquivo é grande demais para ser um preset.` (mais de 256 KB), `O arquivo não é um preset do jopendaw (não é um JSON válido).`, `O arquivo não é um preset do jopendaw.`, `O arquivo tem uma versão de formato inválida.`, `O preset é de uma versão mais nova do jopendaw. Atualize o app para importá-lo.`, `Tipo de preset desconhecido ("família/tipo"). Ele pode ser de uma versão mais nova do jopendaw.`, `O preset não traz parâmetros.`, `O preset não tem nenhum valor utilizável para este tipo.` ou o limite de 300 por tipo. Nada é adicionado. |
 
 O formato do arquivo está em [dev 10, Presets do usuário](../dev/10-app-flutter.md#presets-do-usuário-user_presetsdart-user_presets_uidart).
@@ -260,10 +261,24 @@ Ficam **neste aparelho**, num único registro chamado `userpresets` no guardado 
 | Onde | Como |
 |---|---|
 | Navegador (web) | No IndexedDB do site (banco `jopendaw`, chave `userpresets`), separado por endereço do site. Limpar os dados do site apaga os presets; outro navegador, outro perfil ou uma janela anônima começam sem nenhum. |
-| Android | Num arquivo de texto (`userpresets.txt`) na pasta `jopendaw` dos documentos do app. Desinstalar o app ou limpar os dados dele apaga. |
+| Android | Num arquivo de texto (`userpresets.txt`) na pasta `jopendaw` dos documentos do app; a cópia de um arquivo ilegível, se houver, fica ao lado dele (`userpresets%2Ebak.txt`, `(lido do código)`). Desinstalar o app ou limpar os dados dele apaga. |
 | Outros sistemas de computador | Nada é guardado: os presets valem só até fechar o app (o app é feito para o navegador e o Android). |
 
-Eles **não sincronizam com a conta**: não vão para a nuvem, não aparecem no outro aparelho e não vão dentro do `.jopendaw` do projeto (o projeto leva os valores dos knobs, não a lista de presets). Não são separados por conta: quem entrar com outra conta neste mesmo navegador vê os mesmos presets `(não confirmado em uso; vem da leitura do código, que não usa a conta na chave)`. Para levar a outro aparelho, exporte cada preset e importe no outro. Se a gravação no guardado falhar, os presets seguem na memória até fechar o app, mas o app **não mostra aviso** disso (o erro fica guardado internamente e nenhuma tela o lê): faça uma exportação dos presets importantes como cópia.
+Eles **não sincronizam com a conta**: não vão para a nuvem, não aparecem no outro aparelho e não vão dentro do `.jopendaw` do projeto (o projeto leva os valores dos knobs, não a lista de presets). Não são separados por conta: quem entrar com outra conta neste mesmo navegador vê os mesmos presets `(não confirmado em uso; vem da leitura do código, que não usa a conta na chave)`. Para levar a outro aparelho, exporte cada preset e importe no outro. Se a gravação no guardado falhar, os presets seguem na memória até fechar o app e o app **avisa** (ver abaixo); mesmo assim, exporte os presets importantes como cópia.
+
+#### Avisos do guardado
+
+Quando o app não consegue guardar ou ler os seus presets, ele avisa de dois jeitos: uma linha em vermelho no **topo do menu** de presets (acima de `MEUS PRESETS`, no instrumento e no efeito) e, depois de `Salvar como preset…`, `Renomear…`, `Apagar…` ou `Importar preset…`, uma janela `Presets não guardados` com o mesmo texto. O aviso vale até fechar o app `(testado só por testes automáticos)`.
+
+| Situação | Texto do aviso | O que acontece com os presets |
+|---|---|---|
+| O guardado recusou a gravação (por exemplo, sem espaço) | `Não deu para guardar seus presets neste aparelho.` | Seguem na memória e valem até fechar o app. A próxima gravação que der certo tira o aviso. |
+| Não deu nem para ler o que estava guardado | `Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.` | Nada é gravado por cima do que estava lá. |
+| O arquivo estava ilegível (corrompido, ou de outro formato) | `O arquivo dos seus presets estava ilegível. Guardei uma cópia dele (userpresets.bak) e a lista começou vazia.` | O app guarda uma cópia do conteúdo em `userpresets.bak` (se já havia outra cópia diferente, a nova vai para `userpresets.bak.` seguido de um número) antes de gravar por cima. O que você salvar depois é gravado normalmente. O app não tem tela para abrir a cópia. |
+| O arquivo estava ilegível e a cópia também falhou | `O arquivo dos seus presets está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você salvar vale só até fechar o app.` | Nada é gravado por cima. |
+| O arquivo foi guardado por uma versão **mais nova** do app (você voltou a um app antigo) | `Seus presets foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você salvar, renomear ou apagar vale só até fechar o app.` | Os presets legíveis aparecem e podem ser aplicados; nada é sobrescrito. |
+
+Nota: no aviso do arquivo ilegível a janela `Presets não guardados` também abre, embora a gravação funcione; o título assusta mais que o caso.
 
 No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de arquivos do sistema `(não confirmado no aparelho; testado só por testes automáticos com o seletor e o salvar simulados)`.
 

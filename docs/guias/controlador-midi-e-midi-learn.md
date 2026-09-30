@@ -66,9 +66,9 @@ Resultado: dois faders de um pad controller (`CC 41` e `CC 42`) gravam, com a m�
 2. Saia do modo (`Esc`). No botão `Automação` da barra, escolha `Toque` (`Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.`).
 3. Ligue o loop nos quatro compassos (`L`) e aperte `Espaço`. **Não** aperte `R`: com a gravação de áudio ou MIDI ligada, a automação não grava e a barra avisa `A automação não grava junto com a gravação de áudio ou MIDI.`
 4. Suba e desça o fader do `CC 41`. Ao passar pelo valor atual do fader do `Pad` na tela (ganho 0,55, −5,2 dB, cerca de `CC 83` com curva `Linear`), o fader do app passa a acompanhar e o movimento começa a ser gravado.
-5. Pare de mexer. Depois de **0,7 s sem mensagens** o app entende que você soltou (o controlador não tem "soltar"): o valor volta ao da automação numa rampa de 1/4 de batida, e os pontos gravados aparecem na raia `Volume`. Mexa o `CC 42` na volta seguinte da mesma forma para gravar o `Corte`.
+5. Pare de mexer. Depois de **0,7 s sem mensagens** o app entende que você soltou (o controlador não tem "soltar"): o valor volta ao da automação numa rampa de 1/4 de batida (e o valor fixo do fader do app volta ao de antes de você mexer), e os pontos gravados aparecem na raia `Volume`. Com o loop ligado, se a volta acabar enquanto você ainda mexe, o `Toque` para na virada e só grava de novo quando o fader mexer outra vez `(testado só por testes automáticos; com MIDI vem da leitura do código)`. Mexa o `CC 42` na volta seguinte da mesma forma para gravar o `Corte`.
 6. Pare (`Espaço`). Confira as raias `Volume` do `Pad` e `Filtro · Corte`. `Ctrl+Z` desfaz a passada inteira de uma vez; refazer com `Ctrl+Shift+Z`.
-7. Para o fader ficar onde você o largou até o fim, troque `Toque` por `Trava` (o app mantém o último valor até parar).
+7. Para o fader ficar onde você o largou até o fim, troque `Toque` por `Trava` (o app mantém o último valor até parar). Com o loop ligado, a `Trava` só segue gravando na volta seguinte enquanto o controle ainda conta como seguro (menos de 0,7 s sem mensagens); depois disso ela para na virada do loop `(lido do código)`.
 
 Variações:
 

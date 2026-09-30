@@ -17,7 +17,7 @@ De cima para baixo, cada canal de faixa tem: lista de efeitos (inserts), lista d
 
 Os barramentos aparecem com um fundo violeta discreto, para não se confundirem com faixas de som.
 
-Quando há **pastas** (ver [02b](02b-timeline-e-clipes.md#pastas-de-faixa-grupos)), uma barra colorida com o rótulo `Grupo` fica sobre o canal da pasta e uma faixa da mesma cor, mais clara, sobre os canais das faixas dela, que vêm logo depois. O fader da pasta controla todas, e um efeito nela vale para todas. Recolher a pasta no arranjo não tira as faixas do mixer.
+Quando há **pastas** (ver [02c Pastas de faixa](02c-pastas-de-faixa.md)), uma barra colorida de 14 px com o rótulo `Grupo` fica sobre o canal da pasta e uma faixa da mesma cor, mais clara e sem texto, sobre os canais das faixas dela, que vêm logo depois. O canal da pasta é o de um barramento (fundo violeta, ícone de pasta): o fader dele controla todas as faixas da pasta, e um efeito nele vale para todas. Recolher a pasta no arranjo não tira as faixas do mixer. Sem pasta no projeto a barra não existe; com pasta, o painel cresce 14 px e o canal do `Master` ganha só o vão.
 
 ## Controles
 
@@ -65,7 +65,7 @@ Quais barramentos aparecem na lista: uma faixa comum lista todos os barramentos.
 
 Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo ao fim do arraste). Tudo é salvo com o projeto.
 
-**Fader, pan e nível de envio gravam automação.** Com o botão `Automação` da barra em `Escrever`, `Toque` ou `Trava` (ou com o seletor da raia num desses modos) e a música **tocando**, arrastar o fader, o knob de pan ou o knob de envio (ou usar a roda do mouse sobre eles) grava o movimento como pontos na raia do alvo (`Volume`, `Pan` ou `Envio → nome`), criando a raia se ela não existe. Em `Ler` (o padrão) o gesto muda só o valor fixo, como antes. Enquanto grava, o controle mostra o que a sua mão põe; os pontos aparecem na raia quando o trecho acaba (ao soltar, no `Toque`; ao parar, em `Escrever` e `Trava`). Uma passada inteira vira **um passo só** no desfazer. O mesmo vale para o fader e o pan do `Master`. O envio só grava se ele já existe; criar o envio (tocar no knob vazio) não grava. Modos, valores e passo a passo em [07 Automação, Gravar automação](07-automacao.md#gravar-automação). O mini fader do cabeçalho da faixa grava igual ([02b](02b-timeline-e-clipes.md)).
+**Fader, pan e nível de envio gravam automação.** Com o botão `Automação` da barra em `Escrever`, `Toque` ou `Trava` (ou com o seletor da raia num desses modos) e a música **tocando**, arrastar o fader, o knob de pan ou o knob de envio (ou usar a roda do mouse sobre eles) grava o movimento como pontos na raia do alvo (`Volume`, `Pan` ou `Envio → nome`), criando a raia se ela não existe. Em `Ler` (o padrão) o gesto muda só o valor fixo, como antes. Enquanto grava, o controle mostra o que a sua mão põe; os pontos aparecem na raia quando o trecho acaba (ao soltar, no `Toque`; ao parar, em `Escrever` e `Trava`). Uma passada inteira vira **um passo só** no desfazer. O mesmo vale para o fader e o pan do `Master`. O envio só grava se ele já existe; criar o envio (tocar no knob vazio) não grava. Modos, valores e passo a passo em [07 Automação, Gravar automação](07-automacao.md#gravar-automação). O mini fader do cabeçalho da faixa e o da linha `Master` da linha do tempo gravam igual ([02b](02b-timeline-e-clipes.md)); o do `Master` também mostra o valor da sua mão enquanto grava `(testado só por testes automáticos)`.
 
 **Fader, pan e nível de envio aceitam MIDI learn.** Com um controlador ligado, o fader, o knob de pan e o knob de envio (do canal, do `Master` e o mini fader do cabeçalho da faixa) podem ser comandados por um botão ou fader do teclado: ligue o modo `Aprender MIDI` (botão da barra ou `Shift+K`), clique no controle contornado e mexa no botão do controlador. Botão direito do mouse no fader ou no pan, fora do modo, abre o menu do controle com `Aprender MIDI`, `Remover mapeamento (...)` e `Mapeamentos MIDI…` (no envio o botão direito continua sendo o menu do envio: para mapeá-lo ligue o modo). Com o modo ligado o controle só responde a clique (não arrasta). Tudo em [06f MIDI learn](06f-midi-learn.md).
 
@@ -84,9 +84,9 @@ Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo a
 |---|---|---|---|
 | Botão de saída, com o nome do destino (tooltip `Saída: Master`) | Para onde a faixa sai: `Master` ou um barramento. Abre um menu. | Padrão `Master`. O item marcado é o atual. | A saída é *no lugar* do master: a faixa deixa de ir direto para ele. |
 | Menu da saída: `Master` | Volta a faixa para o master. | | |
-| Menu da saída: nome de um barramento | Manda a faixa para ele (só lista os que não fecham ciclo). | | Use para grupos (bateria, vozes). |
+| Menu da saída: nome de um barramento | Manda a faixa para ele (só lista os que não fecham ciclo). Uma pasta aparece aqui pelo nome, como qualquer barramento. | | Use para grupos (bateria, vozes); para agrupar de uma vez, com linha própria na timeline, use `Agrupar em pasta…` ([02c](02c-pastas-de-faixa.md)). Mudar a saída de uma faixa de pasta por aqui não a tira da pasta. |
 | Menu da saída: `Novo barramento` | Cria um barramento no fim da lista e já liga a saída da faixa nele. | | |
-| Ícone do tipo + nome, no pé do canal | Mostra o tipo da faixa (tooltip: `Áudio`, `Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable`, `Barramento`). Tocar no ícone de uma faixa de instrumento abre o instrumento (`Sintetizador: abrir o instrumento`); no de um barramento abre os efeitos (`Barramento: abrir os efeitos`). | Nome truncado com reticências; o tooltip mostra inteiro. | Renomear é pelo menu da faixa na linha do tempo. |
+| Ícone do tipo + nome, no pé do canal | Mostra o tipo da faixa (tooltip: `Áudio`, `Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable`, `Barramento`, `Grupo` para uma pasta). Tocar no ícone de uma faixa de instrumento abre o instrumento (`Sintetizador: abrir o instrumento`); no de um barramento abre os efeitos (`Barramento: abrir os efeitos`); no de uma pasta (ícone de pasta) também, com o tooltip `Grupo: abrir os efeitos`. | Nome truncado com reticências; o tooltip mostra inteiro. | Renomear é pelo menu da faixa na linha do tempo. |
 
 ### Coluna `Faixa` (fim da lista)
 
@@ -117,11 +117,14 @@ Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo a
 
 Efeito prático: crie primeiro os barramentos que vão *alimentar* outros (grupos, delay) e depois os que recebem (o retorno de reverb, no fim). Como o barramento novo entra sempre no fim da lista, todos os que já existem conseguem mandar para ele.
 
+**Com pastas.** A pasta é um barramento e vale a mesma regra. As faixas dela são comuns e sempre podem sair nela; a pasta, por sua vez, só manda (saída ou envio) para um barramento que venha depois dela. Como a pasta nasce onde estava a primeira faixa agrupada e o retorno de reverb costuma ficar no fim, a saída da pasta para o retorno funciona; um barramento que fique **acima** da pasta não consegue receber dela. Mover a pasta com `Mover para baixo` para além de um barramento que ela alimenta abre o diálogo `Mover a faixa?`.
+
 ### Solo e mudo
 
 - **Mudo** zera o volume da faixa (pós-fader). Os envios *pós*-fader dela calam junto; os *pré*-fader continuam. Mudo num barramento cala tudo o que passa por ele.
 - **Solo** deixa audível: a faixa em solo, tudo que ela alimenta (o barramento da saída dela e os barramentos dos envios dela, em cadeia) e, se o solo estiver num barramento, tudo o que sai nele. As demais são silenciadas em ~5 ms (o medidor delas também apaga).
 - Por isso, soar uma faixa em solo mantém o reverb dela: o retorno é alimentado só por ela, porque os envios das faixas caladas para o retorno são cortados. Solo no próprio barramento de retorno deixa só ele soar, com o que chega pelos envios.
+- **Pasta:** solo na pasta deixa soar a pasta e todas as faixas dela (elas saem nela); solo numa faixa da pasta deixa soar só ela e a pasta, e as outras faixas da pasta calam. O mudo da pasta cala o que passa por ela, mas os envios das faixas para retornos saem direto da faixa e continuam (ver [02c](02c-pastas-de-faixa.md#solo-da-pasta-e-solo-das-faixas)) `(testado só por testes automáticos)`.
 - Faixa com `M` e `S` juntos fica muda: o mudo vence.
 - Não existe solo exclusivo, "solo seguro" nem solo no Master.
 
@@ -169,6 +172,7 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 ## Combina com
 
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): como ler os medidores, o loudness do master (`M`, `S`, `I`, `TP`) e o espectro.
+- [02c Pastas de faixa](02c-pastas-de-faixa.md): agrupar faixas sob um barramento, a barra `Grupo` e o solo da pasta. Guia: [organizar um projeto com pastas](../guias/organizar-um-projeto-com-pastas.md).
 - [06c Painel de efeitos](06c-painel-de-efeitos.md) e [06d Referência dos efeitos](06d-efeitos-referencia.md): o que colocar nos inserts, nos barramentos e no master.
 - [07 Automação](07-automacao.md): mover volume, pan, envios e parâmetros no tempo (desenhando na raia ou gravando com o fader, o pan e os knobs); fader, pan e knobs seguem a automação enquanto toca.
 - [08 Exportação](08-exportacao.md): o arquivo sai depois do limitador do master (`Normalizar o loudness` leva a mixagem ao alvo de LUFS); "Congelar em áudio" leva volume, pan, saída e envios para a faixa nova.

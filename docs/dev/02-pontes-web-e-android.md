@@ -155,6 +155,23 @@ Nenhuma função `jd_*` nova: o Android recebe as quatro pelo `jd_calls` que já
 - **Render offline.** As quatro chamadas **não** estão em `SKIP` nem em `renderSkip`: o Worker e o isolate as aplicam ao motor novo junto com o documento. Como o render conta o trecho e a cauda em quadros no Dart/JS (fora do motor), foram duplicadas as contas do mapa: `renderTempoMap(calls)` em `engine_ffi.dart` e `tempoMapOf(calls)` em `render-worker.js` (mesma leitura das chamadas em ordem: `tempo`, `tempo_clear`, `tempo_point`; a última escrita ganha; ponto na batida ≤ 0 muda o andamento inicial), devolvendo um mapa com `secondsAt` e `beatAt`. Com ele, `frameCounts`/`renderFrames` medem o trecho pelo mapa (`(secondsAt(to) − secondsAt(from)) × taxa`, arredondado) e `prepareCalls`/`prepareRenderCalls` calculam o fim de cada clipe de áudio como `beatAt(secondsAt(início) + duração)` (o clipe toca em tempo real constante) e o corte em segundos como `secondsAt(fim do trecho) − secondsAt(início)`. Sem mapa (um ponto só), as contas são as de antes. O teste `igual ao render-worker.js da web com mapa de andamento` (`app/test/tempo_map_test.dart`) roda o `tempoMapOf` no node e compara com o Dart.
 - **Três cópias da mesma conta.** `engine/src/tempo.rs` (Rust, o que soa), `app/lib/daw/tempo_map.dart` (Dart: régua, relógio, exportação) e `tempoMapOf` no `render-worker.js`. Mudou a fórmula (ou o tratamento de pontos duplicados, o clamp de 20–999): mude as três. Diferenças conhecidas e propositais: o Dart descarta pontos além de 512 (o motor aceita 4096) e mudanças de compasso além de 256 (o motor, 1024).
 
+### Chamada de curva de fade (`clip_fade_shape`)
+
+Uma chamada comum (só números, sem ponteiro), da fase 14 D (`991c05d`). Semântica e fórmulas em [01-motor.md](01-motor.md#curvas-de-fade-dos-clipes-clip_fade_shape-fase-14-d-991c05d); o JSON do clipe e o controlador em [10-app-flutter.md](10-app-flutter.md#curvas-de-fade-e-crossfade-automático-fadeshape-autofade).
+
+| Chamada | Argumentos (tipo no wasm) | Web (worklet) | Android (`jd_calls`) |
+|---|---|---|---|
+| `clip_fade_shape` | `curva in` (`u32`), `curva out` (`u32`) | `w.clip_fade_shape(in, out)`, export em `engine/wasm/src/lib.rs` (`clip_fade_shape(fade_in: u32, fade_out: u32)`) | `Call::ClipFadeShape { fade_in, fade_out }` → `Engine::set_clip_fade_shape`, pela mesma `api::apply`. Nenhuma função `jd_*` nova (o `core.rs` de teste também ganhou o ramo `"clip_fade_shape"`) |
+
+Códigos: 0 `Linear` (`x²`, o padrão), 1 `Potência constante`, 2 `Exponencial`, 3 `S (seno cosseno)`; o índice do enum `FadeShape` do Dart é o código do motor (tipo novo só entra no fim).
+
+- **Ordem e quem manda.** `_docCalls` (`controller.dart`) emite `clip_fade_shape in out` **logo depois** do `clip_add` do clipe e só quando alguma das duas curvas não é `FadeShape.linear`; clipe sem curva não gera chamada nova (documento antigo manda exatamente as chamadas de antes).
+- **A chamada é relativa ao último clipe.** Não leva índice. Por isso quem filtra a lista de chamadas precisa manter o par `clip_add` + `clip_fade_shape` junto ou descartar os dois.
+- **Web: motor antigo.** `clip_fade_shape` entrou na lista `OPTIONAL_CALLS` do `worklet.js`: um `engine.wasm` sem o export ignora a chamada em vez de derrubar o lote, e o fade toca `x²`.
+- **Android: motor antigo.** Um `.so` sem a chamada devolve erro no `apply` e o `core.rs` a conta em `diag.unknown_calls` (nome guardado em `last_unknown`) sem parar o resto do lote `(lido do código; não testado com um .so antigo)`. Os binários integrados em `48ec9e8` (`engine.wasm` e os três `.so`) contêm o nome `clip_fade_shape` (conferido por `grep` nos binários).
+- **Render offline (exportação e congelamento).** A chamada **não** está em `SKIP` nem em `renderSkip`, mas tem tratamento especial no aparo do fim do trecho, nas duas cópias da conta: `prepareCalls` (`render-worker.js`) e `prepareRenderCalls` (`engine_ffi.dart`). Ambas guardam `lastClipKept` (zerado a cada `clip_add`, ligado só se o clipe fica no trecho) e só repassam o `clip_fade_shape` se o clipe anterior ficou; um clipe que começa depois do fim é descartado **junto com** a curva dele. O clipe cortado pelo fim leva a curva de saída dele para o fade de 10 ms (ou para o que restar do fade de saída original, se maior). Teste: `o render aparado leva a curva do clipe que fica e descarta a do que sai` (`app/test/fade_test.dart`).
+- **Checklist.** A chamada seguiu o [checklist](#checklist-acrescentar-uma-chamada-nova-de-ponta-a-ponta) (passos 1 a 5 e 8), com o item 5 (render) exigindo o tratamento acima nas duas cópias.
+
 ### Exports do wasm que não são chamadas (`HOST_ONLY`, `api.rs:226`)
 
 Levam memória por ponteiro; cada hospedeiro tem função própria.

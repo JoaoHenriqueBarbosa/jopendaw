@@ -15,6 +15,7 @@ Comece por aqui, na ordem:
 | [01b Nuvem e sincronização](manual/01b-nuvem-e-sincronizacao.md) | Vários aparelhos, conflitos, cotas |
 | [02 Transporte](manual/02-transporte.md) | Barra superior, andamento, loop, metrônomo |
 | [02b Timeline e clipes](manual/02b-timeline-e-clipes.md) | Faixas, clipes, marcadores, minimapa |
+| [02c Pastas de faixa](manual/02c-pastas-de-faixa.md) | Agrupar faixas sob um barramento, recolher e expandir, solo e stems da pasta |
 | [03 Áudio e clipes](manual/03-audio-e-clipes.md) | Importar, fades, ganho |
 | [03b Warp e altura](manual/03b-warp-e-altura.md) | Esticar no tempo, transpor, detectar andamento |
 | [03c Gravação](manual/03c-gravacao.md) | Microfone, tomadas, MIDI ao vivo |
@@ -51,8 +52,10 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Expressão MIDI na prática](guias/expressao-midi-na-pratica.md) | Bend, modulação e pedal |
 | [Efeitos em combinação](guias/efeitos-em-combinacao.md) | Cadeia vocal, sidechain, delay em tempo |
 | [Mixagem e automação](guias/mixagem-e-automacao.md) | Mix do zero e automação de filtro e volume |
+| [Organizar um projeto com pastas](guias/organizar-um-projeto-com-pastas.md) | Bateria com compressor no grupo, coro com reverb no grupo, projeto grande recolhido |
 | [Loudness e master](guias/loudness-e-master.md) | Nível competitivo e seguro |
 | [Remix com warp e altura](guias/remix-com-warp-e-altura.md) | Esticar, transpor e sobrepor |
+| [Fades e crossfades na prática](guias/fades-e-crossfades.md) | Emendar tomadas de voz, loop sem clique, entrada suave de um pad, com a curva de cada caso |
 | [Trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md) | Nuvem, conflito, offline |
 | [Backup e levar o projeto para outro aparelho](guias/backup-e-levar-projeto-para-outro-aparelho.md) | Arquivo `.jopendaw` |
 | [Mapa de andamento e compasso](guias/mapa-de-andamento-e-compasso.md) | Virada de andamento, ritardando em rampa, 4/4 para 3/4 e 6/8 |

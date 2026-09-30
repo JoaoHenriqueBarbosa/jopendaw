@@ -76,10 +76,10 @@ Erros de exportação que você pode ver: `O projeto está vazio: não há nada 
 
 O render aplica ao motor as mesmas chamadas do projeto e processa tudo até o fim, sem esperar o relógio:
 
-- **Entra:** todas as faixas de áudio (com posição, corte, fades, ganho, warp, altura e inversão) e de instrumento (sintetizador, bateria, sampler, FM, wavetable), o volume, o pan, o mudo e o solo de cada faixa, os efeitos de cada faixa, os envios e os barramentos, o volume, o pan e os efeitos do master, **toda a automação** (de faixas, de efeitos e do master) e o limitador de segurança do master.
+- **Entra:** todas as faixas de áudio (com posição, corte, fades e as curvas deles, crossfades, ganho, warp, altura e inversão; ver [Fades e crossfade](03-audio-e-clipes.md#fades-e-crossfade)) e de instrumento (sintetizador, bateria, sampler, FM, wavetable), o volume, o pan, o mudo e o solo de cada faixa, os efeitos de cada faixa, os envios e os barramentos, o volume, o pan e os efeitos do master, **toda a automação** (de faixas, de efeitos e do master) e o limitador de segurança do master.
 - **Não entra:** o metrônomo, o loop (o arquivo é linear, do começo ao fim), a entrada do microfone e o monitoramento, notas tocadas ao vivo.
 - **Warp pendente:** se algum clipe ainda está processando o warp, a barra mostra `Processando o warp…` e a exportação espera terminar.
-- **Fim do trecho:** clipes que atravessam o fim terminam ali (com um fade de 10 ms); notas que atravessam terminam com a soltura do instrumento; a cauda deixa soar o que já estava tocando (reverb, delay, releases) e a automação continua valendo nela. Nada novo começa depois do fim.
+- **Fim do trecho:** clipes que atravessam o fim terminam ali (com um fade de 10 ms, ou o que restar do fade de saída que já tinham, se passar de 10 ms; a curva desse fade é a de saída do próprio clipe `(lido do código; testado só por testes automáticos)`); notas que atravessam terminam com a soltura do instrumento; a cauda deixa soar o que já estava tocando (reverb, delay, releases) e a automação continua valendo nela. Nada novo começa depois do fim.
 - **Limitador do master:** a mixagem passa pelo limitador de segurança do motor (teto de −0,3 dBFS, antecipação de 1,5 ms, liberação de 80 ms). Por isso, sem normalização, a mixagem não passa de −0,3 dBFS em nenhum formato, nem em 32 bits float.
 - **Ganho final (opcional):** com **Normalizar** ou **Normalizar o loudness**, um ganho fixo é aplicado ao arquivo **depois** do render, portanto depois do limitador do master. O primeiro leva o pico de amostra a −1 dBFS; o segundo leva o loudness integrado ao alvo (seção abaixo). Nenhum dos dois é compressor nem limitador: só multiplicam todas as amostras pelo mesmo número.
 - **Estéreo:** todos os arquivos saem estéreo (2 canais).
@@ -89,6 +89,7 @@ O render aplica ao motor as mesmas chamadas do projeto e processa tudo até o fi
 Com **Stems** ligado, saem a mixagem e um arquivo por faixa, na ordem das faixas. Cada stem é a saída da faixa **depois do fader, do pan, do mudo e da porta do solo** (a mesma posição dos medidores), com os efeitos da faixa, mas **sem a cadeia do master e sem o limitador**. Consequências:
 
 - A soma dos stems não é igual à mixagem: faltam os efeitos e o limitador do master. Um barramento gera o próprio stem (com o que recebeu).
+- **Pastas:** uma pasta é um barramento e gera o próprio stem (`<projeto> - <nome da pasta>.wav`, na posição dela na lista, antes das faixas dela): é a soma das faixas da pasta depois do fader e dos efeitos **da pasta**. Cada faixa da pasta continua gerando o seu stem, **sem** o fader, o mudo e os efeitos da pasta (o stem é o da saída da faixa, antes de entrar nela). Recolher a pasta não muda nada nos stems. Por isso o stem da pasta e os das faixas dela **contêm o mesmo som**: para remontar a mixagem em outro programa, use o stem da pasta **ou** os das faixas, não os dois. Com `M` na pasta o stem dela é silêncio e por isso é pulado, mas os stems das faixas saem. `(lido do código; testado só por testes automáticos)`
 - Faixa que não soa nada no trecho (vazia, muda, calada pelo solo de outra) é **pulada**: não gera arquivo de silêncio.
 - Stems podem passar de 0 dB. Em 16 e 24 bits, o excesso é cortado; em 32 bits float, vai inteiro.
 - Com **Normalizar**, cada stem é levado a −1 dBFS separadamente, então o equilíbrio entre eles muda. Para levar os stems a outro programa mantendo o balanço, deixe **Normalizar** desligado e use **WAV 32 bits float**.
@@ -178,7 +179,7 @@ O item fica desligado, com o motivo na legenda dele, em três casos: `Barramento
 2. O render pega a faixa **depois dos efeitos**, com o fader em 0 dB e o pan no centro, sem mudo e sem solo de nenhuma faixa, e sem a automação de volume e de pan (para não aplicá-las duas vezes).
 3. O resultado é gravado em WAV 32 bits float na taxa do aparelho, e vira mono se os dois canais são idênticos.
 4. Uma **faixa de áudio nova** entra logo abaixo, chamada `<nome> (áudio)`, com a mesma cor, e fica selecionada junto com o clipe. O clipe começa onde começava o primeiro clipe da original e o arquivo aparece como `<nome> (congelada).wav` na lista de áudios do projeto.
-5. A faixa nova recebe o **volume, o pan, o mudo, o solo, a saída, os envios e a automação de volume, pan e envios** da original: ela soa na mixagem como a original soava, e o fader continua mexível.
+5. A faixa nova recebe o **volume, o pan, o mudo, o solo, a saída, os envios e a automação de volume, pan e envios** da original: ela soa na mixagem como a original soava, e o fader continua mexível. Se a original está numa [pasta](02c-pastas-de-faixa.md), a faixa nova herda a saída (a pasta, então o volume e os efeitos da pasta continuam valendo para ela), mas entra **fora** da pasta: não fica recuada, não some com a pasta recolhida e não conta em `N faixas` `(lido do código; não testado)`; mova-a com `Mover para a pasta "Nome"`.
 6. A **original fica muda**, com o instrumento, os efeitos e os clipes intactos (é só reativar o M para voltar). Os envios pré-fader dela saem (senão continuariam soando e dobrariam); os pós-fader ficam, e calam junto com o mudo. Um sidechain que a original alimentava continua funcionando.
 7. Tudo é **um passo só do desfazer**: Ctrl+Z tira a faixa nova e devolve o som da original.
 
@@ -248,7 +249,7 @@ Desde a fase 11 o `.mid` leva o [mapa de andamento](02-transporte.md) e o mapa d
 | Mesmo instante | Dois eventos de andamento no mesmo tick ficam com o último; no mesmo tick o andamento vem antes do compasso | |
 | `Clipe selecionado` | O clipe sai do começo do arquivo, e o mapa vai **deslocado** junto: o `Set Tempo` e o `Time Signature` do tick 0 são os que valiam no começo do clipe, e só os pontos e mudanças depois do começo do clipe entram | Um clipe que começa no meio de um compasso leva a fórmula desse compasso, e a mudança de compasso seguinte cai na batida exata dela, que pode ficar no meio de um compasso do arquivo (na importação de volta o app alinha e avisa, ver [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid)) `(lido do código; não testado em uso)` |
 
-As notas continuam nas mesmas batidas em qualquer programa que respeite o `Set Tempo` e o `Time Signature`. A ida e volta preserva o mapa (salto, rampa em degraus e compassos) mas não recupera a rampa como rampa: ao importar de volta, os degraus entram como pontos de andamento comuns (até 256 pontos, ver o capítulo de importação).
+As notas continuam nas mesmas batidas em qualquer programa que respeite o `Set Tempo` e o `Time Signature`. A ida e volta preserva o mapa (salto, rampa em degraus e compassos) mas não recupera a rampa como rampa: ao importar de volta, os degraus entram como pontos de andamento comuns (as diferenças a menos de 0,05 BPM se fundem e o mapa que entra tem até 1024 pontos desde a fase 14; eram 256; ver o capítulo de importação). Um projeto com um andamento só e fracionado, como `97,5`, volta com o mesmo `97,5` (o `Set Tempo` guarda microssegundos por semínima, `97,5` sai como 615385 e o app arredonda o que lê a uma casa decimal; até a fase 13 a importação o arredondava para `98`) `(testado só por testes automáticos)`.
 
 Limites e pegadinhas do `.mid`:
 
@@ -301,6 +302,7 @@ Limites e pegadinhas do `.mid`:
 - [Analisador e medidores](06b-analisador-e-medidores.md): as leituras `M`, `S`, `I` e `TP` do master, para conferir o mix antes de normalizar.
 - [Guia: loudness e master](../guias/loudness-e-master.md): do nível das faixas ao arquivo entregue no alvo certo.
 - [Automação](07-automacao.md): vai inteira para o arquivo (WAV); no `.mid` a automação não vai.
+- [Pastas de faixa](02c-pastas-de-faixa.md): a pasta gera o próprio stem, além dos das faixas dela (ver [Stems](#stems)).
 - [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid): o caminho de volta, importar um `.mid` (o mesmo botão **Importar** do áudio).
 - [Editor de notas](05-piano-roll.md) e [Ferramentas MIDI](05b-ferramentas-midi.md): onde as notas exportadas são editadas.
 - [Guia: MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): melodia para outro DAW, pacote de acordes e backup das notas.

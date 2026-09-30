@@ -17,6 +17,7 @@ O painel Efeitos é uma das quatro abas do painel de baixo da tela do projeto (M
 | Tecla `F` | O mesmo: abre o painel (na faixa selecionada) ou fecha se já está aberto. |
 | Chip `FX` no cabeçalho de cada faixa da timeline e no cabeçalho do `Master` (tooltip `Efeitos`, `Efeitos (3)` quando há 3 efeitos, `Fechar os efeitos` quando aberto) | Abre o rack daquela faixa ou do master. O chip fica aceso quando a cadeia tem algum efeito. |
 | Ícone de tipo de um barramento na timeline (tooltip `Barramento: abrir os efeitos`) | Abre o rack do barramento. |
+| Botão `Efeitos da pasta` na linha de uma [pasta de faixa](02c-pastas-de-faixa.md), ou o ícone de pasta do canal dela no mixer (tooltip `Grupo: abrir os efeitos`) | Abre o rack da pasta. Tocar de novo no botão da linha, com o rack aberto, fecha o painel. O botão fica na cor da pasta quando a cadeia tem efeitos. |
 | Linha de insert na tira do mixer (nome do efeito) | Abre o rack na faixa dela, ver [06 Mixer](06-mixer.md). |
 
 Com o painel aberto, **escolher outra faixa** (na timeline ou no mixer) troca o rack para ela. Com a tela abaixo de 800 px de largura (celular) os cartões de efeito ficam empilhados; com 800 px ou mais (computador) a cadeia corre na horizontal. As abas do painel só mostram o ícone quando a largura é menor que 560 px.
@@ -96,7 +97,7 @@ Todas essas ações entram no histórico de desfazer (aplicar um preset seu tamb
 
 Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do instrumento (a mesma janela de nome, as mesmas regras de nome, a mesma exportação em `.jopreset`): o passo a passo de cada janela e os textos de erro estão em [04 Painel de instrumento, Meus presets](04-painel-de-instrumento.md#meus-presets). Aqui vai só o que muda para efeitos. Receita completa, com a cadeia vocal: [Presets do usuário](../guias/presets-do-usuario.md).
 
-**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `MEUS PRESETS`, a lista dos seus (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, divisor, `PRESETS` (de fábrica), divisor, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. Desde a fase 13 `MEUS PRESETS` fica no **topo** do menu (antes ficava entre os de fábrica e as ações do cartão), então `Salvar como preset…` e `Importar preset…` aparecem sem rolar. O menu é o mesmo nos cartões do rack do master e no de barramentos.
+**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `MEUS PRESETS`, a lista dos seus (ou `Nenhum ainda`), `Salvar como preset…`, `Importar preset…`, divisor, `PRESETS` (de fábrica), divisor, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. Com problema no guardado, uma linha vermelha de aviso vem antes de `MEUS PRESETS`. Desde a fase 13 `MEUS PRESETS` fica no **topo** do menu (antes ficava entre os de fábrica e as ações do cartão), então `Salvar como preset…` e `Importar preset…` aparecem sem rolar. O menu é o mesmo nos cartões do rack do master e no de barramentos.
 
 **O que cada preset guarda, por tipo.** Todos os parâmetros do tipo, na unidade da tabela do efeito ([06d](06d-efeitos-referencia.md)), menos o `Sidechain`:
 
@@ -119,11 +120,11 @@ Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do i
 
 **Aplicar.** Escolher um preset seu põe todos os valores do preset no cartão (nada do que estava antes sobra, exceto o `Sidechain`), num passo do desfazer. O preset de um tipo só aparece no menu desse tipo: um preset de `Reverb` não aparece no `Delay`. Dois cartões do mesmo tipo (dois `EQ`) enxergam a mesma lista.
 
-**Subtítulo do cartão.** Quando os valores do cartão batem com um preset seu, o subtítulo cinza mostra o nome dele e o menu o marca com um visto; se também batem com um de fábrica, vale o seu. Depois de aplicar e mexer, aparece `Nome (editado)` (só nesta sessão do painel). Os cartões de efeito não têm rótulos `Inicial` nem `Personalizado`: sem correspondência e sem preset aplicado, o subtítulo fica vazio.
+**Subtítulo do cartão.** Quando os valores do cartão batem com um preset seu, o subtítulo cinza mostra o nome dele e o menu o marca com um visto; se também batem com um de fábrica, vale o seu. Depois de aplicar e mexer, aparece `Nome (editado)` (só nesta sessão do painel); se você renomear o preset aplicado, o subtítulo mostra o nome novo, e se o apagar o `(editado)` some `(testado só por testes automáticos)`. Os cartões de efeito não têm rótulos `Inicial` nem `Personalizado`: sem correspondência e sem preset aplicado, o subtítulo fica vazio.
 
-**Ao importar.** Um arquivo `.jopreset` de outro tipo entra no tipo dele, não no do cartão onde você importou; a janela avisa `O preset é de outro tipo (reverb): ele foi guardado, mas só aparece no menu desse tipo.` Os nomes de tipo nessa mensagem são os internos: `eq`, `compressor`, `gate`, `limiter`, `utility`, `reverb`, `delay`, `chorus`, `phaser`, `tremolo`, `distortion`, `filter`.
+**Ao importar.** Um arquivo `.jopreset` de outro tipo entra no tipo dele, não no do cartão onde você importou; a janela avisa `O preset é de outro tipo (Reverb): ele foi guardado, mas só aparece no menu desse tipo.` O nome do tipo nessa mensagem é o de tela (`EQ`, `Compressor`, `Gate`, `Limitador`, `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Distorção`, `Filtro`; de um instrumento, `Sintetizador` e afins); só um tipo que o app não conhece aparece com o nome interno `(testado só por testes automáticos)`.
 
-**Onde ficam.** No aparelho (mesmo registro `userpresets` dos presets de instrumento), sem sincronizar com a conta e fora do `.jopendaw` do projeto; para levar a outro aparelho, `Exportar preset…` e `Importar preset…`. Um preset por cartão e por tipo: **não existe preset da cadeia inteira**, então uma cadeia favorita são vários presets (um por efeito) que você recoloca na ordem à mão.
+**Onde ficam.** No aparelho (mesmo registro `userpresets` dos presets de instrumento), sem sincronizar com a conta e fora do `.jopendaw` do projeto; para levar a outro aparelho, `Exportar preset…` e `Importar preset…`. Se o app não conseguir guardar ou ler os presets, o menu do cartão mostra no topo, em vermelho, o mesmo aviso do painel de instrumento, e depois de salvar, renomear, apagar ou importar abre a janela `Presets não guardados`; textos, cópia `userpresets.bak` de um arquivo ilegível e o caso do arquivo de versão mais nova (só leitura) em [04 Painel de instrumento, Avisos do guardado](04-painel-de-instrumento.md#avisos-do-guardado). Um preset por cartão e por tipo: **não existe preset da cadeia inteira**, então uma cadeia favorita são vários presets (um por efeito) que você recoloca na ordem à mão.
 
 ### Os editores dos efeitos
 
@@ -224,6 +225,15 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 2. Use o começo sugerido: `EQ`, `Compressor`, `Limitador`.
 3. Ponha o `Limitador` por último. O preset `Master −1 dB` já dá um teto de −1 dB.
 
+### Efeitos numa pasta de faixas
+
+A pasta ([02c](02c-pastas-de-faixa.md)) é um barramento: a cadeia dela processa a **soma** das faixas da pasta, depois dos faders e dos efeitos de cada uma e antes do volume da pasta.
+
+1. Toque no botão `Efeitos da pasta` da linha da pasta (ou no ícone de pasta do canal dela no mixer). O painel abre no rack da pasta; no seletor `De qual faixa são os efeitos` ela aparece pelo nome.
+2. `Adicionar efeito` e escolha, por exemplo, `Compressor` (cola o conjunto), `EQ` (um corte só para o grupo) ou `Reverb` (um espaço comum; com `Mistura` baixa, já que a pasta não é um retorno).
+3. Vale tudo o que vale numa cadeia de faixa: bypass, ordem, presets, até 16 efeitos. Efeito com latência (`Limitador`, `Distorção`) é compensado como em qualquer barramento ([06e](06e-compensacao-de-latencia.md)).
+4. **Desagrupar** com efeitos na pasta mantém o barramento e os efeitos, mas sem as faixas ligadas a ele (elas voltam ao `Master`): o rack fica sem entrada até você religar as saídas.
+
 ### Escolher a faixa-chave de um compressor (sidechain)
 
 1. No cartão do compressor, no grupo `CHAVE`, abra o seletor `Sidechain`.
@@ -233,6 +243,7 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 ## Combina com
 
 - [06d Referência dos efeitos](06d-efeitos-referencia.md): cada parâmetro dos 12 efeitos, faixas, padrões e presets.
+- [02c Pastas de faixa](02c-pastas-de-faixa.md): a pasta tem rack próprio, com o mesmo painel; guia [organizar um projeto com pastas](../guias/organizar-um-projeto-com-pastas.md).
 - [06 Mixer](06-mixer.md): as linhas de insert de cada tira (com a luz que liga e desliga o efeito), os envios e barramentos onde `Reverb` e `Delay` costumam morar.
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): o que o motor faz quando um efeito atrasa o som.
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): espectro e níveis para julgar o que o EQ e o compressor fizeram.
