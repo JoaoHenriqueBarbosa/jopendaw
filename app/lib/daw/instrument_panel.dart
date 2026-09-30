@@ -222,7 +222,9 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     if (list.isEmpty) return const [];
     final current = matchingPreset(t);
     final last = _lastPreset[t.id];
-    final label = current?.name ?? (last != null ? '$last (editado)' : 'Personalizado');
+    // a faixa recém-criada traz o padrão do tipo, que não é um "personalizado" de ninguém
+    final pristine = t.kind.params.every((s) => (t.param(s.id) - s.def).abs() <= 1e-6 * math.max(1, s.def.abs()));
+    final label = current?.name ?? (last != null ? '$last (editado)' : (pristine ? 'Inicial' : 'Personalizado'));
     final what = t.kind == TrackKind.drums ? 'kit' : 'preset';
 
     void apply(Preset p) {
@@ -275,7 +277,9 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
       itemBuilder: (_) => entries,
       child: Container(
         height: 32,
-        constraints: BoxConstraints(maxWidth: maxWidth),
+        // com as setas a largura é fixa: senão o "próximo" anda a cada nome e o clique seguinte erra
+        width: arrows ? maxWidth : null,
+        constraints: arrows ? null : BoxConstraints(maxWidth: maxWidth),
         padding: const EdgeInsets.only(left: 10, right: 2),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.05),
@@ -283,11 +287,12 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
           border: Border.all(color: Palette.hairlineStrong),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: arrows ? MainAxisSize.max : MainAxisSize.min,
           children: [
             Icon(Icons.auto_awesome_outlined, size: 15, color: x.color),
             const SizedBox(width: 7),
             Flexible(
+              fit: arrows ? FlexFit.tight : FlexFit.loose,
               child: Text(
                 label,
                 maxLines: 1,
