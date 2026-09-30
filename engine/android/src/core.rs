@@ -20,7 +20,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::call::{Call, NAME_MAX};
 use crate::capture::{RING_SECS, RecReader, RecWriter, rec_ring};
-use crate::state::{MAX_PEAK_TRACKS, Snapshot, StateReader, StateWriter, state};
+use crate::state::{LOUDNESS_KINDS, MAX_PEAK_TRACKS, Snapshot, StateReader, StateWriter, state};
 
 /// O despachante das chamadas por nome (`engine::api::apply`; os testes trocam).
 pub type ApplyFn = fn(&mut Engine, &str, &[f64]) -> Result<Option<f64>, UnknownCall>;
@@ -378,6 +378,9 @@ impl AudioCore {
         meters.raise_peak(2 * shown + 1, r);
         let snap = Snapshot { beat: e.beat(), playing: e.playing(), fx_meter: e.fx_meter(), peaks: 2 * (shown as u32 + 1) };
         self.state.publish(snap);
+        for k in 0..LOUDNESS_KINDS {
+            meters.set_loudness(k, e.loudness(k as u32));
+        }
         if self.analyzing {
             self.spectrum_frames += frames;
             if self.spectrum_frames >= self.spectrum_every || !self.spectrum_live {

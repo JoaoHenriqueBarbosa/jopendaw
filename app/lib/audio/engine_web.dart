@@ -14,6 +14,7 @@ extension type _Host._(JSObject _) implements JSObject {
   external void loadSample(int id, JSArray<JSFloat32Array> channels, double rate);
   external void calls(JSArray<JSArray<JSAny>> list);
   external void setOnState(JSFunction cb);
+  external void setOnLoudness(JSFunction cb);
   external double latency();
   external JSPromise<JSAny?> idbGet(String key);
   external JSPromise<JSAny?> idbPut(String key, JSAny value);
@@ -144,7 +145,23 @@ class AudioEngine {
         }).toJS,
       );
     }
+    _hookLoudness();
     return (await _host.start().toDart).toDartDouble;
+  }
+
+  /// Loudness do master (~30 por segundo, só quando muda): momentâneo, curto prazo, integrado,
+  /// true peak e faixa. Zerar a medida é a chamada `loudness_reset`.
+  void Function(LoudnessReading reading)? onLoudness;
+  bool _loudnessHooked = false;
+
+  void _hookLoudness() {
+    if (_loudnessHooked) return;
+    _loudnessHooked = true;
+    _host.setOnLoudness(
+      ((JSNumber m, JSNumber s, JSNumber i, JSNumber tp, JSNumber r) {
+        onLoudness?.call(LoudnessReading.fromList([m.toDartDouble, s.toDartDouble, i.toDartDouble, tp.toDartDouble, r.toDartDouble]));
+      }).toJS,
+    );
   }
 
   /// Precisa vir de um gesto do usuário (o navegador segura o áudio até lá).

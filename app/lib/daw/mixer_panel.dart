@@ -16,6 +16,7 @@ import '../widgets/theme.dart';
 import 'controller.dart';
 import 'effects.dart';
 import 'instruments.dart';
+import 'loudness_panel.dart';
 import 'meter.dart';
 import 'model.dart';
 import 'timeline.dart' show ToggleChip;
@@ -248,30 +249,40 @@ class _Strip extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 3),
-            SizedBox(
-              height: 20,
-              child: t == null ? null : _RecordRow(c: c, track: index),
-            ),
-            const SizedBox(height: 3),
-            SizedBox(
-              height: 20,
-              child: t == null
-                  ? null
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ToggleChip(label: 'M', on: t.mute, color: Palette.danger, tooltip: 'Mudo', onTap: () => c.edit((d) => d.tracks[index].mute = !t.mute)),
-                        const SizedBox(width: 4),
-                        ToggleChip(
-                          label: 'S',
-                          on: t.solo,
-                          color: const Color(0xFFE3B341),
-                          tooltip: 'Solo',
-                          onTap: () => c.edit((d) => d.tracks[index].solo = !t.solo),
-                        ),
-                      ],
+            // o master não arma nem tem mudo/solo: o lugar das duas linhas (20 + 3 + 20) leva a
+            // leitura de loudness
+            if (t == null)
+              SizedBox(
+                height: 43,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: LoudnessPanel(reading: c.loudness, onReset: c.resetLoudness),
+                ),
+              ),
+            if (t != null) ...[
+              SizedBox(
+                height: 20,
+                child: _RecordRow(c: c, track: index),
+              ),
+              const SizedBox(height: 3),
+              SizedBox(
+                height: 20,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ToggleChip(label: 'M', on: t.mute, color: Palette.danger, tooltip: 'Mudo', onTap: () => c.edit((d) => d.tracks[index].mute = !t.mute)),
+                    const SizedBox(width: 4),
+                    ToggleChip(
+                      label: 'S',
+                      on: t.solo,
+                      color: const Color(0xFFE3B341),
+                      tooltip: 'Solo',
+                      onTap: () => c.edit((d) => d.tracks[index].solo = !t.solo),
                     ),
-            ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 3),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),

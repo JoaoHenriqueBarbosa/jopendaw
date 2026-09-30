@@ -459,3 +459,18 @@ static DETECT_CONFIDENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::Atom
 pub extern "C" fn detect_confidence() -> f64 {
     f64::from_bits(DETECT_CONFIDENCE.load(std::sync::atomic::Ordering::Relaxed))
 }
+
+// ------------------------------------------------------------------ loudness
+
+/// Zera a medida de loudness do master (integrado, faixa, máximos e true peak).
+#[unsafe(no_mangle)]
+pub extern "C" fn loudness_reset() {
+    engine().loudness_reset();
+}
+
+/// Medida de loudness do master (BS.1770-4 / EBU R128, depois do limitador): 0 momentâneo, 1 curto
+/// prazo, 2 integrado (LUFS), 3 true peak máximo (dBTP), 4 faixa de loudness (LU). −200 = sem medida.
+#[unsafe(no_mangle)]
+pub extern "C" fn loudness(kind: u32) -> f64 {
+    engine().loudness(kind)
+}

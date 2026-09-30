@@ -70,6 +70,8 @@ const SKIP = new Set([
   'beat',
   'playing',
   'fx_meter',
+  'loudness',
+  'loudness_reset',
 ]);
 
 class RenderError extends Error {

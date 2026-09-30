@@ -54,6 +54,7 @@
 //! | `jd_offline_captured(h, index, l, r, n) -> i32` | −1 = saída do process, ≥ 0 = `capture_add` |
 //! | `jd_offline_free(h)` | |
 //! | `jd_latency() -> f64` | latência de saída em s (0 sem saída) |
+//! | `jd_loudness(kind) -> f64` | loudness do master: 0 momentâneo, 1 curto prazo, 2 integrado, 3 true peak, 4 faixa; −200 = sem medida |
 
 // O contrato de segurança de todas as funções é o do topo: ponteiros válidos do tamanho indicado.
 #![allow(clippy::missing_safety_doc)]
@@ -264,6 +265,19 @@ pub unsafe extern "C" fn jd_spectrum(out: *mut f32, n: usize) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn jd_latency() -> f64 {
     guard(0.0, || with_host(0.0, |h| h.io.output_latency()))
+}
+
+/// Última medida de loudness do master (BS.1770-4): `kind` 0 momentâneo, 1 curto prazo, 2 integrado
+/// (LUFS), 3 true peak máximo (dBTP), 4 faixa de loudness (LU). −200 = sem medida (ou tipo
+/// desconhecido, ou motor não iniciado). Zerar é a chamada `loudness_reset` de `jd_calls`.
+#[unsafe(no_mangle)]
+pub extern "C" fn jd_loudness(kind: i32) -> f64 {
+    guard(jopendaw_engine::loudness::NONE, || {
+        if kind < 0 {
+            return jopendaw_engine::loudness::NONE;
+        }
+        with_host(jopendaw_engine::loudness::NONE, |h| h.loudness(kind as usize))
+    })
 }
 
 // ------------------------------------------------------------------ decodificação
@@ -620,6 +634,8 @@ mod tests {
         let mut spec = [0.0f32; 1024];
         assert_eq!(unsafe { jd_spectrum(spec.as_mut_ptr(), spec.len()) }, 0);
         assert_eq!(jd_latency(), 0.0);
+        assert_eq!((jd_loudness(2), jd_loudness(3), jd_loudness(-1), jd_loudness(99)), (-200.0, -200.0, -200.0, -200.0));
+        assert_eq!(calls(r#"[["loudness_reset"]]"#), 0);
         let mut json = [0u8; 16];
         assert_eq!(unsafe { jd_input_devices(json.as_mut_ptr(), json.len()) }, 2);
         assert_eq!(&json[..2], b"[]");

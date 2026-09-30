@@ -12,6 +12,8 @@ import '../widgets/feedback.dart';
 import '../widgets/responsive_scaffold.dart';
 import 'controller.dart';
 import 'export_options.dart';
+import 'loudness.dart';
+import 'loudness_panel.dart';
 import 'model.dart';
 import 'transport_bar.dart' show describeActionError;
 
@@ -84,7 +86,16 @@ class _ExportDialogState extends State<ExportDialog> {
   // a região pode ter sumido desde a última exportação: aí volta para a música inteira
   late ExportRange _range = widget.initial.range == ExportRange.loop && !_hasLoopRegion(_doc) ? ExportRange.song : widget.initial.range;
   late bool _stems = widget.initial.stems;
-  late bool _normalize = widget.initial.normalize;
+  late bool _normalize = widget.initial.normalize && !widget.initial.normalizesLoudness;
+  // normalização de loudness: o alvo volta ao pré-definido que tem o mesmo valor (senão, personalizado)
+  late bool _loud = widget.initial.normalizesLoudness;
+  late LoudnessTarget _target = LoudnessTarget.values.firstWhere(
+    (t) => t != LoudnessTarget.custom && t.lufs == widget.initial.targetLufs,
+    orElse: () => widget.initial.normalizesLoudness ? LoudnessTarget.custom : LoudnessTarget.streaming,
+  );
+  late double _customLufs = (widget.initial.targetLufs ?? LoudnessTarget.streaming.lufs).clamp(kMinTargetLufs, kMaxTargetLufs).toDouble();
+  late double _ceiling = widget.initial.ceilingDbtp.clamp(kMinCeiling, kMaxCeiling).toDouble();
+  late bool _loudStems = widget.initial.normalizeStems;
   late double _tail = widget.initial.tail.clamp(0, 10).toDouble();
   // só taxas que a lista oferece; a do aparelho é o null (ela pode ter mudado desde a última vez)
   late int? _rate = _rates.contains(widget.initial.sampleRate) && widget.initial.sampleRate != widget.c.engineRate.round() ? widget.initial.sampleRate : null;
@@ -107,7 +118,20 @@ class _ExportDialogState extends State<ExportDialog> {
     return a == b ? 'Compasso $a' : 'Compassos $a a $b';
   }
 
-  void _submit() => Navigator.pop(context, ExportOptions(format: _format, range: _range, stems: _stems, normalize: _normalize, tail: _tail, sampleRate: _rate));
+  void _submit() => Navigator.pop(
+    context,
+    ExportOptions(
+      format: _format,
+      range: _range,
+      stems: _stems,
+      normalize: _normalize && !_loud,
+      targetLufs: _loud ? (_target == LoudnessTarget.custom ? _customLufs : _target.lufs) : null,
+      ceilingDbtp: _ceiling,
+      normalizeStems: _loud && _stems && _loudStems,
+      tail: _tail,
+      sampleRate: _rate,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -188,7 +212,27 @@ class _ExportDialogState extends State<ExportDialog> {
               title: const Text('Normalizar'),
               subtitle: const Text('Sobe (ou desce) tudo até o pico ficar em −1 dBFS'),
               value: _normalize,
-              onChanged: (v) => setState(() => _normalize = v),
+              // pico e loudness são pedidos contrários: ligar um desliga o outro
+              onChanged: (v) => setState(() {
+                _normalize = v;
+                if (v) _loud = false;
+              }),
+            ),
+            LoudnessNormalizeOptions(
+              enabled: _loud,
+              target: _target,
+              customLufs: _customLufs,
+              ceiling: _ceiling,
+              hasStems: _stems,
+              normalizeStems: _loudStems,
+              onEnabled: (v) => setState(() {
+                _loud = v;
+                if (v) _normalize = false;
+              }),
+              onTarget: (t) => setState(() => _target = t),
+              onCustom: (v) => setState(() => _customLufs = (v * 2).round() / 2),
+              onCeiling: (v) => setState(() => _ceiling = (v * 2).round() / 2),
+              onNormalizeStems: (v) => setState(() => _loudStems = v),
             ),
             const SizedBox(height: 8),
             Row(
@@ -330,7 +374,12 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
           const SizedBox(height: 10),
           Text(
             // o render termina antes do arquivo: no fim ainda falta converter e entregar os bytes
-            p == null ? 'Preparando…' : (p >= 1 ? 'Salvando o arquivo…' : 'Renderizando ${(p * 100).floor()}%'),
+            p == null
+                ? 'Preparando…'
+                : p >= 1
+                ? 'Salvando o arquivo…'
+                // depois dos 95% o render acabou e a mixagem está sendo medida e normalizada
+                : (p >= 0.95 && widget.options.normalizesLoudness ? 'Medindo o loudness…' : 'Renderizando ${(p * 100).floor()}%'),
             style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
           ),
           const SizedBox(height: 6),
@@ -341,6 +390,7 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
       final format = widget.options.format.label;
       final secs = math.max(1, (_elapsed.elapsedMilliseconds / 1000).ceil());
       final warning = _warning;
+      final report = widget.options.normalizesLoudness ? widget.c.exportReport : null;
       body = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -359,6 +409,11 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
               ),
             ],
           ),
+          if (report != null) ...[
+            const SizedBox(height: 12),
+            // o que a normalização fez: quando o teto segurou o ganho ou não deu para medir, em aviso
+            if (report.limitedByCeiling || report.unmeasurable) InlineNotice(report.describe()) else Text(report.describe()),
+          ],
           if (warning != null) ...[const SizedBox(height: 12), InlineNotice(warning)],
         ],
       );

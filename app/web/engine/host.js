@@ -7,6 +7,8 @@
   let node = null;
   let starting = null;
   let onState = null;
+  // loudness do master: [momentâneo, curto prazo, integrado, true peak, faixa]; −200 = sem medida
+  let onLoudness = null;
 
   // Último estado do motor e o maior pico de cada canal desde a última leitura: para conferir de
   // fora (console, testes automatizados) que o áudio está saindo mesmo, sem precisar ouvir.
@@ -61,6 +63,9 @@
             const fxMeter = m.fxMeter || 0;
             track(m.beat, m.playing, m.peaks, fxMeter);
             if (onState) onState(m.beat, m.playing, m.peaks, fxMeter, spectrum);
+          } else if (m.t === 'loudness') {
+            probe.loudness = m.v;
+            if (onLoudness) onLoudness(m.v[0], m.v[1], m.v[2], m.v[3], m.v[4]);
           } else if (m.t === 'level') {
             probe.inputPeak = Math.max(probe.inputPeak, m.peak);
             if (onInputLevel) onInputLevel(m.peak);
@@ -484,6 +489,7 @@
     loadSample,
     calls,
     setOnState: (cb) => { onState = cb; },
+    setOnLoudness: (cb) => { onLoudness = cb; },
     latency: () => (ctx ? (ctx.baseLatency || 0) + (ctx.outputLatency || 0) : 0),
     idbGet: (key) => tx('readonly', (s) => s.get(key)).then((v) => v ?? null),
     idbPut: (key, value) => tx('readwrite', (s) => s.put(value, key)),
@@ -520,6 +526,7 @@
         for (let i = 1; i < s.length; i++) if (s[i] > s[bin]) bin = i;
         r.spectrum = { bins: s.length, peakBin: bin, peakDb: Math.round(s[bin] * 10) / 10 };
       }
+      if (probe.loudness) r.loudness = probe.loudness.map((v) => Math.round(v * 10) / 10);
       if (input) r.input = Math.round(probe.inputPeak * 1000) / 1000;
       probe.peaks = probe.peaks.map(() => 0);
       probe.fxMeter = 0;

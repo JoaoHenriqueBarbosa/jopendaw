@@ -23,6 +23,7 @@ import 'automation_math.dart';
 import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
+import 'loudness.dart';
 import 'model.dart';
 import 'sync.dart';
 import 'templates.dart';
@@ -589,6 +590,7 @@ class DawController extends ChangeNotifier {
       if (!_engine.supported) throw UnsupportedError('O motor de áudio ainda não roda neste aparelho: use o jopendaw no navegador por enquanto.');
       engineRate = await _engine.start();
       _engine.onState = _onEngineState;
+      _engine.onLoudness = _onLoudness;
       final saved = await _store.get(_docKey);
       doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : await _fromTemplate();
       // o andamento e a fórmula de compasso moram no servidor; o local segue
@@ -721,6 +723,7 @@ class DawController extends ChangeNotifier {
       ['watch_analyzer', -2],
     ]);
     if (_engine.onState == _onEngineState) _engine.onState = null;
+    if (_engine.onLoudness == _onLoudness) _engine.onLoudness = null;
     if (_engine.onMidi == _onMidi) _engine.onMidi = null;
     if (_engine.onMidiInputs == _onMidiInputs) _engine.onMidiInputs = null;
     // gravação pela metade some com a tela; a entrada fecha (o navegador apaga o aviso de microfone)
@@ -744,6 +747,7 @@ class DawController extends ChangeNotifier {
     peaks.dispose();
     liveNotes.dispose();
     fxMeter.dispose();
+    loudness.dispose();
     spectrum.dispose();
     inputLevel.dispose();
     super.dispose();
@@ -2733,6 +2737,27 @@ class DawController extends ChangeNotifier {
   final fxMeter = ValueNotifier<double>(0);
   final spectrum = ValueNotifier<Float32List?>(null);
 
+  /// Loudness do master ao vivo (BS.1770-4, depois do limitador): momentâneo, curto prazo,
+  /// integrado, true peak e faixa. "Sem medida" (−200) enquanto nada soou.
+  final loudness = ValueNotifier<LoudnessReading>(const LoudnessReading());
+
+  void _onLoudness(LoudnessReading r) {
+    if (!_disposed) loudness.value = r;
+  }
+
+  /// Zera a medida de loudness do master (integrado, faixa, máximos e true peak): a medição
+  /// recomeça do que soar daqui em diante.
+  void resetLoudness() {
+    _engine.calls([
+      ['loudness_reset'],
+    ]);
+    loudness.value = const LoudnessReading();
+  }
+
+  /// O que a última exportação com normalização de loudness fez (null se a última não pediu, ou
+  /// ainda não terminou).
+  LoudnessReport? exportReport;
+
   /// Taxa de amostragem do motor (a do contexto de áudio do aparelho: 44,1 ou 48 kHz, em geral):
   /// o espectro vai de 0 à metade dela.
   double engineRate = 48000;
@@ -3645,8 +3670,12 @@ class DawController extends ChangeNotifier {
     final calls = _fullSyncCalls();
     final samples = _samplesFor(used);
     _rendering = true;
+    _exportCanceled = false;
+    exportReport = null;
     status = 'Exportando…';
     notifyListeners();
+    // ganho da mixagem em dB, para os stems quando pedirem o mesmo (a mixagem é a primeira saída)
+    double? mixGainDb;
     try {
       final perOutput = ((to - from) * 60 / d.bpm + tail) * rate * 2 * 4;
       final size = math.max(1, (_renderBudget / perOutput).floor());
@@ -3670,7 +3699,26 @@ class DawController extends ChangeNotifier {
           final peak = _peak(channels);
           // stem que não soa (vazia, muda, calada pelo solo): um arquivo de silêncio não serve
           if (batch[k] >= 0 && peak == 0) continue;
-          if (options.normalize && peak > 0) _scale(channels, dbToGain(-1) / peak);
+          final target = options.targetLufs;
+          if (target != null) {
+            if (batch[k] == -1) {
+              final r = await normalizeLoudness(
+                channels,
+                rate,
+                targetLufs: target.clamp(kMinTargetLufs, kMaxTargetLufs).toDouble(),
+                ceilingDb: options.ceilingDbtp.clamp(kMinCeiling, kMaxCeiling).toDouble(),
+                onProgress: onProgress == null ? null : (p) => onProgress(0.95 + 0.04 * p),
+                isCanceled: () => _exportCanceled || _disposed,
+              );
+              if (_exportCanceled) throw const RenderCanceled();
+              exportReport = r.report;
+              if (!r.report.unmeasurable) mixGainDb = r.gainDb;
+            } else if (options.normalizeStems && mixGainDb != null && mixGainDb != 0) {
+              scaleChannels(channels, dbToGain(mixGainDb));
+            }
+          } else if (options.normalize && peak > 0) {
+            _scale(channels, dbToGain(-1) / peak);
+          }
           final bytes = encodeWav(channels, rate.round(), options.format);
           await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
           if (_disposed) return;
@@ -3692,8 +3740,13 @@ class DawController extends ChangeNotifier {
   /// Interrompe o render em andamento (exportação ou congelamento): ele termina sem salvar nada e
   /// sem aviso.
   void cancelRender() {
-    if (_rendering) _engine.cancelRender();
+    if (_rendering) {
+      _exportCanceled = true;
+      _engine.cancelRender();
+    }
   }
+
+  bool _exportCanceled = false;
 
   /// Cauda do congelamento (s): o que soar depois dela está abaixo de −100 dB e é aparado.
   static const _bounceTail = 8.0;

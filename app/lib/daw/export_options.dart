@@ -32,6 +32,18 @@ class ExportOptions {
   /// Normaliza o pico em −1 dBFS (sem passar do teto: o limitador do master continua valendo).
   final bool normalize;
 
+  /// Normaliza o loudness integrado da mixagem até este alvo (LUFS, BS.1770-4 / EBU R128); null
+  /// desliga. Vale no lugar de [normalize] (o pico): as duas juntas seriam pedidos contrários.
+  final double? targetLufs;
+
+  /// Teto de true peak (dBTP) que o ganho do loudness não pode ultrapassar: se subir até o alvo
+  /// passaria dele, o ganho para no teto e o resultado fica abaixo do alvo.
+  final double ceilingDbtp;
+
+  /// Com [targetLufs], os stems recebem o mesmo ganho da mixagem (o equilíbrio entre eles se
+  /// mantém). Sem isto os stems saem como renderizados, sem normalização.
+  final bool normalizeStems;
+
   /// Segundos depois do fim para caudas (reverb, delay, soltura das notas).
   final double tail;
 
@@ -43,7 +55,13 @@ class ExportOptions {
     this.range = ExportRange.song,
     this.stems = false,
     this.normalize = false,
+    this.targetLufs,
+    this.ceilingDbtp = -1,
+    this.normalizeStems = false,
     this.tail = 2,
     this.sampleRate,
   });
+
+  /// Vai normalizar o loudness (há alvo).
+  bool get normalizesLoudness => targetLufs != null;
 }

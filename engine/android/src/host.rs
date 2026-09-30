@@ -188,6 +188,12 @@ impl Host {
         self.link.state.write_state(out) as i32
     }
 
+    /// `jd_loudness`: a última medida de loudness do master publicada pela thread de áudio.
+    pub fn loudness(&mut self, kind: usize) -> f64 {
+        self.pump();
+        self.meters().loudness(kind)
+    }
+
     pub fn spectrum(&mut self, out: &mut [f32]) -> usize {
         self.link.state.spectrum(out)
     }

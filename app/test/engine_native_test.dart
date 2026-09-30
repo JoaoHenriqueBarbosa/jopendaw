@@ -156,6 +156,16 @@ void main() {
     expect(s.spectrum, isNull, reason: 'sem ninguém observando, sem espectro');
   }, skip: skip);
 
+  test('a medida de loudness chega por polling, só quando muda', () async {
+    final got = <LoudnessReading>[];
+    engine.onLoudness = got.add;
+    await engine.start();
+    await until(() => got.isNotEmpty);
+    expect(got.first, const LoudnessReading(momentary: -20, shortTerm: -21, integrated: -22, truePeak: -1.5, range: 6.5));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(got, hasLength(1), reason: 'o valor não mudou: nada de repetir');
+  }, skip: skip);
+
   test('com o analisador ligado o espectro vem junto; desligado, some', () async {
     await engine.start();
     engine.calls([

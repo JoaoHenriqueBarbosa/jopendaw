@@ -72,6 +72,7 @@ pub mod fm;
 pub mod fx;
 pub mod instrument;
 mod limiter;
+pub mod loudness;
 mod metronome;
 pub mod mixer;
 pub mod record;
@@ -508,6 +509,8 @@ pub struct Engine {
     master_quiet: usize,
     limiter: limiter::Limiter,
     limiter_on: bool,
+    /// Medidor de loudness do master (depois do limitador).
+    loudness: loudness::Meter,
     metronome: Metronome,
     scratch: Scratch,
     /// Coeficiente de suavização dos envios (o mesmo dos canais).
@@ -599,6 +602,7 @@ impl Engine {
             master_quiet: 0,
             limiter: limiter::Limiter::new(rate),
             limiter_on: true,
+            loudness: loudness::Meter::new(rate, 2),
             metronome: Metronome::default(),
             scratch: Scratch::new(CHUNK),
             smooth: mixer::smooth_coef(rate),
@@ -1654,6 +1658,10 @@ impl Engine {
         }
         for s in out_l.iter_mut().chain(out_r.iter_mut()) {
             *s = s.clamp(-1.0, 1.0);
+        }
+        // o pré-roll do render (que alinha as capturas) não é música: fica fora da medida
+        if !self.captures.priming {
+            self.loudness.push(out_l, Some(out_r));
         }
         self.master.meter(out_l, out_r);
         if self.watch_analyzer == -1 {

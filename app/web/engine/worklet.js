@@ -317,6 +317,16 @@ class EngineProcessor extends AudioWorkletProcessor {
         transfer,
       );
     }
+    // loudness do master (~30 por segundo, e só quando muda): momentâneo, curto prazo, integrado,
+    // true peak e faixa, como as chamadas `loudness(0..4)`; um motor mais antigo não tem a função
+    if (this.blocks % 12 === 0 && typeof w.loudness === 'function') {
+      const v = [w.loudness(0), w.loudness(1), w.loudness(2), w.loudness(3), w.loudness(4)];
+      const last = this.lastLoudness;
+      if (!last || v.some((x, i) => x !== last[i])) {
+        this.lastLoudness = v;
+        this.port.postMessage({ t: 'loudness', v });
+      }
+    }
     return true;
   }
 }

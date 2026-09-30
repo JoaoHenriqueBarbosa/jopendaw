@@ -163,6 +163,7 @@ final class EngineLib {
       );
   late final offlineFree = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_offline_free');
   late final latency = _lib.lookupFunction<Double Function(), double Function()>('jd_latency');
+  late final loudness = _lib.lookupFunction<Double Function(Int32), double Function(int)>('jd_loudness');
 }
 
 /// Copia [bytes] para memória nativa, chama [fn] com o ponteiro e o tamanho, e solta.
@@ -363,6 +364,8 @@ const renderSkip = {
   'beat',
   'playing',
   'fx_meter',
+  'loudness',
+  'loudness_reset',
 };
 
 double? _num(List<Object> c, int i) {
@@ -918,6 +921,7 @@ final class FfiEngine {
       if (_capturing || _finishing != null) _drainRecorded(lib);
       if (_finishing != null) _maybeFinishCapture(lib);
       if (_inputOpen && _tick % _levelEvery == 0) _pollInputLevel(lib);
+      if (!_background && _tick % _loudnessEvery == 0) _pollLoudness(lib);
     } on Object catch (e, s) {
       // um erro aqui repetiria 60 vezes por segundo: avisa uma vez por tipo e segue
       if (_pollErrors.add(e.runtimeType)) debugPrint('motor de áudio: $e\n$s');
@@ -925,6 +929,31 @@ final class FfiEngine {
   }
 
   final _pollErrors = <Type>{};
+
+  /// A cada quantas leituras vem a medida de loudness (~20 por segundo).
+  static const _loudnessEvery = 3;
+
+  /// Loudness do master; o Dart só recebe quando muda.
+  void Function(LoudnessReading reading)? onLoudness;
+  LoudnessReading? _lastLoudness;
+  // uma biblioteca de antes do medidor não tem `jd_loudness`: pergunta uma vez e desiste
+  bool _noLoudness = false;
+
+  void _pollLoudness(EngineLib lib) {
+    final cb = onLoudness;
+    if (cb == null || _noLoudness) return;
+    final double Function(int) read;
+    try {
+      read = lib.loudness;
+    } on ArgumentError {
+      _noLoudness = true;
+      return;
+    }
+    final r = LoudnessReading.fromList([for (var k = 0; k < 5; k++) read(k)]);
+    if (r == _lastLoudness) return;
+    _lastLoudness = r;
+    cb(r);
+  }
 
   void _pollState(EngineLib lib) {
     final onState = _events.onState;

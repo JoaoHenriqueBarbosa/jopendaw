@@ -62,6 +62,15 @@ class AudioEngine implements EngineEvents {
   @override
   void Function(EngineState state)? onState;
 
+  /// Loudness do master (LUFS/dBTP), ~20 vezes por segundo quando muda (ver engine_web.dart).
+  void Function(LoudnessReading reading)? get onLoudness => _onLoudness;
+  set onLoudness(void Function(LoudnessReading reading)? cb) {
+    _onLoudness = cb;
+    _native?.onLoudness = cb;
+  }
+
+  void Function(LoudnessReading reading)? _onLoudness;
+
   double get latency => _native?.latency ?? 0;
 
   /// Nos testes: guarda aqui as chamadas que iriam ao motor (null não guarda).

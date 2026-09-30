@@ -66,6 +66,9 @@ class FakeEngine implements AudioEngine {
   void Function(EngineState state)? onState;
 
   @override
+  void Function(LoudnessReading reading)? onLoudness;
+
+  @override
   double latency = 0;
 
   @override

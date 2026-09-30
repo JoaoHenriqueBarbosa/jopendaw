@@ -94,6 +94,12 @@ size_t jd_spectrum(float *out, size_t n) {
 
 double jd_latency(void) { return 0.02; }
 
+// loudness do master: momentâneo -20, curto prazo -21, integrado -22, true peak -1,5 e faixa 6,5
+double jd_loudness(int32_t kind) {
+  static const double v[5] = {-20.0, -21.0, -22.0, -1.5, 6.5};
+  return kind >= 0 && kind < 5 ? v[kind] : -200.0;
+}
+
 // ---------------------------------------------------------------- decodificação
 // "FAKE" + um byte por quadro; três canais (o Dart fica com dois), 44,1 kHz.
 

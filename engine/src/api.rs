@@ -51,7 +51,7 @@ impl std::error::Error for UnknownCall {}
 pub const MAX_TRACKS: usize = 1024;
 
 /// Aplica uma chamada. `Ok(Some(v))` para as que devolvem valor (`auto_lane`, `capture_add`,
-/// `fx_meter`, `beat`, `playing`), `Ok(None)` para as outras. Com erro, o motor fica intocado.
+/// `fx_meter`, `beat`, `playing`, `loudness`), `Ok(None)` para as outras. Com erro, o motor fica intocado.
 pub fn apply(engine: &mut Engine, name: &str, args: &[f64]) -> Result<Option<f64>, UnknownCall> {
     Call::parse(name, args).map(|call| call.apply(engine))
 }
@@ -101,6 +101,8 @@ pub enum Call {
     CaptureAdd { track: i32 },
     Beat,
     Playing,
+    LoudnessReset,
+    Loudness { kind: u32 },
 }
 
 /// Tipo de um parâmetro, como na assinatura do export do wasm (booleano é `u32` lá).
@@ -174,6 +176,8 @@ const CALLS: &[Signature] = &[
     sig("capture_add", &[("faixa", I32)], Some(I32)),
     sig("beat", &[], Some(F64)),
     sig("playing", &[], Some(U32)),
+    sig("loudness_reset", &[], None),
+    sig("loudness", &[("tipo", U32)], Some(F64)),
 ];
 
 /// Exports do wasm que não passam por aqui: `init` recria o motor com a taxa do hospedeiro (quem
@@ -338,6 +342,8 @@ impl Call {
             "capture_add" => Call::CaptureAdd { track: a.i32(0) },
             "beat" => Call::Beat,
             "playing" => Call::Playing,
+            "loudness_reset" => Call::LoudnessReset,
+            "loudness" => Call::Loudness { kind: a.u32(0) },
             // os testes passam por toda a tabela: chegar aqui é chamada nova sem conversão
             other => return Err(UnknownCall(format!("{other}: está na tabela de chamadas mas sem conversão (erro no motor)"))),
         })
@@ -417,6 +423,8 @@ impl Call {
             Call::CaptureAdd { track } => return Some(f64::from(e.capture_add(track))),
             Call::Beat => return Some(e.beat()),
             Call::Playing => return Some(f64::from(u32::from(e.playing()))),
+            Call::LoudnessReset => e.loudness_reset(),
+            Call::Loudness { kind } => return Some(e.loudness(kind)),
         }
         None
     }
@@ -515,6 +523,12 @@ mod tests {
         e.add_point(0, 0.0, 0.05, 0.0);
     }
 
+    /// Tocando há mais de 400 ms: a janela do momentâneo já fechou.
+    fn measured(e: &mut Engine) {
+        playing(e);
+        run(e, 200);
+    }
+
     fn held(e: &mut Engine) {
         playing(e);
         e.live_on(1, 60, 1.0);
@@ -573,8 +587,10 @@ mod tests {
         v.iter().map(|s| s.to_bits())
     }
 
-    fn status(e: &Engine) -> Vec<u64> {
-        vec![e.beat().to_bits(), u64::from(e.playing()), f64::from(e.fx_meter()).to_bits()]
+    fn status(e: &mut Engine) -> Vec<u64> {
+        let mut v = vec![e.beat().to_bits(), u64::from(e.playing()), f64::from(e.fx_meter()).to_bits()];
+        v.extend((0..5).map(|k| e.loudness(k).to_bits()));
+        v
     }
 
     fn observe(e: &mut Engine, ret: Option<f64>, post: fn(&mut Engine)) -> Obs {
@@ -757,6 +773,8 @@ mod tests {
             valued(playing, "capture_add", &[0.0], |e| f64::from(e.capture_add(0)), Changes),
             valued(sounding, "beat", &[], |e| e.beat(), Query),
             valued(playing, "playing", &[], |e| f64::from(u32::from(e.playing())), Query),
+            case(measured, "loudness_reset", &[], |e| e.loudness_reset(), Changes),
+            valued(measured, "loudness", &[3.0], |e| e.loudness(3), Query),
         ]
     }
 

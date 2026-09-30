@@ -8,7 +8,7 @@
 //!   dos inteiros é a dos valores, então o máximo atômico de inteiros serve.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use triple_buffer::{Input, Output, triple_buffer};
 
@@ -56,7 +56,13 @@ pub struct Meters {
     input_lost: AtomicBool,
     /// A thread de áudio entrou em pânico: o motor ficou em estado desconhecido e só sai silêncio.
     broken: AtomicBool,
+    /// Loudness do master (momentâneo, curto prazo, integrado, true peak, faixa: os `kind` do motor),
+    /// como os bits de um f64; a thread de áudio publica a cada bloco e o Dart lê quando quiser.
+    loudness: [AtomicU64; LOUDNESS_KINDS],
 }
+
+/// Medidas de loudness publicadas.
+pub const LOUDNESS_KINDS: usize = 5;
 
 fn raise(a: &AtomicU32, v: f32) {
     // NaN e negativos não sobem nada; infinito sobe (bits maiores que qualquer finito)
@@ -77,6 +83,7 @@ impl Meters {
             input_dropped: AtomicBool::new(false),
             input_lost: AtomicBool::new(false),
             broken: AtomicBool::new(false),
+            loudness: std::array::from_fn(|_| AtomicU64::new(jopendaw_engine::loudness::NONE.to_bits())),
         }
     }
 
@@ -112,6 +119,17 @@ impl Meters {
 
     pub fn take_input_lost(&self) -> bool {
         self.input_lost.swap(false, Ordering::AcqRel)
+    }
+
+    pub fn set_loudness(&self, kind: usize, v: f64) {
+        if let Some(a) = self.loudness.get(kind) {
+            a.store(v.to_bits(), Ordering::Relaxed);
+        }
+    }
+
+    /// A última medida publicada; −200 (sem medida) para um tipo que não existe.
+    pub fn loudness(&self, kind: usize) -> f64 {
+        self.loudness.get(kind).map_or(jopendaw_engine::loudness::NONE, |a| f64::from_bits(a.load(Ordering::Relaxed)))
     }
 
     pub fn set_broken(&self) {
@@ -241,6 +259,15 @@ mod tests {
         assert_eq!(short[3], 2.0);
         assert!((r.meters.take_peak(3) - 0.9).abs() < 1e-7);
         assert_eq!(r.write_state(&mut [0.0; 3]), 0);
+    }
+
+    #[test]
+    fn loudness_is_published_per_kind() {
+        let m = Meters::new();
+        assert_eq!(m.loudness(2), -200.0);
+        m.set_loudness(2, -14.5);
+        m.set_loudness(9, 1.0);
+        assert_eq!((m.loudness(2), m.loudness(9)), (-14.5, -200.0));
     }
 
     #[test]
