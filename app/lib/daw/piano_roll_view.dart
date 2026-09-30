@@ -49,6 +49,31 @@ abstract final class _Prefs {
   static var preview = true;
   static var strength = 1.0;
   static var ends = false;
+
+  /// Prender na escala do clipe (notas desenhadas, movidas e coladas).
+  static var snapScale = false;
+
+  /// Fantasmas: notas dos outros clipes da faixa e das outras faixas de instrumento, em cinza.
+  static var ghostSame = true;
+  static var ghostOthers = false;
+
+  /// Acorde que o clique numa área vazia cria no lugar de uma nota só (null = desligado).
+  static _Stamp? chordStamp;
+
+  /// Último acorde escolhido no diálogo (o ponto de partida do próximo).
+  static var chordType = 'maj';
+  static var chordInversion = 0;
+
+  static var arpPattern = ArpPattern.up;
+  static var arpRate = 4;
+  static var arpOctaves = 1;
+  static var arpGate = .9;
+  static var humTiming = .5;
+  static var humVelocity = .5;
+  static var staccato = .5;
+
+  /// A semente cresce a cada uso (arpejo aleatório, humanizar): repetir dá outro resultado.
+  static var seed = 1;
   static double? panelHeight;
   static var lastLength = 1.0;
   static var lastVelocity = .8;
@@ -58,6 +83,13 @@ abstract final class _Prefs {
 
   /// Notas copiadas, com o início contado da primeira; serve para colar em qualquer clipe.
   static var clipboard = const <MidiNote>[];
+}
+
+/// Um acorde para carimbar no clique: o tipo (id de `chordTypes` ou diatônico) e a inversão.
+class _Stamp {
+  final String type;
+  final int inversion;
+  const _Stamp(this.type, this.inversion);
 }
 
 // ---------------------------------------------------------------------- medidas

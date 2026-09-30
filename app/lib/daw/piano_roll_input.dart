@@ -45,6 +45,9 @@ class _Drag {
   bool additive = false;
   MidiNote? anchor, deselectOnUp, soleOnUp;
 
+  /// Ao desenhar com o acorde no clique: todas as notas do acorde (a duração vale para todas).
+  List<MidiNote> mates = const [];
+
   /// No toque, o que estava sob o dedo ao descer (a decisão espera o dedo mexer ou soltar).
   _Hit? hit;
   Map<MidiNote, _Orig> orig = const {};
@@ -488,13 +491,19 @@ extension _Input on _PianoRollState {
   /// Nota nova no ponto, com a duração escolhida e a última velocidade usada; fica selecionada.
   MidiNote? _createNote(Offset p) {
     final clip = _clip!, g = _g;
-    final pitch = g.rows.pitchAt(g.rowAt(p.dy));
-    if (pitch == null) return null;
-    final n = MidiNote(pitch: pitch, start: math.max(0.0, _snapFloor(g.beatAt(p.dx))), length: _tidy(_newLength), velocity: _Prefs.lastVelocity);
-    c.edit((_) => clip.notes.add(n));
+    final row = g.rows.pitchAt(g.rowAt(p.dy));
+    if (row == null) return null;
+    final pitch = _snapPitch(row);
+    final base = MidiNote(pitch: pitch, start: math.max(0.0, _snapFloor(g.beatAt(p.dx))), length: _tidy(_newLength), velocity: _Prefs.lastVelocity);
+    // com o acorde no clique, a nota vira o acorde inteiro (o arraste dá a duração a todas)
+    final stamp = _Prefs.chordStamp;
+    final made = stamp == null || _dims.drums ? [base] : chordNotes(base, chordPitches(pitch, stamp.type, inversion: stamp.inversion, scale: _scale));
+    final n = made.firstWhere((m) => m.pitch == pitch, orElse: () => made.first);
+    c.edit((_) => clip.notes.addAll(made));
     _sel
       ..clear()
-      ..add(n);
+      ..addAll(made);
+    _mates = made;
     _justCreated = n;
     return n;
   }
@@ -509,6 +518,7 @@ extension _Input on _PianoRollState {
     d
       ..op = _Op.draw
       ..anchor = n
+      ..mates = _mates
       ..checkpointed = true
       ..structural = true;
     _sound(d, n.pitch, n.velocity);
@@ -631,9 +641,12 @@ extension _Input on _PianoRollState {
     if (!d.checkpointed && delta.abs() < 1e-9 && dRow == 0) return;
     _change(d, () {
       for (final e in d.orig.entries) {
+        var pitch = g.rows.pitchAt(g.rows.rowOf(e.value.pitch)! + dRow)!;
+        // prender na escala só quando a altura muda: mover na horizontal não mexe em nota fora dela
+        if (dRow != 0) pitch = _snapPitch(pitch, preferUp: dRow < 0);
         e.key
           ..start = _tidy(e.value.start + delta)
-          ..pitch = g.rows.pitchAt(g.rows.rowOf(e.value.pitch)! + dRow)!;
+          ..pitch = pitch;
       }
     });
     _sound(d, a.pitch, a.velocity);
@@ -645,7 +658,14 @@ extension _Input on _PianoRollState {
     final a = d.anchor!, g = _g;
     final shortest = _snapOff ? 1 / 64 : _step;
     final len = _tidy(math.max(shortest, _snapCeil(g.beatAt(d.last.dx)) - a.start));
-    if (len != a.length) c.mutate((_) => a.length = len);
+    if (len != a.length) {
+      c.mutate((_) {
+        a.length = len;
+        for (final m in d.mates) {
+          m.length = len;
+        }
+      });
+    }
     _label = '${_pitchLabel(a.pitch)} · ${_formatLength(a.length)}';
     _labelAt = (a.start, g.rows.rowOf(a.pitch));
   }
@@ -1123,6 +1143,22 @@ extension _Input on _PianoRollState {
       if (!repeat) _quantize();
       return true;
     }
+    if (!shift && k == LogicalKeyboardKey.keyK) {
+      if (!repeat) _splitAtCursor();
+      return true;
+    }
+    if (!shift && k == LogicalKeyboardKey.keyJ) {
+      if (!repeat) _joinNotes();
+      return true;
+    }
+    if (shift && k == LogicalKeyboardKey.keyH) {
+      if (!repeat) _humanize();
+      return true;
+    }
+    if (shift && k == LogicalKeyboardKey.keyL) {
+      if (!repeat) _transform(legato);
+      return true;
+    }
     if (_sel.isEmpty) return false;
     if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown) {
       final steps = shift && !_dims.drums ? 12 : 1;
@@ -1232,7 +1268,12 @@ extension _Input on _PianoRollState {
     }
     _pasteBase = base;
     _pasteNext = at + step;
-    _addNotes([for (final n in board) n.copy()..start = _tidy(n.start + at)]);
+    _addNotes([
+      for (final n in board)
+        n.copy()
+          ..start = _tidy(n.start + at)
+          ..pitch = _snapPitch(n.pitch),
+    ]);
   }
 
   void _duplicate() {

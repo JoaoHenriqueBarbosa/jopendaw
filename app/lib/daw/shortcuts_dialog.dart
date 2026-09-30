@@ -83,6 +83,11 @@ List<(String, List<(String, String)>)> _groups() => [
       ('↑ ↓  (Shift: oitava)', 'Transpor'),
       ('← →  (Shift: compasso)', 'Mover pela grade'),
       ('Q', 'Quantizar'),
+      ('K', 'Dividir as notas no cursor (a seleção, ou todas)'),
+      ('J', 'Unir notas iguais adjacentes'),
+      ('Shift+H', 'Humanizar com os últimos ajustes'),
+      ('Shift+L', 'Legato: cada nota vai até a próxima'),
+      ('Menu Ferramentas', 'Escala, acordes, arpejador, rampa de velocidade, inverter, escalar o tempo, fantasmas'),
     ],
   ),
 ];

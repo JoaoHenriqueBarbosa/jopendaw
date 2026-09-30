@@ -36,7 +36,10 @@ class _GridPainter extends CustomPainter {
   final bool drums;
   final int bpb;
   final double step;
-  _GridPainter({required this.g, required this.drums, required this.bpb, required this.step});
+
+  /// Escala do clipe: as linhas dela ficam realçadas (a tônica mais) e as de fora, escurecidas.
+  final ClipScale? scale;
+  _GridPainter({required this.g, required this.drums, required this.bpb, required this.step, this.scale});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -50,9 +53,14 @@ class _GridPainter extends CustomPainter {
     final black = Paint()..color = _blackRow;
     final thin = Paint()..color = drums ? const Color(0x12FFFFFF) : const Color(0x0AFFFFFF);
     final octave = Paint()..color = const Color(0x24FFFFFF);
+    final inKey = Paint()..color = Palette.accent.withValues(alpha: .10);
+    final tonic = Paint()..color = Palette.accent.withValues(alpha: .22);
+    final outKey = Paint()..color = const Color(0x4D000000);
+    final sc = drums ? null : scale;
     for (var r = r0; r <= r1; r++) {
       final p = rows.pitches[r], y = g.y(r);
       canvas.drawRect(Rect.fromLTWH(0, y, size.width, g.rowH), (drums ? r.isOdd : isBlackKey(p)) ? black : white);
+      if (sc != null) canvas.drawRect(Rect.fromLTWH(0, y, size.width, g.rowH), sc.isRoot(p) ? tonic : (sc.contains(p) ? inKey : outKey));
       // divisa embaixo da linha: marcada entre oitavas (abaixo do C), discreta nas outras
       final strong = !drums && p % 12 == 0;
       if (strong || g.rowH >= 7) canvas.drawRect(Rect.fromLTWH(0, (y + g.rowH).roundToDouble() - 1, size.width, 1), strong ? octave : thin);
@@ -89,7 +97,7 @@ class _GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_GridPainter o) => !g.same(o.g) || drums != o.drums || bpb != o.bpb || step != o.step;
+  bool shouldRepaint(_GridPainter o) => !g.same(o.g) || drums != o.drums || bpb != o.bpb || step != o.step || scale?.encode() != o.scale?.encode();
 }
 
 /// As notas, o que fica fora do clipe (escurecido), o fim do clipe, o retângulo de seleção e a
@@ -97,6 +105,10 @@ class _GridPainter extends CustomPainter {
 class _NotesPainter extends CustomPainter {
   final _Geo g;
   final List<MidiNote> notes;
+
+  /// Notas de outros clipes, em cinza e sem edição: cada lista com o deslocamento que leva o tempo
+  /// do clipe dela ao deste.
+  final List<(double, List<MidiNote>)> ghosts;
   final Set<MidiNote> sel;
   final MidiNote? hover;
   final List<Color> colors;
@@ -115,6 +127,7 @@ class _NotesPainter extends CustomPainter {
   _NotesPainter({
     required this.g,
     required this.notes,
+    this.ghosts = const [],
     required this.sel,
     required this.hover,
     required this.colors,
@@ -141,6 +154,20 @@ class _NotesPainter extends CustomPainter {
       ..color = Colors.white;
     final radius = Radius.circular(math.min(3.0, g.rowH / 4));
     final text = g.rowH >= 12;
+    if (ghosts.isNotEmpty) {
+      final ghost = Paint()..color = const Color(0x2EFFFFFF);
+      for (final (shift, list) in ghosts) {
+        for (final n in list) {
+          final start = n.start + shift;
+          if (start + n.length < x0 || start > x1) continue;
+          final row = g.rows.rowOf(n.pitch);
+          if (row == null) continue;
+          final y = g.y(row);
+          if (y + g.rowH < 0 || y > size.height) continue;
+          canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(g.x(start) + .5, y + 1, math.max(3.0, n.length * g.ppb) - 1, g.rowH - 2), radius), ghost);
+        }
+      }
+    }
     for (final selectedPass in const [false, true]) {
       if (selectedPass && sel.isEmpty) break;
       for (final n in notes) {
@@ -224,7 +251,10 @@ class _KeysPainter extends CustomPainter {
   final Set<int> pressed;
   final Color accent;
   final TextStyle font;
-  _KeysPainter({required this.g, required this.drums, required this.pressed, required this.accent, required this.font});
+
+  /// Escala do clipe: uma marca nas teclas dela (maior na tônica).
+  final ClipScale? scale;
+  _KeysPainter({required this.g, required this.drums, required this.pressed, required this.accent, required this.font, this.scale});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -284,13 +314,22 @@ class _KeysPainter extends CustomPainter {
             tp.paint(canvas, Offset(w - tp.width - 4, y + (g.rowH - tp.height) / 2));
           }
         }
+        if (scale != null && scale!.contains(p) && g.rowH >= 6) {
+          final root = scale!.isRoot(p);
+          canvas.drawCircle(
+            Offset(6, y + g.rowH / 2),
+            math.min(root ? 3.0 : 2.0, g.rowH / 3),
+            Paint()..color = Palette.accent.withValues(alpha: root ? 1 : .7),
+          );
+        }
       }
     }
     canvas.drawRect(Rect.fromLTWH(w - 1, 0, 1, size.height), Paint()..color = Palette.hairlineStrong);
   }
 
   @override
-  bool shouldRepaint(_KeysPainter o) => !g.same(o.g) || drums != o.drums || accent != o.accent || font != o.font || !setEquals(pressed, o.pressed);
+  bool shouldRepaint(_KeysPainter o) =>
+      !g.same(o.g) || drums != o.drums || accent != o.accent || font != o.font || !setEquals(pressed, o.pressed) || scale?.encode() != o.scale?.encode();
 }
 
 /// Régua: números de compasso, marcas de tempo e subdivisão, e a alça do fim do clipe.

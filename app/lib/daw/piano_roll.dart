@@ -20,10 +20,12 @@ import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'instruments.dart';
+import 'midi_tools.dart';
 import 'model.dart';
 
 part 'piano_roll_input.dart';
 part 'piano_roll_paint.dart';
+part 'piano_roll_tools.dart';
 part 'piano_roll_view.dart';
 
 class PianoRoll extends StatefulWidget {
@@ -71,6 +73,9 @@ class _PianoRollState extends State<PianoRoll> {
   final _keyClicks = _Clicks();
   String? _label;
   (double, int?)? _labelAt;
+
+  /// As notas do acorde que o último clique criou (o arraste muda a duração de todas).
+  List<MidiNote> _mates = const [];
 
   /// Notas soando na prévia (o teclado acende as mesmas).
   final _sounding = <int>{};
@@ -478,6 +483,9 @@ class _PianoRollState extends State<PianoRoll> {
                     onTap: () => _setTool(_Tool.select),
                   ),
                   const _Divider(),
+                  _toolsMenu(context),
+                  if (!_dims.drums) _scaleButton(context),
+                  const _Divider(),
                   PopupMenuButton<_Grid>(
                     tooltip: 'Grade do editor (Alt ao arrastar desliga)',
                     initialValue: _Prefs.grid,
@@ -593,6 +601,8 @@ class _PianoRollState extends State<PianoRoll> {
       'Shift ou Ctrl + arrastar seleciona por retângulo; Shift + clique acumula.\n'
       'Ctrl+A tudo · Ctrl+C/X/V copia, recorta e cola no cursor · Ctrl+D duplica.\n'
       'Setas ↑↓ transpõem (Shift: oitava) · ←→ movem pela grade (Shift: compasso) · Q quantiza.\n'
+      'K divide as notas no cursor · J une notas iguais adjacentes · Shift+H humaniza · Shift+L legato.\n'
+      'Ferramentas: escala, acordes, arpejador, humanizar, rampa de velocidade, inverter, escalar o tempo.\n'
       'Dois cliques numa tecla selecionam as notas dela.\n'
       'Ctrl + roda: zoom na horizontal · Alt + roda: altura das linhas (Cmd no lugar de Ctrl no Mac).\n'
       'No toque: toque longo apaga a nota (ou começa a seleção), dois dedos rolam e dão zoom.';
@@ -668,7 +678,7 @@ class _PianoRollState extends State<PianoRoll> {
       child: ClipRect(
         child: CustomPaint(
           size: Size.infinite,
-          painter: _KeysPainter(g: g, drums: drums, pressed: {..._sounding}, accent: color, font: _font(context)),
+          painter: _KeysPainter(g: g, drums: drums, pressed: {..._sounding}, accent: color, font: _font(context), scale: drums ? null : _scale),
         ),
       ),
     ),
@@ -730,7 +740,7 @@ class _PianoRollState extends State<PianoRoll> {
                     Positioned.fill(
                       child: RepaintBoundary(
                         child: CustomPaint(
-                          painter: _GridPainter(g: g, drums: drums, bpb: c.doc.beatsPerBar, step: _Prefs.grid.beats),
+                          painter: _GridPainter(g: g, drums: drums, bpb: c.doc.beatsPerBar, step: _Prefs.grid.beats, scale: drums ? null : _scale),
                         ),
                       ),
                     ),
@@ -740,6 +750,7 @@ class _PianoRollState extends State<PianoRoll> {
                           painter: _NotesPainter(
                             g: g,
                             notes: clip.notes,
+                            ghosts: _ghosts(_track!, clip),
                             sel: _sel,
                             hover: _hover,
                             colors: colors,
@@ -860,7 +871,10 @@ class _ToolToggle extends StatelessWidget {
 class _MenuLabel extends StatelessWidget {
   final IconData icon;
   final String text;
-  const _MenuLabel({required this.icon, required this.text});
+
+  /// Destaca o rótulo (a escala ligada, por exemplo).
+  final bool on;
+  const _MenuLabel({required this.icon, required this.text, this.on = false});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -868,9 +882,12 @@ class _MenuLabel extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: Colors.white70),
+        Icon(icon, size: 18, color: on ? Palette.accent : Colors.white70),
         const SizedBox(width: 6),
-        Text(text, style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
+        Text(
+          text,
+          style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()], color: on ? Palette.accent : null),
+        ),
         const Icon(Icons.arrow_drop_down, size: 18, color: Colors.white54),
       ],
     ),

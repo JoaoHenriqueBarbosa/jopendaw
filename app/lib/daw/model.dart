@@ -90,14 +90,18 @@ class MidiClip {
   double start, length;
   List<MidiNote> notes;
 
-  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes}) : notes = notes ?? [];
+  /// Escala escolhida no editor ("tônica:id", ver `ClipScale` em `midi_tools.dart`); null = sem escala.
+  String? scale;
+
+  MidiClip({required this.id, this.name = '', required this.start, required this.length, List<MidiNote>? notes, this.scale}) : notes = notes ?? [];
 
   MidiClip.fromJson(Map<String, dynamic> j)
     : id = j['id'],
       name = j['name'] ?? '',
       start = (j['start'] as num).toDouble(),
       length = (j['length'] as num).toDouble(),
-      notes = [for (final n in j['notes'] as List) MidiNote.fromJson(n)];
+      notes = [for (final n in j['notes'] as List) MidiNote.fromJson(n)],
+      scale = j['scale'] as String?;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -105,6 +109,8 @@ class MidiClip {
     'start': start,
     'length': length,
     'notes': [for (final n in notes) n.toJson()],
+    // só quando há escala: documentos sem escala continuam idênticos
+    if (scale != null) 'scale': scale,
   };
 
   double get end => start + length;
