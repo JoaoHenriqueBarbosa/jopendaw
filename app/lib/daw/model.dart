@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'effects.dart';
 import 'instruments.dart';
+import 'midi_map.dart';
 import 'sampler_zones.dart';
 import 'tempo_map.dart';
 
@@ -509,6 +510,10 @@ class DawDoc {
   /// Marcadores, sempre ordenados por batida. Ausentes nos documentos antigos.
   List<Marker> markers;
 
+  /// Mapeamentos de MIDI learn (controles do teclado → parâmetros). Vazio nos documentos antigos e
+  /// só vai ao JSON (`midi_map`) quando há algo: um documento sem mapa sai igual ao de antes.
+  MidiMap midiMap;
+
   DawDoc({
     required this.bpm,
     required this.beatsPerBar,
@@ -527,10 +532,12 @@ class DawDoc {
     List<EffectSlot>? masterEffects,
     List<AutoLane>? masterLanes,
     List<Marker>? markers,
+    MidiMap? midiMap,
   }) : tempoMap = normalizeTempoPoints(tempoMap ?? const [], bpm),
        meterMap = normalizeMeterChanges(meterMap ?? const [], beatsPerBar),
        tracks = tracks ?? [],
        markers = markers ?? [],
+       midiMap = midiMap ?? MidiMap(),
        samples = samples ?? {},
        masterEffects = masterEffects ?? [],
        masterLanes = masterLanes ?? [];
@@ -553,7 +560,8 @@ class DawDoc {
       recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
       masterEffects = _effects(j['master_effects']),
       masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)],
-      markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat));
+      markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat)),
+      midiMap = MidiMap.fromJson(j['midi_map']);
 
   Map<String, dynamic> toJson() => {
     'version': version,
@@ -575,6 +583,8 @@ class DawDoc {
     'master_effects': [for (final e in masterEffects) e.toJson()],
     'master_lanes': [for (final l in masterLanes) l.toJson()],
     'markers': [for (final m in markers) m.toJson()],
+    // só com mapeamentos: um documento sem MIDI learn sai igual ao de antes
+    if (!midiMap.isEmpty) 'midi_map': midiMap.toJson(),
   };
 
   // Os mapas viram objetos de conta sob demanda e ficam guardados enquanto a lista, o tamanho e o

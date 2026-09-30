@@ -25,6 +25,7 @@ import 'controller.dart';
 import 'instruments.dart';
 import 'marker.dart';
 import 'meter.dart';
+import 'midi_learn_ui.dart';
 import 'midi_cc.dart' show trimControlsLeft;
 import 'midi_convert_dialog.dart';
 import 'minimap.dart';
@@ -704,6 +705,18 @@ class _TrackHeaderState extends State<_TrackHeader> {
   double _dragFrom = 0;
   int? _dragTo;
 
+  /// O deslizador de volume do cabeçalho tem prioridade sobre o reordenar: um toque longo que começa
+  /// nele (ou a até [_sliderGuard] px em volta da barra) não liga o arraste da faixa.
+  static const _sliderGuard = 15.0;
+  final _faderKey = GlobalKey();
+  bool _skipReorder = false;
+
+  bool _onSlider(Offset global) {
+    final box = _faderKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return false;
+    return (box.localToGlobal(Offset.zero) & box.size).inflate(_sliderGuard).contains(global);
+  }
+
   DawController get c => widget.c;
   int get index => widget.index;
 
@@ -743,11 +756,13 @@ class _TrackHeaderState extends State<_TrackHeader> {
         if (_taps(d.globalPosition)) _rename(context, t);
       },
       onLongPressStart: (d) {
+        if (_skipReorder) return;
         HapticFeedback.selectionClick();
         _dragFrom = _Layout.of(c, height).trackTop[index] + d.localPosition.dy;
         setState(() => _dragTo = index);
       },
       onLongPressMoveUpdate: (d) {
+        if (_skipReorder) return;
         final to = _trackAt(_dragFrom + d.offsetFromOrigin.dy);
         if (to != _dragTo) setState(() => _dragTo = to);
       },
@@ -757,118 +772,129 @@ class _TrackHeaderState extends State<_TrackHeader> {
         if (to != null && to != index) moveTrackAsking(context, c, index, to);
       },
       onLongPressCancel: () => setState(() => _dragTo = null),
-      child: Container(
-        height: height,
-        foregroundDecoration: dragging ? BoxDecoration(border: Border.all(color: color, width: 2)) : null,
-        decoration: BoxDecoration(
-          color: dragging ? color.withValues(alpha: 0.18) : (selected ? Palette.overlay : Palette.bar),
-          border: const Border(
-            right: BorderSide(color: Palette.hairline),
-            bottom: BorderSide(color: Palette.hairline),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (e) => _skipReorder = _onSlider(e.position),
+        child: Container(
+          height: height,
+          foregroundDecoration: dragging ? BoxDecoration(border: Border.all(color: color, width: 2)) : null,
+          decoration: BoxDecoration(
+            color: dragging ? color.withValues(alpha: 0.18) : (selected ? Palette.overlay : Palette.bar),
+            border: const Border(
+              right: BorderSide(color: Palette.hairline),
+              bottom: BorderSide(color: Palette.hairline),
+            ),
           ),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Row(
-              children: [
-                Container(width: 4, color: color),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(compact ? 6 : 8, 6, compact ? 2 : 4, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
-                            if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
-                            Expanded(
-                              child: Text(
-                                dragging ? 'Mover para a posição ${_dragTo! + 1}' : t.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.labelLarge,
-                              ),
-                            ),
-                            _TrackMenu(c: c, index: index, onRename: () => _rename(context, t)),
-                          ],
-                        ),
-                        // efeitos, no celular, ficam no menu e no ícone do barramento
-                        Row(
-                          children: [
-                            if (compact) ...[_KindButton(c: c, index: index, color: color, width: chip), SizedBox(width: gap)],
-                            ToggleChip(
-                              label: 'M',
-                              width: chip,
-                              on: t.mute,
-                              color: Palette.danger,
-                              tooltip: 'Mudo',
-                              onTap: () => c.edit((_) => t.mute = !t.mute),
-                            ),
-                            SizedBox(width: gap),
-                            ToggleChip(
-                              label: 'S',
-                              width: chip,
-                              on: t.solo,
-                              color: const Color(0xFFE3B341),
-                              tooltip: 'Solo',
-                              onTap: () => c.edit((_) => t.solo = !t.solo),
-                            ),
-                            SizedBox(width: gap),
-                            // barramento não grava; o vão deixa A e FX na mesma coluna das outras faixas
-                            if (t.kind == TrackKind.bus) SizedBox(width: chip) else _ArmButton(c: c, track: index, width: chip),
-                            SizedBox(width: gap),
-                            _AutomationButton(c: c, track: index, width: chip),
-                            if (!compact) ...[
-                              const SizedBox(width: 4),
-                              _EffectsChip(c: c, track: index),
-                              const SizedBox(width: 4),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Row(
+                children: [
+                  Container(width: 4, color: color),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(compact ? 6 : 8, 6, compact ? 2 : 4, 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
+                              if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
                               Expanded(
-                                // um só widget nos dois casos: a raia ganha pontos no meio do arraste e trocar a
-                                // árvore aqui derrubaria o gesto
-                                child: ListenableBuilder(
-                                  listenable: Listenable.merge([c.beat, c.autoRec]),
-                                  builder: (_, _) {
-                                    const volume = AutoTarget(AutoKind.volume);
-                                    final hand = c.autoRec.isRecording(index, volume);
-                                    final follows = c.automated(index, AutoKind.volume) && !hand;
-                                    return _MiniFader(
-                                      gain: follows ? c.liveValue(index, AutoKind.volume) : t.gain,
-                                      automated: follows && c.playing.value,
-                                      onStart: () => _miniStart(index),
-                                      onGain: (g) => _miniGain(index, g),
-                                      onEnd: () => c.autoRec.release(index, volume),
-                                    );
-                                  },
+                                child: Text(
+                                  dragging ? 'Mover para a posição ${_dragTo! + 1}' : t.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelLarge,
                                 ),
                               ),
+                              _TrackMenu(c: c, index: index, onRename: () => _rename(context, t)),
                             ],
-                          ],
-                        ),
-                      ],
+                          ),
+                          // efeitos, no celular, ficam no menu e no ícone do barramento
+                          Row(
+                            children: [
+                              if (compact) ...[_KindButton(c: c, index: index, color: color, width: chip), SizedBox(width: gap)],
+                              ToggleChip(
+                                label: 'M',
+                                width: chip,
+                                on: t.mute,
+                                color: Palette.danger,
+                                tooltip: 'Mudo',
+                                onTap: () => c.edit((_) => t.mute = !t.mute),
+                              ),
+                              SizedBox(width: gap),
+                              ToggleChip(
+                                label: 'S',
+                                width: chip,
+                                on: t.solo,
+                                color: const Color(0xFFE3B341),
+                                tooltip: 'Solo',
+                                onTap: () => c.edit((_) => t.solo = !t.solo),
+                              ),
+                              SizedBox(width: gap),
+                              // barramento não grava; o vão deixa A e FX na mesma coluna das outras faixas
+                              if (t.kind == TrackKind.bus) SizedBox(width: chip) else _ArmButton(c: c, track: index, width: chip),
+                              SizedBox(width: gap),
+                              _AutomationButton(c: c, track: index, width: chip),
+                              if (!compact) ...[
+                                const SizedBox(width: 4),
+                                _EffectsChip(c: c, track: index),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  // um só widget nos dois casos: a raia ganha pontos no meio do arraste e trocar a
+                                  // árvore aqui derrubaria o gesto
+                                  child: ListenableBuilder(
+                                    listenable: Listenable.merge([c.beat, c.autoRec]),
+                                    builder: (_, _) {
+                                      const volume = AutoTarget(AutoKind.volume);
+                                      final hand = c.autoRec.isRecording(index, volume);
+                                      final follows = c.automated(index, AutoKind.volume) && !hand;
+                                      return MidiLearnControl(
+                                        c: c,
+                                        track: index,
+                                        target: volume,
+                                        radius: 6,
+                                        child: _MiniFader(
+                                          key: _faderKey,
+                                          gain: follows ? c.liveValue(index, AutoKind.volume) : t.gain,
+                                          automated: follows && c.playing.value,
+                                          onStart: () => _miniStart(index),
+                                          onGain: (g) => _miniGain(index, g),
+                                          onEnd: () => c.autoRec.release(index, volume),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Meter(peaks: c.peaks, index: index, width: 6),
-                ),
-                SizedBox(width: compact ? 4 : 6),
-              ],
-            ),
-            // o nível da entrada numa barra fina no rodapé, fora da conta das linhas: é por ele que
-            // se acerta o ganho do microfone antes de gravar
-            if (t.armed && t.kind == TrackKind.audio)
-              Positioned(
-                left: compact ? 10 : 12,
-                right: compact ? 14 : 16,
-                bottom: 2,
-                height: 3,
-                child: _InputMeter(level: c.inputLevel),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Meter(peaks: c.peaks, index: index, width: 6),
+                  ),
+                  SizedBox(width: compact ? 4 : 6),
+                ],
               ),
-          ],
+              // o nível da entrada numa barra fina no rodapé, fora da conta das linhas: é por ele que
+              // se acerta o ganho do microfone antes de gravar
+              if (t.armed && t.kind == TrackKind.audio)
+                Positioned(
+                  left: compact ? 10 : 12,
+                  right: compact ? 14 : 16,
+                  bottom: 2,
+                  height: 3,
+                  child: _InputMeter(level: c.inputLevel),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1296,7 +1322,7 @@ class _MiniFader extends StatelessWidget {
 
   /// Soltou o deslizador (fecha a passada de gravação de automação).
   final VoidCallback? onEnd;
-  const _MiniFader({required this.gain, required this.onStart, required this.onGain, this.onEnd, this.automated = false});
+  const _MiniFader({super.key, required this.gain, required this.onStart, required this.onGain, this.onEnd, this.automated = false});
 
   @override
   Widget build(BuildContext context) => Tooltip(

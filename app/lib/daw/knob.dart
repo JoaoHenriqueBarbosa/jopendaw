@@ -54,6 +54,15 @@ double _widest(List<String> options, TextStyle style) {
   return w;
 }
 
+/// Uma entrada extra do menu de contexto do knob (botão direito ou toque longo), abaixo de
+/// "Digitar o valor…" (o MIDI learn põe aqui "Aprender MIDI" e "Remover mapeamento").
+class KnobMenuAction {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const KnobMenuAction(this.label, this.icon, this.onTap);
+}
+
 /// Knob de um parâmetro. Para [Curve.choice] vira um seletor compacto (menu).
 ///
 /// Gestos: arrastar na vertical (Shift = ajuste fino), roda do mouse, duplo clique volta ao padrão,
@@ -89,6 +98,9 @@ class Knob extends StatefulWidget {
   /// Ícone de cada opção no seletor (formas de onda, tipos de filtro); null = só o texto.
   final Widget? Function(int option, Color color)? optionIcon;
 
+  /// Entradas extras do menu de contexto; null = o botão direito abre direto o campo de digitar.
+  final List<KnobMenuAction> Function()? extraActions;
+
   const Knob({
     super.key,
     required this.spec,
@@ -102,6 +114,7 @@ class Knob extends StatefulWidget {
     this.format,
     this.dimmed = false,
     this.optionIcon,
+    this.extraActions,
   });
 
   @override
@@ -225,6 +238,42 @@ class _KnobState extends State<Knob> {
     if (v != null && mounted) _set(v);
   }
 
+  /// Botão direito ou toque longo: o campo de digitar o valor, ou, se há [Knob.extraActions], um menu
+  /// com ele e as entradas extras.
+  Future<void> _context(Offset? at) async {
+    final extra = widget.extraActions?.call();
+    if (extra == null || extra.isEmpty) return _type();
+    _end();
+    final box = context.findRenderObject() as RenderBox;
+    final origin = at ?? box.localToGlobal(box.size.center(Offset.zero));
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final pick = await showMenu<int>(
+      context: context,
+      position: RelativeRect.fromRect(origin & Size.zero, Offset.zero & overlay.size),
+      items: [
+        const PopupMenuItem(value: -1, child: Row(children: [Icon(Icons.keyboard_outlined, size: 18), SizedBox(width: 10), Text('Digitar o valor…')])),
+        const PopupMenuDivider(),
+        for (var i = 0; i < extra.length; i++)
+          PopupMenuItem(
+            value: i,
+            child: Row(
+              children: [
+                Icon(extra[i].icon, size: 18),
+                const SizedBox(width: 10),
+                Flexible(child: Text(extra[i].label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (pick == null || !mounted) return;
+    if (pick < 0) {
+      await _type();
+    } else {
+      extra[pick].onTap();
+    }
+  }
+
   /// Um passo para teclado/leitor de tela: uma unidade em inteiros, 5% do curso no resto.
   double _stepped(int dir) {
     if (_spec.curve == Curve.integer) return _spec.clamp(widget.value + dir);
@@ -280,7 +329,7 @@ class _KnobState extends State<Knob> {
             // arraste de quem segura parado um instante antes de mover
             child: GestureDetector(
               supportedDevices: const {PointerDeviceKind.touch, PointerDeviceKind.stylus, PointerDeviceKind.invertedStylus},
-              onLongPress: _type,
+              onLongPress: () => _context(null),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onVerticalDragStart: _dragStart,
@@ -288,7 +337,7 @@ class _KnobState extends State<Knob> {
                 onVerticalDragEnd: (_) => _end(),
                 onVerticalDragCancel: _end,
                 onDoubleTap: _reset,
-                onSecondaryTap: _type,
+                onSecondaryTapUp: (d) => _context(d.globalPosition),
                 child: SizedBox(
                   width: knobCellWidth(widget.size),
                   child: Column(

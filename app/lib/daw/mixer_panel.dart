@@ -18,6 +18,7 @@ import 'effects.dart';
 import 'instruments.dart';
 import 'loudness_panel.dart';
 import 'meter.dart';
+import 'midi_learn_ui.dart';
 import 'model.dart';
 import 'timeline.dart' show ToggleChip;
 
@@ -194,14 +195,26 @@ class _Strip extends StatelessWidget {
             const SizedBox(height: 5),
             SizedBox(
               height: 20,
-              child: _PanKnob(c: c, track: index, color: color),
+              child: MidiLearnControl(
+                c: c,
+                track: index,
+                target: const AutoTarget(AutoKind.pan),
+                secondaryMenu: true,
+                child: _PanKnob(c: c, track: index, color: color),
+              ),
             ),
             const SizedBox(height: 3),
             Expanded(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _Fader(c: c, track: index, color: _master ? Palette.accent : color),
+                  MidiLearnControl(
+                    c: c,
+                    track: index,
+                    target: const AutoTarget(AutoKind.volume),
+                    secondaryMenu: true,
+                    child: _Fader(c: c, track: index, color: _master ? Palette.accent : color),
+                  ),
                   const SizedBox(width: 4),
                   Padding(
                     // o medidor acompanha o curso do fader (a tampa sobra meia altura em cima e embaixo)
@@ -1272,7 +1285,17 @@ class _Sends extends StatelessWidget {
               child: _NewSendRow(c: c, track: track),
             )
           : _SlotList(
-              children: [for (final b in targets) _SendRow(key: ValueKey(b.id), c: c, track: track, bus: b, send: _sendTo(t, b.id))],
+              children: [
+                for (final b in targets)
+                  MidiLearnControl(
+                    key: ValueKey(b.id),
+                    c: c,
+                    track: track,
+                    target: AutoTarget(AutoKind.send, ref: b.id),
+                    radius: 4,
+                    child: _SendRow(c: c, track: track, bus: b, send: _sendTo(t, b.id)),
+                  ),
+              ],
             ),
     );
   }
@@ -1329,7 +1352,7 @@ class _SendRow extends StatefulWidget {
   final int track;
   final DawTrack bus;
   final Send? send;
-  const _SendRow({super.key, required this.c, required this.track, required this.bus, required this.send});
+  const _SendRow({required this.c, required this.track, required this.bus, required this.send});
 
   @override
   State<_SendRow> createState() => _SendRowState();

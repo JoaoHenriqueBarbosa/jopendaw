@@ -51,12 +51,12 @@ Future<(String, Uint8List)?> pickUserPresetFile() async {
   return (f.name, await f.readAsBytes());
 }
 
-/// As entradas que os menus acrescentam depois dos presets de fábrica: a seção "Meus presets" e
-/// os itens "Salvar como preset…" e "Importar preset…". Os valores são [UserPresetChoice].
+/// As entradas que os menus põem NO TOPO, acima dos presets de fábrica (para não ficarem atrás de
+/// dezenas de itens): a seção "Meus presets" e os itens "Salvar como preset…" e "Importar preset…".
+/// Terminam num divisor, que já separa dos de fábrica. Os valores são [UserPresetChoice].
 /// [checkWidth] é a largura da coluna do visto, para alinhar com os itens de fábrica.
 List<PopupMenuEntry<Object>> userPresetEntries({required List<UserPreset> presets, UserPreset? current, required Color color, double checkWidth = 24}) {
   return [
-    const PopupMenuDivider(height: 8),
     PopupMenuItem<Object>(
       enabled: false,
       height: 26,
@@ -122,6 +122,7 @@ List<PopupMenuEntry<Object>> userPresetEntries({required List<UserPreset> preset
         ],
       ),
     ),
+    const PopupMenuDivider(height: 8),
   ];
 }
 

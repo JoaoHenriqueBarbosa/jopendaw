@@ -16,6 +16,7 @@ import 'dock.dart';
 import 'automation_mode.dart';
 import 'export.dart';
 import 'midi_file_ui.dart' show importFiles;
+import 'midi_learn_ui.dart' show MidiLearnButton;
 import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
 import 'shortcuts_dialog.dart';
@@ -185,6 +186,8 @@ class TransportBar extends StatelessWidget {
                 : 'Entrada MIDI: ${c.midiInputs.join(', ')}',
             onTap: c.enableMidiInput,
           ),
+          // só com o MIDI ligado (ou já em uso): sem controlador o botão só gastaria largura da barra
+          if (c.midiEnabled || c.midiLearn.learning || !c.doc.midiMap.isEmpty) MidiLearnButton(c: c),
         ];
         const divider = Padding(
           padding: EdgeInsets.symmetric(horizontal: 4),
@@ -599,7 +602,8 @@ class _TempoDialogState extends State<_TempoDialog> {
           decoration: const InputDecoration(labelText: 'Tempos por compasso'),
           items: [
             if (_custom) DropdownMenuItem(value: 0, child: Text('${widget.initialMeter.numerator}/${widget.initialMeter.denominator} (atual)')),
-            for (var i = 1; i <= math.max(12, _custom ? 0 : widget.beatsPerBar); i++) DropdownMenuItem(value: i, child: Text('$i/4')),
+            // 1/4 a 32/4, o limite do documento e da importação do .mid; o valor de agora aparece mesmo se passasse
+            for (var i = 1; i <= math.max(32, _custom ? 0 : widget.beatsPerBar); i++) DropdownMenuItem(value: i, child: Text('$i/4')),
           ],
           onChanged: (v) => setState(() => _bpb = v ?? _bpb),
         ),

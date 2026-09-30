@@ -22,6 +22,7 @@ import 'controller.dart';
 import 'effects.dart';
 import 'instruments.dart';
 import 'knob.dart';
+import 'midi_learn_ui.dart';
 import 'model.dart';
 
 /// Taxa de amostragem suposta para desenhar: as curvas do EQ são as do filtro digital (o que muda
@@ -388,17 +389,23 @@ class _Fx {
       },
       onChangeEnd: (_) => c.autoRec.release(track, AutoTarget(AutoKind.effect, ref: slot.id, param: p.id)),
       onChanged: (value) => set(p.id, value, undoable: p.curve == Curve.choice),
+      extraActions: () => midiLearnActions(c, track, AutoTarget(AutoKind.effect, ref: slot.id, param: p.id)),
     );
     final target = AutoTarget(AutoKind.effect, ref: slot.id, param: p.id);
     return _Cell(
       width,
-      // com automação e tocando, o knob segue a curva, em laranja
-      c.automatedTarget(track, target)
-          ? ValueListenableBuilder<double>(
-              valueListenable: c.beat,
-              builder: (_, _, _) => build(c.liveTargetValue(track, target, v(p.id)), c.playing.value ? automationColor : color),
-            )
-          : build(v(p.id), color),
+      MidiLearnControl(
+        c: c,
+        track: track,
+        target: target,
+        // com automação e tocando, o knob segue a curva, em laranja
+        child: c.automatedTarget(track, target)
+            ? ValueListenableBuilder<double>(
+                valueListenable: c.beat,
+                builder: (_, _, _) => build(c.liveTargetValue(track, target, v(p.id)), c.playing.value ? automationColor : color),
+              )
+            : build(v(p.id), color),
+      ),
     );
   }
 

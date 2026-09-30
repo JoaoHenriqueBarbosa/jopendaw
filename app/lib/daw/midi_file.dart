@@ -457,7 +457,9 @@ Future<MidiFileData> parseMidiFile(Uint8List bytes, {int yieldEvery = 20000}) as
 }
 
 /// Tempos (semínimas) do primeiro compasso do arquivo, do jeito que o app guarda no `beatsPerBar`.
-int importedMeterBeats(MeterChange first) => first.barBeats.round().clamp(1, 12);
+/// O mesmo limite (1–32) de [importedMeter] e do documento: um primeiro compasso de 13/4 ou 4/1 cria o
+/// clipe com o compasso certo, não com 12 tempos.
+int importedMeterBeats(MeterChange first) => first.barBeats.round().clamp(1, 32);
 
 class _ParseCtx {
   final int ppq, yieldEvery;

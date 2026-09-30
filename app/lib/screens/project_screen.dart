@@ -12,6 +12,7 @@ import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/marker.dart';
 import '../daw/midi_file_ui.dart' show importFiles;
+import '../daw/midi_learn_ui.dart' show MidiLearnBanner, toggleMidiLearn;
 import '../daw/model.dart' show DawDoc;
 import '../daw/timeline.dart';
 import '../daw/transport_bar.dart';
@@ -157,6 +158,8 @@ class _DawStudioState extends State<DawStudio> {
       action = ctx != null ? () => importFiles(ctx, c) : c.importAudio;
     } else if (mod && k == LogicalKeyboardKey.keyK) {
       action = c.toggleKeyboard;
+    } else if (!mod && keys.isShiftPressed && k == LogicalKeyboardKey.keyK) {
+      action = () => toggleMidiLearn(c);
     } else if (!mod && k == LogicalKeyboardKey.keyS) {
       action = () => splitClipsAtPlayhead(c);
     } else if (!mod && keys.isShiftPressed && k == LogicalKeyboardKey.keyL) {
@@ -189,6 +192,8 @@ class _DawStudioState extends State<DawStudio> {
     } else if (e.character == '?' || (keys.isShiftPressed && k == LogicalKeyboardKey.slash)) {
       final ctx = node.context;
       if (ctx != null) action = () => showShortcuts(ctx);
+    } else if (k == LogicalKeyboardKey.escape && c.midiLearn.learning) {
+      action = c.midiLearn.escape;
     } else if (k == LogicalKeyboardKey.escape && c.dock != Dock.none) {
       action = () => c.setDock(Dock.none);
     } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.add || k == LogicalKeyboardKey.numpadAdd || e.character == '+') {
@@ -216,6 +221,7 @@ class _DawStudioState extends State<DawStudio> {
           builder: (context, _) => Column(
             children: [
               if (desktop) transport,
+              MidiLearnBanner(c: c),
               if (c.audioFailure != null)
                 Padding(
                   padding: const EdgeInsets.all(8),

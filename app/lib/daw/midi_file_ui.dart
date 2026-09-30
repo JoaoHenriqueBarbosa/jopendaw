@@ -138,7 +138,11 @@ Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController
       'compasso ${formatMeter(d.beatsPerBar!, 4)}',
   ];
   final nc = c.doc.tempoMap.length - 1;
-  final now = '${_bpmText(c.doc.bpm)} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${formatDocMeter(c.doc)}';
+  // o compasso de verdade do projeto (6/8 aparece como 6/8, não como 3/4) e as mudanças do mapa
+  final mc = c.doc.meterMap.length - 1;
+  final now =
+      '${_bpmText(c.doc.bpm)} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${formatDocMeter(c.doc)}'
+      '${mc > 0 ? ' e $mc mudança${mc == 1 ? '' : 's'} de compasso' : ''}';
   final r = await showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(

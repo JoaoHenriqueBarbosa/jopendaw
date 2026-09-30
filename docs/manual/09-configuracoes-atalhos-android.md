@@ -125,6 +125,7 @@ Grupo novo: lista os atalhos de letra que deixam de agir (a letra vira nota, oit
 | `F` | Efeitos da faixa (vira nota) |
 | `K` · `J` | Dividir / unir notas no piano roll (viram nota) |
 | `Shift+H` · `Shift+L` | Humanizar e legato no piano roll; `Shift+L` também faz o loop no clipe (viram nota) |
+| `Shift+K` | Aprender MIDI liga/desliga (vira nota) |
 | Com `Ctrl` (`⌘`) | Os atalhos com `Ctrl` continuam valendo (desfazer, duplicar, importar; `Ctrl+K` desliga o teclado) |
 
 **Piano roll**
@@ -314,3 +315,7 @@ Os atalhos deste assunto:
 | `+` (ou `=`) / `−` | Aproximar / afastar |
 | `Esc` | Fechar o painel de baixo |
 | `Enter` no campo de latência | Confirmar o número digitado |
+
+## Aprender MIDI
+
+Botão com o ícone de controle remoto na barra (aparece com a entrada MIDI ligada) ou `Shift+K`. No modo, os controles mapeáveis (knobs de instrumento e de efeito, volume, pan e envios) ganham contorno; clique num deles e mexa num botão do teclado ou controlador (CC, pitch bend ou pressão do canal): o controle passa a acompanhá-lo, na mesma escala da automação, e grava automação se o modo de gravação de automação estiver armado. `Esc` desarma; de novo, sai do modo. Botão direito (ou toque longo) no controle: `Aprender MIDI` e `Remover mapeamento`. `Mapeamentos (n)` na faixa do modo, ou botão direito no botão da barra, abre a lista: origem, alvo, invertido, curva linear ou logarítmica, faixa mín/máx e remover; ali também ficam a opção **Suave** (o controle só assume quando o botão cruza o valor que ele já tem; ligada por padrão) e **Salvar como padrão para novos projetos** (só neste aparelho; leva volume, pan e parâmetros de instrumento, faixas pela posição; efeitos e envios ficam de fora). Os mapeamentos moram no projeto (`midi_map` no documento). CC 1, pedal e pitch bend seguem sendo expressão do instrumento a menos que você os mapeie; CC 120 a 127 (pânico, reset) nunca são mapeados. Mapeamento cujo alvo sumiu (faixa apagada, efeito removido) é ignorado e aparece em vermelho na lista.

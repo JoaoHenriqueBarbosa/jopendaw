@@ -20,6 +20,7 @@ import 'controller.dart';
 import 'expression_wheels.dart';
 import 'instruments.dart';
 import 'knob.dart';
+import 'midi_learn_ui.dart';
 import 'model.dart';
 import 'presets.dart';
 import 'sampler_zones.dart' show zoneCoveredNotes;
@@ -271,7 +272,8 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
       n is Preset ? apply(n) : applyUser(n as UserPreset);
     }
 
-    final entries = <PopupMenuEntry<Object>>[];
+    // "Meus presets" e salvar/importar no topo, acima dos de fábrica
+    final entries = <PopupMenuEntry<Object>>[...userPresetEntries(presets: userList, current: userCurrent, color: x.color)];
     String? section;
     for (final p in list) {
       if (p.category != section) {
@@ -301,8 +303,6 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
         ),
       );
     }
-
-    entries.addAll(userPresetEntries(presets: userList, current: userCurrent, color: x.color));
 
     final menu = PopupMenuButton<Object>(
       tooltip: t.kind == TrackKind.drums ? 'Kits de bateria' : 'Presets',
@@ -1045,15 +1045,18 @@ class _Ctx {
       },
       onChangeEnd: (_) => c.autoRec.release(ti, AutoTarget(AutoKind.instrument, param: p.id)),
       onChanged: (v) => c.setParam(ti, p.id, v, undoable: p.curve == Curve.choice),
+      extraActions: () => midiLearnActions(c, ti, AutoTarget(AutoKind.instrument, param: p.id)),
     );
     final target = AutoTarget(AutoKind.instrument, param: p.id);
-    if (!c.automatedTarget(ti, target)) return build(t.param(p.id), color);
     // com automação e tocando, o knob segue a curva (mexer muda o valor fixo, que volta a valer
     // quando para)
-    return ValueListenableBuilder<double>(
-      valueListenable: c.beat,
-      builder: (_, _, _) => build(c.liveTargetValue(ti, target, t.param(p.id)), c.playing.value ? automationColor : color),
-    );
+    final control = !c.automatedTarget(ti, target)
+        ? build(t.param(p.id), color)
+        : ValueListenableBuilder<double>(
+            valueListenable: c.beat,
+            builder: (_, _, _) => build(c.liveTargetValue(ti, target, t.param(p.id)), c.playing.value ? automationColor : color),
+          );
+    return MidiLearnControl(c: c, track: ti, target: target, child: control);
   }
 }
 

@@ -19,6 +19,7 @@ const suspendedShortcuts = <(String, String)>[
   ('E', 'Editor de notas (vira nota)'),
   ('F', 'Efeitos da faixa (vira nota)'),
   ('K  ·  J', 'Dividir / unir notas no piano roll (viram nota)'),
+  ('Shift+K', 'Aprender MIDI liga/desliga (vira nota)'),
   ('Shift+H  ·  Shift+L', 'Humanizar e legato no piano roll; Shift+L também faz o loop no clipe (viram nota)'),
 ];
 
@@ -66,6 +67,14 @@ List<(String, List<(String, String)>)> _groups() => [
       ('+  (ou  =)  /  −', 'Aproximar / afastar'),
       ('$_mod + roda', 'Zoom no ponto do mouse'),
       ('Shift + roda', 'Rolar na horizontal'),
+    ],
+  ),
+  (
+    'Aprender MIDI',
+    [
+      ('Shift+K', 'Liga o modo: os controles ganham contorno; clique num e mexa no botão do teclado'),
+      ('Botão direito · toque longo', 'Menu do controle: aprender ou remover o mapeamento'),
+      ('Esc', 'Cancela o controle armado; de novo, sai do modo'),
     ],
   ),
   (

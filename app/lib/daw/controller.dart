@@ -29,6 +29,7 @@ import 'instruments.dart';
 import 'loudness.dart';
 import 'midi_cc.dart';
 import 'midi_file.dart';
+import 'midi_learn.dart';
 import 'model.dart';
 import 'sync.dart';
 import 'tempo_map.dart';
@@ -513,9 +514,16 @@ class DawController extends ChangeNotifier {
   /// Gravação de automação (Escrever, Toque, Trava) ao mexer nos controles tocando.
   late final AutoRecorder autoRec;
 
+  /// MIDI learn: controles do teclado mapeados a parâmetros (o mapa mora em [DawDoc.midiMap]).
+  MidiLearn? _learn;
+  MidiLearn get midiLearn => _learn ??= MidiLearn(this);
+
   final Future<void> Function(String id, Map<String, dynamic> patch) _patchProject;
   final AudioEngine _engine;
   final LocalStore _store;
+
+  /// O guardado local do aparelho (o padrão do MIDI learn para novos projetos mora nele).
+  LocalStore get localStore => _store;
   final SyncApi _api;
   final bool Function() _canSync;
   final double syncTimeScale;
@@ -989,10 +997,17 @@ class DawController extends ChangeNotifier {
   Future<DawDoc> _fromTemplate() async {
     final key = 'template:${project.id}';
     final chosen = await _store.get(key);
-    if (chosen is! String) return _fresh();
-    _templated = true;
-    await _store.delete(key);
-    return ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: project.beatsPerBar);
+    final DawDoc d;
+    if (chosen is! String) {
+      d = _fresh();
+    } else {
+      _templated = true;
+      await _store.delete(key);
+      d = ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: project.beatsPerBar);
+    }
+    // projeto novo: o mapa de MIDI learn padrão do aparelho (se o usuário salvou um)
+    d.midiMap = midiDefaultFrom(await loadMidiDefault(_store), d.tracks, newId);
+    return d;
   }
 
   DawDoc _fresh() => DawDoc(
@@ -1056,6 +1071,7 @@ class DawController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     autoRec.dispose();
+    _learn?.dispose();
     // o motor sobrevive à tela: nada pode ficar soando nem preso para o próximo projeto, nem
     // medindo o que ninguém mais olha
     _engine.calls([
@@ -2033,7 +2049,9 @@ class DawController extends ChangeNotifier {
     doc = DawDoc.fromJson(jsonDecode(from.removeLast()))
       ..metronome = before.metronome
       ..countIn = before.countIn
-      ..recLatencyMs = before.recLatencyMs;
+      ..recLatencyMs = before.recLatencyMs
+      // mapear não entra no histórico: desfazer uma nota não desfaz os mapeamentos
+      ..midiMap = before.midiMap;
     if (doc.loopStart == before.loopStart && doc.loopEnd == before.loopEnd) doc.loopOn = before.loopOn;
     final live = {for (final t in before.tracks) t.id: t};
     for (final t in doc.tracks) {
@@ -2724,9 +2742,11 @@ class DawController extends ChangeNotifier {
     final warnings = [...data.warnings];
     final bpms = [for (final p in data.tempoMap) p.bpm];
     if (useTempo && data.tempoPoints.length < data.tempoMap.length) {
+      final total = data.tempoMap.length - 1, kept = data.tempoPoints.length - 1;
       warnings.add(
-        'O arquivo tem ${data.tempoMap.length - 1} mudanças de andamento; fundi as que diferem menos de $midiTempoEpsilon BPM e '
-        '${data.tempoPoints.length - 1} ficaram no mapa (o limite é $midiMaxTempoPoints pontos).',
+        'O arquivo tem $total ${total == 1 ? 'mudança' : 'mudanças'} de andamento; fundi as que diferem menos de '
+        '${midiTempoEpsilon.toString().replaceAll('.', ',')} BPM e $kept ${kept == 1 ? 'ficou' : 'ficaram'} no mapa '
+        '(o limite é $midiMaxTempoPoints pontos).',
       );
     } else if (!useTempo && data.hasTempoChanges) {
       warnings.add('O arquivo muda de andamento no meio (de ${bpms.reduce(math.min).round()} a ${bpms.reduce(math.max).round()} BPM); mantive o do projeto.');
@@ -3161,6 +3181,9 @@ class DawController extends ChangeNotifier {
   void _onMidi(int status, int data1, int data2) {
     if (!ready || _disposed) return;
     final type = status & 0xF0;
+    // MIDI learn: um CC, bend ou pressão mapeado (ou o que aprende agora) é do mapeamento, não
+    // expressão do instrumento; o painel de CC 120..127 nunca passa por aqui
+    if ((type == 0xB0 || type == 0xE0 || type == 0xD0) && (_learn != null || !doc.midiMap.isEmpty) && midiLearn.handle(status, data1, data2)) return;
     if (type == 0x90 && data2 > 0) {
       _midiNoteOn(data1, data2 / 127);
     } else if (type == 0x80 || type == 0x90) {

@@ -546,6 +546,8 @@ class _EffectsPanelState extends State<EffectsPanel> {
         }
       },
       itemBuilder: (_) => [
+        // "Meus presets" e salvar/importar no topo, acima dos de fábrica
+        ...userPresetEntries(presets: userList, current: userCurrent, color: color, checkWidth: 30),
         if (presets.isNotEmpty) ...[
           PopupMenuItem<Object>(
             enabled: false,
@@ -566,9 +568,8 @@ class _EffectsPanelState extends State<EffectsPanel> {
                 ],
               ),
             ),
+          const PopupMenuDivider(),
         ],
-        ...userPresetEntries(presets: userList, current: userCurrent, color: color, checkWidth: 30),
-        const PopupMenuDivider(),
         item(_Action.reset, Icons.restart_alt, 'Reiniciar (valores padrão)', enabled: !isDefaultEffect(s)),
         item(_Action.bypass, Icons.power_settings_new, s.bypass ? 'Ligar' : 'Desligar (bypass)'),
         item(_Action.left, desktop ? Icons.arrow_back : Icons.arrow_upward, desktop ? 'Mover para a esquerda' : 'Mover para cima', enabled: index > 0),
