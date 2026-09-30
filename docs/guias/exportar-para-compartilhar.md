@@ -58,7 +58,7 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 - **FLAC de 16 bits.** Chip `16 bits`: para tocar em aparelho que não lê 24 bits. O WAV que sobe ao servidor é de 16 bits, com dither.
 - **Podcast.** MP3 com `Normalizar o loudness` no chip `Podcast −16,0` (ver [Loudness e master, variações](loudness-e-master.md#variações)).
 - **Guardar em FLAC e ainda tocar em um leitor simples.** Exporte os dois formatos, um de cada vez; a janela guarda as últimas opções.
-- **Vários stems.** Cada arquivo espera a fila do servidor: 8 stems são 8 conversões em série (e, se outra pessoa estiver exportando no mesmo servidor, a sua espera em `Na fila do servidor…`). Deixe a aba aberta até a janela dizer `Exportação concluída`; se ela disser `Exportação cancelada`, no Android, é porque a janela `Salvar` foi fechada.
+- **Vários stems.** Cada arquivo espera a fila do servidor: 8 stems são 8 conversões em série (e, se outra pessoa estiver exportando no mesmo servidor, a sua espera em `Na fila do servidor…`). Deixe a aba aberta até a janela dizer `Exportação concluída`; se ela disser `Exportação cancelada`, no Android, é porque a janela `Salvar` foi fechada (vale para FLAC, MP3 e também para o WAV direto, desde a fase 19: antes o WAV terminava em `Exportação concluída` mesmo sem salvar nada).
 
 ## Por que funciona
 
@@ -81,6 +81,7 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 | `O servidor converte até 30 minutos por arquivo...` e `Exportar` desligado | Trecho mais `Cauda` acima de 30 minutos | `Região do loop`, cauda menor ou WAV |
 | A taxa mudou para 44,1 kHz sozinha | O MP3 só aceita 44,1 e 48 kHz | Escolha `48 kHz`, se preferir |
 | Cancelei e sobrou áudio na conta | Só num servidor antigo: ele não cancela a conversão em andamento (`409`) | O app tenta apagar de novo depois de 3, 10 e 30 s; se sobrar, na tela `Conta`, `Limpar áudios sem uso` (só leva o que subiu há mais de 1 hora) |
-| A janela diz `Exportação cancelada: você não escolheu onde salvar` | Você fechou a janela `Salvar <nome>` do Android | `Voltar às opções` e exporte de novo, concluindo o `Salvar <nome>` |
+| A janela diz `Exportação cancelada: você não escolheu onde salvar` (com FLAC ou MP3 o nome do arquivo vem entre aspas; no WAV direto o aviso termina em `salvar.`) | Você fechou a janela `Salvar <nome>` do Android | `Voltar às opções` e exporte de novo, concluindo o `Salvar <nome>`. A exportação para no arquivo cancelado: os stems seguintes não são oferecidos |
+| `1 arquivo foi salvo compactado` / `N arquivos foram salvos compactados` no aviso `Não deu para compactar` | Parte dos stems já saiu em FLAC ou MP3 antes da falha | `Exportar em WAV mesmo assim` salva só os que faltam, em WAV |
 | O MP3 soa mais alto ou estoura na decodificação | Pico do MP3 acima do WAV | Baixe o `Teto de true peak` (−1,5 ou −2,0 dBTP) e exporte de novo |
 | Aviso `Um efeito está em solo ou ouvindo a banda: a exportação sairá assim (...)` | Um `Solo` de banda do `Multibanda` ou o `Ouvir banda` do `De-esser` ficou ligado (o cartão do efeito mostra o selo `SOLO` ou `OUVINDO A BANDA`) | Feche a janela, desligue o solo ou o `Ouvir banda` e exporte de novo; o aviso não impede a exportação |

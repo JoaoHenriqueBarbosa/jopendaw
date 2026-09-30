@@ -319,7 +319,7 @@ Para dar camadas de força do toque a esse instrumento (um piano macio e um fort
 - [04 Painel de instrumento](04-painel-de-instrumento.md): presets, teclado da tela, gestos dos knobs.
 - [03 Áudio e clipes](03-audio-e-clipes.md): importar áudios, fades e ganho de clipes; os áudios do projeto são os mesmos que o sampler e as zonas usam.
 - [05 Piano roll](05-piano-roll.md): escrever as notas que disparam as zonas; o painel `Vel.` (velocidade) é o que escolhe a camada de velocidade.
-- [05c Sequenciador de passos](05c-sequenciador-de-passos.md): a aba `Passos` mostra uma linha por zona e programa as fatias em grade, como uma bateria; o botão `Padrões` só existe na bateria.
+- [05c Sequenciador de passos](05c-sequenciador-de-passos.md): a aba `Passos` mostra uma linha por zona e programa as fatias em grade, como uma bateria (as zonas de um trecho do áudio aparecem como `Fatia N · <nota>`, as de áudio inteiro, como um piano multi-sample, como `Zona · <nota>`); o botão `Padrões` só existe na bateria.
 - [05b Ferramentas MIDI](05b-ferramentas-midi.md): `Humanizar` (varia a velocidade e por isso a camada e o round-robin) e `Rampa de velocidade` (passeia pelas camadas); `Staccato` e `Legato` não mudam o tamanho de zonas `Até o fim`.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md): efeitos da faixa (reverberação, filtro) sobre todo o sampler; um insert atua sobre todas as zonas juntas.
 - [07 Automação](07-automacao.md): dá para automatizar `Volume`, `Afinação` e o envelope; as propriedades de cada zona (ganho, pan, faixas, loop) não são automatizáveis.

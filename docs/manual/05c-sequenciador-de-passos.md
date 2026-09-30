@@ -8,7 +8,7 @@
 
 ![O diálogo Padrões de bateria, com a descrição de cada padrão de fábrica; escolher um escreve o padrão na faixa e avisa com uma mensagem.](../img/passos-padroes.jpg)
 
-*O diálogo Padrões de bateria, com a descrição de cada padrão de fábrica; escolher um escreve o padrão na faixa e avisa com uma mensagem.*
+*O diálogo Padrões de bateria, com a descrição de cada padrão de fábrica; escolher um escreve o padrão na faixa e avisa com uma mensagem. Captura da fase 17, que não acompanha a fase 19 (A): ela mostra só oito dos nove padrões (o `Shuffle (tercinas)` ficava fora da tela), não tem o botão `Cancelar` e traz os textos antigos de `Rock` e `Reggaeton (dembow)`. Hoje o conteúdo do diálogo rola por inteiro, com o título fixo, e o texto certo de cada padrão está na tabela de [Padrões de fábrica](#padrões-de-fábrica).*
 
 ## Onde fica
 
@@ -32,16 +32,16 @@ Em janelas de 700 px ou mais a barra quebra em linhas; abaixo disso ela é uma l
 |---|---|---|---|
 | `Passo` (menu) | Escolhe a resolução: quanto vale um quadrado | `1/4 · 4/comp.`, `1/8 · 8/comp.`, `1/8 tercina · 12/comp.`, `1/16 · 16/comp.`, `1/16 tercina · 24/comp.`, `1/32 · 32/comp.`, `1/64 · 64/comp.` (o número depois do ponto é quantos passos cabem num compasso de 4 tempos; em outro compasso ele muda). Padrão `1/16` | Trocar a resolução não mexe nas notas, só na grade que as lê |
 | `Compassos` com `−` (tooltip `Menos um compasso`), número e `+` (tooltip `Mais um compasso`) | Tamanho do padrão, em compassos | 1 a 8. Enquanto você não mexe nos botões, é automático: os compassos que cobrem as notas do clipe (pelo início da última nota), no mínimo 1 e no máximo os compassos do clipe | Depois do primeiro clique em `−` ou `+` o valor fica fixo até você fechar o app |
-| `Swing N%` e o controle deslizante ao lado | Escolhe o swing que `Aplicar swing` vai gravar | 0 a 75%, de 1 em 1; padrão 0% | Só o número muda ao arrastar; as notas só andam ao clicar em `Aplicar swing` |
-| `Aplicar swing` | Atrasa as notas dos passos pares até o valor escolhido | Só liga quando o controle está diferente do swing já aplicado. Aviso: `Swing de N% aplicado (M notas).` | Um passo do `Ctrl+Z` |
-| `Tirar swing` | Devolve as notas ao passo reto | Só liga quando há swing aplicado. Aviso: `Swing tirado (M notas).` | Um passo do `Ctrl+Z` |
+| `Swing N%` e o controle deslizante ao lado | Escolhe o swing que `Aplicar swing` vai gravar. Ao abrir, mostra o swing que as notas do clipe já têm nesta resolução (ver [Swing](#swing)) | 0 a 75%, de 1 em 1; 0% quando as notas estão retas | Só o número muda ao arrastar; as notas só andam ao clicar em `Aplicar swing`. Se o swing das notas muda por fora (`Ctrl+Z`, piano roll, outro padrão), o controle acompanha |
+| `Aplicar swing` | Atrasa as notas dos passos pares, em todo o clipe, até o valor escolhido | Só liga quando o controle está diferente do swing que as notas têm. Aviso: `Swing de N% aplicado (M notas, em <resolução>).` (por exemplo `em 1/16`). Se nenhuma nota está nos passos pares da resolução atual, não muda nada e avisa `Nenhuma nota está nos passos pares de <resolução>: troque a resolução para a das notas ou desenhe algo antes.` | Um passo do `Ctrl+Z`, que desfaz as notas e o valor do controle juntos |
+| `Tirar swing` | Devolve as notas ao passo reto | Só liga quando as notas têm swing nesta resolução. Aviso: `Swing tirado (M notas).` | Um passo do `Ctrl+Z` |
 | `Normal`, `Acento`, `Fantasma` (pincéis) | Escolhem a velocidade dos passos que você liga | `Normal` 0,80 (padrão), `Acento` 1,00, `Fantasma` 0,30 | Vale também para `Inverter` e `Preencher a cada N passos…` |
 | `Padrões` (só na bateria) | Abre `Padrões de bateria`, com 9 padrões prontos | Ver [Padrões de fábrica](#padrões-de-fábrica) | No sampler o botão não existe |
 | `Ações` (ícone de reticências; tooltip `Ações do padrão`) | Menu de operações sobre o padrão | Ver [Ações](#ações) | |
 
 Depois de uma ação, um aviso em cor de destaque aparece sob a barra (`Padrão copiado (N notas).` e os outros abaixo). Ele some quando você troca a resolução ou faz outra ação sem aviso.
 
-Nada dessa barra é salvo com o projeto: resolução, `Compassos`, swing aplicado, pincel e linha selecionada valem enquanto o app está aberto, um conjunto por clipe.
+Nada dessa barra é salvo com o projeto: resolução, `Compassos`, pincel e linha selecionada valem enquanto o app está aberto, um conjunto por clipe. O swing é a exceção que não precisa ser salva: ele é lido das notas do clipe, que são salvas.
 
 ### A grade
 
@@ -86,35 +86,40 @@ Nada dessa barra é salvo com o projeto: resolução, `Compassos`, swing aplicad
 - **Fora da grade.** Uma nota que não cai em nenhum passo (humanizada, tocada ao vivo, ou escrita em `1/32` quando a grade está em `1/16`) aparece no passo mais próximo, com contorno âmbar e um ponto. Se a nota fica no meio de dois passos, vai para o anterior. Editar outros passos não a move. Apagar aquele passo apaga todas as notas dele, as fora da grade também.
 - **Duas notas no mesmo passo.** Se a resolução é mais grossa que a das notas, várias notas da mesma linha caem no mesmo quadrado. Se uma delas está exatamente no passo, o quadrado parece normal e as outras ficam escondidas atrás; clicar nele apaga todas juntas. Para ver o que há de verdade, escolha a resolução que combina com as notas (por exemplo `1/32` num padrão de rolos).
 - **Tercinas.** `1/8 tercina` (12 passos por compasso de 4/4) e `1/16 tercina` (24) dividem o tempo em 3 e em 6. Notas de tercina em grade reta aparecem fora da grade, e o contrário também.
-- **Outros compassos.** Em 3/4 o compasso tem 3 tempos; o número de passos por compasso e o desenho da régua seguem o compasso do clipe no mapa de compassos ([guia](../guias/mapa-de-andamento-e-compasso.md)).
-- **Notas fora do padrão.** Notas depois do fim do padrão (`Compassos`) e notas de alturas que não são linhas da grade (por exemplo uma nota melódica num clipe de bateria) não aparecem e não são mexidas pelas ações de limpar, inverter, deslocar e preencher. Só `Repetir até o fim do clipe` as leva.
+- **Outros compassos.** Em 3/4 o compasso tem 3 tempos; o número de passos por compasso e o desenho da régua seguem o compasso do clipe no mapa de compassos ([guia](../guias/mapa-de-andamento-e-compasso.md)). Os padrões de fábrica também: cortados em 3 tempos, repetidos em compassos maiores que 4 (ver [Padrões de fábrica](#padrões-de-fábrica)).
+- **Notas fora do padrão.** Notas depois do fim do padrão (`Compassos`) e notas de alturas que não são linhas da grade (por exemplo uma nota melódica num clipe de bateria) não aparecem e não são mexidas pelas ações de limpar, inverter, deslocar e preencher. Só `Repetir até o fim do clipe` as leva, e o swing (`Aplicar swing` e `Tirar swing`) também as alcança, porque vale para o clipe todo e para qualquer altura (inclusive uma nota melódica que esteja exatamente num passo par).
 - **Comprimento das notas que a grade cria:** o do passo, no máximo 1/16 de batida (0,25). A bateria toca a peça inteira de qualquer jeito; no `Sampler`, ver [Sampler com zonas](#sampler-com-zonas).
 
 ## Swing
 
 - **A conta.** Os passos pares da grade (o 2º, o 4º, o 6º..., contando de 1) começam mais tarde que o passo reto por `swing × duração do passo`. A 1/16 (0,25 batida) e 50%, o 2º passo de cada par sai 0,125 batida depois (62,5 ms a 120 BPM). A 33% o segundo 16 cai em 0,3325 batida, quase a tercina (0,333); 75% é o máximo. Vale em qualquer resolução: em `1/8` atrasa as colcheias fracas, em `1/16` as semicolcheias fracas.
-- **`Aplicar swing`** move só as notas que estão exatamente num passo par no swing atual, em todas as linhas. Notas fora da grade e passos ímpares (o 1º, o 3º...) não se movem. Se já havia swing aplicado, ele vai do valor atual ao novo.
+- **`Aplicar swing`** move só as notas que estão exatamente num passo par da resolução escolhida, no swing atual, em todas as linhas e **no clipe todo**, não só nos `Compassos` do padrão. Notas fora da grade e passos ímpares (o 1º, o 3º...) não se movem. Se já havia swing, ele vai do valor atual ao novo. Em `1/8` são as colcheias fracas (os contratempos) que andam; em `1/16`, as semicolcheias fracas. Se nenhuma nota está num passo par da resolução atual, o botão não edita nada e o aviso `Nenhuma nota está nos passos pares de <resolução>: troque a resolução para a das notas ou desenhe algo antes.` diz o que fazer.
 - **A grade passa a enxergar o swing.** Depois de aplicar, os passos continuam acesos e os novos cliques nos passos pares já caem atrasados.
 - **`Tirar swing`** volta as notas dos passos pares ao passo reto.
-- **O swing aplicado é estado da tela, não do projeto.** Fechar o app (ou recarregar a página) esquece que havia swing: as notas seguem atrasadas, agora aparecem com contorno âmbar nos passos pares, e `Tirar swing` fica apagado (para a tela, o swing é 0). Para desfazer nessa situação, use `Quantizar` no [piano roll](05-piano-roll.md) com a grade em `1/16` `(dedução)`. Dentro da mesma sessão, `Ctrl+Z` logo depois de aplicar desfaz as notas, mas o valor de swing da tela permanece, e os passos pares aparecem fora da grade até você tirar o swing ou mexer no controle `(lido do código, não confirmado no app)`.
-- **Padrão de fábrica com swing ligado:** o padrão chega reto (sem swing) e os passos pares dele aparecem como fora da grade. Aplique o swing depois do padrão, não antes.
+- **O swing é lido das notas, não guardado na tela (desde a fase 19 A, `fc5878b`).** A cada desenho da grade o app olha as notas do clipe e escolhe o valor (de 1 em 1%, até 75%) que deixa mais notas exatamente nos passos da resolução atual; em empate fica o reto (0%). Por isso: `Ctrl+Z` logo depois de `Aplicar swing` desfaz as notas e o swing mostrado junto (o controle volta a 0% e `Tirar swing` apaga); fechar e reabrir o projeto mostra o swing que as notas têm e deixa `Tirar swing` ligado; e uma edição no [piano roll](05-piano-roll.md) que muda o atraso das notas também muda o controle. Antes da fase 19 (A) o valor era estado da tela e sumia ao recarregar, deixando as notas atrasadas com contorno âmbar e `Tirar swing` apagado. `(testado só por testes automáticos)`
+- **O swing lido depende da resolução.** Ele é calculado na resolução em `Passo`. Um clipe de semicolcheias seguidas com swing aplicado em `1/16` mostra `Swing 0%` em `1/8` (coberto por teste), porque em `1/8` as notas atrasadas caem fora dos passos; volte a `1/16` para ver o valor e para usar `Tirar swing`. Consequência da mesma regra `(deduzido do código)`: notas sem swing nenhum, mas deslocadas por humanização ou gravação para o meio de passos ímpares, podem ser lidas como um swing se isso deixar mais notas na grade.
+- **Padrão de fábrica com swing ligado:** `Padrões` tira o swing que o clipe tinha (de todas as notas do clipe, não só as do padrão, para a grade não ficar meio no swing e meio reta) e escreve o padrão reto, tudo no mesmo passo do `Ctrl+Z`: o controle volta a 0% e, desfazendo, o swing volta junto com as notas. O swing que sai é o lido na resolução do padrão escolhido (quase todos são `1/16`; `Trap` abre em `1/32` e `Shuffle (tercinas)` em `1/8 tercina`). Aplique o swing depois do padrão, não antes, se quiser que ele fique. `(testado só por testes automáticos)`
 
 ## Padrões de fábrica
 
 O botão `Padrões` (só na bateria) abre `Padrões de bateria`, uma lista de 9 itens com nome e descrição; tocar num item aplica na hora, sem confirmação.
 
-**O que aplicar faz:** apaga as notas das 12 peças da bateria nos primeiros 4 tempos por compasso do padrão (`bars × 4` batidas, contadas a partir do começo do clipe) e escreve as do padrão. Notas de outras alturas e notas depois dessa faixa ficam. Notas que passariam do fim do clipe não são escritas. A resolução da grade e `Compassos` mudam para os do padrão (todos têm 1 compasso de 4 tempos; em 3/4 são 2 compassos). O swing aplicado e o pincel continuam como estavam. Aviso: `Padrão "<nome>" aplicado.` Um passo do `Ctrl+Z`.
+O botão `Cancelar` (no rodapé, sempre à vista) fecha sem aplicar; tocar fora do diálogo também deve fechar, pelo padrão do Flutter `(não confirmado)`. O conteúdo da lista rola por inteiro, com o título `Padrões de bateria` fixo, então o último item (`Shuffle (tercinas)`) é alcançável em qualquer tamanho de tela (coberto por teste em 360 e em 1512 px de largura).
+
+**O que aplicar faz:** apaga as notas das 12 peças da bateria no compasso do padrão (todos os padrões têm 1 compasso: as batidas do compasso do clipe no mapa de compassos, contadas a partir do começo do clipe) e escreve as do padrão. Notas de outras alturas e notas depois dessa faixa ficam. Notas que passariam do fim do clipe não são escritas. A resolução da grade e `Compassos` mudam para os do padrão (`Compassos` fica em 1, em qualquer compasso). O pincel continua como estava. O swing que o clipe tinha sai no mesmo passo (ver [Swing](#swing)): o padrão entra reto. Aviso: `Padrão <nome> aplicado.` (sem aspas; por exemplo `Padrão Rock aplicado.`). Um passo do `Ctrl+Z`.
+
+**Em outro compasso.** O desenho dos padrões é escrito em 4 tempos. Num compasso de 3 tempos (3/4, 6/8) ele é cortado: ficam só os 3 primeiros tempos, o `Quatro no chão` leva bumbos nos tempos 1, 2 e 3 e palmas só no 2. Num compasso maior que 4 tempos (5/4, 6/4, 7/4) o desenho se repete para preencher o compasso: em 6/4 o bumbo do `Quatro no chão` cai nos seis tempos. Em 4/4 nada muda. `(testado só por testes automáticos)`
 
 Nas linhas abaixo, cada caractere é um passo na resolução indicada: `.` vazio, `x` normal (0,80), `X` acento (1,00), `o` fantasma (0,30).
 
 | Padrão (item da lista) | Resolução | Bumbo | Caixa / palmas / aro | Chimbal fechado | Chimbal aberto |
 |---|---|---|---|---|---|
 | `Quatro no chão` (`Bumbo em todo tempo, palmas no 2 e no 4.`) | `1/16` | `x...x...x...x...` | Palmas `....x.......x...` | `x.x.x.x.x.x.x.x.` | |
-| `Rock` (`Bumbo no 1 e no 3, caixa no 2 e no 4, chimbal em colcheias.`) | `1/16` | `x.......x.x.....` | Caixa `....x.......x...` | `x.x.x.x.x.x.x.x.` | |
+| `Rock` (`Bumbo no 1, no 3 e no passo 11 (o e do 3), caixa no 2 e no 4, chimbal em colcheias.`) | `1/16` | `x.......x.x.....` | Caixa `....x.......x...` | `x.x.x.x.x.x.x.x.` | |
 | `Funk` (`Bumbo sincopado, caixa com notas fantasma, chimbal em semicolcheias.`) | `1/16` | `x..x...x..x.....` | Caixa `....x..o.o..x..o` | `XxxxXxxxXxxxXxxx` | |
 | `Hip-hop` (`Boom bap: bumbo deslocado, caixa seca e chimbal aberto no fim.`) | `1/16` | `x.....x..x......` | Caixa `....x.......x...` | `x.x.x.x.x.x.x.x.` | `..............x.` |
 | `Trap` (`Meio tempo, caixa no 3 e chimbal com rolos em 1/32.`) | `1/32` | `x.........x.x...` (16 caracteres, cada um vale 1/16) | Caixa `........x.......` (16 caracteres de 1/16, um só golpe: o tempo 3) | `x...x...x...x...x.x.x.x.oxoxxXXX` (32 caracteres de 1/32) | |
-| `Reggaeton (dembow)` (`Bumbo em todo tempo e a caixa do dembow (3 e 6 de cada meio compasso).`) | `1/16` | `x...x...x...x...` | Caixa `...x..x....x..x.` | `x.x.x.x.x.x.x.x.` | |
+| `Reggaeton (dembow)` (`Bumbo em todo tempo e a caixa do dembow (4º e 7º passos de cada meio compasso).`) | `1/16` | `x...x...x...x...` | Caixa `...x..x....x..x.` | `x.x.x.x.x.x.x.x.` | |
 | `Bossa nova` (`Clave no aro (3-2), bumbo sincopado e chimbal em colcheias.`) | `1/16` | `x..x....x..x....` | Aro `x..x..x...x..x..` | `x.x.x.x.x.x.x.x.` | |
 | `House` (`Bumbo em todo tempo, palmas no 2 e no 4, chimbal aberto no contratempo.`) | `1/16` | `x...x...x...x...` | Palmas `....x.......x...` | `.o.o.o.o.o.o.o.o` (fantasmas) | `..x...x...x...x.` |
 | `Shuffle (tercinas)` (`Balanço ternário: três passos por tempo.`) | `1/8 tercina` | `x.....x.....` | Caixa `...x.....x..` | `x.xx.xx.xx.x` | |
@@ -124,10 +129,11 @@ Cada linha do padrão vira notas na linha da peça de mesmo nome: `Bumbo` (nota 
 Notas sobre o que cada padrão escreve de fato (lidas do código):
 
 - No `Trap`, na grade de 32 passos o bumbo cai nos passos 1, 21 e 25 (no tempo 1, no "e" do tempo 3 e no tempo 4) e a caixa no passo 17 (tempo 3). O chimbal faz colcheias do passo 1 ao 17 (de 4 em 4), semicolcheias nos passos 19, 21 e 23 e, no último tempo, o rolo em 1/32: fantasmas nos passos 25 e 27, normais nos 26, 28 e 29 e três acentos nos 30, 31 e 32.
-- No `Rock` a descrição diz "bumbo no 1 e no 3", mas a linha do bumbo tem também o passo 11 (o "e" do tempo 3): `x.......x.x.....`.
+- No `Rock` o bumbo cai nos passos 1, 9 e 11 (`x.......x.x.....`): o 1, o 3 e o "e" do tempo 3. A descrição do item já diz isso desde a fase 19 (A); antes falava só do 1 e do 3.
+- No `Reggaeton (dembow)` a caixa cai nos passos 4, 7, 12 e 15 (`...x..x....x..x.`), ou seja, o 4º e o 7º passos de cada meio compasso de 8 passos.
 - No `House` os chimbais fechados são todos fantasmas nos passos 2, 4, 6... (o "e" e o "a" de cada tempo) e o aberto fica no "&" de cada tempo. Como o fechado abafa o aberto e o aberto abafa o fechado (6 ms de fade, ver [04b](04b-bateria.md#limites-e-pegadinhas)), o aberto soa só até o fantasma seguinte, um 16 depois.
 - No `Hip-hop` o chimbal fechado e o aberto caem juntos no passo 15; na ordem em que entram, o aberto vence e corta o fechado.
-- Cada padrão tem 1 compasso. Para tocar um clipe de 4 compassos, use `Ações` > `Repetir até o fim do clipe`.
+- Cada padrão tem 1 compasso (de 4 tempos no 4/4; ver "Em outro compasso" acima). Para tocar um clipe de 4 compassos, use `Ações` > `Repetir até o fim do clipe`.
 
 ## Ações
 
@@ -144,14 +150,14 @@ O menu `Ações` abre com uma linha desativada, `Vale para: todas as linhas` (se
 | `Inverter` | Acende o que está apagado e apaga o que está aceso | Os acesos novos usam a velocidade do pincel |
 | `Aleatorizar…` | Refaz o escopo ao acaso | Abre `Aleatorizar` com o controle `Densidade: N%` (0 a 100, padrão 40) e `Cancelar` / `Aplicar`. Apaga o escopo e acende cada passo com essa chance, com velocidades sorteadas entre 0,55 e 1,00 (nunca fantasma) |
 | `Preencher a cada N passos…` | Refaz o escopo com um passo aceso a cada N | Abre `Preencher a cada N passos…` com `A cada: N passos` (de 1 até metade dos passos do padrão, no mínimo 2; padrão 4, ou 2 se o padrão tem menos de 16 passos), `Cancelar` / `Aplicar`. Começa no primeiro passo, com a velocidade do pincel. Em `1/16`, `4` é quatro no chão; `2` são colcheias; `8` são os tempos 1 e 3 |
-| `Repetir até o fim do clipe` | Repete o padrão até o fim do clipe | Copia as notas dos primeiros `Compassos` do clipe (todas as linhas e alturas, sem olhar a seleção) e **apaga tudo que havia depois do padrão**, no lugar das cópias. Aviso: `Padrão repetido até o fim do clipe (N vezes).` (`1 vez` no singular), ou `O padrão já ocupa o clipe inteiro.` se o padrão é do tamanho do clipe ou maior |
+| `Repetir até o fim do clipe` | Repete o padrão até o fim do clipe | Copia as notas dos primeiros `Compassos` do clipe (todas as linhas e alturas, sem olhar a seleção) e **apaga tudo que havia depois do padrão**, no lugar das cópias. Só age quando há o que repetir: o padrão é menor que o clipe e tem ao menos uma nota. Aviso: `Padrão repetido até o fim do clipe (N vezes).` (`1 vez` no singular). Sem nada a repetir não muda nenhuma nota e não deixa passo vazio no `Ctrl+Z`; o aviso é `O padrão já ocupa o clipe inteiro.` se o padrão é do tamanho do clipe ou maior, ou `Não há notas no padrão para repetir.` se os primeiros `Compassos` estão sem notas (notas só depois do padrão ficam onde estão) |
 
 Com uma linha selecionada, `Limpar linha`, `Copiar`, `Colar`, `Deslocar`, `Inverter`, `Aleatorizar…` e `Preencher…` valem só para ela; sem seleção, valem para todas as linhas. Como clicar num passo seleciona a linha dele, é fácil esquecer uma linha selecionada: confira a primeira linha do menu (`Vale para: …`) e toque de novo no nome da linha para voltar a `todas as linhas`.
 
 ## Sampler com zonas
 
-- Uma linha por zona do sampler, na ordem das zonas, com o nome `Fatia N · <nota>` (por exemplo `Fatia 1 · C1`, `Fatia 2 · C#1`). A nota da linha é a `Nota base` da zona, ou a mais próxima dentro da faixa `Notas de`–`até` se a base estiver fora dela. Zonas que resultam na mesma nota (camadas de velocidade, round-robin) dividem uma linha só; o número `N` conta as linhas, não as zonas.
-- O nome `Fatia` aparece para qualquer zona, mesmo num piano multi-sample que não veio de `Fatiar sample…`.
+- Uma linha por zona do sampler, na ordem das zonas. O nome depende do que a zona toca: uma zona de um **trecho** do áudio (`Trecho` com início maior que 0 ou com fim definido, como as que saem de `Fatiar sample…`) leva `Fatia N · <nota>` (por exemplo `Fatia 1 · C1`, `Fatia 2 · C#1`); uma zona do **áudio inteiro** (um piano multi-sample, por exemplo) leva só `Zona · <nota>` (por exemplo `Zona · C3`). Desde a fase 19 (A) uma zona de áudio inteiro deixou de ser chamada de `Fatia`.
+- A nota da linha é a `Nota base` da zona, ou a mais próxima dentro da faixa `Notas de`–`até` se a base estiver fora dela. Zonas que resultam na mesma nota (camadas de velocidade, round-robin) dividem uma linha só (a primeira zona dá o nome). O número `N` de `Fatia N` conta só as linhas de fatia: numa faixa que mistura zonas de áudio inteiro e fatias, a primeira fatia é `Fatia 1` mesmo que venha depois de uma `Zona · …`. `(testado só por testes automáticos)`
 - Depois de [Fatiar sample](04c-sampler.md#fatiar-sample) (uma zona por fatia a partir de C1), a grade vira um sequenciador de fatias: cada linha toca um pedaço do loop.
 - Não há o botão `Padrões` (os padrões são de bateria). Faixa de sampler com áudio único, sem zonas, não mostra a aba.
 - As notas da grade têm no máximo 1/16 de batida. Zonas no modo `Até o fim` (as de `Fatiar sample…`) tocam inteiras assim mesmo; zonas em `Sustenta` soam só enquanto a nota dura, então uma nota de 1/16 corta um som longo. Para notas longas, edite no piano roll.
@@ -183,8 +189,8 @@ Para um clipe de 4 compassos, `Ações` > `Repetir até o fim do clipe`.
 
 1. Com o padrão de hip-hop (`Padrões` > `Hip-hop`) ou o seu, deixe `Passo` em `1/16`.
 2. Arraste o controle ao lado de `Swing` até `Swing 40%`. As notas ainda não mexeram.
-3. Toque em `Aplicar swing`. O aviso diz `Swing de 40% aplicado (N notas).`, com o número de notas que andaram. As semicolcheias fracas (passos 2, 4, 6...) ficam 0,1 batida mais tarde.
-4. Ouça; compare com `Tirar swing` e refaça, ou `Ctrl+Z`. Para outro valor, arraste o controle e toque em `Aplicar swing` de novo: ele parte do valor aplicado, não do zero.
+3. Toque em `Aplicar swing`. O aviso diz `Swing de 40% aplicado (N notas, em 1/16).`, com o número de notas que andaram. As semicolcheias fracas (passos 2, 4, 6...) ficam 0,1 batida mais tarde. No `Hip-hop` puro só o bumbo do passo 10 está num passo par (as colcheias do chimbal e a caixa estão nos ímpares), então o aviso diz `1 notas`; com fantasmas nos passos pares o número cresce (ver o [guia](../guias/batida-com-o-sequenciador-de-passos.md#cenário-2-hip-hop-com-swing-e-notas-fantasma)). Isso vale o clipe inteiro, mesmo que `Compassos` cubra só o começo.
+4. Ouça; compare com `Tirar swing` e refaça, ou `Ctrl+Z` (que desfaz as notas e o valor do controle juntos). Para outro valor, arraste o controle e toque em `Aplicar swing` de novo: ele parte do swing que as notas têm, não do zero. Se você fechar e reabrir o projeto, o controle mostra o swing que ficou nas notas e `Tirar swing` continua ligado.
 5. O swing vale sempre para todas as linhas de uma vez (não há swing por linha). Para deixar só o chimbal balançando, aplique o swing e, no piano roll, leve à mão as notas das outras linhas de volta ao tempo reto (ou faça o padrão sem swing e mova só as notas do chimbal `(dedução)`).
 
 ### Rolos de chimbal com fantasmas
@@ -220,13 +226,13 @@ Para um clipe de 4 compassos, `Ações` > `Repetir até o fim do clipe`.
 - **Uma resolução para a grade toda.** Não há resolução por linha, nem passos com probabilidade, repetição (ratchet) ou micro-tempo por passo. Para isso, use resolução mais fina (`1/32`, `1/64`) ou o piano roll.
 - **Não adivinha a resolução.** Um clipe em `1/32` aberto na grade padrão de `1/16` mostra notas fora da grade e as junta nos passos vizinhos. Escolha a resolução certa antes de clicar: clicar num passo que esconde notas apaga todas.
 - **Um clipe de cada vez.** A grade edita o clipe da seleção; para o de outra faixa, selecione a faixa.
-- **`Repetir até o fim do clipe` é destrutivo.** Apaga tudo que estava depois do padrão, de todas as alturas e linhas, incluindo notas de variação que você fez nos compassos seguintes. `Ctrl+Z` volta.
+- **`Repetir até o fim do clipe` é destrutivo.** Apaga tudo que estava depois do padrão, de todas as alturas e linhas, incluindo notas de variação que você fez nos compassos seguintes. `Ctrl+Z` volta. Ele só roda quando o padrão tem notas e é menor que o clipe; senão avisa e não mexe em nada (nem deixa um passo vazio no `Ctrl+Z`).
 - **Sem seleção, as ações valem para todas as linhas.** `Inverter`, `Aleatorizar…` e `Preencher a cada N passos…` sem linha selecionada refazem a bateria inteira.
 - **Padrão maior que o clipe.** Se `Compassos` passa do fim do clipe, os passos de fora ficam escurecidos e o clique não os liga; mas `Inverter`, `Aleatorizar…` e `Preencher a cada N passos…` podem gravar notas lá `(lido do código, não confirmado no app)`. Elas não tocam (notas depois do fim do clipe não tocam); estique o clipe.
 - **O arraste do mouse lê uma posição por vez.** Um arraste muito rápido pode pular passos no meio do caminho `(lido do código, não confirmado no app)`.
-- **Estado da tela.** Resolução, `Compassos` fixado, swing aplicado, pincel, linha selecionada e a cópia do `Copiar padrão` não vão para o projeto nem para a nuvem: cada aparelho começa em `1/16`, `Compassos` automático e swing 0.
+- **Estado da tela.** Resolução, `Compassos` fixado, pincel, linha selecionada e a cópia do `Copiar padrão` não vão para o projeto nem para a nuvem: cada aparelho começa em `1/16` e `Compassos` automático. O swing não entra nessa lista: é lido das notas do clipe, então acompanha o `Ctrl+Z`, a reabertura do projeto e a edição no piano roll (ver [Swing](#swing)).
 - **Android.** A grade é a mesma; os gestos são os de toque descritos acima. `(testado só por testes automáticos; não foi visto no aparelho)`
-- **Testado.** A lógica (conversões passo/nota, ações, swing, os 9 padrões) e a interface (cliques, arraste, toque longo, duplo toque, faixa de velocidade, presets, ações, swing, sampler, layout de 360 px) só têm testes automáticos; a aba não foi vista no Chrome nem no Android `(testado só por testes automáticos)`.
+- **Testado.** A lógica (conversões passo/nota, ações, leitura do swing, os 9 padrões, padrões em compassos de 3, 6 e 7 tempos, nomes de zona) e a interface (cliques, arraste, toque longo, duplo toque, faixa de velocidade, presets, ações, swing com `Ctrl+Z` e reabertura, `Repetir` sem notas, `Padrões` em 3/4, diálogo de padrões em 360 e 1512 px, sampler, layout de 360 px) só têm testes automáticos; a aba não foi vista no Chrome nem no Android `(testado só por testes automáticos)`.
 
 ## Atalhos
 

@@ -738,7 +738,7 @@ Todos com `Ouvir banda` em `Não` e `Modo` `Banda dividida`, menos o `Banda larg
 ### Cuidados
 
 - Excesso vira ceceio: se a voz soar "sem o s", suba o `Limiar` ou baixe a `Razão`.
-- `Ouvir banda` em `Sim` deixa a saída só com a banda, também na exportação; os presets o desligam. Enquanto está ligado, o cartão mostra o selo `OUVINDO A BANDA` ao lado do título e a janela `Exportar áudio` avisa que a exportação sairá assim (ver [06c, cartão de efeito](06c-painel-de-efeitos.md#cartão-de-efeito)).
+- `Ouvir banda` em `Sim` deixa a saída só com a banda, também na exportação; os presets o desligam. Enquanto está ligado, o cartão mostra o selo `OUVINDO A BANDA` ao lado do título (tooltip `Este efeito está ouvindo a banda: o áudio muda de verdade, inclusive na exportação`; até a fase 18 a frase saía `está em ouvindo a banda`) e a janela `Exportar áudio` avisa que a exportação sairá assim (ver [06c, cartão de efeito](06c-painel-de-efeitos.md#cartão-de-efeito)).
 - O `Q` alto e a `Frequência` errada fazem o efeito agir em pouca coisa: confira com o medidor e com `Ouvir banda`.
 - Um `Limiar` acima do nível da banda não comprime nada; o efeito é então transparente (saída igual à entrada, no modo dividido).
 

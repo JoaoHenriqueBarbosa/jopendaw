@@ -33,13 +33,13 @@ Projeto a **100 BPM** em 4/4: um compasso = 4 × 60 ÷ 100 = **2,4 s**. A faixa 
 | 4,8 s a 9,6 s | `3.1.1` a `5.1.1` | Pré-roll: você ouve os compassos 3 e 4 e se prepara |
 | 9,6 s a 14,4 s | `5.1.1` a `7.1.1` | A região: cante a frase |
 
-6. Continue depois do punch out se quiser (o app **não** para sozinho ali); pare com `R`, `Espaço` ou `Enter` (por exemplo em 16,8 s, `8.1.1`). Aparece `Salvando a gravação…`.
-7. Resultado na faixa: o clipe antigo de 0 a 9,6 s fica como estava; nasce um clipe novo de 9,6 s a 14,4 s (4,8 s); e o clipe antigo de 14,4 s a 38,4 s passa a começar 7 ms antes (14,393 s), com fade de entrada de 7 ms; o clipe novo termina com fade de saída de 7 ms. O cursor volta a `5.1.1`. Aperte `Espaço` e ouça as duas emendas.
+6. Cante a frase até o fim da região. **Sem loop, a gravação para sozinha no punch out** (14,4 s, `7.1.1`): aparece `A gravação parou no punch out.` e depois `Salvando a gravação…`, e a música para junto (a captura do motor só liga e desliga com o play, então ela não segue tocando depois do punch out). Se quiser encerrar antes, pare com `R`, `Espaço` ou `Enter`.
+7. Resultado na faixa: o clipe antigo de 0 a 9,6 s fica como estava; nasce um clipe novo de 9,6 s a 14,4 s (4,8 s). Como o app espera a latência da entrada antes de fechar o arquivo, costuma sobrar uma fração de áudio além do punch out, e então o clipe antigo de 14,4 s a 38,4 s passa a começar 7 ms antes (14,393 s), com fade de entrada de 7 ms, e o clipe novo termina com fade de saída de 7 ms `(pela leitura do código; o tamanho da sobra não foi medido)`. O cursor volta a `5.1.1`. Aperte `Espaço` e ouça as duas emendas.
 8. Se o começo da frase nova estalar, selecione o clipe novo e arraste a alça de fade de entrada até uns 5 a 10 ms: com pré-roll a gravação começa exatamente no punch in, e nessa borda não há fade nem crossfade (o de 7 ms só existe onde havia áudio gravado além da região).
 9. Não gostou? `Ctrl+Z` desfaz a gravação inteira e a frase antiga volta. A região continua marcada: aperte `R` de novo.
 10. Terminou: desligue o punch (`P`), senão o próximo `R` continua limitado à região.
 
-Nota sobre a contagem: com `Contagem de um compasso` ligada e o metrônomo desligado, os cliques da contagem também soam durante o pré-roll (o metrônomo provisório só é desligado meio tempo antes do ponto de gravar). Se preferir só a música, desmarque a contagem: o pré-roll já basta. `(lido do código; não visto rodando)`
+Nota sobre a contagem: com `Contagem de um compasso` ligada e o metrônomo desligado, só o compasso da contagem clica; o pré-roll (compassos 3 e 4 na tabela) toca só o arranjo, sem cliques (desde a fase 19; antes os cliques vazavam para o pré-roll). Com o metrônomo ligado (`C`) ele soa em tudo. Se preferir só a música, desmarque a contagem: o pré-roll já basta. Se você parar durante a contagem ou o pré-roll, nada é gravado e o app avisa `Gravação cancelada: você parou antes do ponto de gravar (contagem ou pré-roll); nada foi gravado.` `(testado só por testes automáticos)`
 
 ### Cenário 2. Gravar um solo com pré-roll e sem contagem
 
@@ -65,19 +65,19 @@ Perto do começo da música o pré-roll encolhe: com o cursor em `3.1.1` (compas
 | 0,65 s | `92,3` |
 | 0,75 s | `80` |
 
-2. Toque em `Salvar`. Ou, sem abrir a janela, aperte `T` no ritmo: o botão do andamento mostra `Tap · 92,3 BPM` e, 1,5 s depois da última batida, o andamento entra no projeto (`Andamento: 92,3 BPM (tap).`). `Ctrl+Z` desfaz. Para andamentos abaixo de uns 40 BPM use o botão da janela (com `T` o prazo de 1,5 s vence entre as batidas).
+2. Toque em `Salvar`. Ou, sem abrir a janela, aperte `T` no ritmo: o botão do andamento mostra `Tap · 92,3 BPM` e, 1,5 s depois da última batida, o andamento entra no projeto (`Andamento: 92,3 BPM (tap).`). `Ctrl+Z` desfaz. Em andamento lento (abaixo de uns 52 BPM) a espera cresce para 1,3 intervalo, e **abaixo de 40 BPM o `T` pede ao menos 3 batidas**: com só duas, nada é aplicado, a sequência recomeça e aparece `Abaixo de 40 BPM, bata ao menos 3 vezes para aplicar o andamento.` (o botão da janela só aplica no `Salvar`).
 3. Ajustar o andamento **antes** de gravar áudio: mudar depois desalinha o áudio já gravado (o botão do andamento fica desligado gravando).
 
 **Metrônomo com subdivisões** (o projeto agora a 92,3 BPM):
 1. Abra `Configurações` e desça até `METRÔNOMO`.
 2. `Timbre`: `Madeira`. `Subdivisão`: `Colcheias` (em 4/4, 8 cliques por compasso, um a cada 0,325 s a 92,3 BPM). O controle `Volume das subdivisões` aparece: leve a 30%.
-3. `Acento do primeiro tempo` em 150% e `Altura do acento` em `×1,50` (1200 Hz sobre os 800 Hz da madeira). `Volume` em 60%. Solte cada controle deslizante: o valor só vale ao soltar.
+3. `Acento do primeiro tempo` em 150% e `Altura do acento` em `×1,50` (1200 Hz sobre os 800 Hz da madeira). `Volume` em 60% (já é o padrão desde a fase 19; o acento de 150% dá pico 0,9, abaixo do teto de 1,0). Solte cada controle deslizante: o valor só vale ao soltar.
 4. `Quando soa`: `Sempre que ligado` para ensaiar; ligue o metrônomo (`C`) e dê play. Depois troque para `Só ao gravar` se quiser o clique só na gravação.
 5. Num compasso de 6/8 o "tempo" é a colcheia: `Um clique por tempo` dá 6 cliques por compasso e `Colcheias` dá 12.
 
 ## Variações
 
-- **Regravar várias tomadas só do trecho.** Marque o loop em cima da frase (`5.1.1` a `7.1.1`), use `Usar a região do loop`, ligue o punch e o loop, cursor no começo do loop: cada volta é uma tomada só da região, e a ativa é a última que a cobre inteira. Escolha depois no selo `N tomadas`.
+- **Regravar várias tomadas só do trecho.** Marque o loop em cima da frase (`5.1.1` a `7.1.1`) e **ligue o loop** (`L`): `Usar a região do loop` só funciona com o loop ligado. Use o botão, ligue o punch, cursor no começo do loop: cada volta é uma tomada só da região, e a ativa é a última que a cobre inteira. Com o loop ligado a gravação **não** para sozinha no punch out: as tomadas seguem até você parar (`R`, `Espaço` ou `Enter`). Escolha depois no selo `N tomadas`.
 - **Punch em notas MIDI.** Com uma faixa de instrumento armada, o punch guarda só as notas da região (a que estava segurada no punch in começa nele, a que passa do punch out é cortada nele); as notas que já estavam no clipe **não** são apagadas: limpe antes no editor de notas. Com o teclado do computador ligado, `P` e `T` viram notas: use os botões.
 - **Punch sem pré-roll.** Cursor antes do punch in e `Pré-roll` em `Não`: o transporte parte do cursor, o que você tocar antes do punch in é descartado e a emenda de entrada ganha o crossfade de 7 ms.
 - **Tercinas.** `Subdivisão` em `Tercinas` (3 cliques por tempo, 0,217 s entre cliques a 92,3 BPM) para ensaiar um shuffle.
@@ -85,7 +85,7 @@ Perto do começo da música o pré-roll encolhe: com o cursor em `3.1.1` (compas
 
 ## Por que funciona
 
-- **O punch corta depois, não durante.** O app grava tudo o que a entrada mandou e, ao parar, guarda só a região. Por isso você pode passar do punch out e o clipe não ganha lixo, e por isso o punch não silencia nada ao vivo.
+- **O punch corta depois, não durante.** O app grava tudo o que a entrada mandou e, ao parar, guarda só a região. Por isso o clipe não ganha lixo de fora da região (nem de antes do punch in, nem da sobra depois do punch out), e por isso o punch não silencia nada ao vivo. Sem loop o app ainda encerra a gravação sozinho no punch out; com loop, o corte é o mesmo, mas quem para é você.
 - **Pré-roll conta compassos, não segundos.** Ele volta pelo mapa de compassos (2 s por compasso a 120 BPM, 2,4 s a 100): a preparação é sempre musical, em qualquer andamento.
 - **A contagem e o pré-roll são coisas diferentes.** A contagem é um compasso de cliques; o pré-roll é a música. Juntos, a contagem vem primeiro e o pré-roll depois, e o ponto de gravar não muda.
 - **Fades de 7 ms.** Curtos demais para comer a sílaba e longos o bastante para não estalar; só existem onde a gravação foi cortada. Com pré-roll a entrada da região é seca, por isso o passo 8 do cenário 1.
@@ -103,8 +103,12 @@ Perto do começo da música o pré-roll encolhe: com o cursor em `3.1.1` (compas
 | O punch ainda vale numa gravação que devia ser inteira | Ficou ligado do ensaio anterior | `P` desliga; o botão `Punch (P)` apagado |
 | `P` e `T` viram nota | O teclado do computador está ligado (`Ctrl+K`) | Desligue o teclado ou use os botões |
 | O pré-roll ficou menor que o escolhido | Cursor perto do começo (só vai até o zero) ou fim do loop dentro do pré-roll | Mova o cursor para mais adiante; ou desligue o loop |
-| O tap tempo não muda nada | Gravando; ou o valor é igual ao atual; ou passou de 1,5 s e a sequência já recomeçou | Bata seguido; com o botão da janela o valor só vale no `Salvar` |
-| O andamento pulou no meio das batidas (com `T`) | Pausa maior que 1,5 s: o valor foi aplicado e a sequência recomeçou | Bata sem pausas, ou use o botão da janela |
+| O tap tempo não muda nada | Gravando; ou o valor é igual ao atual; ou passou de 1,5 s (1,3 intervalo em andamento lento) e a sequência já recomeçou; ou o andamento ficou abaixo de 40 BPM com menos de 3 batidas | Bata seguido; abaixo de 40 BPM bata ao menos 3 vezes; com o botão da janela o valor só vale no `Salvar` |
+| `Abaixo de 40 BPM, bata ao menos 3 vezes para aplicar o andamento.` | Duas batidas muito espaçadas (intervalo acima de 1,5 s) com o `T` | Comece de novo e bata 3 vezes ou mais |
+| O andamento pulou no meio das batidas (com `T`) | Pausa maior que 1,5 s (ou 1,3 intervalo, se o andamento é lento): o valor foi aplicado e a sequência recomeçou | Bata sem pausas, ou use o botão da janela |
+| `Gravação cancelada: você parou antes do ponto de gravar (contagem ou pré-roll); nada foi gravado.` | Você parou durante a contagem ou o pré-roll | Aperte `R` de novo e pare só depois do ponto de gravar |
+| A gravação parou e a música também, no punch out (`A gravação parou no punch out.`) | É assim sem loop: o motor só captura com o play | Para continuar ouvindo, dê play de novo; com loop ligado ela não para sozinha |
+| `Usar a região do loop` está apagado | O loop está desligado (ou sem largura, ou você está gravando) | Ligue o loop (`L`) sobre o trecho |
 | Só ouço o clique padrão, mesmo com outro timbre | Página em cache ou APK antigo sem a chamada `metronome_style` (o `Volume` continua valendo) | Recarregue a página ou atualize o app |
-| Depois de `Reiniciar o áudio` o timbre voltou ao clique | O estilo não é reenviado ao motor novo até a próxima mudança de opção `(lido do código)` | Mude qualquer opção do metrônomo e volte |
+| Depois de `Reiniciar o áudio` o timbre voltou ao clique | Só acontecia até a fase 18: o estilo não era reenviado ao motor novo. Desde a fase 19 o app reenvia o estilo (e a modulação) sozinho `(testado só por testes automáticos)` | Se ainda ocorrer, mude qualquer opção do metrônomo e volte |
 | `Volume das subdivisões` sumiu | A subdivisão é `Um clique por tempo` ou `Só o acento do compasso` | Escolha `Colcheias`, `Tercinas` ou `Semicolcheias` |
