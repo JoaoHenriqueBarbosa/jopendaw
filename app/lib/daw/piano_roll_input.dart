@@ -1124,68 +1124,60 @@ extension _Input on _PianoRollState {
     if (!mounted || _clip == null || _rows == null || !_active || e is KeyUpEvent || _drag != null) return false;
     if (FocusManager.instance.primaryFocus?.context?.widget is EditableText) return false;
     final keys = HardwareKeyboard.instance;
-    final mod = keys.isControlPressed || keys.isMetaPressed;
     final shift = keys.isShiftPressed;
-    final k = e.logicalKey;
+    final stroke = KeyCombo.fromKey(
+      e.logicalKey,
+      character: e.character,
+      mod: keys.isControlPressed || keys.isMetaPressed,
+      shift: shift,
+      alt: keys.isAltPressed,
+    );
+    if (stroke == null) return false;
     final repeat = e is KeyRepeatEvent;
-    if (k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) {
-      if (!repeat) _deleteNotes(_sel.toList());
-      return true;
-    }
-    if (k == LogicalKeyboardKey.escape) {
-      if (_sel.isEmpty) return false;
-      _sel.clear();
-      _refresh();
-      return true;
-    }
-    if (mod) {
-      if (k == LogicalKeyboardKey.keyA) {
+    final hits = Keymap.instance.resolve(stroke, KeyContext.pianoRoll);
+    if (hits.isEmpty) return false;
+    switch (hits.first.id) {
+      case 'pr.delete':
+        if (!repeat) _deleteNotes(_sel.toList());
+      case 'pr.deselect':
+        if (_sel.isEmpty) return false;
+        _sel.clear();
+        _refresh();
+      case 'pr.selectAll':
         _selectAll();
-      } else if (k == LogicalKeyboardKey.keyC) {
+      case 'pr.copy':
         _copy();
-      } else if (k == LogicalKeyboardKey.keyX) {
+      case 'pr.cut':
         if (!repeat) _cut();
-      } else if (k == LogicalKeyboardKey.keyV) {
+      case 'pr.paste':
         if (!repeat) _paste();
-      } else if (k == LogicalKeyboardKey.keyD) {
+      case 'pr.duplicate':
         if (!repeat) _duplicate();
-      } else {
+      case 'pr.quantize':
+        if (!repeat) _quantize();
+      case 'pr.split':
+        if (!repeat) _splitAtCursor();
+      case 'pr.join':
+        if (!repeat) _joinNotes();
+      case 'pr.humanize':
+        if (!repeat) _humanize();
+      case 'pr.legato':
+        if (!repeat) _transform(legato);
+      case 'pr.up' || 'pr.down' || 'pr.octaveUp' || 'pr.octaveDown':
+        if (_sel.isEmpty) return false;
+        final id = hits.first.id;
+        // na bateria as linhas são peças, não alturas: a oitava anda uma linha, como o semitom
+        final steps = id.contains('octave') && !_dims.drums ? 12 : 1;
+        _transpose(id == 'pr.up' || id == 'pr.octaveUp' ? steps : -steps, repeat: repeat);
+      case 'pr.left' || 'pr.right' || 'pr.barLeft' || 'pr.barRight':
+        if (_sel.isEmpty) return false;
+        final id = hits.first.id;
+        final step = id.startsWith('pr.bar') ? _barLen(_sel.map((n) => n.start).reduce(math.min)) : _unit;
+        _nudge(id.endsWith('ight') ? step : -step, repeat: repeat);
+      default:
         return false;
-      }
-      return true;
     }
-    if (k == LogicalKeyboardKey.keyQ && !shift) {
-      if (!repeat) _quantize();
-      return true;
-    }
-    if (!shift && k == LogicalKeyboardKey.keyK) {
-      if (!repeat) _splitAtCursor();
-      return true;
-    }
-    if (!shift && k == LogicalKeyboardKey.keyJ) {
-      if (!repeat) _joinNotes();
-      return true;
-    }
-    if (shift && k == LogicalKeyboardKey.keyH) {
-      if (!repeat) _humanize();
-      return true;
-    }
-    if (shift && k == LogicalKeyboardKey.keyL) {
-      if (!repeat) _transform(legato);
-      return true;
-    }
-    if (_sel.isEmpty) return false;
-    if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown) {
-      final steps = shift && !_dims.drums ? 12 : 1;
-      _transpose(k == LogicalKeyboardKey.arrowUp ? steps : -steps, repeat: repeat);
-      return true;
-    }
-    if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowRight) {
-      final step = shift ? _barLen(_sel.map((n) => n.start).reduce(math.min)) : _unit;
-      _nudge(k == LogicalKeyboardKey.arrowRight ? step : -step, repeat: repeat);
-      return true;
-    }
-    return false;
+    return true;
   }
 
   // ------------------------------------------------------------------ comandos

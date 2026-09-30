@@ -8,6 +8,7 @@ import '../api/client.dart';
 import '../daw/sync_ui.dart';
 import '../daw/controller.dart';
 import '../daw/tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
+import '../daw/keymap.dart';
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/marker.dart';
@@ -106,6 +107,12 @@ class DawStudio extends StatefulWidget {
 class _DawStudioState extends State<DawStudio> {
   DawController get c => widget.c;
 
+  @override
+  void initState() {
+    super.initState();
+    unawaited(Keymap.instance.load());
+  }
+
   /// Falha de uma ação do transporte (gravar, parar a gravação) que o controlador não transformou
   /// em aviso: aparece junto dos avisos dele, em vez de sumir no console; some na próxima ação que
   /// dá certo.
@@ -120,6 +127,84 @@ class _DawStudioState extends State<DawStudio> {
     return f is EditableText;
   }
 
+  /// O que a ação do catálogo faz agora, ou null se não se aplica ao estado (Esc sem painel, por exemplo).
+  void Function()? _actionFor(String id, FocusNode node) {
+    // desfazer ou importar no meio da gravação poderia apagar ou deslocar a faixa que recebe o áudio (os botões
+    // ficam desligados); a tecla é engolida para o navegador não usá-la
+    if (c.recording && (id == 'edit.undo' || id == 'edit.redo' || id == 'edit.import')) return () {};
+    switch (id) {
+      case 'transport.play':
+        return () => playOrPause(c, _onActionError);
+      case 'transport.stop':
+        return () => stopTransport(c, _onActionError);
+      case 'transport.record':
+        // R não é nota no teclado musical (A W S E D F T G Y H U J K O L P), então grava mesmo com ele ligado
+        return () => toggleRecording(c, _onActionError);
+      case 'edit.delete':
+        return () => deleteSelectedClip(c);
+      case 'edit.undo':
+        return c.undo;
+      case 'edit.redo':
+        return c.redo;
+      case 'edit.duplicate':
+        return () => duplicateSelectedClip(c);
+      case 'edit.import':
+        final ctx = node.context;
+        return ctx != null ? () => importFiles(ctx, c) : c.importAudio;
+      case 'kbd.toggle':
+        return c.toggleKeyboard;
+      case 'midilearn.toggle':
+        return () => toggleMidiLearn(c);
+      case 'edit.split':
+        return () => splitClipsAtPlayhead(c);
+      case 'loop.clip':
+        // sem clipe selecionado cai na seção do cursor; sem nenhuma das duas, nada acontece
+        return () {
+          if (!c.loopSelection()) c.loopSection();
+        };
+      case 'transport.loop':
+        return c.toggleLoop;
+      case 'marker.add':
+        return () => addMarkerAtPlayhead(c);
+      case 'marker.rename':
+        final ctx = node.context;
+        return ctx != null ? () => renameMarkerAtPlayhead(ctx, c) : () => addMarkerAtPlayhead(c);
+      case 'marker.prev':
+        return c.jumpToPreviousMarker;
+      case 'marker.next':
+        return c.jumpToNextMarker;
+      case 'view.fitAll':
+        // no teclado musical o Z é oitava (já tratado antes, na camada dele)
+        return c.fitAll;
+      case 'view.fitClip':
+        return c.fitSelection;
+      case 'view.follow':
+        return c.toggleFollow;
+      case 'transport.metronome':
+        return c.toggleMetronome;
+      case 'panel.mixer':
+        return () => toggleDock(c, Dock.mixer);
+      case 'panel.editor':
+        return () => toggleDock(c, Dock.editor);
+      case 'panel.instrument':
+        return () => toggleDock(c, Dock.instrument);
+      case 'panel.effects':
+        return () => toggleDock(c, Dock.effects);
+      case 'help.shortcuts':
+        final ctx = node.context;
+        return ctx != null ? () => showShortcuts(ctx) : null;
+      case 'midilearn.cancel':
+        return c.midiLearn.learning ? c.midiLearn.escape : null;
+      case 'panel.close':
+        return c.dock != Dock.none ? () => c.setDock(Dock.none) : null;
+      case 'view.zoomIn':
+        return () => c.zoom(1.25);
+      case 'view.zoomOut':
+        return () => c.zoom(0.8);
+    }
+    return null;
+  }
+
   /// Teclas da tela, em camadas: primeiro o teclado musical (quando ligado, as letras dele ganham
   /// dos atalhos), depois o editor aberto, depois os atalhos gerais.
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
@@ -131,75 +216,12 @@ class _DawStudioState extends State<DawStudio> {
     if (c.keyboardOn && (e is KeyUpEvent || !mod) && c.handleNoteKey(e)) return KeyEventResult.handled;
     if (c.editorKeyHandler?.call(e) ?? false) return KeyEventResult.handled;
     if (e is! KeyDownEvent) return KeyEventResult.ignored;
-    final k = e.logicalKey;
+    final stroke = KeyCombo.fromKey(e.logicalKey, character: e.character, mod: mod, shift: keys.isShiftPressed, alt: keys.isAltPressed);
+    if (stroke == null) return KeyEventResult.ignored;
     void Function()? action;
-    if (k == LogicalKeyboardKey.space) {
-      action = () => playOrPause(c, _onActionError);
-    } else if (k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.home) {
-      action = () => stopTransport(c, _onActionError);
-    } else if (!mod && k == LogicalKeyboardKey.keyR) {
-      // R não é nota no teclado musical (A W S E D F T G Y H U J K O L P), então grava mesmo com
-      // ele ligado; com Ctrl/Cmd fica para o navegador (recarregar)
-      action = () => toggleRecording(c, _onActionError);
-    } else if (k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) {
-      action = () => deleteSelectedClip(c);
-    } else if (mod && c.recording && (k == LogicalKeyboardKey.keyZ || k == LogicalKeyboardKey.keyY || k == LogicalKeyboardKey.keyI)) {
-      // desfazer ou importar no meio da gravação poderia apagar ou deslocar a faixa que recebe o
-      // áudio (os botões ficam desligados); a tecla é engolida para o navegador não usá-la
-      action = () {};
-    } else if (mod && k == LogicalKeyboardKey.keyZ) {
-      action = keys.isShiftPressed ? c.redo : c.undo;
-    } else if (mod && k == LogicalKeyboardKey.keyY) {
-      action = c.redo;
-    } else if (mod && k == LogicalKeyboardKey.keyD) {
-      action = () => duplicateSelectedClip(c);
-    } else if (mod && k == LogicalKeyboardKey.keyI) {
-      final ctx = node.context;
-      action = ctx != null ? () => importFiles(ctx, c) : c.importAudio;
-    } else if (mod && k == LogicalKeyboardKey.keyK) {
-      action = c.toggleKeyboard;
-    } else if (!mod && keys.isShiftPressed && k == LogicalKeyboardKey.keyK) {
-      action = () => toggleMidiLearn(c);
-    } else if (!mod && k == LogicalKeyboardKey.keyS) {
-      action = () => splitClipsAtPlayhead(c);
-    } else if (!mod && keys.isShiftPressed && k == LogicalKeyboardKey.keyL) {
-      // sem clipe selecionado cai na seção do cursor; sem nenhuma das duas, nada acontece
-      action = () {
-        if (!c.loopSelection()) c.loopSection();
-      };
-    } else if (!mod && k == LogicalKeyboardKey.keyL) {
-      action = c.toggleLoop;
-    } else if (!mod && k == LogicalKeyboardKey.keyM) {
-      final ctx = node.context;
-      action = keys.isShiftPressed && ctx != null ? () => renameMarkerAtPlayhead(ctx, c) : () => addMarkerAtPlayhead(c);
-    } else if (!mod && k == LogicalKeyboardKey.bracketLeft) {
-      action = c.jumpToPreviousMarker;
-    } else if (!mod && k == LogicalKeyboardKey.bracketRight) {
-      action = c.jumpToNextMarker;
-    } else if (!mod && k == LogicalKeyboardKey.keyZ) {
-      // no teclado musical o Z é oitava (já tratado antes, na camada dele)
-      action = keys.isShiftPressed ? c.fitSelection : c.fitAll;
-    } else if (!mod && k == LogicalKeyboardKey.keyC) {
-      action = c.toggleMetronome;
-    } else if (!mod && k == LogicalKeyboardKey.keyX) {
-      action = () => toggleDock(c, Dock.mixer);
-    } else if (!mod && k == LogicalKeyboardKey.keyE) {
-      action = () => toggleDock(c, Dock.editor);
-    } else if (!mod && k == LogicalKeyboardKey.keyI) {
-      action = () => toggleDock(c, Dock.instrument);
-    } else if (!mod && k == LogicalKeyboardKey.keyF) {
-      action = () => toggleDock(c, Dock.effects);
-    } else if (e.character == '?' || (keys.isShiftPressed && k == LogicalKeyboardKey.slash)) {
-      final ctx = node.context;
-      if (ctx != null) action = () => showShortcuts(ctx);
-    } else if (k == LogicalKeyboardKey.escape && c.midiLearn.learning) {
-      action = c.midiLearn.escape;
-    } else if (k == LogicalKeyboardKey.escape && c.dock != Dock.none) {
-      action = () => c.setDock(Dock.none);
-    } else if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.add || k == LogicalKeyboardKey.numpadAdd || e.character == '+') {
-      action = () => c.zoom(1.25);
-    } else if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract || e.character == '-') {
-      action = () => c.zoom(0.8);
+    for (final a in Keymap.instance.resolve(stroke, KeyContext.global)) {
+      action = _actionFor(a.id, node);
+      if (action != null) break;
     }
     if (action == null) return KeyEventResult.ignored;
     action();

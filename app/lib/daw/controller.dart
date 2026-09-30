@@ -36,6 +36,7 @@ import 'automation_record.dart';
 import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
+import 'keymap.dart' show Keymap;
 import 'loudness.dart';
 import 'midi_cc.dart';
 import 'midi_file.dart';
@@ -276,9 +277,7 @@ const noteKeys = <PhysicalKeyboardKey>[
   PhysicalKeyboardKey.keyP, // D#
 ];
 
-/// Oitava abaixo/acima e velocidade menor/maior.
-const _octaveDown = PhysicalKeyboardKey.keyZ, _octaveUp = PhysicalKeyboardKey.keyX;
-const _velocityDown = PhysicalKeyboardKey.keyC, _velocityUp = PhysicalKeyboardKey.keyV;
+/// Oitava abaixo/acima e velocidade menor/maior são ações do `Keymap` (contexto "teclado tocando"; padrão Z X C V).
 
 /// Nota MIDI que uma tecla toca com o teclado na oitava [octave] (4 = dó central na tecla A), ou
 /// null se a tecla não é de nota.
@@ -289,7 +288,7 @@ int? keyboardNote(PhysicalKeyboardKey key, int octave) {
   return pitch >= 0 && pitch <= 127 ? pitch : null;
 }
 
-bool _isKeyboardKey(PhysicalKeyboardKey k) => noteKeys.contains(k) || k == _octaveDown || k == _octaveUp || k == _velocityDown || k == _velocityUp;
+bool _isKeyboardKey(PhysicalKeyboardKey k) => noteKeys.contains(k) || Keymap.instance.playingAction(k) != null;
 
 /// O que o motor já recebeu de uma faixa (tipo, parâmetros, áudio do sampler, efeitos, envios,
 /// saída): o sync só manda o que mudou, senão um arraste mandaria centenas de parâmetros por quadro.
@@ -3428,14 +3427,17 @@ class DawController extends ChangeNotifier {
       final t = _inputTrack;
       noteOn(pitch, velocity: keyboardVelocity, track: t);
       if (_live.contains((t, pitch))) _keyNotes[key] = (t, pitch);
-    } else if (key == _octaveDown) {
-      setKeyboardOctave(keyboardOctave - 1);
-    } else if (key == _octaveUp) {
-      setKeyboardOctave(keyboardOctave + 1);
-    } else if (key == _velocityDown) {
-      setKeyboardVelocity(keyboardVelocity - 0.1);
-    } else if (key == _velocityUp) {
-      setKeyboardVelocity(keyboardVelocity + 0.1);
+    } else {
+      switch (Keymap.instance.playingAction(key)?.id) {
+        case 'kbd.octaveDown':
+          setKeyboardOctave(keyboardOctave - 1);
+        case 'kbd.octaveUp':
+          setKeyboardOctave(keyboardOctave + 1);
+        case 'kbd.velocityDown':
+          setKeyboardVelocity(keyboardVelocity - 0.1);
+        case 'kbd.velocityUp':
+          setKeyboardVelocity(keyboardVelocity + 0.1);
+      }
     }
     return true;
   }

@@ -1,165 +1,177 @@
-/// Janela com os atalhos do teclado do estúdio (tecla ? ou o botão de ajuda da barra).
+/// Janela com os atalhos do teclado do estúdio (tecla ? ou o botão de ajuda da barra). O texto sai do catálogo
+/// de ações e dos atalhos atuais (`keymap.dart`): uma só fonte da verdade, então o que a pessoa personalizar
+/// aparece aqui. O botão "Personalizar" troca a lista pela tela de personalização (`keymap_ui.dart`).
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/format.dart';
 import '../widgets/theme.dart';
+import 'keymap.dart';
+import 'keymap_ui.dart';
 
-String get _mod => modKey;
+/// O que não é tecla do catálogo (mouse, menus e gestos), por categoria, no fim de cada grupo.
+Map<KeyCategory, List<(String, String)>> _extras() => {
+  KeyCategory.markers: [
+    ('Arrastar · duplo clique', 'Move (com encaixe) · renomeia o marcador na régua'),
+    ('Botão direito', 'Menu do marcador: cor, loop da seção, apagar'),
+    ('Menu Seções', 'Lista de marcadores, loop entre marcadores e da seção'),
+  ],
+  KeyCategory.view: [
+    ('Menu Visão', 'Altura das faixas (pequena, média, grande), seguir o cursor, régua em mm:ss'),
+    ('Clique em "comp."/"mm:ss"', 'Alterna a régua entre compassos e tempo'),
+    ('Visão geral (embaixo)', 'Clique ou arraste para rolar o projeto'),
+  ],
+  KeyCategory.edit: [('$modKey + roda', 'Zoom no ponto do mouse'), ('Shift + roda', 'Rolar na horizontal')],
+  KeyCategory.midiLearn: [('Botão direito · toque longo', 'Menu do controle: aprender ou remover o mapeamento')],
+  KeyCategory.keyboard: [('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima')],
+  KeyCategory.pianoRoll: [
+    ('Clique no vazio', 'Nova nota (arraste para a duração)'),
+    ('Alt ao arrastar', 'Sem grade; no começo do arraste, duplica'),
+    ('Menu Ferramentas', 'Escala, acordes, arpejador, rampa de velocidade, inverter, escalar o tempo, fantasmas'),
+  ],
+};
 
-/// Atalhos de letra que viram nota, oitava ou velocidade com o teclado do computador ligado (a
-/// camada dele vem antes; só o que tem $_mod escapa). Cada tecla daqui está em `noteKeys` ou é Z/X/C/V.
-const suspendedShortcuts = <(String, String)>[
-  ('C', 'Metrônomo (vira velocidade menor)'),
-  ('L', 'Loop liga/desliga (vira nota)'),
-  ('S', 'Cortar no cursor (vira nota)'),
-  ('X', 'Mixer (vira oitava acima)'),
-  ('Z  ·  Shift+Z', 'Enquadrar projeto / clipe (vira oitava abaixo)'),
-  ('E', 'Editor de notas (vira nota)'),
-  ('F', 'Efeitos da faixa (vira nota)'),
-  ('K  ·  J', 'Dividir / unir notas no piano roll (viram nota)'),
-  ('Shift+K', 'Aprender MIDI liga/desliga (vira nota)'),
-  ('Shift+H  ·  Shift+L', 'Humanizar e legato no piano roll; Shift+L também faz o loop no clipe (viram nota)'),
-];
+/// As letras que viram outra coisa com o teclado do computador ligado: cada tecla sem Ctrl/Cmd nem Alt, de ação do
+/// estúdio ou do piano roll, que é de nota ou de oitava/velocidade. Sai do catálogo e dos atalhos atuais.
+List<(String, String)> suspendedShortcutsOf(Keymap km) {
+  final noteLetters = noteKeyLetters.toSet();
+  // token → rótulo da ação do teclado tocando que o usa (em minúsculas)
+  final playing = <String, String>{};
+  for (final a in keyCatalog) {
+    if (a.context != KeyContext.playing) continue;
+    for (final c in km.bindingsOf(a.id)) {
+      playing[c.token] = a.label.toLowerCase();
+    }
+  }
+  final out = <(String, String)>[];
+  for (final a in keyCatalog) {
+    if (a.context == KeyContext.playing) continue;
+    final hit = [
+      for (final c in km.bindingsOf(a.id))
+        if (!c.mod && !c.alt && (noteLetters.contains(c.token) || playing.containsKey(c.token))) c,
+    ];
+    if (hit.isEmpty) continue;
+    final first = hit.first.token;
+    final becomes = playing[first] ?? 'nota';
+    out.add((hit.map((c) => c.label).join('  ·  '), '${a.label} (vira $becomes)'));
+  }
+  return out;
+}
 
-List<(String, List<(String, String)>)> _groups() => [
-  (
-    'Transporte',
-    [
-      ('Espaço', 'Tocar / pausar'),
-      ('Enter · Home', 'Parar e voltar ao começo (ou ao início do loop)'),
-      ('R', 'Gravar (com faixas armadas)'),
-      ('L', 'Loop liga/desliga (arraste na régua para marcar a região)'),
-      ('C', 'Metrônomo'),
-    ],
-  ),
-  (
-    'Marcadores e loop',
-    [
-      ('M', 'Marcador no cursor (Shift+M: pede o nome)'),
-      ('[  /  ]', 'Cursor no marcador anterior / seguinte'),
-      ('Shift+L', 'Loop no clipe selecionado (ou na seção do cursor)'),
-      ('Arrastar · duplo clique', 'Move (com encaixe) · renomeia o marcador na régua'),
-      ('Botão direito', 'Menu do marcador: cor, loop da seção, apagar'),
-      ('Menu Seções', 'Lista de marcadores, loop entre marcadores e da seção'),
-    ],
-  ),
-  (
-    'Visão',
-    [
-      ('Z', 'Enquadrar o projeto inteiro'),
-      ('Shift+Z', 'Enquadrar o clipe selecionado'),
-      ('Menu Visão', 'Altura das faixas (pequena, média, grande), seguir o cursor, régua em mm:ss'),
-      ('Clique em "comp."/"mm:ss"', 'Alterna a régua entre compassos e tempo'),
-      ('Visão geral (embaixo)', 'Clique ou arraste para rolar o projeto'),
-    ],
-  ),
-  (
-    'Edição',
-    [
-      ('$_mod+Z', 'Desfazer'),
-      ('$_mod+Shift+Z  ou  $_mod+Y', 'Refazer'),
-      ('$_mod+D', 'Duplicar o clipe'),
-      ('S', 'Cortar no cursor'),
-      ('Delete · Backspace', 'Apagar o clipe'),
-      ('$_mod+I', 'Importar áudio ou MIDI'),
-      ('+  (ou  =)  /  −', 'Aproximar / afastar'),
-      ('$_mod + roda', 'Zoom no ponto do mouse'),
-      ('Shift + roda', 'Rolar na horizontal'),
-    ],
-  ),
-  (
-    'Aprender MIDI',
-    [
-      ('Shift+K', 'Liga o modo: os controles ganham contorno; clique num e mexa no botão do teclado'),
-      ('Botão direito · toque longo', 'Menu do controle: aprender ou remover o mapeamento'),
-      ('Esc', 'Cancela o controle armado; de novo, sai do modo'),
-    ],
-  ),
-  (
-    'Painéis',
-    [
-      ('X', 'Mixer'),
-      ('E', 'Editor de notas (piano roll)'),
-      ('I', 'Instrumento da faixa'),
-      ('F', 'Efeitos da faixa'),
-      ('Esc', 'Fechar o painel'),
-      ('?', 'Esta janela'),
-    ],
-  ),
-  (
-    'Teclado do computador ($_mod+K liga)',
-    [
-      ('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima'),
-      ('Z  /  X', 'Oitava abaixo / acima (só da faixa que está tocando: a bateria começa no C2)'),
-      ('C  /  V', 'Velocidade menor / maior'),
-    ],
-  ),
-  (
-    'Suspensos enquanto o teclado do computador está ligado',
-    [
-      for (final (keys, what) in suspendedShortcuts) (keys, what),
-      ('Com $_mod', 'Os atalhos com $_mod continuam valendo (desfazer, duplicar, importar, $_mod+K desliga o teclado)'),
-    ],
-  ),
-  (
-    'Piano roll',
-    [
-      ('Clique no vazio', 'Nova nota (arraste para a duração)'),
-      ('Alt ao arrastar', 'Sem grade; no começo do arraste, duplica'),
-      ('$_mod+A · $_mod+C/X/V · $_mod+D', 'Tudo · copiar/recortar/colar no cursor · duplicar'),
-      ('↑ ↓  (Shift: oitava)', 'Transpor'),
-      ('← →  (Shift: compasso)', 'Mover pela grade'),
-      ('Q', 'Quantizar'),
-      ('K', 'Dividir as notas no cursor (a seleção, ou todas)'),
-      ('J', 'Unir notas iguais adjacentes'),
-      ('Shift+H', 'Humanizar com os últimos ajustes'),
-      ('Shift+L', 'Legato: cada nota vai até a próxima'),
-      ('Menu Ferramentas', 'Escala, acordes, arpejador, rampa de velocidade, inverter, escalar o tempo, fantasmas'),
-    ],
-  ),
-];
+/// Os grupos da janela: título e linhas (teclas, descrição).
+List<(String, List<(String, String)>)> shortcutGroups(Keymap km) {
+  final extras = _extras();
+  final groups = <(String, List<(String, String)>)>[];
+  for (final cat in KeyCategory.values) {
+    final rows = <(String, String)>[];
+    for (final a in keyCatalog) {
+      if (a.category != cat) continue;
+      // o teclado tocando fica no fim do grupo dele, com o texto próprio
+      rows.add((km.labelOf(a.id, none: '—').replaceAll(' · ', '  ·  '), a.helpText));
+    }
+    rows.addAll(extras[cat] ?? const []);
+    if (cat == KeyCategory.keyboard) {
+      groups.add(('${cat.title} (${km.labelOf('kbd.toggle')} liga)', rows));
+    } else {
+      groups.add((cat.title, rows));
+    }
+  }
+  final suspended = suspendedShortcutsOf(km);
+  if (suspended.isNotEmpty) {
+    groups.add((
+      'Suspensos enquanto o teclado do computador está ligado',
+      [...suspended, ('Com $modKey', 'Os atalhos com $modKey continuam valendo (desfazer, duplicar, importar, ${km.labelOf('kbd.toggle')} desliga o teclado)')],
+    ));
+  }
+  return groups;
+}
 
-Future<void> showShortcuts(BuildContext context) => showDialog<void>(context: context, builder: (_) => const _ShortcutsDialog());
+/// Celular sem teclado físico: a lista vale só para leitura. Na web e no computador dá para personalizar.
+bool get canCustomizeShortcuts => kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS);
 
-class _ShortcutsDialog extends StatelessWidget {
-  const _ShortcutsDialog();
+Future<void> showShortcuts(BuildContext context, {bool? canCustomize, Keymap? keymap}) => showDialog<void>(
+  context: context,
+  builder: (_) => ShortcutsDialog(canCustomize: canCustomize ?? canCustomizeShortcuts, keymap: keymap ?? Keymap.instance),
+);
+
+class ShortcutsDialog extends StatefulWidget {
+  final bool canCustomize;
+  final Keymap keymap;
+  const ShortcutsDialog({super.key, required this.canCustomize, required this.keymap});
+
+  @override
+  State<ShortcutsDialog> createState() => _ShortcutsDialogState();
+}
+
+class _ShortcutsDialogState extends State<ShortcutsDialog> {
+  var _customizing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.keymap.load();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final keyStyle = theme.textTheme.labelMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()], color: Palette.accent);
+    final narrow = MediaQuery.sizeOf(context).width < 520;
     return AlertDialog(
-      title: const Text('Atalhos do teclado'),
+      insetPadding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 40, vertical: 24),
+      contentPadding: EdgeInsets.fromLTRB(narrow ? 16 : 24, 16, narrow ? 16 : 24, 0),
+      title: Text(_customizing ? 'Personalizar atalhos' : 'Atalhos do teclado'),
       content: SizedBox(
         width: 560,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final (title, items) in _groups()) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 12, bottom: 6),
-                  child: Text(title.toUpperCase(), style: theme.textTheme.labelSmall!.copyWith(letterSpacing: 0.8, color: Colors.white54)),
-                ),
-                for (final (keys, what) in items)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(width: 210, child: Text(keys, style: keyStyle)),
-                        Expanded(child: Text(what, style: theme.textTheme.bodyMedium)),
-                      ],
-                    ),
-                  ),
-              ],
-            ],
-          ),
-        ),
+        child: SingleChildScrollView(child: _customizing ? KeymapEditor(keymap: widget.keymap) : _list(theme, narrow)),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar'))],
+      actions: [
+        if (widget.canCustomize)
+          TextButton(
+            key: const ValueKey('shortcuts-customize'),
+            onPressed: () => setState(() => _customizing = !_customizing),
+            child: Text(_customizing ? 'Voltar à lista' : 'Personalizar'),
+          ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
+      ],
+    );
+  }
+
+  Widget _list(ThemeData theme, bool narrow) {
+    final keyStyle = theme.textTheme.labelMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()], color: Palette.accent);
+    return ListenableBuilder(
+      listenable: widget.keymap,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (title, items) in shortcutGroups(widget.keymap)) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 6),
+              child: Text(title.toUpperCase(), style: theme.textTheme.labelSmall!.copyWith(letterSpacing: 0.8, color: Colors.white54)),
+            ),
+            for (final (keys, what) in items)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: narrow
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(keys, style: keyStyle),
+                          Text(what, style: theme.textTheme.bodyMedium),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(width: 210, child: Text(keys, style: keyStyle)),
+                          Expanded(child: Text(what, style: theme.textTheme.bodyMedium)),
+                        ],
+                      ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }

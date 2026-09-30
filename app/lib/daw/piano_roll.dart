@@ -21,6 +21,7 @@ import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'instruments.dart';
+import 'keymap.dart';
 import 'midi_cc.dart';
 import 'midi_tools.dart';
 import 'model.dart';

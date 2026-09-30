@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/controller.dart';
+import 'package:jopendaw_app/daw/keymap.dart';
 import 'package:jopendaw_app/daw/shortcuts_dialog.dart';
 
 void main() {
@@ -48,7 +49,7 @@ void main() {
   test('todo atalho suspenso pelo teclado ligado é mesmo uma letra que o teclado usa', () {
     final letters = {for (final k in noteKeys) k.debugName!.replaceAll('Key ', '')}..addAll(['Z', 'X', 'C', 'V']);
     final listed = <String>{};
-    for (final (keys, _) in suspendedShortcuts) {
+    for (final (keys, _) in suspendedShortcutsOf(Keymap(MemoryKeymapStorage()))) {
       for (final part in keys.split('·')) {
         final letter = part.trim().replaceAll('Shift+', '').split('/').first;
         expect(letters, contains(letter), reason: keys);
