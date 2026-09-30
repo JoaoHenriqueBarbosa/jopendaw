@@ -26,7 +26,7 @@ nm="$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-nm | head -1)"
 want="jd_start jd_stop jd_calls jd_sample_load jd_sample_drop jd_state jd_spectrum jd_decode jd_decoded_info
 jd_decoded_copy jd_decoded_free jd_input_start jd_input_stop jd_input_devices jd_capture jd_recorded jd_input_level
 jd_rec_notes jd_offline_new jd_offline_calls jd_offline_sample jd_offline_process jd_offline_captured jd_offline_free
-jd_latency JNI_OnLoad"
+jd_latency jd_loudness jd_stretch jd_detect_bpm JNI_OnLoad"
 for abi in arm64-v8a armeabi-v7a x86_64; do
   so="$out/$abi/libjopendaw_engine.so"
   syms="$("$nm" -D --defined-only "$so")"
