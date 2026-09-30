@@ -109,6 +109,8 @@ class MidiMapping {
     final kind = AutoKind.values.where((k) => k.name == tg['kind']).firstOrNull;
     if (kind == null) throw const FormatException('alvo desconhecido');
     final track = j['track'];
+    // faixa que não é texto nem nulo vem de outra versão: descarta em vez de virar o master
+    if (track != null && track is! String) throw const FormatException('faixa do mapeamento inválida');
     double frac(Object? v, double def) => v is num && v.isFinite ? v.toDouble().clamp(0.0, 1.0) : def;
     return MidiMapping(
       id: id,
@@ -149,6 +151,10 @@ class MidiMap {
   MidiMap({List<MidiMapping>? items, this.soft = true}) : items = items ?? [];
 
   bool get isEmpty => items.isEmpty;
+
+  /// Igual ao mapa que um documento sem `midi_map` teria: sem itens e com o takeover no padrão
+  /// (ligado). Só o que foge disso vai ao JSON; um "Suave" desligado sem mapeamentos também vale.
+  bool get isDefault => items.isEmpty && soft;
 
   /// Tolerante: qualquer coisa que não seja um mapa válido vira um mapa vazio, e uma entrada
   /// inválida é descartada sem derrubar as outras (um documento de outra versão abre).
@@ -214,11 +220,12 @@ class MidiPickup {
 
   /// Decide se o controlador [incoming] (posição 0..1 do controle) deve mexer no controle que está
   /// em [current]; [lo] e [hi] são os limites do mapeamento (o valor atual é levado para dentro
-  /// deles, senão um controle fora da faixa nunca seria alcançado).
-  bool accept(double incoming, double current, double lo, double hi) {
+  /// deles, senão um controle fora da faixa nunca seria alcançado). [held] é o valor que o
+  /// mapeamento escreveu por último no controle, para reconhecer a outra mão; sem ele vale [current].
+  bool accept(double incoming, double current, double lo, double hi, {double? held}) {
     // outra mão (o mouse, a automação) mexeu no controle desde a última vez: pega de novo
     final out = lastOut;
-    if (picked && out != null && (current - out).abs() > midiPickupTolerance) picked = false;
+    if (picked && out != null && ((held ?? current) - out).abs() > midiPickupTolerance) picked = false;
     if (!picked) {
       final cur = current.clamp(math.min(lo, hi), math.max(lo, hi));
       final prev = lastIn;

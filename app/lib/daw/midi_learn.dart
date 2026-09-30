@@ -52,6 +52,8 @@ class MidiLearn extends ChangeNotifier {
 
   final _pickups = <String, MidiPickup>{};
   final _runs = <String, ({Timer idle, int track, AutoTarget target})>{};
+  // corridas que já tiveram a primeira mudança real (touch da automação + ponto de desfazer)
+  final _stepped = <String>{};
   var _seq = 0;
   bool _disposed = false;
 
@@ -246,7 +248,10 @@ class MidiLearn extends ChangeNotifier {
     final incoming = midiMappingNorm(m, raw);
     if (!incoming.isFinite) return;
     final pick = _pickups.putIfAbsent(m.id, MidiPickup.new);
-    if (map.soft && !pick.accept(incoming, autoNorm(info.fixed, info), m.min, m.max)) return;
+    // o takeover compara com o valor que o knob mostra (a curva da automação, tocando); o "outra mão
+    // mexeu" olha o valor fixo, que é o que este mapeamento escreve
+    final live = c.liveTargetValue(track, m.target, info.fixed);
+    if (map.soft && !pick.accept(incoming, autoNorm(live, info), m.min, m.max, held: autoNorm(info.fixed, info))) return;
     pick.picked = true;
     final v = midiTargetValue(info, incoming);
     if (v == info.fixed) {
@@ -254,8 +259,9 @@ class MidiLearn extends ChangeNotifier {
       _keepRun(m.id, track, m.target);
       return;
     }
-    if (!_runs.containsKey(m.id)) {
-      // começo do gesto: como o knob, anuncia à gravação de automação antes do ponto de desfazer
+    if (_stepped.add(m.id)) {
+      // a primeira mudança real do gesto (não a primeira mensagem, que pode cair no valor que já
+      // estava): como o knob, anuncia à gravação de automação antes do ponto de desfazer
       c.autoRec.touch(track, m.target);
       c.checkpoint();
     }
@@ -271,12 +277,14 @@ class MidiLearn extends ChangeNotifier {
   }
 
   void _endRun(String id) {
+    _stepped.remove(id);
     final r = _runs.remove(id);
     if (r == null || _disposed) return;
     c.autoRec.release(r.track, r.target);
   }
 
   void _cancelRun(String id) {
+    _stepped.remove(id);
     final r = _runs.remove(id);
     if (r == null) return;
     r.idle.cancel();
@@ -308,6 +316,7 @@ class MidiLearn extends ChangeNotifier {
       r.idle.cancel();
     }
     _runs.clear();
+    _stepped.clear();
     super.dispose();
   }
 
@@ -332,13 +341,20 @@ Map<String, dynamic> midiDefaultToJson(MidiMap map, List<DawTrack> tracks) {
       index = tracks.indexWhere((t) => t.id == m.trackId);
       if (index < 0) continue;
     }
-    items.add({...m.toJson()..remove('track'), 'index': index});
+    items.add({
+      ...m.toJson()..remove('track'),
+      'index': index,
+      // o id do parâmetro só quer dizer algo dentro do instrumento (13 é o Corte no sintetizador e o
+      // Ataque do operador 2 no FM): o padrão só vale numa faixa do mesmo tipo
+      if (m.target.kind == AutoKind.instrument && index != null) 'kind': tracks[index].kind.name,
+    });
   }
   return {'soft': map.soft, 'items': items};
 }
 
 /// O mapa padrão aplicado às faixas de um projeto novo: cada mapeamento pega a faixa da mesma
-/// posição; o que aponta para faixa que não existe é descartado.
+/// posição; o que aponta para faixa que não existe (ou, nos parâmetros de instrumento, para uma
+/// faixa de outro tipo de instrumento) é descartado.
 MidiMap midiDefaultFrom(Object? json, List<DawTrack> tracks, String Function() newId) {
   if (json is! Map) return MidiMap();
   final out = MidiMap(soft: json['soft'] != false);
@@ -353,6 +369,9 @@ MidiMap midiDefaultFrom(Object? json, List<DawTrack> tracks, String Function() n
       if (idx is num) {
         final i = idx.toInt();
         if (i < 0 || i >= tracks.length) continue;
+        // padrão de instrumento guarda o tipo: em faixa de outro tipo o id cairia noutro parâmetro
+        final kind = j['kind'];
+        if (kind is String && tracks[i].kind.name != kind) continue;
         trackId = tracks[i].id;
       }
       final m = MidiMapping.fromJson({...j, 'id': newId(), 'track': trackId});

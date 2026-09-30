@@ -62,7 +62,7 @@ String fmtBytes(int bytes) {
 /// texto nos dois. [octave] e [velocityPercent] só aparecem com o teclado ligado.
 String keyboardTooltip({required bool on, required int octave, required int velocityPercent}) => withMod(
   on
-      ? 'Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C$octave, '
+      ? 'Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/K/L). A a P tocam a partir do C$octave, '
             'Z/X mudam a oitava, C/V a intensidade ($velocityPercent%). Ctrl+K desliga'
       : 'Tocar com o teclado do computador (Ctrl+K)',
 );

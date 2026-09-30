@@ -100,7 +100,7 @@ A cada mensagem mapeada, o app faz esta conta, na ordem:
 5. **Suave** (takeover), se ligado: decide se o controle assume ou espera (abaixo).
 6. O valor vai para a **escala do controle** (o fader pela curva dele, Hz em logarítmica...) e é aplicado pelo mesmo caminho de quem mexe com o mouse.
 
-Por ser o mesmo caminho do mouse: o motor é atualizado, o projeto é salvo, e com o botão `Automação` em `Escrever`, `Toque` ou `Trava` e a música tocando o movimento **grava automação** ([Automação, Gravar automação](07-automacao.md#gravar-automação)). Um movimento do controlador vale **um passo só** no desfazer: o gesto começa na primeira mensagem que muda o valor e termina depois de 700 ms sem mensagens (uma pausa de mais de 0,7 s no meio do giro abre um passo novo, e é também o que solta o controle no modo `Toque`). Só mexe no valor fixo do controle; se ele está com automação em `Ler`, a curva continua mandando quando o transporte toca.
+Por ser o mesmo caminho do mouse: o motor é atualizado, o projeto é salvo, e com o botão `Automação` em `Escrever`, `Toque` ou `Trava` e a música tocando o movimento **grava automação** ([Automação, Gravar automação](07-automacao.md#gravar-automação)). Um movimento do controlador vale **um passo só** no desfazer: o gesto começa na primeira mensagem que muda o valor (uma primeira mensagem que cai no valor que o controle já tinha não conta) e termina depois de 700 ms sem mensagens (uma pausa de mais de 0,7 s no meio do giro abre um passo novo, e é também o que solta o controle no modo `Toque`). Só mexe no valor fixo do controle; se ele está com automação em `Ler`, a curva continua mandando quando o transporte toca.
 
 Funciona com o transporte parado ou tocando, com o painel do controle aberto ou não, com o modo de aprender ligado ou desligado.
 
@@ -159,7 +159,7 @@ Regras que valem no código:
 
 | Dado | Onde fica |
 |---|---|
-| Os mapeamentos (origem, alvo, faixa mín/máx, curva, invertido) e a opção `Suave` | No **projeto** (campo `midi_map` do documento): vão junto na sincronização com a nuvem, na cópia para outro aparelho e no arquivo `.jopendaw`. O campo só é gravado quando há mapeamentos |
+| Os mapeamentos (origem, alvo, faixa mín/máx, curva, invertido) e a opção `Suave` | No **projeto** (campo `midi_map` do documento): vão junto na sincronização com a nuvem, na cópia para outro aparelho e no arquivo `.jopendaw`. O campo é gravado quando há mapeamentos ou quando `Suave` está desligado |
 | O modo `Aprender MIDI` ligado e o controle armado | Só na tela; não são salvos |
 | O padrão para novos projetos | Só no **aparelho** (guardado local, chave `midimap:default`): não vai à nuvem nem ao projeto |
 | O desfazer | Mapear, remover e editar mapeamentos **não** entram no `Ctrl+Z`; desfazer uma nota ou um movimento de fader não desfaz o mapeamento |
@@ -168,7 +168,7 @@ Como o mapa é parte do projeto, um projeto puxado de outro aparelho traz o mapa
 
 ### Padrão para novos projetos
 
-`Salvar como padrão para novos projetos` guarda os mapeamentos deste projeto para os projetos que você criar depois neste aparelho. Ele leva `Volume`, `Pan` (do `Master` e das faixas) e parâmetros de instrumento, com a opção `Suave`. **Não leva** efeitos nem envios (dependem de ids que só existem no projeto onde foram criados). As faixas vão pela **posição** (o mapeamento da terceira faixa vai para a terceira faixa do projeto novo); o que aponta para uma posição que não existe é descartado. O aviso que aparece:
+`Salvar como padrão para novos projetos` guarda os mapeamentos deste projeto para os projetos que você criar depois neste aparelho. Ele leva `Volume`, `Pan` (do `Master` e das faixas) e parâmetros de instrumento, com a opção `Suave`. **Não leva** efeitos nem envios (dependem de ids que só existem no projeto onde foram criados). Os parâmetros de instrumento guardam também o **tipo da faixa** (o id 13 é o `Corte` no sintetizador e o `Ataque` do operador 2 no FM): o mapeamento só é aplicado numa faixa do mesmo tipo (padrões guardados antes disso, sem o tipo, seguem valendo como antes). As faixas vão pela **posição** (o mapeamento da terceira faixa vai para a terceira faixa do projeto novo); o que aponta para uma posição que não existe é descartado. O aviso que aparece:
 
 - ao guardar: `Guardado: os projetos novos começam com estes mapeamentos de volume, pan e instrumento (efeitos e envios ficam de fora).`
 - ao apagar (`Apagar o padrão`): `Padrão apagado: projetos novos começam sem mapeamentos.`

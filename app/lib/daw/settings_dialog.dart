@@ -318,8 +318,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 if (_latencyError != null) Text(_latencyError!, style: muted.copyWith(color: Palette.danger)),
                 const SizedBox(height: 4),
                 Text(
-                  'Quanto o áudio gravado chega atrasado, além do que ${kIsWeb ? 'o navegador' : 'o sistema'} já informa: positivo adianta o que for gravado, '
-                  'negativo atrasa. Para medir, grave o metrônomo pelo microfone e ajuste até a batida gravada cair na grade.',
+                  'Quanto o áudio gravado chega atrasado, além do que já é medido sozinho (a latência do motor, com os efeitos e o limitador, e a que ${kIsWeb ? 'o navegador' : 'o sistema'} '
+                  'informa para a entrada e a saída): positivo adianta o que for gravado, negativo atrasa. '
+                  'Para medir, grave o metrônomo pelo microfone e ajuste até a batida gravada cair na grade.',
+                  style: muted,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ida e volta do monitoramento: ${_ms(c.monitorLatency * 1000)} ms'
+                  '${c.inputOpen ? '' : ' (sem a entrada: ela só é medida com o microfone aberto)'}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                Text(
+                  'Entrada do aparelho, motor com a compensação dos efeitos e saída, somados: o atraso que quem toca ouve entre o gesto e o som.',
                   style: muted,
                 ),
               ],

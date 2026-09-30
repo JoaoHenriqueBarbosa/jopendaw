@@ -725,15 +725,21 @@ class _TrackHeaderState extends State<_TrackHeader> {
   int? _dragTo;
 
   /// O deslizador de volume do cabeçalho tem prioridade sobre o reordenar: um toque longo que começa
-  /// nele (ou a até [_sliderGuard] px em volta da barra) não liga o arraste da faixa.
-  static const _sliderGuard = 15.0;
+  /// nele (ou a até [_sliderGuard] px acima e abaixo da barra, e uma margem curta dos lados: ao lado dela
+  /// ficam o botão FX e o medidor, onde o toque longo reordena) não liga o arraste da faixa.
+  static const _sliderGuard = 15.0, _sliderSideGuard = 4.0;
   final _faderKey = GlobalKey();
   bool _skipReorder = false;
+
+  Rect _verticalGuard(RenderBox box) {
+    final r = box.localToGlobal(Offset.zero) & box.size;
+    return Rect.fromLTRB(r.left, r.top - _sliderGuard, r.right, r.bottom + _sliderGuard);
+  }
 
   bool _onSlider(Offset global) {
     final box = _faderKey.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return false;
-    return (box.localToGlobal(Offset.zero) & box.size).inflate(_sliderGuard).contains(global);
+    return (box.localToGlobal(Offset.zero) & box.size).inflate(_sliderSideGuard).expandToInclude(_verticalGuard(box)).contains(global);
   }
 
   DawController get c => widget.c;
@@ -775,6 +781,8 @@ class _TrackHeaderState extends State<_TrackHeader> {
         if (_taps(d.globalPosition)) _rename(context, t);
       },
       onLongPressStart: (d) {
+        // a guarda vale para ESTE toque longo (a posição onde ele começou), não a do último PointerDown
+        _skipReorder = _onSlider(d.globalPosition);
         if (_skipReorder) return;
         HapticFeedback.selectionClick();
         _dragFrom = _Layout.of(c, height).trackTop[index] + d.localPosition.dy;

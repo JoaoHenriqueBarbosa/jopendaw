@@ -684,7 +684,7 @@ class DawDoc {
     'master_lanes': [for (final l in masterLanes) l.toJson()],
     'markers': [for (final m in markers) m.toJson()],
     // só com mapeamentos: um documento sem MIDI learn sai igual ao de antes
-    if (!midiMap.isEmpty) 'midi_map': midiMap.toJson(),
+    if (!midiMap.isDefault) 'midi_map': midiMap.toJson(),
   };
 
   // Os mapas viram objetos de conta sob demanda e ficam guardados enquanto a lista, o tamanho e o

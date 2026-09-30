@@ -101,6 +101,9 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
   /// Quanto espera para tentar trazer o documento de novo quando o projeto está ocupado (gravando, tocando, gesto).
   static const busyRetry = Duration(seconds: 2);
 
+  /// Espera entre o reenvio dos áudios e a nova tentativa depois de um 422 (cresce a cada tentativa).
+  static const missingBackoff = Duration(milliseconds: 250);
+
   /// Quantas vezes o envio reenvia áudios e tenta de novo depois de um 422 (áudio citado apagado no meio).
   static const maxMissingRetries = 3;
 
@@ -139,7 +142,16 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Lê o estado guardado e faz a primeira conversa com o servidor. [localExisted]: já havia um
   /// documento guardado neste aparelho (sem estado de sincronização ele conta como pendente).
-  Future<void> start({required bool localExisted}) => starting = _start(localExisted);
+  ///
+  /// [holdFirstPull]: a abertura está esperando esta conversa para mostrar o estúdio (projeto que só
+  /// existe no servidor). Se o projeto estiver ocupado (gravando, tocando, gesto), a primeira rodada
+  /// espera aqui dentro, em vez de voltar e deixar o estúdio vazio aparecer para ser trocado depois.
+  Future<void> start({required bool localExisted, bool holdFirstPull = false}) {
+    _holdPull = holdFirstPull;
+    return starting = _start(localExisted);
+  }
+
+  bool _holdPull = false, _pullWasBusy = false;
 
   /// A primeira conversa (testes esperam por ela).
   @visibleForTesting
@@ -258,6 +270,12 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
       if (!_pulled) {
         _set(SyncPhase.syncing);
         await _pull();
+        while (_pullWasBusy && !_pulled && conflict == null && !_disposed && canSync()) {
+          _pullWasBusy = false;
+          await Future<void>.delayed(busyRetry * math.min(1.0, timeScale));
+          if (_disposed) return;
+          await _pull();
+        }
         // não trouxe ainda (o projeto estava ocupado com gravação ou gesto): a rodada volta sozinha
         if (conflict != null || !_pulled) return;
       }
@@ -306,6 +324,9 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _pull() async {
     final s = await api.projectDoc(projectId);
+    // o servidor respondeu: as falhas de rede de antes acabaram, mesmo que a rodada saia sem trocar o documento
+    _failures = 0;
+    _pullWasBusy = false;
     if (s.version > _version && s.doc != null) {
       if (_sameAsLocal(s)) {
         // o servidor já tem exatamente este documento (um envio cuja resposta se perdeu)
@@ -321,6 +342,10 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
           if (gen == _gen && !_dirty) {
             // gravando, tocando ou com um gesto em andamento (e nada editado): não é conflito, só não dá para trocar
             // o documento agora. Não marca como trazido; tenta de novo daqui a pouco
+            if (_holdPull) {
+              _pullWasBusy = true; // a própria rodada espera e repete (ver _step)
+              return;
+            }
             _timer?.cancel();
             _timer = Timer(busyRetry * timeScale, () => unawaited(syncNow()));
             return;
@@ -372,16 +397,26 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
     final hashes = host.sampleHashes();
     String? sampleError = await _uploadForPush(hashes);
     // 422: um áudio citado foi apagado no servidor no instante do envio. Reenvia os citados em `missing` (a lista do que o
-    // servidor já tinha vale menos que a resposta dele) e tenta de novo, com limite
+    // servidor já tinha vale menos que a resposta dele) e tenta de novo, com um recuo curto e limite. Se este aparelho
+    // também não tem o áudio, reenviar não adianta: para logo
     for (var attempt = 0; ; attempt++) {
       try {
         _version = await api.putProjectDoc(projectId, _version, json);
         break;
       } on DocSamplesMissing catch (e) {
         _serverHas.removeAll(e.hashes);
+        var absentHere = false;
+        for (final h in e.hashes) {
+          if (await store.get('sample:$h') is! Uint8List) absentHere = true;
+        }
+        if (absentHere) {
+          throw SyncFailure('${e.message}. Faltam áudios neste aparelho: abra o projeto onde eles estão e tente de novo.');
+        }
         if (attempt >= maxMissingRetries) {
           throw SyncFailure('${e.message}. Não consegui reenviar o áudio; abra o projeto no aparelho que o tem e tente de novo.');
         }
+        await Future<void>.delayed(missingBackoff * (attempt + 1) * math.min(1.0, timeScale));
+        if (_disposed) return;
         sampleError = await _uploadForPush(e.hashes) ?? sampleError;
       }
     }

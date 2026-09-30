@@ -132,6 +132,10 @@ const SILENCE: f32 = 1e-6;
 /// Fade dos clipes de áudio ao parar: cortar o áudio no meio de uma onda estala.
 const STOP_FADE_SECS: f64 = 0.01;
 
+/// O maior lookahead que o limitador aceita (s): quanto cada lane que o automatiza pode subir a
+/// latência da PDC no caminho de áudio, e por isso a folga que o comando reserva nos atrasos.
+const PDC_LOOKAHEAD_MAX_SECS: f64 = 0.010;
+
 /// Notas reservadas por faixa (cabem sem realocar; passar disso realoca no comando, nunca no
 /// `process`).
 const NOTES_RESERVED: usize = 1024;
@@ -665,6 +669,9 @@ pub struct Engine {
     frames_run: u64,
     /// A automação mexeu numa latência: recalcular a PDC quando o intervalo mínimo passar.
     pdc_auto_pending: bool,
+    /// A última conta da PDC, feita sem poder alocar, limitou algum atraso: o próximo `settle`
+    /// refaz com folga.
+    pdc_short: bool,
     pdc_auto_last: u64,
     /// Quantas vezes a PDC foi recalculada (os testes conferem o limite de frequência).
     #[cfg(test)]
@@ -753,6 +760,7 @@ impl Engine {
             metro_dirty: false,
             frames_run: 0,
             pdc_auto_pending: false,
+            pdc_short: false,
             pdc_auto_last: 0,
             #[cfg(test)]
             pdc_runs: 0,
@@ -1407,8 +1415,14 @@ impl Engine {
     /// trocado, tirado, lookahead novo): é aí que os atrasos podem crescer (alocar). Bypass não
     /// muda nada: a latência do efeito conta ligado ou não. Os atrasos mudam por crossfade curto.
     /// Uma faixa que só chega em outro barramento (ciclo de sidechain) não conta a chave.
-    fn pdc_update(&mut self) {
+    ///
+    /// `grow`: pode alocar (o comando). Entre blocos, na thread de áudio, é false: os atrasos só
+    /// mudam de tomada dentro do que os anéis já comportam (o comando reserva folga para a latência
+    /// automatizada, ver `pdc_headroom`); se algo não couber, fica limitado à capacidade e o
+    /// próximo comando (`settle`) refaz a conta com `grow`.
+    fn pdc_update(&mut self, grow: bool) {
         self.pdc_dirty = false;
+        self.pdc_short = false;
         #[cfg(test)]
         {
             self.pdc_runs += 1;
@@ -1416,10 +1430,11 @@ impl Engine {
         let n = self.tracks.len();
         let cap = self.rate as usize;
         let fade = (mixer::FADE_SECS * self.rate) as usize;
+        let mut fit = true;
         for s in &mut self.strips {
-            s.chain.refresh_latency(cap);
+            fit &= s.chain.refresh_latency(cap, grow);
         }
-        self.master_fx.refresh_latency(cap);
+        fit &= self.master_fx.refresh_latency(cap, grow);
         self.pdc_inmax[..n].fill(0);
         let mut master_in = 0;
         for oi in 0..self.order.len() {
@@ -1446,53 +1461,98 @@ impl Engine {
         let arrive_master = master_in.max(self.master_fx.key_need(usize::MAX, &self.pdc_out[..n], |_| true)).min(cap);
         self.pdc_total = arrive_master;
         self.pdc_master = self.master_fx.latency();
-        self.metro_delay.set_target(self.pdc_total + self.pdc_master, fade);
+        if grow {
+            // folga para a latência que a automação ainda pode subir (lookahead dos limitadores):
+            // reservada aqui, no comando, para o bloco não alocar
+            let extra = self.pdc_headroom();
+            if extra > 0 {
+                let room = (self.pdc_total + self.pdc_master + extra).min(cap);
+                self.metro_delay.reserve(room);
+                for s in &mut self.strips {
+                    s.chain.reserve_delays(room);
+                    s.pre.reserve(room);
+                    s.out_line.reserve(room);
+                    for send in &mut s.sends {
+                        send.line.reserve(room);
+                    }
+                }
+                self.master_fx.reserve_delays(room);
+            }
+        }
+        let set = |d: &mut Delay, frames: usize| {
+            if grow {
+                d.set_target(frames, fade);
+                true
+            } else {
+                d.set_target_fit(frames, fade)
+            }
+        };
+        fit &= set(&mut self.metro_delay, self.pdc_total + self.pdc_master);
         for t in 0..n {
             let (arrive, out) = (self.pdc_arrive[t], self.pdc_out[t]);
             let rank = &self.rank;
             let known = |k: usize| rank[k] < rank[t];
             let bus = self.lanes[t].kind == instrument::kind::BUS;
             let strip = &mut self.strips[t];
-            strip.pre.set_target(if bus { 0 } else { arrive }, fade);
+            fit &= set(&mut strip.pre, if bus { 0 } else { arrive });
             let to = if strip.out_dst >= 0 { self.pdc_arrive[strip.out_dst as usize] } else { arrive_master };
-            strip.out_line.set_target(to.saturating_sub(out), fade);
+            fit &= set(&mut strip.out_line, to.saturating_sub(out));
             for s in &mut strip.sends {
                 let to = if s.dst >= 0 { self.pdc_arrive[s.dst as usize] } else { out };
-                s.line.set_target(to.saturating_sub(out), fade);
+                fit &= set(&mut s.line, to.saturating_sub(out));
             }
-            strip.chain.set_key_delays(arrive, t, &self.pdc_out[..n], known);
+            fit &= strip.chain.set_key_delays(arrive, t, &self.pdc_out[..n], known, grow);
         }
-        self.master_fx.set_key_delays(arrive_master, usize::MAX, &self.pdc_out[..n], |_| true);
+        fit &= self.master_fx.set_key_delays(arrive_master, usize::MAX, &self.pdc_out[..n], |_| true, grow);
+        self.pdc_short = !fit;
+    }
+
+    /// Quantos quadros a latência ainda pode subir por automação de lookahead: o máximo do limitador
+    /// (10 ms) por lane que automatiza o lookahead de um limitador. Zero sem essas lanes: aí os
+    /// atrasos só crescem por comando e o `set_target` reserva o que precisa.
+    fn pdc_headroom(&self) -> usize {
+        use effect::auto_target as at;
+        let per = (PDC_LOOKAHEAD_MAX_SECS * self.rate).ceil() as usize;
+        let lanes = self.auto[..self.auto_count]
+            .iter()
+            .filter(|l| l.target.kind == at::EFFECT && l.target.id == effect::limiter_param::LOOKAHEAD)
+            .filter(|l| self.chain(l.target.track).and_then(|c| c.slot(l.target.slot as usize)).is_some_and(|s| s.kind == effect::kind::LIMITER))
+            .count();
+        lanes * per
     }
 
     /// Latência total do motor em quadros: a com que todas as fontes chegam ao master (PDC), mais a
     /// cadeia de inserts do master e o limitador de segurança. É quanto o som sai depois do que o
     /// transporte toca, e quanto o começo de um render offline descarta.
     pub fn latency_frames(&mut self) -> usize {
-        self.refresh();
+        self.refresh(true);
         self.pdc_total + self.pdc_master + if self.limiter_on { self.latency } else { 0 }
     }
 
     /// Só a parte da PDC (efeitos de faixas e barramentos), em quadros.
     pub fn pdc_latency(&mut self) -> usize {
-        self.refresh();
+        self.refresh(true);
         self.pdc_total
     }
 
     /// Põe em dia o roteamento e a PDC logo depois de um comando: os atrasos que crescem alocam
     /// aqui, no comando (que já pode alocar, como o `set_fx`), e não no `process` seguinte.
     pub fn settle(&mut self) {
-        self.refresh();
+        if self.pdc_short {
+            self.pdc_dirty = true;
+        }
+        self.refresh(true);
     }
 
     /// Põe em dia o roteamento e a PDC (o `process` faz isso a cada bloco; quem consulta a latência
     /// logo depois de um comando também).
-    fn refresh(&mut self) {
+    /// `grow`: pode alocar (comando); false entre blocos na thread de áudio.
+    fn refresh(&mut self, grow: bool) {
         if self.routing_dirty {
             self.route();
         }
         if self.pdc_dirty {
-            self.pdc_update();
+            self.pdc_update(grow);
         }
     }
 
@@ -1555,6 +1615,10 @@ impl Engine {
         lane.points.clear();
         lane.last = f32::NAN;
         self.auto_count += 1;
+        if target == effect::auto_target::EFFECT {
+            // a lane pode subir a latência (lookahead): a PDC reserva a folga dos atrasos no comando
+            self.pdc_dirty = true;
+        }
         (self.auto_count - 1) as u32
     }
 
@@ -1936,12 +2000,16 @@ impl Engine {
         }
         self.master_fx.collect();
         // a latência automatizada recalcula a PDC no máximo a cada PDC_AUTO_SECS
+        // (o único recálculo que nasce na thread de áudio: só ele fica sem poder alocar; um pendente
+        // de comando que ainda não foi posto em dia segue podendo crescer os anéis)
+        let mut grow = true;
         if self.pdc_auto_pending && self.frames_run.saturating_sub(self.pdc_auto_last) >= (PDC_AUTO_SECS * self.rate) as u64 {
             self.pdc_auto_pending = false;
             self.pdc_auto_last = self.frames_run;
+            grow = self.pdc_dirty || self.routing_dirty;
             self.pdc_dirty = true;
         }
-        self.refresh();
+        self.refresh(grow);
     }
 
     /// Reordena as notas mexidas e reposiciona os cursores, entre um bloco e outro.

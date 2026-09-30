@@ -24,7 +24,7 @@ import 'settings_dialog.dart';
 import 'structure_menu.dart';
 import 'tempo_lane.dart' show showMeterChangeDialog;
 import 'tempo_map.dart';
-import 'tempo_format.dart' show formatBpm, formatDocMeter;
+import 'tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
 import 'warp_dialog.dart' show parseBpm;
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
@@ -331,7 +331,7 @@ class _TempoButton extends StatelessWidget {
               children: [
                 if (!d.tempo.isSingle) const Icon(Icons.show_chart, size: 14, color: Palette.accent),
                 if (!d.tempo.isSingle) const SizedBox(width: 4),
-                Text('${formatBpm(bpm)}${ramp ? (falling ? '↘' : '↗') : ''} BPM · ${m.numerator}/${m.denominator}', style: style),
+                Text('${formatBpm(bpm)}${ramp ? (falling ? '↘' : '↗') : ''} BPM · ${formatMeter(m.numerator, m.denominator)}', style: style),
               ],
             ),
           ),
@@ -604,7 +604,7 @@ class _TempoDialogState extends State<_TempoDialog> {
           initialValue: _bpb,
           decoration: const InputDecoration(labelText: 'Tempos por compasso'),
           items: [
-            if (_custom) DropdownMenuItem(value: 0, child: Text('${widget.initialMeter.numerator}/${widget.initialMeter.denominator} (atual)')),
+            if (_custom) DropdownMenuItem(value: 0, child: Text('${formatMeter(widget.initialMeter.numerator, widget.initialMeter.denominator)} (atual)')),
             // 1/4 a 32/4, o limite do documento e da importação do .mid; o valor de agora aparece mesmo se passasse
             for (var i = 1; i <= math.max(32, _custom ? 0 : widget.beatsPerBar); i++) DropdownMenuItem(value: i, child: Text('$i/4')),
           ],

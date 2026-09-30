@@ -349,8 +349,8 @@ const GROW_STEP: usize = 1024;
 /// latência com som passando não estala nem pula. Com atraso zero (e nenhuma mudança em curso) a
 /// linha está parada e quem a usa pula todas as chamadas: o caminho sem latência não muda em nada.
 ///
-/// A memória cresce só em [`Delay::set_target`], que roda no comando (ou entre um bloco e outro),
-/// nunca no meio do processamento.
+/// A memória cresce só em [`Delay::set_target`] e [`Delay::reserve`], que rodam no comando, nunca
+/// no meio do processamento nem entre blocos na thread de áudio (lá vale [`Delay::set_target_fit`]).
 #[derive(Clone, Debug, Default)]
 pub struct Delay {
     l: Vec<f32>,
@@ -371,21 +371,42 @@ impl Delay {
     }
 
     /// Pede o atraso `frames`, com o crossfade de `fade_len` quadros (pelo menos 1). Aumentar a
-    /// capacidade preserva o histórico. Um crossfade ainda no meio termina na hora (raro: duas
-    /// mudanças de latência em menos de 10 ms).
+    /// capacidade preserva o histórico e ALOCA: só no comando (ou onde alocar é permitido); no
+    /// caminho de áudio use [`Delay::set_target_fit`]. Um crossfade ainda no meio termina na hora
+    /// (raro: duas mudanças de latência em menos de 10 ms).
     pub fn set_target(&mut self, frames: usize, fade_len: usize) {
         if frames == self.target {
             return;
         }
+        self.reserve(frames);
+        self.retarget(frames, fade_len);
+    }
+
+    /// Como [`Delay::set_target`], mas nunca aloca: o que não cabe no anel é limitado à capacidade
+    /// (o anel tem `len` quadros e o atraso vai até `len − 1`). Devolve se o pedido coube inteiro;
+    /// false deixa a linha aquém do pedido até um comando reservar o resto ([`Delay::reserve`]).
+    pub fn set_target_fit(&mut self, frames: usize, fade_len: usize) -> bool {
+        let fit = frames.min(self.l.len().saturating_sub(1));
+        if fit != self.target {
+            self.retarget(fit, fade_len);
+        }
+        fit == frames
+    }
+
+    /// Garante espaço para um atraso de até `frames` quadros (preserva o histórico). Aloca, com
+    /// folga: uma latência automatizada que sobe aos poucos não realoca a cada degrau.
+    pub fn reserve(&mut self, frames: usize) {
+        if self.l.len() < frames + 1 {
+            self.grow((frames + 1).next_multiple_of(GROW_STEP));
+        }
+    }
+
+    fn retarget(&mut self, frames: usize, fade_len: usize) {
         if !self.active() {
             // parada: o anel guarda o que sobrou de antes, que não é passado deste sinal
             self.l.fill(0.0);
             self.r.fill(0.0);
             self.pos = 0;
-        }
-        if self.l.len() < frames + 1 {
-            // com folga: uma latência automatizada que sobe aos poucos não realoca a cada degrau
-            self.grow((frames + 1).next_multiple_of(GROW_STEP));
         }
         self.cur = self.target;
         self.target = frames;

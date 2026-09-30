@@ -91,7 +91,8 @@ CREATE TABLE projects (
 CREATE INDEX projects_owner_updated ON projects (owner_id, updated_at DESC);
 
 -- ---------------------------------------------------------------- fase 6: documento, samples e jobs
--- a versão base for a atual (concorrência otimista, 409 senão).
+-- Documento do projeto (JSONB) com versão: o PUT só vale se a versão base enviada for a atual
+-- (concorrência otimista, 409 com o documento do servidor senão). `doc` é NULL até o primeiro envio.
 CREATE TABLE IF NOT EXISTS project_docs (
   project_id UUID        PRIMARY KEY REFERENCES projects (id) ON DELETE CASCADE,
   version    BIGINT      NOT NULL,

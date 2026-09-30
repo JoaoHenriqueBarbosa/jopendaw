@@ -11,6 +11,15 @@ String formatBpm(double v) {
   return (t == t.roundToDouble() ? t.toStringAsFixed(0) : t.toStringAsFixed(1)).replaceAll('.', ',');
 }
 
+/// A altura do warp em semitonos: até duas casas, sem zeros sobrando ("+2", "-0,5", "0,04"). Não é o [formatBpm]: uma
+/// casa só faria 0,04 st aparecer como 0.
+String formatPitch(double v) {
+  final t = (v * 100).round() / 100;
+  var text = (t == 0 ? 0.0 : t).toStringAsFixed(2);
+  if (text.contains('.')) text = text.replaceFirst(RegExp(r'\.?0+$'), '');
+  return text.replaceAll('.', ',');
+}
+
 /// "4/4", "6/8": tempos por compasso e a figura do tempo.
 String formatMeter(int numerator, int denominator) => '$numerator/$denominator';
 

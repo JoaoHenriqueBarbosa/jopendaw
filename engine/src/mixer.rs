@@ -653,17 +653,33 @@ impl Chain {
     }
 
     /// Lê de novo a latência de cada efeito e a passa aos atrasos do seco (PDC). Roda no comando
-    /// ou entre um bloco e outro, nunca no meio do processamento: os atrasos podem crescer aqui.
-    /// `cap` limita a latência de cada efeito.
-    pub fn refresh_latency(&mut self, cap: usize) {
+    /// ou entre um bloco e outro, nunca no meio do processamento. `cap` limita a latência de cada
+    /// efeito. Com `grow` os atrasos podem crescer (alocar: só no comando); sem ele, no caminho de
+    /// áudio, o que não cabe é limitado e o resultado é false (o próximo comando refaz a conta).
+    pub fn refresh_latency(&mut self, cap: usize, grow: bool) -> bool {
+        let mut fit = true;
         for s in &mut self.slots {
             s.latency = match &s.fx {
                 Some(fx) if !s.dying => fx.latency().min(cap),
                 _ => 0,
             };
-            s.dry.set_target(s.latency, self.fade_len);
+            if grow {
+                s.dry.set_target(s.latency, self.fade_len);
+            } else {
+                fit &= s.dry.set_target_fit(s.latency, self.fade_len);
+            }
         }
         self.update_hold();
+        fit
+    }
+
+    /// Reserva (no comando) espaço para atrasos de até `frames` quadros em todos os anéis da cadeia:
+    /// o folga que deixa a PDC crescer no caminho de áudio, com a latência automatizada, sem alocar.
+    pub fn reserve_delays(&mut self, frames: usize) {
+        for s in &mut self.slots {
+            s.dry.reserve(frames);
+            s.key_delay.reserve(frames);
+        }
     }
 
     /// A latência que o efeito do slot declara agora difere da que a PDC usa (um parâmetro
@@ -700,13 +716,19 @@ impl Chain {
     }
 
     /// Atrasa cada chave até o sinal do slot: a entrada da cadeia chega com latência `arrive`.
-    pub fn set_key_delays(&mut self, arrive: usize, own: usize, out: &[usize], known: impl Fn(usize) -> bool) {
-        let mut before = 0;
+    /// `grow` como em [`Chain::refresh_latency`]; false: alguma chave não coube.
+    pub fn set_key_delays(&mut self, arrive: usize, own: usize, out: &[usize], known: impl Fn(usize) -> bool, grow: bool) -> bool {
+        let (mut before, mut fit) = (0, true);
         for s in &mut self.slots {
             let d = Self::key_track(s, own, out.len(), &known).map_or(0, |k| (arrive + before).saturating_sub(out[k]));
-            s.key_delay.set_target(d, self.fade_len);
+            if grow {
+                s.key_delay.set_target(d, self.fade_len);
+            } else {
+                fit &= s.key_delay.set_target_fit(d, self.fade_len);
+            }
             before += s.latency;
         }
+        fit
     }
 
     /// Termina na hora as mudanças de atraso e esvazia os anéis (começo de um render).

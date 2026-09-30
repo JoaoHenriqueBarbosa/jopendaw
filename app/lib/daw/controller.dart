@@ -9,7 +9,17 @@ import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart' show GestureBinding, PointerCancelEvent, PointerDownEvent, PointerEvent, PointerMoveEvent, PointerUpEvent;
+import 'package:flutter/gestures.dart'
+    show
+        GestureBinding,
+        PointerCancelEvent,
+        PointerDeviceKind,
+        PointerDownEvent,
+        PointerEvent,
+        PointerHoverEvent,
+        PointerMoveEvent,
+        PointerUpEvent,
+        kPrimaryButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show EditableText, FocusManager;
 
@@ -725,7 +735,7 @@ class DawController extends ChangeNotifier {
       // mostrar o estúdio. Senão aparece uma faixa vazia que depois troca por tudo de uma vez.
       // Offline ou lento, segue com o vazio depois de um tempo e a sincronização continua atrás.
       final waitServer = saved is! String && !_templated && _canSync();
-      final started = sync.start(localExisted: saved is String || _templated);
+      final started = sync.start(localExisted: saved is String || _templated, holdFirstPull: waitServer);
       if (waitServer) {
         _lastSaved = jsonEncode(doc.toJson());
         _blankJson = _lastSaved;
@@ -787,9 +797,16 @@ class DawController extends ChangeNotifier {
   @visibleForTesting
   Duration pointerStaleAfter = const Duration(seconds: 30);
 
-  /// Há um gesto (arraste) em andamento que valha esperar: ponteiro apertado e mexendo há menos que [pointerStaleAfter].
+  /// Mouses com o botão principal apertado segundo o último evento deles. Um botão segurado parado
+  /// não manda evento nenhum, então o tempo sem movimento não prova que o gesto acabou: o estado
+  /// do botão (o `buttons` dos eventos, que vem 0 no primeiro evento depois de soltar) é quem decide.
+  final _mouseHeld = <int>{};
+
+  /// Há um gesto (arraste) em andamento que valha esperar: ponteiro apertado e mexendo há menos que
+  /// [pointerStaleAfter], ou um mouse com o botão principal ainda apertado.
   bool get _gestureInProgress {
     if (_pointerIds.isEmpty) return false;
+    if (_mouseHeld.any(_pointerIds.contains)) return true;
     if (DateTime.now().difference(_pointerActiveAt) <= pointerStaleAfter) return true;
     _pointerIds.clear();
     _pointersDown = 0;
@@ -799,6 +816,7 @@ class DawController extends ChangeNotifier {
   /// O app perdeu ou voltou o foco: nenhum PointerUp que ainda não chegou vale esperar.
   void _dropPointers() {
     _pointerIds.clear();
+    _mouseHeld.clear();
     _pointersDown = 0;
   }
 
@@ -810,6 +828,17 @@ class DawController extends ChangeNotifier {
       _pointerIds.add(e.pointer);
     } else if (e is PointerUpEvent || e is PointerCancelEvent) {
       _pointerIds.remove(e.pointer);
+      _mouseHeld.remove(e.pointer);
+    }
+    if (e.kind == PointerDeviceKind.mouse) {
+      if ((e is PointerDownEvent || e is PointerMoveEvent) && e.buttons & kPrimaryButton != 0) {
+        _mouseHeld.add(e.pointer);
+      } else if (e is PointerMoveEvent || e is PointerHoverEvent) {
+        // o botão já foi solto e o PointerUp se perdeu: o gesto acabou (os ids de um aperto e do
+        // passeio seguinte do mesmo mouse diferem, então vale para todos os apertos do mouse)
+        _pointerIds.removeAll(_mouseHeld);
+        _mouseHeld.clear();
+      }
     }
     if (e is PointerDownEvent || e is PointerMoveEvent) _pointerActiveAt = DateTime.now();
     _pointersDown = _pointerIds.length;
@@ -1997,7 +2026,7 @@ class DawController extends ChangeNotifier {
   }
 
   // andamento e compasso que o servidor conhece (o projeto carregado, até um PATCH dar certo)
-  late (int, int) _mirroredTempo = (project.bpm, project.beatsPerBar);
+  late (int, int, int) _mirroredTempo = (project.bpm, project.beatsPerBar, project.beatUnit);
   bool _mirroring = false, _mirrorAgain = false;
 
   /// O andamento e o compasso do documento são a verdade; o servidor guarda um espelho para a lista
@@ -2014,10 +2043,11 @@ class DawController extends ChangeNotifier {
       do {
         _mirrorAgain = false;
         if (_disposed || !ready || !_canSync()) return;
-        final want = (doc.bpm.round().clamp(minBpmInt, maxBpmInt), doc.beatsPerBar);
+        final want = _wantedTempo;
         if (want == _mirroredTempo) return;
         try {
-          await _patchProject(project.id, {'bpm': want.$1, 'beats_per_bar': want.$2});
+          // a figura do tempo só vai quando muda (o servidor a aceita e valida): sem ela um 6/8 apareceria 6/4 na lista
+          await _patchProject(project.id, {'bpm': want.$1, 'beats_per_bar': want.$2, if (want.$3 != _mirroredTempo.$3) 'beat_unit': want.$3});
           _mirroredTempo = want;
         } catch (_) {
           return;
@@ -2034,7 +2064,14 @@ class DawController extends ChangeNotifier {
 
   /// O andamento espelhado ainda não chegou ao servidor (nos testes).
   @visibleForTesting
-  bool get tempoPending => (doc.bpm.round().clamp(minBpmInt, maxBpmInt), doc.beatsPerBar) != _mirroredTempo;
+  bool get tempoPending => _wantedTempo != _mirroredTempo;
+
+  /// O que o espelho do servidor deve ter: andamento, tempos por compasso e figura do compasso inicial.
+  (int, int, int) get _wantedTempo {
+    // o compasso inicial de verdade (um 6/8 guarda 3 em `beatsPerBar`): é o que o cabeçalho do projeto mostra
+    final m = doc.meter.changeAt(1);
+    return (doc.bpm.round().clamp(minBpmInt, maxBpmInt), m.numerator.clamp(1, 32), const {1, 2, 4, 8, 16, 32}.contains(m.denominator) ? m.denominator : 4);
+  }
 
   // ------------------------------------------------------------------ edição
 
@@ -2201,7 +2238,8 @@ class DawController extends ChangeNotifier {
     }
     if (_disposed) return false;
     if (!canSwap() || _saveTimer?.isActive == true) return false;
-    if (recording) throw StateError('gravando: o projeto novo entra depois');
+    // (gravar, tocar e gesto em andamento já vêm em [canSwap]; isto só guarda o que muda entre a checagem e a troca)
+    if (recording) return false;
     final old = doc;
     final wasBlank = _blankJson != null && jsonEncode(old.toJson()) == _blankJson;
     _blankJson = null;
@@ -4665,11 +4703,15 @@ class DawController extends ChangeNotifier {
     final out = <String, List<_RecCc>>{};
     if (r.midiIds.isEmpty) return out;
     final byTrack = <int, List<_RecCc>>{};
+    // como nas notas: o recuo da latência não passa do começo da gravação (nem do loop), senão um
+    // CC tocado nos primeiros ms cairia antes do início e o filtro da contagem, adiante, o jogaria fora
+    final floor = math.min(r.start, r.loopOn ? r.loopStart : r.start);
     for (final n in data ?? const <RecordedNote>[]) {
       if (n.pitch < ccPitchBase || !n.start.isFinite || !n.velocity.isFinite) continue;
       final cc = n.pitch - ccPitchBase;
       if (!ccKinds.contains(cc)) continue;
-      byTrack.putIfAbsent(n.track, () => []).add((cc: cc, beat: r.shiftBeat(n.start), value: MidiCc.clampValue(cc, n.velocity)));
+      final beat = r.midiLatency > 0 ? math.max(r.shiftBeat(n.start), math.min(n.start, floor)) : n.start;
+      byTrack.putIfAbsent(n.track, () => []).add((cc: cc, beat: beat, value: MidiCc.clampValue(cc, n.velocity)));
     }
     final zone = r.zone, ls = r.loopStart;
     for (final e in byTrack.entries) {

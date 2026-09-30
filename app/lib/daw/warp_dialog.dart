@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/feedback.dart';
 import 'controller.dart';
-import 'tempo_format.dart' show formatBpm;
+import 'tempo_format.dart' show formatBpm, formatPitch;
 import 'transport_bar.dart' show describeActionError;
 
 export 'tempo_format.dart' show formatBpm;
@@ -174,7 +174,7 @@ class _WarpDialogState extends State<_WarpDialog> {
                     SizedBox(
                       width: 96,
                       child: Text(
-                        '${clip.pitch > 0 ? '+' : ''}${formatBpm(clip.pitch)} st',
+                        '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)} st',
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),

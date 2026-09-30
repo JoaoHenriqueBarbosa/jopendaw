@@ -20,6 +20,7 @@ import 'package:crypto/crypto.dart';
 
 import '../audio/engine.dart' show LocalStore;
 import '../models/project.dart';
+import 'midi_map.dart';
 import 'model.dart';
 import 'tempo_map.dart' show maxBpmInt, minBpmInt;
 
@@ -421,6 +422,39 @@ void remapDocIds(DawDoc doc) {
     t.lanes = lanes(t.lanes);
   }
   doc.masterLanes = lanes(doc.masterLanes);
+
+  // o mapa de MIDI learn aponta faixas e efeitos/envios pelo id: reaponta junto e descarta o que ficou solto
+  final mapped = <MidiMapping>[];
+  for (final m in doc.midiMap.items) {
+    String? track;
+    if (m.trackId != null) {
+      track = trackIds[m.trackId];
+      if (track == null) continue;
+    }
+    var ref = m.target.ref;
+    if (m.target.kind == AutoKind.effect) {
+      ref = slotIds[ref];
+      if (ref == null) continue;
+    } else if (m.target.kind == AutoKind.send) {
+      ref = trackIds[ref];
+      if (ref == null) continue;
+    }
+    mapped.add(
+      MidiMapping(
+        id: m.id,
+        source: m.source,
+        trackId: track,
+        target: AutoTarget(m.target.kind, ref: ref, param: m.target.param),
+        min: m.min,
+        max: m.max,
+        curve: m.curve,
+        inverted: m.inverted,
+      ),
+    );
+  }
+  doc.midiMap.items
+    ..clear()
+    ..addAll(mapped);
 }
 
 // ------------------------------------------------------------------ importar
@@ -463,12 +497,16 @@ Future<Project> importProjectBundle(
   try {
     // o espelho do servidor é inteiro e vai de 20 a 999, como o motor; o andamento com decimais fica no documento
     final bpm = doc.bpm.isFinite ? doc.bpm.round().clamp(minBpmInt, maxBpmInt) : 120;
-    final bpb = doc.beatsPerBar.clamp(1, 32);
-    if (bpm != project.bpm || bpb != project.beatsPerBar) {
-      project = await patchProject(project.id, {'bpm': bpm, 'beats_per_bar': bpb});
+    final first = doc.meter.changeAt(1);
+    final bpb = first.numerator.clamp(1, 32);
+    final unit = first.denominator;
+    final unitOk = const {1, 2, 4, 8, 16, 32}.contains(unit) && unit != project.beatUnit;
+    if (bpm != project.bpm || bpb != project.beatsPerBar || unitOk) {
+      project = await patchProject(project.id, {'bpm': bpm, 'beats_per_bar': bpb, if (unitOk) 'beat_unit': unit});
     }
     if (!doc.bpm.isFinite || doc.bpm.round() != project.bpm) doc.bpm = project.bpm.toDouble();
-    doc.beatsPerBar = project.beatsPerBar;
+    // (o `beatsPerBar` do documento é dele: um 6/8 guarda 3 lá e 6 no espelho do servidor)
+    doc.beatsPerBar = doc.beatsPerBar.clamp(1, 32);
     final total = bundle.samples.length;
     var done = 0;
     onProgress?.call(0, total);

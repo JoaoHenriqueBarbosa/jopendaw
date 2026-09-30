@@ -884,6 +884,7 @@ fn o_crescimento_dos_atrasos_da_pdc_acontece_no_comando() {
     let lane = e.add_lane(0, auto_target::EFFECT, 0, effect::limiter_param::LOOKAHEAD);
     e.add_point(lane, 0.0, 0.0, 0.0);
     e.add_point(lane, 2.0, 0.010, 0.0);
+    e.settle();
     e.seek(0.0);
     let allocs = crate::testalloc::count(|| {
         for _ in 0..(2 * 48_000 / 128) {
@@ -925,5 +926,39 @@ fn impulso_monitorado_sai_depois_da_latencia_exposta() {
         }
         let want = at + e.latency_frames();
         assert_eq!(argmax(&out), want, "faixa {track_fx}, master {master_fx}, latência {}", e.latency_frames());
+    }
+}
+
+/// A latência automatizada sobe no caminho de áudio sem alocar mesmo quando nenhum anel tinha
+/// espaço para ela: a faixa sem atraso que passa a ter um (a outra espera o limitador) e uma cadeia
+/// de vários limitadores de 10 ms (mais de um `GROW_STEP` de quadros). O comando que cria a lane
+/// reserva a folga.
+#[test]
+fn a_latencia_automatizada_sobe_sem_alocar_mesmo_sem_anel_previo() {
+    for fixed in [0usize, 3] {
+        let (mut e, _) = sine_engine();
+        // `fixed` limitadores de 10 ms já postos, mais o automatizado (que parte de 0)
+        for s in 0..fixed {
+            fx(&mut e, 0, s, fx_kind::LIMITER);
+            e.set_fx_param(0, s, effect::limiter_param::LOOKAHEAD, 0.010);
+        }
+        fx(&mut e, 0, fixed, fx_kind::LIMITER);
+        e.set_fx_param(0, fixed, effect::limiter_param::LOOKAHEAD, 0.0);
+        let lane = e.add_lane(0, auto_target::EFFECT, fixed as u32, effect::limiter_param::LOOKAHEAD);
+        e.add_point(lane, 0.0, 0.0, 0.0);
+        e.add_point(lane, 1.0, 0.010, 0.0);
+        e.settle();
+        let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+        e.seek(0.0);
+        e.play();
+        let allocs = crate::testalloc::count(|| {
+            for _ in 0..(3 * 48_000 / 128) {
+                e.process(&mut l, &mut r);
+            }
+        });
+        assert_eq!(allocs, 0, "{fixed} limitadores fixos: o bloco alocou");
+        // (a conta do bloco, sem um comando por perto, chegou inteira: os anéis já tinham folga)
+        assert_eq!(e.pdc_total, (fixed + 1) * 480, "{fixed} limitadores fixos: a conta não chegou ao fim");
+        assert!(!e.pdc_short, "{fixed} limitadores fixos: algum atraso ficou limitado");
     }
 }

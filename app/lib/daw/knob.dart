@@ -315,9 +315,10 @@ class _KnobState extends State<Knob> {
       onIncrease: () => _set(_stepped(1)),
       onDecrease: () => _set(_stepped(-1)),
       child: Tooltip(
-        message: '$label: arraste ou use a roda (Shift: ajuste fino)\nDuplo clique: padrão (${_fmt(_spec.def)}) · botão direito: digitar o valor',
+        message:
+            '$label: arraste ou use a roda (Shift: ajuste fino)\nDuplo clique: padrão (${_fmt(_spec.def)}) · botão direito: ${widget.extraActions == null ? 'digitar o valor' : 'menu (digitar o valor, Aprender MIDI)'}',
         waitDuration: const Duration(milliseconds: 900),
-        // no toque o toque longo é para digitar o valor, não para a dica
+        // no toque o toque longo abre o campo de digitar o valor (ou o menu), não a dica
         triggerMode: TooltipTriggerMode.manual,
         child: MouseRegion(
           cursor: SystemMouseCursors.resizeUpDown,
