@@ -24,7 +24,8 @@ class _Prefs {
   /// Compassos do padrão; null: os que cobrem as notas do clipe.
   int? bars;
 
-  /// Swing já aplicado às notas e o que o controle mostra.
+  /// Swing que as notas do clipe já têm nesta resolução (derivado do documento a cada leitura, não
+  /// guardado: desfazer e reabrir o projeto não o deixam para trás) e o que o controle mostra.
   double swing = 0, pending = 0;
   int? selected;
   StepDynamic brush = StepDynamic.normal;
@@ -132,8 +133,25 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
     return ((extent / bar).floor() + 1).clamp(1, clipBars);
   }
 
-  StepLayout _layout(MidiClip clip, _Prefs p) =>
-      StepLayout.of(barBeats: _barBeats(clip), bars: _barsOf(clip, p), step: resolutionById(p.res).beats, swing: p.swing);
+  /// A grade do padrão. O swing vem das notas (ver [detectSwing]); quando ele muda por fora (desfazer,
+  /// edição no piano roll) o controle acompanha.
+  StepLayout _layout(MidiClip clip, _Prefs p) {
+    final sw = _swingOf(clip, p);
+    return StepLayout.of(barBeats: _barBeats(clip), bars: _barsOf(clip, p), step: resolutionById(p.res).beats, swing: sw);
+  }
+
+  /// A grade reta estendida ao clipe inteiro: as ações de clipe (swing) valem além dos compassos do padrão.
+  StepLayout _fullLayout(MidiClip clip, _Prefs p) =>
+      StepLayout(step: resolutionById(p.res).beats, steps: stepsFor(clip.length, 1, resolutionById(p.res).beats));
+
+  double _swingOf(MidiClip clip, _Prefs p) {
+    final sw = detectSwing(clip.notes, _fullLayout(clip, p));
+    if ((sw - p.swing).abs() > 1e-9) {
+      p.swing = sw;
+      p.pending = sw;
+    }
+    return sw;
+  }
 
   /// Segue o cursor na grade durante a reprodução.
   void _follow() {
@@ -322,12 +340,17 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
   Future<void> _presets(MidiClip clip, _Prefs pr) async {
     final p = await showDialog<StepPreset>(
       context: context,
-      builder: (ctx) => SimpleDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Padrões de bateria'),
-        children: [
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 420, maxHeight: MediaQuery.sizeOf(ctx).height * 0.6),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
+        // o conteúdo rola por inteiro (título fixo): com todos os padrões o último tem de ser alcançável
+        // em qualquer tamanho de tela
+        content: SizedBox(
+          width: 420,
+          child: Scrollbar(
             child: SingleChildScrollView(
+              key: const ValueKey('step-presets-scroll'),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -343,16 +366,24 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
               ),
             ),
           ),
-        ],
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar'))],
       ),
     );
     if (p == null || !mounted) return;
     final now = _clipNow(clip.id);
     if (now == null) return;
     pr.res = p.resolution;
-    pr.bars = ((p.span / _barBeats(now)) - 1e-6).ceil().clamp(1, maxPatternBars);
-    // o swing aplicado vale para o que o usuário desenhar depois; o padrão de fábrica vem reto
-    _run(now, (n) => applyPreset(n, p, clipLength: now.length), notice: 'Padrão "${p.name}" aplicado.');
+    final bar = _barBeats(now);
+    pr.bars = p.bars.clamp(1, maxPatternBars);
+    final full = _fullLayout(now, pr);
+    final sw = _swingOf(now, pr);
+    // o padrão de fábrica entra reto: o swing que o clipe tinha sai (de todas as notas, para a grade
+    // não ficar com uma parte no swing e outra reta) no mesmo passo do desfazer
+    _run(now, (n) {
+      if (sw > 0) retimeSwing(n, full, sw, 0);
+      applyPreset(n, p, clipLength: now.length, barBeats: bar);
+    }, notice: 'Padrão ${p.name} aplicado.');
   }
 
   Future<void> _menu(String v, MidiClip clip, _Prefs pr, StepLayout l, List<StepRow> rows) async {
@@ -383,22 +414,36 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
         final now = _clipNow(clip.id);
         if (n != null && now != null && mounted) _run(now, (x) => fillEvery(x, scope, l, n, velocity: pr.brush.velocity));
       case 'repeat':
+        if (!canRepeatPattern(clip.notes, l, clip.length)) {
+          // nada a fazer: nem mexe nas notas nem deixa um passo vazio no desfazer
+          setState(
+            () => _notice = l.span >= clip.length - stepEps ? 'O padrão já ocupa o clipe inteiro.' : 'Não há notas no padrão para repetir.',
+          );
+          return;
+        }
         var done = 0;
         _run(clip, (n) => done = repeatPattern(n, l, clip.length));
-        setState(
-          () => _notice = done == 0 ? 'O padrão já ocupa o clipe inteiro.' : 'Padrão repetido até o fim do clipe ($done ${done == 1 ? 'vez' : 'vezes'}).',
-        );
+        setState(() => _notice = 'Padrão repetido até o fim do clipe ($done ${done == 1 ? 'vez' : 'vezes'}).');
     }
   }
 
-  void _swing(MidiClip clip, _Prefs pr, StepLayout l, double to) {
+  /// O swing vale para o clipe inteiro (não só para os compassos do padrão) e na resolução atual: só
+  /// andam as notas que estão exatamente nos passos pares dela.
+  void _swing(MidiClip clip, _Prefs pr, double to) {
+    final full = _fullLayout(clip, pr);
+    final from = _swingOf(clip, pr);
+    final res = resolutionById(pr.res).label;
+    final probe = [for (final n in clip.notes) n.copy()];
+    if (retimeSwing(probe, full, from, to) == 0) {
+      setState(() {
+        pr.pending = from;
+        _notice = 'Nenhuma nota está nos passos pares de $res: troque a resolução para a das notas ou desenhe algo antes.';
+      });
+      return;
+    }
     var moved = 0;
-    _run(clip, (n) => moved = retimeSwing(n, l, pr.swing, to));
-    setState(() {
-      pr.swing = to;
-      pr.pending = to;
-      _notice = to == 0 ? 'Swing tirado ($moved notas).' : 'Swing de ${(to * 100).round()}% aplicado ($moved notas).';
-    });
+    _run(clip, (n) => moved = retimeSwing(n, full, from, to));
+    setState(() => _notice = to == 0 ? 'Swing tirado ($moved notas).' : 'Swing de ${(to * 100).round()}% aplicado ($moved notas, em $res).');
   }
 
   void _createClip(int lane) {
@@ -703,10 +748,10 @@ class _StepSequencerPanelState extends State<StepSequencerPanel> {
       ),
       TextButton(
         key: const ValueKey('step-swing-apply'),
-        onPressed: (pr.pending - pr.swing).abs() > 1e-9 ? () => _swing(clip, pr, l, pr.pending) : null,
+        onPressed: (pr.pending - pr.swing).abs() > 1e-9 ? () => _swing(clip, pr, pr.pending) : null,
         child: const Text('Aplicar swing'),
       ),
-      TextButton(key: const ValueKey('step-swing-off'), onPressed: pr.swing > 0 ? () => _swing(clip, pr, l, 0) : null, child: const Text('Tirar swing')),
+      TextButton(key: const ValueKey('step-swing-off'), onPressed: pr.swing > 0 ? () => _swing(clip, pr, 0) : null, child: const Text('Tirar swing')),
       gap(),
       for (final d in StepDynamic.values)
         Padding(

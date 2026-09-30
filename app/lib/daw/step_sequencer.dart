@@ -86,6 +86,10 @@ class StepLayout {
 
   StepLayout withSwing(double s) => StepLayout(step: step, steps: steps, swing: s);
 
+  /// A mesma grade estendida até cobrir [length] batidas (o clipe inteiro), não só os compassos do
+  /// padrão: as ações que valem para o clipe todo (swing) usam esta.
+  StepLayout covering(double length) => StepLayout(step: step, steps: math.max(steps, stepsFor(length, 1, step)), swing: swing);
+
   /// Comprimento da grade em batidas.
   double get span => steps * step;
 
@@ -268,12 +272,52 @@ int retimeSwing(List<MidiNote> notes, StepLayout l, double from, double to) {
   return moved;
 }
 
+/// O swing (fração de passo, em múltiplos de 1%, 0 a 0,75) que as notas de [notes] já têm nesta
+/// resolução: o que deixa mais notas exatamente nos passos de [l]. Empate fica com o menor (reto). É
+/// o que liga o estado do swing ao documento: desfazer, reabrir o projeto ou editar no piano roll
+/// mudam as notas, e o swing mostrado acompanha. [l] deve cobrir o clipe inteiro.
+double detectSwing(Iterable<MidiNote> notes, StepLayout l) {
+  final straight = l.withSwing(0);
+  final cands = <int>{};
+  for (final n in notes) {
+    final k = (n.start / l.step + 1e-9).floor();
+    if (k < 0 || !k.isOdd) continue;
+    final pct = ((n.start / l.step - k) * 100).round();
+    if (pct > 0 && pct <= 75) cands.add(pct);
+  }
+  var best = 0, bestScore = _onGridCount(notes, straight);
+  for (final pct in cands.toList()..sort()) {
+    final score = _onGridCount(notes, l.withSwing(pct / 100));
+    if (score > bestScore) {
+      best = pct;
+      bestScore = score;
+    }
+  }
+  return best / 100;
+}
+
+int _onGridCount(Iterable<MidiNote> notes, StepLayout l) {
+  var c = 0;
+  for (final n in notes) {
+    final i = l.cellOf(n.start);
+    if (i != null && l.onGrid(n, i)) c++;
+  }
+  return c;
+}
+
+/// Há o que repetir: o padrão é menor que o clipe e tem notas nos primeiros [l].span batidas.
+bool canRepeatPattern(List<MidiNote> notes, StepLayout l, double clipLength) {
+  final span = l.span;
+  if (span <= 0 || clipLength - span < stepEps) return false;
+  return notes.any((n) => n.start < span - stepEps);
+}
+
 /// Repete o padrão (as notas dos primeiros [l].span batidas) até o fim do clipe de [clipLength]
 /// batidas, trocando o que havia depois dele. Sem nada a preencher (padrão do tamanho do clipe ou
-/// maior) não mexe. Devolve quantas repetições entraram.
+/// maior, ou sem nenhuma nota no padrão) não mexe em nada. Devolve quantas repetições entraram.
 int repeatPattern(List<MidiNote> notes, StepLayout l, double clipLength) {
   final span = l.span;
-  if (span <= 0 || clipLength - span < stepEps) return 0;
+  if (!canRepeatPattern(notes, l, clipLength)) return 0;
   final src = [
     for (final n in notes)
       if (n.start < span - stepEps) n.copy(),
@@ -350,11 +394,14 @@ List<StepRow> drumRows() {
 List<StepRow> zoneRows(DawTrack t) {
   final out = <StepRow>[];
   final seen = <int>{};
+  var slices = 0;
   for (var i = 0; i < t.zones.length; i++) {
     final z = t.zones[i];
     final pitch = z.root.clamp(z.lo, z.hi);
     if (!seen.add(pitch)) continue;
-    out.add(StepRow(pitch, 'Fatia ${out.length + 1} · ${noteName(pitch)}'));
+    // fatia é zona de um trecho do áudio; zona de áudio inteiro (multi-sample) leva só a nota
+    final isSlice = z.start > 0 || z.end > 0;
+    out.add(StepRow(pitch, isSlice ? 'Fatia ${++slices} · ${noteName(pitch)}' : 'Zona · ${noteName(pitch)}'));
   }
   return out;
 }
@@ -386,13 +433,17 @@ class StepPreset {
   /// Resolução em que a grade abre ao aplicar (id de [stepResolutions]).
   final String resolution;
 
-  /// Compassos de 4 tempos.
+  /// Compassos do desenho (cada um com 4 tempos de texto; num compasso de outro tamanho o desenho
+  /// é cortado ou repetido para caber, ver [presetNotes]).
   final int bars;
   final List<StepPresetRow> rows;
   const StepPreset(this.id, this.name, this.about, this.resolution, this.bars, this.rows);
 
-  /// Comprimento em batidas (num 4/4).
-  double get span => bars * 4.0;
+  /// Comprimento em batidas num 4/4.
+  double get span => spanIn(4);
+
+  /// Comprimento em batidas em compassos de [barBeats] batidas.
+  double spanIn(double barBeats) => bars * barBeats;
 }
 
 const _kick = 36, _snare = 38, _clap = 39, _hatC = 42, _hatO = 46, _rim = 37;
@@ -403,7 +454,7 @@ const stepPresets = <StepPreset>[
     StepPresetRow(_clap, '....x.......x...'),
     StepPresetRow(_hatC, 'x.x.x.x.x.x.x.x.'),
   ]),
-  StepPreset('rock', 'Rock', 'Bumbo no 1 e no 3, caixa no 2 e no 4, chimbal em colcheias.', '1/16', 1, [
+  StepPreset('rock', 'Rock', 'Bumbo no 1, no 3 e no passo 11 (o e do 3), caixa no 2 e no 4, chimbal em colcheias.', '1/16', 1, [
     StepPresetRow(_kick, 'x.......x.x.....'),
     StepPresetRow(_snare, '....x.......x...'),
     StepPresetRow(_hatC, 'x.x.x.x.x.x.x.x.'),
@@ -424,7 +475,7 @@ const stepPresets = <StepPreset>[
     StepPresetRow(_snare, '........x.......'),
     StepPresetRow(_hatC, 'x...x...x...x...x.x.x.x.oxoxxXXX', 0.125),
   ]),
-  StepPreset('dembow', 'Reggaeton (dembow)', 'Bumbo em todo tempo e a caixa do dembow (3 e 6 de cada meio compasso).', '1/16', 1, [
+  StepPreset('dembow', 'Reggaeton (dembow)', 'Bumbo em todo tempo e a caixa do dembow (4º e 7º passos de cada meio compasso).', '1/16', 1, [
     StepPresetRow(_kick, 'x...x...x...x...'),
     StepPresetRow(_snare, '...x..x....x..x.'),
     StepPresetRow(_hatC, 'x.x.x.x.x.x.x.x.'),
@@ -447,8 +498,11 @@ const stepPresets = <StepPreset>[
   ]),
 ];
 
-/// As notas de um padrão de fábrica, com início em batidas do começo do clipe.
-List<MidiNote> presetNotes(StepPreset p) {
+/// As notas de um padrão de fábrica, com início em batidas do começo do clipe. O desenho é escrito
+/// em compassos de 4 tempos; em compassos de [barBeats] batidas cada compasso do desenho é cortado
+/// no tamanho do compasso (3/4 fica com os 3 primeiros tempos) ou repetido até preenchê-lo
+/// (compassos maiores que 4).
+List<MidiNote> presetNotes(StepPreset p, {double barBeats = 4}) {
   final out = <MidiNote>[];
   for (final r in p.rows) {
     for (var i = 0; i < r.pattern.length; i++) {
@@ -459,19 +513,28 @@ List<MidiNote> presetNotes(StepPreset p) {
         _ => null,
       };
       if (v == null) continue;
-      out.add(MidiNote(pitch: r.pitch, start: i * r.step, length: stepNoteLength(r.step), velocity: v));
+      final o = i * r.step;
+      final bar = (o / 4 + 1e-9).floor();
+      final inBar = o - bar * 4;
+      for (var base = 0.0; base < barBeats - stepEps; base += 4) {
+        final s = bar * barBeats + base + inBar;
+        if (base + inBar >= barBeats - stepEps) break;
+        out.add(MidiNote(pitch: r.pitch, start: s, length: stepNoteLength(r.step), velocity: v));
+      }
     }
   }
   return out;
 }
 
 /// Aplica o padrão de fábrica: troca todas as notas de peças da bateria nos primeiros compassos do
-/// padrão. Notas de fora do kit e as depois do padrão ficam. Devolve as notas que entraram.
-int applyPreset(List<MidiNote> notes, StepPreset p, {double? clipLength}) {
+/// padrão (compassos de [barBeats] batidas). Notas de fora do kit e as depois do padrão ficam.
+/// Devolve as notas que entraram.
+int applyPreset(List<MidiNote> notes, StepPreset p, {double? clipLength, double barBeats = 4}) {
   final kit = {for (final d in drumPieces) d.pitch};
-  notes.removeWhere((n) => kit.contains(n.pitch) && n.start >= -stepEps && n.start < p.span - stepEps);
+  final span = p.spanIn(barBeats);
+  notes.removeWhere((n) => kit.contains(n.pitch) && n.start >= -stepEps && n.start < span - stepEps);
   final add = [
-    for (final n in presetNotes(p))
+    for (final n in presetNotes(p, barBeats: barBeats))
       if (clipLength == null || n.start < clipLength - stepEps) n,
   ];
   notes.addAll(add);

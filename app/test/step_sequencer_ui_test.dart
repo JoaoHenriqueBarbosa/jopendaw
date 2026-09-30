@@ -16,13 +16,13 @@ import 'package:jopendaw_app/widgets/theme.dart';
 var _ids = 0;
 
 class StepDaw extends DawController {
-  StepDaw({TrackKind kind = TrackKind.drums, List<MidiNote>? notes, double clipLength = 4, bool withClip = true, List<SamplerZone>? zones})
+  StepDaw({TrackKind kind = TrackKind.drums, List<MidiNote>? notes, double clipLength = 4, bool withClip = true, List<SamplerZone>? zones, int beatsPerBar = 4})
     : super(
         Project.fromJson({
           'id': 'p',
           'name': 'Teste',
           'bpm': 120,
-          'beats_per_bar': 4,
+          'beats_per_bar': beatsPerBar,
           'beat_unit': 4,
           'sample_rate': 48000,
           'created_at': '2026-01-01T00:00:00Z',
@@ -31,7 +31,7 @@ class StepDaw extends DawController {
       ) {
     doc = DawDoc(
       bpm: 120,
-      beatsPerBar: 4,
+      beatsPerBar: beatsPerBar,
       tracks: [
         DawTrack(
           id: 't1',
