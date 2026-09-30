@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -18,6 +19,7 @@ import 'controller.dart';
 import 'effects.dart' show effectMonitoringNote;
 import 'export_compressed.dart';
 import 'export_options.dart';
+import 'export_plan.dart';
 import 'loudness.dart';
 import 'loudness_panel.dart';
 import 'midi_file_ui.dart';
@@ -39,8 +41,8 @@ bool _hasLoopRegion(DawDoc d) => d.loopEnd - d.loopStart > _minLoop;
 
 /// Abre as opções e, confirmadas, o render com progresso. Se o render falha, a pessoa pode voltar às
 /// opções (com as mesmas escolhas) e tentar de novo.
-Future<void> showExportDialog(BuildContext context, DawController c) async {
-  var options = _lastOptions ?? const ExportOptions();
+Future<void> showExportDialog(BuildContext context, DawController c, {ExportOptions? preset}) async {
+  var options = preset ?? _lastOptions ?? const ExportOptions();
   while (true) {
     if (!context.mounted) return;
     var wholeProject = false, midi = false;
@@ -111,9 +113,18 @@ class _ExportDialogState extends State<ExportDialog> {
   DawDoc get _doc => widget.c.doc;
 
   late ExportFormat _format = widget.initial.format;
-  // a região pode ter sumido desde a última exportação: aí volta para a música inteira
-  late ExportRange _range = widget.initial.range == ExportRange.loop && !_hasLoopRegion(_doc) ? ExportRange.song : widget.initial.range;
+  // a região (ou os marcadores) pode ter sumido desde a última exportação: aí volta para a música inteira
+  late ExportRange _range = _validRange(widget.initial);
   late bool _stems = widget.initial.stems;
+  late String? _fromMarker = _markerOr(widget.initial.fromMarker);
+  late String? _toMarker = _markerOr(widget.initial.toMarker);
+  late final Set<String> _sectionIds = {
+    for (final s in exportSections(_doc))
+      if (widget.initial.sectionIds == null || widget.initial.sectionIds!.contains(s.id)) s.id,
+  };
+  late final Set<String> _trackIds = _initialTracks();
+  late final _template = TextEditingController(text: widget.initial.nameTemplate);
+  late bool _zip = widget.initial.zip;
   late bool _normalize = widget.initial.normalize && !widget.initial.normalizesLoudness;
   // normalização de loudness: o alvo volta ao pré-definido que tem o mesmo valor (senão, personalizado)
   late bool _loud = widget.initial.normalizesLoudness;
@@ -132,15 +143,67 @@ class _ExportDialogState extends State<ExportDialog> {
   // só taxas que a lista oferece; a do aparelho é o null (ela pode ter mudado desde a última vez)
   late int? _rate = _rates.contains(widget.initial.sampleRate) && widget.initial.sampleRate != widget.c.engineRate.round() ? widget.initial.sampleRate : null;
 
-  /// Início e fim do intervalo escolhido, em batidas.
-  (double, double) get _span => switch (_range) {
-    ExportRange.song => (0, _doc.contentEnd),
-    ExportRange.loop => (_doc.loopStart, _doc.loopEnd),
-  };
+  /// O id do marcador se ele ainda existe (senão, null: o começo ou o fim).
+  String? _markerOr(String? id) => id != null && _doc.markers.any((m) => m.id == id) ? id : null;
 
-  double get _spanSeconds => _doc.tempo.isSingle ? (_span.$2 - _span.$1) * 60 / _doc.bpm : _doc.secondsAt(_span.$2) - _doc.secondsAt(_span.$1);
+  ExportRange _validRange(ExportOptions o) {
+    switch (o.range) {
+      case ExportRange.loop:
+        return _hasLoopRegion(_doc) ? o.range : ExportRange.song;
+      case ExportRange.markers:
+        final stale = (o.fromMarker != null && _markerOr(o.fromMarker) == null) || (o.toMarker != null && _markerOr(o.toMarker) == null);
+        return stale || _doc.markers.isEmpty ? ExportRange.song : o.range;
+      case ExportRange.sections:
+        return exportSections(_doc).isEmpty ? ExportRange.song : o.range;
+      case ExportRange.song:
+        return o.range;
+    }
+  }
 
-  bool get _empty => _span.$2 - _span.$1 <= _minLoop;
+  /// As faixas marcadas: as da última exportação que ainda existem (todas se não sobrou nenhuma).
+  Set<String> _initialTracks() {
+    final all = [for (final t in _doc.tracks) t.id];
+    final want = widget.initial.trackIds;
+    if (want == null) return all.toSet();
+    final kept = all.where(want.contains).toSet();
+    return kept.isEmpty ? all.toSet() : kept;
+  }
+
+  bool get _allTracks => _trackIds.length == _doc.tracks.length;
+
+  /// As opções como estão na janela agora (a prévia e o botão Exportar usam as mesmas).
+  ExportOptions _current() => ExportOptions(
+    format: _format,
+    range: _range,
+    stems: _stems,
+    normalize: _normalize && !_loud,
+    targetLufs: _loud ? (_target == LoudnessTarget.custom ? _customLufs : _target.lufs) : null,
+    ceilingDbtp: _ceiling,
+    normalizeStems: _loud && _stems && _loudStems,
+    tail: _tail,
+    sampleRate: _rate,
+    flacBits: _flacBits,
+    flacLevel: _flacLevel,
+    mp3Quality: _mp3,
+    artist: _artist.text.trim(),
+    fromMarker: _fromMarker,
+    toMarker: _toMarker,
+    sectionIds: exportSections(_doc).every((s) => _sectionIds.contains(s.id)) ? null : _sectionIds.toList(),
+    trackIds: _allTracks ? null : _trackIds.toList(),
+    nameTemplate: _template.text.trim().isEmpty ? kDefaultNameTemplate : _template.text,
+    zip: _zip,
+  );
+
+  late ExportPlan _plan = planExport(_doc, _current(), project: widget.c.project.name);
+
+  double _spanLen(ExportSpan s) => _doc.tempo.isSingle ? (s.to - s.from) * 60 / _doc.bpm : _doc.secondsAt(s.to) - _doc.secondsAt(s.from);
+
+  /// A duração do maior arquivo (é ele que o servidor e o tamanho do upload limitam).
+  double get _spanSeconds => _plan.spans.fold(0.0, (m, s) => math.max(m, _spanLen(s)));
+
+  bool get _empty => _plan.problem != null;
+
+  int get _fileCount => expectedExportFiles(_doc, _current(), _plan);
 
   int get _effectiveRate => _rate ?? widget.c.engineRate.round();
 
@@ -150,6 +213,7 @@ class _ExportDialogState extends State<ExportDialog> {
   @override
   void dispose() {
     _artist.dispose();
+    _template.dispose();
     super.dispose();
   }
 
@@ -196,30 +260,169 @@ class _ExportDialogState extends State<ExportDialog> {
     return a == b ? 'Compasso $a' : 'Compassos $a a $b';
   }
 
-  void _submit() => Navigator.pop(
-    context,
-    ExportOptions(
-      format: _format,
-      range: _range,
-      stems: _stems,
-      normalize: _normalize && !_loud,
-      targetLufs: _loud ? (_target == LoudnessTarget.custom ? _customLufs : _target.lufs) : null,
-      ceilingDbtp: _ceiling,
-      normalizeStems: _loud && _stems && _loudStems,
-      tail: _tail,
-      sampleRate: _rate,
-      flacBits: _flacBits,
-      flacLevel: _flacLevel,
-      mp3Quality: _mp3,
-      artist: _artist.text.trim(),
-    ),
-  );
+  void _submit() => Navigator.pop(context, _current());
+
+  String _barAt(double beat) {
+    final m = _doc.meter;
+    return '${m.isSingle ? beat ~/ _doc.beatsPerBar + 1 : m.barOf(beat).$1}';
+  }
+
+  String _markerName(Marker m) => '${m.name.trim().isEmpty ? 'Marcador' : m.name.trim()} · compasso ${_barAt(m.beat)}';
+
+  List<Marker> get _sortedMarkers => [..._doc.markers]..sort((a, b) => a.beat.compareTo(b.beat));
+
+  /// A escolha do trecho entre dois marcadores: de onde e até onde (os extremos são o começo e o fim da música).
+  List<Widget> _markerPickers(TextStyle muted) {
+    final markers = _sortedMarkers;
+    DropdownButtonFormField<String?> picker(Key key, String label, String? value, String none, ValueChanged<String?> on) => DropdownButtonFormField<String?>(
+      key: key,
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: [
+        DropdownMenuItem<String?>(value: null, child: Text(none)),
+        for (final m in markers)
+          DropdownMenuItem<String?>(
+            value: m.id,
+            child: Text(_markerName(m), overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: (v) => setState(() => on(v)),
+    );
+    return [
+      const SizedBox(height: 12),
+      picker(const Key('export-from-marker'), 'De', _fromMarker, 'Início do projeto', (v) => _fromMarker = v),
+      const SizedBox(height: 12),
+      picker(const Key('export-to-marker'), 'Até', _toMarker, 'Fim da música', (v) => _toMarker = v),
+    ];
+  }
+
+  /// A lista de seções com uma caixa cada (todas marcadas de início).
+  List<Widget> _sectionPickers(TextStyle muted) {
+    final sections = exportSections(_doc);
+    return [
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(child: Text('${_sectionIds.length} de ${sections.length} seções', style: muted)),
+          TextButton(
+            key: const Key('export-sections-all'),
+            onPressed: () => setState(() => _sectionIds.addAll([for (final s in sections) s.id])),
+            child: const Text('Todas'),
+          ),
+          TextButton(key: const Key('export-sections-none'), onPressed: () => setState(_sectionIds.clear), child: const Text('Nenhuma')),
+        ],
+      ),
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 220),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final s in sections)
+                CheckboxListTile(
+                  key: Key('export-section-${s.id}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text(s.name, overflow: TextOverflow.ellipsis),
+                  subtitle: Text('${_bars(s.from, s.to)} · ${_clock(_spanLen(ExportSpan(from: s.from, to: s.to, label: '', n: 0, base: '')))}'),
+                  value: _sectionIds.contains(s.id),
+                  onChanged: (v) => setState(() => v == true ? _sectionIds.add(s.id) : _sectionIds.remove(s.id)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  /// Quais faixas entram: a mixagem é só delas (e os stems também).
+  Widget _trackPicker(TextStyle muted) {
+    final tracks = _doc.tracks;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: const Key('export-tracks'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        title: const Text('Faixas'),
+        subtitle: Text(_allTracks ? 'Todas (${tracks.length})' : '${_trackIds.length} de ${tracks.length}', style: muted),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton(
+                key: const Key('export-tracks-all'),
+                onPressed: () => setState(() => _trackIds.addAll([for (final t in tracks) t.id])),
+                child: const Text('Todas'),
+              ),
+              if (widget.c.selectedTrack >= 0 && widget.c.selectedTrack < tracks.length)
+                TextButton(
+                  key: const Key('export-tracks-selected'),
+                  onPressed: () => setState(() {
+                    _trackIds
+                      ..clear()
+                      ..add(tracks[widget.c.selectedTrack].id);
+                  }),
+                  child: const Text('Só a selecionada'),
+                ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final t in tracks)
+                FilterChip(
+                  key: Key('export-track-${t.id}'),
+                  label: Text(t.name, overflow: TextOverflow.ellipsis),
+                  selected: _trackIds.contains(t.id),
+                  onSelected: (v) => setState(() => v ? _trackIds.add(t.id) : _trackIds.remove(t.id)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('A mixagem leva só as faixas marcadas (o mudo do projeto continua valendo) e os stems também.', style: muted),
+        ],
+      ),
+    );
+  }
+
+  /// O modelo do nome dos arquivos e a prévia dos nomes que vão sair.
+  List<Widget> _nameFields(TextStyle muted) {
+    final spans = _plan.spans;
+    final shown = spans.take(3).map((s) => '${s.base}.${_format.extension}').toList();
+    return [
+      const SizedBox(height: 12),
+      _Label('Nome dos arquivos', style: muted),
+      TextField(
+        key: const Key('export-name-template'),
+        controller: _template,
+        maxLength: 120,
+        onChanged: (_) => setState(() {}),
+        decoration: const InputDecoration(helperText: 'Use {projeto}, {marcador} e {n}', helperMaxLines: 2, counterText: ''),
+      ),
+      if (shown.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            key: const Key('export-name-preview'),
+            '${shown.join(', ')}${spans.length > shown.length ? ' e mais ${spans.length - shown.length}' : ''}',
+            style: muted,
+          ),
+        ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall!.copyWith(color: theme.colorScheme.onSurfaceVariant);
     final loop = _hasLoopRegion(_doc);
+    _plan = planExport(_doc, _current(), project: widget.c.project.name);
     final engineRate = widget.c.engineRate.round();
     final tracks = _doc.tracks.where((t) => t.kind.hasClips).length;
     return AlertDialog(
@@ -250,13 +453,49 @@ class _ExportDialogState extends State<ExportDialog> {
                     onSelected: loop ? (_) => setState(() => _range = ExportRange.loop) : null,
                   ),
                 ),
+                Tooltip(
+                  message: _doc.markers.isEmpty ? 'Ponha marcadores na régua para exportar o trecho entre eles' : 'Um trecho entre dois marcadores',
+                  child: ChoiceChip(
+                    key: const Key('export-range-markers'),
+                    label: Text(ExportRange.markers.label),
+                    selected: _range == ExportRange.markers,
+                    onSelected: _doc.markers.isEmpty ? null : (_) => setState(() => _range = ExportRange.markers),
+                  ),
+                ),
+                Tooltip(
+                  message: _doc.markers.isEmpty
+                      ? 'Ponha marcadores na régua para dividir a música em seções'
+                      : 'Um arquivo por seção, com o nome do marcador',
+                  child: ChoiceChip(
+                    key: const Key('export-range-sections'),
+                    label: Text(ExportRange.sections.label),
+                    selected: _range == ExportRange.sections,
+                    onSelected: exportSections(_doc).isEmpty
+                        ? null
+                        : (_) => setState(() {
+                            _range = ExportRange.sections;
+                            // vários arquivos: o zip é o padrão, mas só até a pessoa mexer nele
+                            if (_sectionIds.length > 1) _zip = true;
+                          }),
+                  ),
+                ),
               ],
             ),
+            if (_range == ExportRange.markers) ..._markerPickers(muted),
+            if (_range == ExportRange.sections) ..._sectionPickers(muted),
+            if (_range == ExportRange.markers || _range == ExportRange.sections) ..._nameFields(muted),
             const SizedBox(height: 6),
             Text(
               _empty
-                  ? (_range == ExportRange.song ? 'O projeto ainda não tem clipes.' : 'A região do loop está vazia.')
-                  : '${_bars(_span.$1, _span.$2)} · ${_clock(_spanSeconds)}${_tail > 0 ? ' + ${_seconds(_tail)} de cauda' : ''}',
+                  ? (_trackIds.isEmpty
+                        ? _plan.problem!
+                        : (_range == ExportRange.song
+                              ? 'O projeto ainda não tem clipes.'
+                              : (_range == ExportRange.loop ? 'A região do loop está vazia.' : 'Escolha o trecho.')))
+                  : _plan.spans.length == 1
+                  ? '${_bars(_plan.spans.first.from, _plan.spans.first.to)} · ${_clock(_spanSeconds)}${_tail > 0 ? ' + ${_seconds(_tail)} de cauda' : ''}'
+                  : '${_plan.spans.length} arquivos · o maior com ${_clock(_spanSeconds)}${_tail > 0 ? ' + ${_seconds(_tail)} de cauda' : ''}',
+              key: const Key('export-span-summary'),
               style: muted,
             ),
             const SizedBox(height: 16),
@@ -323,6 +562,7 @@ class _ExportDialogState extends State<ExportDialog> {
               onChanged: (v) => setState(() => _rate = v),
             ),
             const SizedBox(height: 12),
+            _trackPicker(muted),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Stems'),
@@ -330,6 +570,15 @@ class _ExportDialogState extends State<ExportDialog> {
               value: _stems,
               onChanged: (v) => setState(() => _stems = v),
             ),
+            if (_fileCount > 1)
+              SwitchListTile(
+                key: const Key('export-zip'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Reunir num .zip'),
+                subtitle: Text('Um arquivo só com os $_fileCount${_stems ? ' (no máximo: faixa sem som não gera stem)' : ''}'),
+                value: _zip,
+                onChanged: (v) => setState(() => _zip = v),
+              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Normalizar'),
@@ -387,9 +636,13 @@ class _ExportDialogState extends State<ExportDialog> {
             if (_empty) ...[
               const SizedBox(height: 12),
               InlineNotice(
-                _range == ExportRange.song
+                _trackIds.isEmpty
+                    ? 'Não há o que exportar: ${_plan.problem}'
+                    : _range == ExportRange.song
                     ? 'Não há o que exportar: grave, importe ou desenhe um clipe primeiro.'
-                    : 'Não há o que exportar: a região do loop não tem duração.',
+                    : _range == ExportRange.loop
+                    ? 'Não há o que exportar: a região do loop não tem duração.'
+                    : 'Não há o que exportar: ${_plan.problem}',
               ),
             ],
           ],
@@ -479,6 +732,17 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
   /// A pessoa fechou a janela "Salvar" do aparelho (na conversão ou no "WAV mesmo assim"): exportação cancelada.
   bool _saveCanceled = false;
 
+  /// Com "Reunir num .zip": os arquivos esperam aqui e saem juntos no fim.
+  ExportZip? _zip;
+  String? _zipName;
+
+  /// Quantos intervalos a exportação tem e qual está no render ("Intervalo 2 de 5: Refrão").
+  int _spanCount = 1, _spanIndex = 0;
+  String _spanLabel = '';
+
+  /// A pessoa cancelou no meio, sem zip: quantos arquivos já tinham sido salvos.
+  int _canceledSaved = 0;
+
   /// O maior progresso já mostrado: a barra de FLAC e MP3 soma o render e a conversão e nunca recua.
   double _shown = 0;
 
@@ -496,20 +760,41 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     c.clearError();
     String? error;
     final options = widget.options;
+    final plan = planExport(c.doc, options, project: c.project.name);
+    final expected = plan.problem == null ? expectedExportFiles(c.doc, options, plan) : 1;
+    _spanCount = math.max(1, plan.spans.length);
+    if (options.zip && expected > 1) {
+      _zip = ExportZip();
+      _zipName = '${sanitizeExportName(c.project.name)}.zip';
+    }
+    final zip = _zip;
+    Future<bool> zipSave(String name, Uint8List bytes, String mime) async {
+      zip!.add(name, bytes);
+      return true;
+    }
+
     if (options.format.compressed) {
       _cx = CompressedExport(
         api: widget.api ?? ApiClient.instance,
         options: options,
         album: c.project.name,
-        expectedFiles: options.stems ? c.doc.tracks.length + 1 : 1,
-        save: c.saveExportedFile,
+        expectedFiles: expected,
+        save: zip != null ? zipSave : c.saveExportedFile,
         signedIn: widget.signedIn ?? () => Session.instance.signedIn,
       )..addListener(() => mounted ? setState(() {}) : null);
     }
     try {
       await c.exportAudio(
         options,
-        sink: _cx?.deliver,
+        sink: _cx?.deliver ?? (zip == null ? null : (n, b) async => zip.add(n, b)),
+        onSpan: (i, n, label) {
+          if (!mounted) return;
+          setState(() {
+            _spanIndex = i;
+            _spanCount = n;
+            _spanLabel = label;
+          });
+        },
         onProgress: (p) {
           if (!mounted || !p.isFinite) return;
           final v = p.clamp(0.0, 1.0);
@@ -525,7 +810,13 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     _elapsed.stop();
     if (!mounted) return;
     if (_canceled) {
-      Navigator.pop(context, false);
+      // vários arquivos soltos: o que já foi salvo antes do cancelamento fica, e a pessoa precisa saber
+      final saved = zip != null ? 0 : (_cx?.compressed ?? c.exportSavedCount);
+      if (saved == 0) {
+        Navigator.pop(context, false);
+        return;
+      }
+      setState(() => _canceledSaved = saved);
       return;
     }
     final said = c.error;
@@ -540,8 +831,14 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
       }
     }
     final pending = _cx?.fallbacks.isNotEmpty ?? false;
+    // o zip sai quando tudo está pronto; com WAV caído por falta de servidor, espera a pessoa decidir
+    var zipCanceled = false;
+    if (zip != null && error == null && !pending && !(_cx?.saveCanceled ?? false) && c.exportSaveCanceledName == null) {
+      zipCanceled = !await _saveZip();
+      if (!mounted) return;
+    }
     // WAV direto: o controlador avisa que o "Salvar" foi cancelado; compactado: o CompressedExport
-    final saveCanceled = (_cx?.saveCanceled ?? false) || c.exportSaveCanceledName != null;
+    final saveCanceled = (_cx?.saveCanceled ?? false) || c.exportSaveCanceledName != null || zipCanceled;
     setState(() {
       _saveCanceled = error == null && saveCanceled;
       _fallback = error == null && pending && !saveCanceled;
@@ -550,6 +847,17 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
       _warning = warning;
     });
   }
+
+  /// Fecha o zip e o entrega pelo caminho do "Salvar" (false se a pessoa fechou a janela do aparelho).
+  Future<bool> _saveZip() async {
+    final zip = _zip!;
+    if (zip.count == 0) return true;
+    final ok = await widget.c.saveExportedFile(_zipName!, zip.build(), 'application/zip');
+    if (!ok) _zipCanceledName = _zipName;
+    return ok;
+  }
+
+  String? _zipCanceledName;
 
   void _cancel() {
     setState(() => _canceled = true);
@@ -563,7 +871,13 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     try {
       final n = await _cx!.saveWavs();
       if (!mounted) return;
-      final left = _cx!.fallbacks.isNotEmpty;
+      var left = _cx!.fallbacks.isNotEmpty;
+      if (!left && _zip != null) {
+        // os WAV que caíram entram no zip junto dos compactados
+        final ok = await _saveZip();
+        if (!mounted) return;
+        left = !ok;
+      }
       setState(() {
         _wavSaved += n;
         // sobrou WAV sem salvar: a janela "Salvar" foi fechada no meio
@@ -582,7 +896,7 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     }
   }
 
-  bool get _running => !_done && _error == null && !_fallback && !_saveCanceled;
+  bool get _running => !_done && _error == null && !_fallback && !_saveCanceled && _canceledSaved == 0;
 
   /// Em que formatos saiu o que foi salvo: "MP3", "WAV" (a queda) ou "2 em FLAC, 1 em WAV" quando misturou.
   String get _savedFormats {
@@ -611,14 +925,20 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     final muted = theme.textTheme.bodySmall!.copyWith(color: theme.colorScheme.onSurfaceVariant);
     final cx = _cx;
     // compactado: o CompressedExport sabe o nome e quantos já saíram; WAV direto: o controlador
-    final canceledName = cx?.canceledName ?? widget.c.exportSaveCanceledName;
-    final savedBefore = cx != null ? cx.compressed : widget.c.exportSavedCount;
+    final canceledName = _zipCanceledName ?? cx?.canceledName ?? widget.c.exportSaveCanceledName;
+    final savedBefore = _zip != null ? 0 : (cx != null ? cx.compressed : widget.c.exportSavedCount);
     final stage = cx?.stage;
     final p = _barValue();
     // o texto do render fala do render, não da barra somada
     final render = _progress;
     final Widget body;
-    if (_saveCanceled && !_fallback) {
+    if (_canceledSaved > 0) {
+      body = InlineNotice(
+        key: const Key('export-canceled-partial'),
+        'Exportação cancelada no meio: ${_canceledSaved == 1 ? 'um arquivo já tinha sido salvo e continua' : '$_canceledSaved arquivos já tinham sido salvos e continuam'} '
+        'nos downloads ou onde você escolheu. Os outros não foram gerados.',
+      );
+    } else if (_saveCanceled && !_fallback) {
       body = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -644,7 +964,9 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
             ),
           const SizedBox(height: 12),
           Text(
-            cx.compressed > 0
+            _zip != null
+                ? 'Nada foi salvo ainda: os arquivos ficam prontos para o .zip. Dá para exportar tudo em WAV (os $n que falharam vão em WAV, o resto já compactado) sem renderizar de novo.'
+                : cx.compressed > 0
                 ? '${cx.compressed} ${cx.compressed == 1 ? 'arquivo foi salvo compactado' : 'arquivos foram salvos compactados'}. '
                       '${n == 1 ? 'O outro já está renderizado' : 'Os outros $n já estão renderizados'} em WAV: dá para salvar assim, sem renderizar de novo.'
                 : 'O ${n == 1 ? 'arquivo já está renderizado' : 'áudio já está renderizado ($n arquivos)'} em WAV: dá para salvar assim, sem renderizar de novo.',
@@ -658,6 +980,14 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         children: [
           LinearProgressIndicator(value: p, minHeight: 6, borderRadius: BorderRadius.circular(3)),
           const SizedBox(height: 10),
+          if (_spanCount > 1) ...[
+            Text(
+              key: const Key('export-span-progress'),
+              'Intervalo ${_spanIndex + 1} de $_spanCount${_spanLabel.isEmpty ? '' : ': $_spanLabel'}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+          ],
           Text(
             // o render termina antes do arquivo: no fim ainda falta converter e entregar os bytes
             stage ??
@@ -666,7 +996,9 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
                     : render >= 1
                     ? 'Salvando o arquivo…'
                     // depois dos 95% o render acabou e a mixagem está sendo medida e normalizada
-                    : (render >= 0.95 && widget.options.normalizesLoudness ? 'Medindo o loudness…' : 'Renderizando ${(render * 100).floor()}%')),
+                    : (render >= 0.95 && widget.options.normalizesLoudness && _spanCount == 1
+                          ? 'Medindo o loudness…'
+                          : 'Renderizando ${(render * 100).floor()}%')),
             style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
           ),
           const SizedBox(height: 6),
@@ -689,17 +1021,26 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  widget.options.stems
+                  _zip != null
+                      ? 'Os ${_zip!.count} arquivos ($format) foram reunidos em "$_zipName" em $secs s. No navegador, o arquivo fica nos downloads.'
+                      : _spanCount > 1
+                      ? 'Os arquivos de $_spanCount intervalos foram salvos ($format) em $secs s. No navegador, eles ficam nos downloads.'
+                      : widget.options.stems
                       ? 'A mixagem e os stems foram salvos ($format) em $secs s. No navegador, os arquivos ficam nos downloads.'
                       : 'A mixagem foi salva ($format) em $secs s. No navegador, o arquivo fica nos downloads.',
                 ),
               ),
             ],
           ),
-          if (report != null) ...[
+          if (report != null && widget.c.exportReports.length <= 1) ...[
             const SizedBox(height: 12),
             // o que a normalização fez: quando o teto segurou o ganho ou não deu para medir, em aviso
             if (report.limitedByCeiling || report.unmeasurable) InlineNotice(report.describe()) else Text(report.describe()),
+          ] else if (report != null) ...[
+            const SizedBox(height: 12),
+            Text('O loudness foi normalizado em cada um dos ${widget.c.exportReports.length} arquivos.'),
+            for (final r in widget.c.exportReports)
+              if (r.report.limitedByCeiling || r.report.unmeasurable) ...[const SizedBox(height: 8), InlineNotice('${r.name}: ${r.report.describe()}')],
           ],
           if (warning != null) ...[const SizedBox(height: 12), InlineNotice(warning)],
           for (final w in cx?.warnings ?? const <String>[]) ...[const SizedBox(height: 12), InlineNotice(sentence(w))],
@@ -716,12 +1057,16 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         title: Text(
           _running
               ? 'Exportando…'
+              : _canceledSaved > 0
+              ? 'Exportação cancelada'
               : (_saveCanceled ? 'Exportação cancelada' : (_fallback ? 'Não deu para compactar' : (_done ? 'Exportação concluída' : 'A exportação falhou'))),
         ),
         content: SizedBox(width: 400, child: body),
         actions: [
           if (_running)
             TextButton(onPressed: _canceled || (render ?? 0) >= 1 && cx == null ? null : _cancel, child: Text(_canceled ? 'Cancelando…' : 'Cancelar'))
+          else if (_canceledSaved > 0)
+            FilledButton(onPressed: () => Navigator.pop(context, false), child: const Text('Fechar'))
           else if (_saveCanceled && !_fallback) ...[
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Fechar')),
             FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Voltar às opções')),

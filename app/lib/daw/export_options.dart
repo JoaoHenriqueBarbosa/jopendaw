@@ -83,12 +83,21 @@ const kEncodeMaxUploadBytes = 512 * 1024 * 1024;
 /// bits por amostra.
 int estimatedWavBytes(double seconds, int rate, int bits) => 44 + (seconds * rate).ceil() * 2 * (bits ~/ 8);
 
+/// O modelo de nome padrão dos arquivos por marcador.
+const kDefaultNameTemplate = '{projeto}-{marcador}-{n}';
+
 enum ExportRange {
   /// Do começo até o fim do último clipe (mais a cauda).
   song('Música inteira'),
 
   /// A região do loop.
-  loop('Região do loop');
+  loop('Região do loop'),
+
+  /// O trecho entre dois marcadores escolhidos ([ExportOptions.fromMarker] e [ExportOptions.toMarker]).
+  markers('Entre marcadores'),
+
+  /// Um arquivo por seção: cada trecho entre marcadores consecutivos, com o nome do marcador (ver `export_plan.dart`).
+  sections('Uma por seção');
 
   final String label;
   const ExportRange(this.label);
@@ -132,6 +141,22 @@ class ExportOptions {
   /// FLAC e MP3: artista nos metadados do arquivo (vazio: sem artista).
   final String artist;
 
+  /// [ExportRange.markers]: os marcadores de onde e até onde (null = o começo do projeto / o fim da música).
+  final String? fromMarker, toMarker;
+
+  /// [ExportRange.sections]: quais seções (o id do marcador que abre cada uma; '' é o trecho antes do primeiro
+  /// marcador). Null = todas.
+  final List<String>? sectionIds;
+
+  /// As faixas que entram (ids): a mixagem é só delas e os stems também. Null = todas.
+  final List<String>? trackIds;
+
+  /// Modelo do nome dos arquivos nos intervalos por marcador: `{projeto}`, `{marcador}` e `{n}` (ver `export_plan.dart`).
+  final String nameTemplate;
+
+  /// Reúne todos os arquivos num único .zip (vale quando saem vários).
+  final bool zip;
+
   const ExportOptions({
     this.format = ExportFormat.wav24,
     this.range = ExportRange.song,
@@ -146,6 +171,12 @@ class ExportOptions {
     this.flacLevel = FlacLevel.standard,
     this.mp3Quality = Mp3Quality.cbr192,
     this.artist = '',
+    this.fromMarker,
+    this.toMarker,
+    this.sectionIds,
+    this.trackIds,
+    this.nameTemplate = kDefaultNameTemplate,
+    this.zip = false,
   });
 
   /// O formato do WAV que o render entrega: o próprio [format] nos WAV; nos compactados, o que vai ao servidor (16

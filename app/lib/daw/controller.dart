@@ -36,6 +36,7 @@ import 'automation_record.dart';
 import 'comp.dart';
 import 'effects.dart';
 import 'export_options.dart';
+import 'export_plan.dart';
 import 'freeze.dart';
 import 'history.dart';
 import 'instruments.dart';
@@ -4528,6 +4529,9 @@ class DawController extends ChangeNotifier {
   /// ainda não terminou).
   LoudnessReport? exportReport;
 
+  /// O relatório de cada arquivo da última exportação com loudness (um por intervalo).
+  List<({String name, LoudnessReport report})> exportReports = [];
+
   /// Nome do arquivo cujo "Salvar" a pessoa cancelou no WAV direto da última exportação (null: nenhum).
   /// A exportação para nesse arquivo.
   String? exportSaveCanceledName;
@@ -5910,113 +5914,143 @@ class DawController extends ChangeNotifier {
   ///
   /// [sink] recebe cada WAV renderizado (nome com `.wav`) no lugar do salvamento direto: é por onde o FLAC e o MP3
   /// passam pelo servidor (`export_compressed.dart`). Sem ele, o arquivo é salvo como WAV.
-  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress, Future<void> Function(String name, Uint8List wav)? sink}) async {
+  Future<void> exportAudio(
+    ExportOptions options, {
+    void Function(double progress)? onProgress,
+    Future<void> Function(String name, Uint8List wav)? sink,
+    void Function(int index, int count, String label)? onSpan,
+  }) async {
     if (!ready || _busyFor('exportar')) return;
     final d = doc;
-    final loop = options.range == ExportRange.loop;
-    final from = loop ? d.loopStart : 0.0;
-    final to = loop ? d.loopEnd : d.contentEnd;
-    if (!(to > from + 1e-9)) {
-      error = loop ? 'A região do loop está vazia: marque o loop antes de exportar.' : 'O projeto está vazio: não há nada para exportar.';
+    final plan = planExport(d, options, project: project.name);
+    if (plan.problem != null) {
+      error = plan.problem;
       notifyListeners();
       return;
     }
+    final spans = plan.spans;
     final rate = (options.sampleRate ?? engineRate).toDouble();
     final tail = options.tail.isFinite ? options.tail.clamp(0.0, 60.0).toDouble() : 0.0;
-    final outputs = [
-      -1,
-      if (options.stems)
-        for (var i = 0; i < d.tracks.length; i++) i,
-    ];
-    final base = _fileName(project.name, 'jopendaw');
-    final names = <int, String>{-1: '$base.wav'};
-    final taken = {'$base.wav'.toLowerCase()};
-    for (final i in outputs.skip(1)) {
-      final stem = _fileName(d.tracks[i].name, 'Faixa ${i + 1}');
-      var name = '$base - $stem.wav';
+    final picked = exportTrackIndexes(d, options);
+    final outputs = [-1, if (options.stems) ...picked];
+    // os nomes de cada intervalo: a mixagem e, com stems, uma por faixa, sem repetir nenhum (nem entre intervalos)
+    final names = <List<String>>[];
+    final taken = <String>{};
+    String unique(String stem) {
+      var name = '$stem.wav';
       for (var k = 2; taken.contains(name.toLowerCase()); k++) {
-        name = '$base - $stem ($k).wav';
+        name = '$stem ($k).wav';
       }
       taken.add(name.toLowerCase());
-      names[i] = name;
+      return name;
+    }
+
+    for (final span in spans) {
+      names.add([
+        unique(span.base),
+        for (final i in outputs.skip(1)) unique('${span.base} - ${_fileName(d.tracks[i].name, 'Faixa ${i + 1}')}'),
+      ]);
     }
     await _settleWarp();
     if (_disposed) return;
     final used = _usedHashes();
     final lost = used.where((h) => !_sampleIds.containsKey(h)).length;
-    final calls = _fullSyncCalls();
+    // só algumas faixas: a mixagem delas é o solo delas (o mudo do projeto continua valendo; o barramento que elas
+    // alimentam segue soando, como no mixer)
+    final calls = options.trackIds == null ? _fullSyncCalls() : _callsFor(_soloDoc(d, picked));
     final samples = _samplesFor(used);
     _rendering = true;
     _exportCanceled = false;
     exportReport = null;
+    exportReports = [];
     exportSaveCanceledName = null;
     exportSavedCount = 0;
     status = 'Exportando…';
     notifyListeners();
-    // ganho da mixagem em dB, para os stems quando pedirem o mesmo (a mixagem é a primeira saída)
-    double? mixGainDb;
+    var skipped = 0;
     try {
-      final perOutput = ((d.secondsAt(to) - d.secondsAt(from)) + tail) * rate * 2 * 4;
-      final size = math.max(1, (_renderBudget / perOutput).floor());
-      final batches = [for (var i = 0; i < outputs.length; i += size) outputs.sublist(i, math.min(outputs.length, i + size))];
-      for (var b = 0; b < batches.length; b++) {
-        final batch = batches[b];
-        final result = await _engine.renderOffline(
-          calls: calls,
-          samples: samples,
-          fromBeat: from,
-          toBeat: to,
-          tailSeconds: tail,
-          outputs: batch,
-          rate: rate,
-          onProgress: onProgress == null ? null : (p) => onProgress(((b + (p.isFinite ? p.clamp(0.0, 1.0) : 0.0)) / batches.length) * 0.95),
-        );
-        if (_disposed) return;
-        for (var k = 0; k < batch.length && k < result.length; k++) {
-          final channels = result[k];
-          if (channels.isEmpty) continue;
-          final peak = _peak(channels);
-          // stem que não soa (vazia, muda, calada pelo solo): um arquivo de silêncio não serve
-          if (batch[k] >= 0 && peak == 0) continue;
-          final target = options.targetLufs;
-          if (target != null) {
-            if (batch[k] == -1) {
-              final r = await normalizeLoudness(
-                channels,
-                rate,
-                targetLufs: target.clamp(kMinTargetLufs, kMaxTargetLufs).toDouble(),
-                ceilingDb: options.ceilingDbtp.clamp(kMinCeiling, kMaxCeiling).toDouble(),
-                onProgress: onProgress == null ? null : (p) => onProgress(0.95 + 0.04 * p),
-                isCanceled: () => _exportCanceled || _disposed,
-              );
-              if (_exportCanceled) throw const RenderCanceled();
-              exportReport = r.report;
-              if (!r.report.unmeasurable) mixGainDb = r.gainDb;
-            } else if (options.normalizeStems && mixGainDb != null && mixGainDb != 0) {
-              scaleChannels(channels, dbToGain(mixGainDb));
-            }
-          } else if (options.normalize && peak > 0) {
-            _scale(channels, dbToGain(-1) / peak);
-          }
-          final bytes = encodeWav(channels, rate.round(), options.renderFormat);
-          if (sink != null) {
-            await sink(names[batch[k]]!, bytes);
-          } else {
-            final saved = await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
-            if (_disposed) return;
-            if (!saved) {
-              // a pessoa fechou a janela "Salvar" (só o Android sabe dizer): não é "Exportação concluída"
-              // e não adianta insistir nos próximos arquivos
-              exportSaveCanceledName = names[batch[k]];
-              return;
-            }
-            exportSavedCount++;
-          }
+      for (var si = 0; si < spans.length; si++) {
+        if (_exportCanceled || _disposed) throw const RenderCanceled();
+        final span = spans[si];
+        final from = span.from, to = span.to;
+        onSpan?.call(si, spans.length, span.label);
+        void report(double p) => onProgress?.call(((si + p) / spans.length).clamp(0.0, 0.999).toDouble());
+        // ganho da mixagem em dB, para os stems quando pedirem o mesmo (a mixagem é a primeira saída); cada arquivo
+        // tem o seu: o loudness é medido por intervalo
+        double? mixGainDb;
+        final perOutput = ((d.secondsAt(to) - d.secondsAt(from)) + tail) * rate * 2 * 4;
+        final size = math.max(1, (_renderBudget / perOutput).floor());
+        final batches = [for (var i = 0; i < outputs.length; i += size) outputs.sublist(i, math.min(outputs.length, i + size))];
+        for (var b = 0; b < batches.length; b++) {
+          final batch = batches[b];
+          final result = await _engine.renderOffline(
+            calls: calls,
+            samples: samples,
+            fromBeat: from,
+            toBeat: to,
+            tailSeconds: tail,
+            outputs: batch,
+            rate: rate,
+            onProgress: onProgress == null ? null : (p) => report(((b + (p.isFinite ? p.clamp(0.0, 1.0) : 0.0)) / batches.length) * 0.95),
+          );
           if (_disposed) return;
+          for (var k = 0; k < batch.length && k < result.length; k++) {
+            final channels = result[k];
+            if (channels.isEmpty) continue;
+            final peak = _peak(channels);
+            // stem que não soa (vazia, muda, calada pelo solo): um arquivo de silêncio não serve
+            if (batch[k] >= 0 && peak == 0) continue;
+            // vários intervalos: uma seção sem som (nada toca ali nas faixas escolhidas) também fica de fora
+            if (batch[k] < 0 && peak == 0 && spans.length > 1) {
+              skipped++;
+              continue;
+            }
+            final target = options.targetLufs;
+            if (target != null) {
+              if (batch[k] == -1) {
+                final r = await normalizeLoudness(
+                  channels,
+                  rate,
+                  targetLufs: target.clamp(kMinTargetLufs, kMaxTargetLufs).toDouble(),
+                  ceilingDb: options.ceilingDbtp.clamp(kMinCeiling, kMaxCeiling).toDouble(),
+                  onProgress: onProgress == null ? null : (p) => report(0.95 + 0.04 * p),
+                  isCanceled: () => _exportCanceled || _disposed,
+                );
+                if (_exportCanceled) throw const RenderCanceled();
+                exportReport = r.report;
+                exportReports.add((name: names[si][0], report: r.report));
+                if (!r.report.unmeasurable) mixGainDb = r.gainDb;
+              } else if (options.normalizeStems && mixGainDb != null && mixGainDb != 0) {
+                scaleChannels(channels, dbToGain(mixGainDb));
+              }
+            } else if (options.normalize && peak > 0) {
+              _scale(channels, dbToGain(-1) / peak);
+            }
+            final bytes = encodeWav(channels, rate.round(), options.renderFormat);
+            final name = names[si][outputs.indexOf(batch[k])];
+            if (sink != null) {
+              await sink(name, bytes);
+            } else {
+              final saved = await _engine.saveFile(name, bytes, 'audio/wav');
+              if (_disposed) return;
+              if (!saved) {
+                // a pessoa fechou a janela "Salvar" (só o Android sabe dizer): não é "Exportação concluída"
+                // e não adianta insistir nos próximos arquivos
+                exportSaveCanceledName = name;
+                return;
+              }
+              exportSavedCount++;
+            }
+            if (_disposed) return;
+          }
         }
       }
       onProgress?.call(1);
-      if (lost > 0) error = 'Exportado sem ${lost == 1 ? 'um áudio que não está' : '$lost áudios que não estão'} neste aparelho.';
+      final notes = <String>[
+        if (lost > 0) 'Exportado sem ${lost == 1 ? 'um áudio que não está' : '$lost áudios que não estão'} neste aparelho.',
+        if (skipped > 0) '${skipped == 1 ? 'Uma seção sem som ficou' : '$skipped seções sem som ficaram'} de fora.',
+      ];
+      if (notes.isNotEmpty) error = notes.join(' ');
     } on RenderCanceled {
       // quem cancelou já sabe: não é falha
     } catch (e) {
@@ -6026,6 +6060,15 @@ class DawController extends ChangeNotifier {
       status = null;
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Uma cópia do documento em que só as faixas de [picked] estão em solo (as outras, não): o render da mixagem delas.
+  DawDoc _soloDoc(DawDoc d, List<int> picked) {
+    final copy = DawDoc.fromJson(jsonDecode(jsonEncode(d.toJson())));
+    for (var i = 0; i < copy.tracks.length; i++) {
+      copy.tracks[i].solo = picked.contains(i);
+    }
+    return copy;
   }
 
   /// Salva um arquivo exportado pelo mesmo caminho dos WAV (seletor do aparelho, downloads no navegador).

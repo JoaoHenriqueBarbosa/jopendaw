@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 
 import '../widgets/dialogs.dart';
 import 'controller.dart';
+import 'export.dart' show showExportDialog;
+import 'export_options.dart';
 import 'model.dart';
 
 /// M: marcador no cursor. Já havendo um ali, ele só fica selecionado.
@@ -44,6 +46,7 @@ Future<void> showMarkerMenu(BuildContext context, DawController c, Marker m, Off
     items: [
       const PopupMenuItem(value: 'rename', child: Text('Renomear')),
       const PopupMenuItem(value: 'loop', child: Text('Loop desta seção')),
+      const PopupMenuItem(value: 'export', child: Text('Exportar esta seção…')),
       PopupMenuItem(
         enabled: false,
         child: Wrap(
@@ -83,6 +86,14 @@ Future<void> showMarkerMenu(BuildContext context, DawController c, Marker m, Off
     case 'loop':
       c.seek(m.beat);
       c.loopSection();
+    case 'export':
+      // do marcador até o próximo (ou o fim da música): o diálogo de exportação já abre com esse trecho
+      final next = ([...c.doc.markers]..sort((a, b) => a.beat.compareTo(b.beat))).where((x) => x.beat > m.beat + 1e-6).firstOrNull;
+      await showExportDialog(
+        context,
+        c,
+        preset: ExportOptions(range: ExportRange.markers, fromMarker: m.id, toMarker: next?.id),
+      );
     case 'delete':
       c.removeMarker(m.id);
     default:

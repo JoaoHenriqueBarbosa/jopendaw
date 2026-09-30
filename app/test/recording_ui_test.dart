@@ -115,7 +115,12 @@ class FakeDaw extends DawController {
   }
 
   @override
-  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress, Future<void> Function(String name, Uint8List wav)? sink}) async {
+  Future<void> exportAudio(
+    ExportOptions options, {
+    void Function(double progress)? onProgress,
+    Future<void> Function(String name, Uint8List wav)? sink,
+    void Function(int index, int count, String label)? onSpan,
+  }) async {
     exported = options;
     onProgress?.call(0.25);
     await exportGate?.future;
@@ -485,6 +490,8 @@ void main() {
     await t.tap(find.text('abrir'));
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
+    // o diálogo rola: com os seletores de intervalo o formato fica abaixo da dobra em 640 px de altura
+    await t.ensureVisible(find.text('WAV 24 bits'));
     await t.tap(find.text('WAV 24 bits'));
     await t.pumpAndSettle();
     await t.tap(find.text('WAV 32 bits float').last);
