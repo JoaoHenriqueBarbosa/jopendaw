@@ -10,7 +10,10 @@ void main() {
     test('modelo ${t.label}: documento válido, envios para barramentos que existem, JSON de ida e volta', () {
       final doc = t.build(bpm: 120, beatsPerBar: 4);
       expect(doc.tracks, isNotEmpty);
-      final buses = {for (final x in doc.tracks) if (x.kind == TrackKind.bus) x.id};
+      final buses = {
+        for (final x in doc.tracks)
+          if (x.kind == TrackKind.bus) x.id,
+      };
       for (final x in doc.tracks) {
         for (final s in x.sends) {
           expect(buses, contains(s.target));

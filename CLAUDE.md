@@ -45,8 +45,14 @@ mixer, metrônomo; testes em `engine/src/lib.rs`). Na web ele roda compilado em 
 (`engine/wasm/`, funções C sem wasm-bindgen) dentro de um AudioWorklet: `app/web/engine/worklet.js`
 hospeda o módulo, `host.js` é a ponte com o Dart (`lib/audio/engine_web.dart`) e guarda documento
 e áudios no IndexedDB. O host manda os *bytes* do wasm, não o `WebAssembly.Module`: o Chrome não
-entrega módulo compilado ao escopo do worklet. No Android o mesmo crate entra como lib nativa com
-Oboe (a fazer). Mudou o motor: `./engine/build-web.sh` e commite o `engine.wasm` junto.
+entrega módulo compilado ao escopo do worklet. No Android o mesmo motor roda nativo: `engine/android`
+(cdylib `libjopendaw_engine.so`, superfície C `jd_*`, saída/entrada por AAudio, fila de comandos
+sem trava, decodificação com symphonia, render offline) e `lib/audio/engine_ffi.dart` (dart:ffi);
+`engine::api::apply` despacha as chamadas por nome, o mesmo protocolo do worklet. Mudou o motor:
+`./engine/build-web.sh` e `./engine/build-android.sh` (NDK 28; `ANDROID_NDK_HOME`) e commite o
+`engine.wasm` e os `.so` juntos: sem recompilar os `.so` o Android fica com o motor velho (e mudo,
+se o `apply` for novo). Emulador: `flutter test integration_test -d emulator-5554`; o app aponta
+para o servidor local com `--dart-define=API_BASE=http://10.0.2.2:8080`.
 
 Lado Flutter em `lib/daw/`: `model.dart` (documento: faixas, clipes em batidas/segundos),
 `controller.dart` (edição, desfazer, sync com o motor a cada mudança, importação com sha-256),

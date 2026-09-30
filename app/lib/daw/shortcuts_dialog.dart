@@ -47,7 +47,11 @@ List<(String, List<(String, String)>)> _groups() => [
   ),
   (
     'Teclado do computador ($_mod+K liga)',
-    [('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima'), ('Z  /  X', 'Oitava abaixo / acima'), ('C  /  V', 'Velocidade menor / maior')],
+    [
+      ('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima'),
+      ('Z  /  X', 'Oitava abaixo / acima'),
+      ('C  /  V', 'Velocidade menor / maior'),
+    ],
   ),
   (
     'Piano roll',
