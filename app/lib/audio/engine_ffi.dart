@@ -21,6 +21,8 @@
 ///     void   jd_decoded_info(handle, *frames, *channels, f64* rate)   inteiros de até 64 bits
 ///     void   jd_decoded_copy(handle, usize channel, f32* out)          `frames` floats
 ///     void   jd_decoded_free(handle)
+///     handle jd_stretch(f32* l, f32* r, usize frames, f64 rate, f64 ratio, f64 semitones)   como jd_decode
+///     i32    jd_detect_bpm(f32* l, f32* r, usize frames, f64 rate, f64* bpm, f64* confidence)
 ///     f64    jd_input_start(i32 device)                   latência de entrada (s); < 0 erro; −1 = padrão
 ///     void   jd_input_stop()
 ///     usize  jd_input_devices(u8* out, usize max)         tamanho do JSON (maior que max: não coube)
@@ -126,6 +128,16 @@ final class EngineLib {
       >('jd_decoded_info');
   late final decodedCopy = _lib.lookupFunction<Void Function(IntPtr, IntPtr, Pointer<Float>), void Function(int, int, Pointer<Float>)>('jd_decoded_copy');
   late final decodedFree = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_decoded_free');
+  late final stretch = _lib
+      .lookupFunction<
+        IntPtr Function(Pointer<Float>, Pointer<Float>, IntPtr, Double, Double, Double),
+        int Function(Pointer<Float>, Pointer<Float>, int, double, double, double)
+      >('jd_stretch');
+  late final detectBpm = _lib
+      .lookupFunction<
+        Int32 Function(Pointer<Float>, Pointer<Float>, IntPtr, Double, Pointer<Double>, Pointer<Double>),
+        int Function(Pointer<Float>, Pointer<Float>, int, double, Pointer<Double>, Pointer<Double>)
+      >('jd_detect_bpm');
   late final inputStart = _lib.lookupFunction<Double Function(IntPtr), double Function(int)>('jd_input_start');
   late final inputStop = _lib.lookupFunction<Void Function(), void Function()>('jd_input_stop');
   late final inputDevices = _lib.lookupFunction<IntPtr Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_input_devices');
@@ -640,6 +652,59 @@ DecodedAudio decodeNow(Uint8List bytes, String library) {
   }
 }
 
+/// Esticar e transpor no isolate atual (o chamado roda num isolate; ver [FfiEngine.stretch]).
+DecodedAudio stretchNow(DecodedAudio a, double ratio, double semitones, String library) {
+  final lib = EngineLib.open(library);
+  final l = a.channels[0];
+  final r = a.channels.length > 1 ? a.channels[1] : null;
+  final frames = r == null ? l.length : math.min(l.length, r.length);
+  final handle = _withNativeFloats(l, frames, (pl) => _withNativeFloats(r, frames, (pr) => lib.stretch(pl, pr, frames, a.rate, ratio, semitones)));
+  if (handle == 0) throw StateError('Não deu para processar este áudio (memória ou parâmetros inválidos).');
+  final framesCell = calloc<Uint64>();
+  final channelsCell = calloc<Uint64>();
+  final rateCell = calloc<Double>();
+  try {
+    lib.decodedInfo(handle, framesCell, channelsCell, rateCell);
+    final n = framesCell.value, channels = channelsCell.value;
+    final out = malloc<Float>(math.max(1, n));
+    try {
+      final list = <Float32List>[];
+      for (var c = 0; c < math.min(2, channels); c++) {
+        lib.decodedCopy(handle, c, out);
+        list.add(Float32List.fromList(out.asTypedList(n)));
+      }
+      return DecodedAudio(list, a.rate);
+    } finally {
+      malloc.free(out);
+    }
+  } finally {
+    calloc
+      ..free(framesCell)
+      ..free(channelsCell)
+      ..free(rateCell);
+    lib.decodedFree(handle);
+  }
+}
+
+/// Estimar o andamento no isolate atual.
+({double bpm, double confidence}) detectBpmNow(DecodedAudio a, String library) {
+  final lib = EngineLib.open(library);
+  final l = a.channels[0];
+  final r = a.channels.length > 1 ? a.channels[1] : null;
+  final frames = r == null ? l.length : math.min(l.length, r.length);
+  final bpm = calloc<Double>();
+  final confidence = calloc<Double>();
+  try {
+    final code = _withNativeFloats(l, frames, (pl) => _withNativeFloats(r, frames, (pr) => lib.detectBpm(pl, pr, frames, a.rate, bpm, confidence)));
+    if (code != 0) throw StateError('Não deu para analisar o andamento deste áudio.');
+    return (bpm: bpm.value, confidence: confidence.value);
+  } finally {
+    calloc
+      ..free(bpm)
+      ..free(confidence);
+  }
+}
+
 // ------------------------------------------------------------------ o motor que toca
 
 /// O motor nativo tocando no aparelho, com a mesma interface do engine_web.dart (a documentação de
@@ -777,6 +842,23 @@ final class FfiEngine {
 
   // estático: o closure do isolate não pode levar o motor junto (timers e portas não viajam)
   static Future<DecodedAudio> _decodeIn(Uint8List bytes, String library) => Isolate.run(() => decodeNow(bytes, library), debugName: 'jopendaw: decodificar');
+
+  /// Warp num isolate (o processamento leva de centenas de ms a segundos e não trava a tela).
+  Future<DecodedAudio> stretch(DecodedAudio a, {required double ratio, double semitones = 0}) {
+    _open();
+    return _stretchIn(a, ratio, semitones, library);
+  }
+
+  static Future<DecodedAudio> _stretchIn(DecodedAudio a, double ratio, double semitones, String library) =>
+      Isolate.run(() => stretchNow(a, ratio, semitones, library), debugName: 'jopendaw: warp');
+
+  Future<({double bpm, double confidence})> detectBpm(DecodedAudio a) {
+    _open();
+    return _detectIn(a, library);
+  }
+
+  static Future<({double bpm, double confidence})> _detectIn(DecodedAudio a, String library) =>
+      Isolate.run(() => detectBpmNow(a, library), debugName: 'jopendaw: andamento');
 
   /// sha-256 em hexa; arquivo grande num isolate (centenas de MB levariam segundos na tela).
   Future<String> sha256Hex(Uint8List bytes) async {

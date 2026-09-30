@@ -26,6 +26,7 @@ import 'instruments.dart';
 import 'model.dart';
 import 'sync.dart';
 import 'templates.dart';
+import 'warp.dart';
 import 'wav.dart';
 
 /// Resumo de um áudio para desenhar a onda: mínimo e máximo a cada [bucket] quadros.
@@ -476,6 +477,38 @@ class DawController extends ChangeNotifier {
   final waveforms = <String, Waveform>{};
   final _sampleIds = <String, int>{};
 
+  /// Os sons derivados do warp (esticados, transpostos, invertidos) dos clipes.
+  late final WarpCache _warp = WarpCache(
+    engine: _engine,
+    store: _store,
+    source: (sha) {
+      final id = _sampleIds[sha];
+      return id == null ? null : _decoded[id];
+    },
+    register: (key, audio) {
+      // mesmo caminho do `_register`, sem forma de onda nem `missing`: o derivado não é um áudio do projeto
+      final id = _sampleIds['warp:$key'] ??= _sampleIds.length + 1;
+      _engine.loadSample(id, audio);
+      _decoded[id] = audio;
+      return id;
+    },
+    drop: (key, id) {
+      _engine.calls([
+        ['sample_drop', id],
+      ]);
+      _decoded.remove(id);
+    },
+    onChange: () {
+      if (_disposed) return;
+      _sync();
+      notifyListeners();
+    },
+    debounce: warpDebounce,
+  );
+
+  /// Espera antes de refazer os sons do warp depois de uma mudança (os testes zeram).
+  Duration warpDebounce = const Duration(milliseconds: 400);
+
   /// Áudios citados no documento que não estão neste aparelho.
   final missing = <String>{};
 
@@ -703,6 +736,7 @@ class DawController extends ChangeNotifier {
     }
     editorKeyHandler = null;
     _saveTimer?.cancel();
+    _warp.dispose();
     _save();
     _syncService?.dispose();
     beat.dispose();
@@ -726,6 +760,7 @@ class DawController extends ChangeNotifier {
   /// Gravando, o loop, o metrônomo e a automação podem estar trocados pela contagem (ver
   /// [_startRecording]): o sync manda o que vale agora, não o do documento.
   void _sync() {
+    _warp.want(_warpSpecs());
     final ids = [for (final t in doc.tracks) t.id];
     var release = const <List<Object>>[];
     if (!_isPrefix(_cache.ids, ids)) {
@@ -749,6 +784,86 @@ class DawController extends ChangeNotifier {
     // por último: um motor que ainda não conheça a entrada para aqui sem perder o resto
     calls.addAll(_monitorCalls());
     _engine.calls(calls);
+  }
+
+  // ------------------------------------------------------------------ warp
+
+  Iterable<WarpSpec> _warpSpecs() sync* {
+    for (final t in doc.tracks) {
+      if (t.kind != TrackKind.audio) continue;
+      for (final c in t.clips) {
+        final s = WarpSpec.of(c, doc.bpm);
+        if (s != null) yield s;
+      }
+    }
+  }
+
+  /// O som que o motor toca para o clipe e onde ele corta: o derivado do warp quando está pronto
+  /// (offset, duração e fades passam dos segundos da origem para os do derivado), senão o
+  /// original. Null se o áudio não está neste aparelho.
+  ({int id, double offset, double length, double fadeIn, double fadeOut})? _clipSound(AudioClip c, double bpm) {
+    final orig = _sampleIds[c.sample];
+    if (orig == null) return null;
+    final spec = WarpSpec.of(c, bpm);
+    final id = spec == null ? null : _warp.idOf(spec);
+    if (spec == null || id == null) return (id: orig, offset: c.offset, length: c.length, fadeIn: c.fadeIn, fadeOut: c.fadeOut);
+    final k = spec.ratio;
+    // invertido, o que era o fim do trecho passa a ser o começo
+    final total = _decoded[orig]?.duration ?? (c.offset + c.length);
+    final offset = spec.reverse ? math.max(0.0, total - c.offset - c.length) : c.offset;
+    return (id: id, offset: offset * k, length: c.length * k, fadeIn: c.fadeIn * k, fadeOut: c.fadeOut * k);
+  }
+
+  /// O clipe de áudio pelo id (null se sumiu).
+  AudioClip? audioClip(String id) => _findClip(id)?.$2;
+
+  /// O clipe está esperando o som do warp ("processando…"); ele toca o original até ficar pronto.
+  bool warpPending(AudioClip c) {
+    final s = WarpSpec.of(c, doc.bpm);
+    return s != null && _warp.isPending(s);
+  }
+
+  /// Por que o warp do clipe não ficou pronto (ele toca o original), se falhou.
+  String? warpFailure(AudioClip c) {
+    final s = WarpSpec.of(c, doc.bpm);
+    return s == null ? null : _warp.failure(s);
+  }
+
+  /// Estima o andamento do áudio do clipe (o original, sem warp). Null se o áudio não está aqui.
+  Future<({double bpm, double confidence})?> detectClipBpm(String clipId) async {
+    final f = _findClip(clipId);
+    final id = f == null ? null : _sampleIds[f.$2.sample];
+    final audio = id == null ? null : _decoded[id];
+    if (audio == null) return null;
+    return _engine.detectBpm(audio);
+  }
+
+  /// Muda o warp do clipe (uma edição desfazível); o som novo vem assíncrono.
+  void setClipWarp(String clipId, {bool? warp, double? sourceBpm, bool clearSourceBpm = false, double? pitch, bool? reverse}) {
+    final f = _findClip(clipId);
+    if (f == null || _blockedByRecording('mudar o warp')) return;
+    edit((_) {
+      final c = f.$2;
+      if (warp != null) c.warp = warp;
+      if (clearSourceBpm) c.sourceBpm = null;
+      if (sourceBpm != null) c.sourceBpm = sourceBpm.clamp(20.0, 999.0);
+      if (pitch != null) c.pitch = pitch.clamp(-24.0, 24.0);
+      if (reverse != null) c.reverse = reverse;
+    });
+  }
+
+  /// Nos testes: espera os sons do warp que o documento pede.
+  @visibleForTesting
+  Future<void> debugSettleWarp() => _warp.settle();
+
+  /// Termina os sons do warp pendentes antes de renderizar: o que soa é o que exporta.
+  Future<void> _settleWarp() async {
+    if (!_warp.busy) return;
+    final before = status;
+    status = 'Processando o warp…';
+    notifyListeners();
+    await _warp.settle();
+    if (!_disposed) status = before;
   }
 
   /// O documento inteiro como chamadas, para um motor novo (o render fora de tempo real, que roda
@@ -782,9 +897,9 @@ class DawController extends ChangeNotifier {
       calls.add(['track', i, t.gain, t.pan, t.mute, t.solo]);
       if (t.kind != TrackKind.audio) continue;
       for (final c in t.clips) {
-        final id = _sampleIds[c.sample];
-        if (id == null) continue;
-        calls.add(['clip_add', i, id, c.start, c.offset, c.length, c.gain, c.fadeIn, c.fadeOut]);
+        final r = _clipSound(c, d.bpm);
+        if (r == null) continue;
+        calls.add(['clip_add', i, r.id, c.start, r.offset, r.length, c.gain, r.fadeIn, r.fadeOut]);
       }
     }
     // instrumentos e notas depois do áudio: um motor que ainda não conheça estas funções para na
@@ -1668,10 +1783,12 @@ class DawController extends ChangeNotifier {
       for (final o in t.clips.toList()) {
         if (identical(o, top) || o.end(bpm) <= s + 1e-9 || o.start >= e - 1e-9) continue;
         final oEnd = o.end(bpm);
+        // segundos da origem por batida deste clipe (com warp, o andamento do áudio, não o do projeto)
+        final ob = o.tempoFor(bpm);
         if (o.start >= s - 1e-9 && oEnd <= e + 1e-9) {
           t.clips.remove(o);
         } else if (o.start < s && oEnd > e) {
-          final cut = (e - o.start) * 60 / bpm;
+          final cut = (e - o.start) * 60 / ob;
           t.clips.add(
             AudioClip.fromJson(o.toJson())
               ..id = newId()
@@ -1681,14 +1798,14 @@ class DawController extends ChangeNotifier {
               ..fadeIn = 0,
           );
           o
-            ..length = (s - o.start) * 60 / bpm
+            ..length = (s - o.start) * 60 / ob
             ..fadeOut = 0;
         } else if (o.start < s) {
           o
-            ..length = (s - o.start) * 60 / bpm
-            ..fadeOut = math.min(o.fadeOut, (s - o.start) * 60 / bpm);
+            ..length = (s - o.start) * 60 / ob
+            ..fadeOut = math.min(o.fadeOut, (s - o.start) * 60 / ob);
         } else {
-          final cut = (e - o.start) * 60 / bpm;
+          final cut = (e - o.start) * 60 / ob;
           o
             ..start = e
             ..offset = o.offset + cut
@@ -1780,7 +1897,7 @@ class DawController extends ChangeNotifier {
     if (audioCuts.isEmpty && midiCuts.isEmpty) return;
     edit((d) {
       for (final (t, c) in audioCuts) {
-        final secs = (at - c.start) * 60 / d.bpm;
+        final secs = (at - c.start) * 60 / c.tempoFor(d.bpm);
         final right = AudioClip.fromJson(c.toJson())
           ..id = newId()
           ..start = at
@@ -3521,6 +3638,8 @@ class DawController extends ChangeNotifier {
       taken.add(name.toLowerCase());
       names[i] = name;
     }
+    await _settleWarp();
+    if (_disposed) return;
     final used = _usedHashes();
     final lost = used.where((h) => !_sampleIds.containsKey(h)).length;
     final calls = _fullSyncCalls();
@@ -3600,6 +3719,8 @@ class DawController extends ChangeNotifier {
       return;
     }
     final rate = engineRate;
+    await _settleWarp();
+    if (_disposed) return;
     final calls = _callsFor(_bounceDoc(track));
     final samples = _samplesFor(_usedHashes());
     _rendering = true;
@@ -3752,6 +3873,16 @@ class DawController extends ChangeNotifier {
       final id = _sampleIds[h];
       final audio = id == null ? null : _decoded[id];
       if (audio != null) out[id!] = audio;
+    }
+    // os derivados do warp que os clipes tocam agora
+    for (final t in doc.tracks) {
+      if (t.kind != TrackKind.audio) continue;
+      for (final c in t.clips) {
+        final s = WarpSpec.of(c, doc.bpm);
+        final id = s == null ? null : _warp.idOf(s);
+        final audio = id == null ? null : _decoded[id];
+        if (audio != null) out[id!] = audio;
+      }
     }
     return out;
   }

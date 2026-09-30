@@ -400,6 +400,56 @@
     for (const entry of [...renders]) entry.finish({ error: 'canceled' });
   }
 
+  // ------------------------------------------------------------ warp
+
+  // Roda uma tarefa do warp ('stretch' ou 'detect') num Worker próprio, com o mesmo engine.wasm.
+  // Nunca rejeita: devolve a resposta do Worker ou { error, message } (o Dart escreve a mensagem).
+  // O wasm do worklet não serve: aqui é uma instância à parte, então nada disso toca a thread de
+  // áudio nem a da interface. Sem progresso fino (o wasm é síncrono): só 0 e 1.
+  async function warpJob(kind, job, onProgress) {
+    if (typeof Worker === 'undefined') return { error: 'unsupported', message: 'Este navegador não consegue processar em segundo plano (sem Web Worker).' };
+    let module;
+    try {
+      module = await engineModule();
+    } catch (err) {
+      return { error: 'failed', message: `Não deu para carregar o motor de áudio: ${(err && err.message) || err}` };
+    }
+    if (onProgress) onProgress(0);
+    return new Promise((resolve) => {
+      const worker = new Worker('engine/render-worker.js');
+      const finish = (r) => {
+        worker.terminate();
+        resolve(r);
+      };
+      worker.onmessage = (e) => {
+        const m = e.data;
+        if (m.t === 'stretched') {
+          if (onProgress) onProgress(1);
+          finish({ channels: m.channels, frames: m.frames });
+        } else if (m.t === 'tempo') {
+          finish({ bpm: m.bpm, confidence: m.confidence });
+        } else if (m.t === 'error') {
+          finish({ error: m.code || 'failed', message: m.message });
+        }
+      };
+      worker.onerror = (e) => {
+        e.preventDefault();
+        finish({ error: 'failed', message: `O processamento parou: ${e.message || 'erro no Worker'}` });
+      };
+      worker.onmessageerror = () => finish({ error: 'failed', message: 'O processamento devolveu dados ilegíveis.' });
+      try {
+        // os canais vão copiados: o Dart continua dono do áudio dele
+        worker.postMessage({ t: kind, wasm: module, ...job });
+      } catch (err) {
+        const memory = err && (err.name === 'DataCloneError' || err instanceof RangeError);
+        finish({ error: memory ? 'memory' : 'failed', message: String((err && err.message) || err) });
+      }
+    });
+  }
+
+  const stretchAudio = (job, onProgress) => warpJob('stretch', job, onProgress);
+  const detectBpm = (job) => warpJob('detect', job);
+
   // ------------------------------------------------------------ arquivos
 
   // Oferece os bytes como download. O link temporário vive um minuto: revogar logo depois do
@@ -453,6 +503,8 @@
     setOnInputLost: (cb) => { onInputLost = cb; },
     renderOffline,
     cancelRender,
+    stretchAudio,
+    detectBpm,
     saveFile,
     sha256,
     // posição, tocando, estado do contexto, os picos (esq, dir por faixa; o master por último) e

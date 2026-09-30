@@ -179,7 +179,23 @@ const CALLS: &[Signature] = &[
 /// Exports do wasm que não passam por aqui: `init` recria o motor com a taxa do hospedeiro (quem
 /// hospeda cria o dele), e os outros levam memória por ponteiro, então cada hospedeiro tem uma
 /// função própria para eles.
-const HOST_ONLY: &[&str] = &["alloc", "dealloc", "init", "process", "sample_load", "analyzer", "set_input", "rec_notes", "captured", "peaks"];
+const HOST_ONLY: &[&str] = &[
+    "alloc",
+    "dealloc",
+    "init",
+    "process",
+    "sample_load",
+    "analyzer",
+    "set_input",
+    "rec_notes",
+    "captured",
+    "peaks",
+    "stretch_run",
+    "stretch_channel",
+    "stretch_free",
+    "detect_bpm",
+    "detect_confidence",
+];
 
 /// Como o JavaScript converte um número para `i32`/`u32` ao chamar o wasm (ToInt32/ToUint32):
 /// trunca em direção ao zero e dá a volta módulo 2³². Saturar em vez disso faria de um −1 num

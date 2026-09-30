@@ -25,6 +25,7 @@ import 'marker.dart';
 import 'meter.dart';
 import 'midi_convert_dialog.dart';
 import 'minimap.dart';
+import 'warp_dialog.dart';
 import 'model.dart';
 
 const _rulerHeight = 30.0;
@@ -2256,6 +2257,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     final c = widget.c;
     final clip = widget.clip;
     final bpm = c.doc.bpm;
+    // segundos da origem por batida: com warp o clipe segue o andamento do áudio, não o do projeto
+    final tb = clip.tempoFor(bpm);
     final dBeats = total.dx / c.pxPerBeat;
     final dur = c.doc.samples[clip.sample]?.duration ?? (_orig.offset + _orig.length);
     const minLen = 0.01;
@@ -2273,10 +2276,10 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       case _Grab.left:
         var start = _snapDrag(c, _orig.start + dBeats);
         // não passa do começo do áudio nem do fim do clipe
-        final minStart = math.max(0.0, _orig.start - _orig.offset * bpm / 60);
-        final maxStart = math.max(minStart, _orig.end(bpm) - minLen * bpm / 60);
+        final minStart = math.max(0.0, _orig.start - _orig.offset * tb / 60);
+        final maxStart = math.max(minStart, _orig.end(bpm) - minLen * tb / 60);
         start = start.clamp(minStart, maxStart);
-        final secs = (start - _orig.start) * 60 / bpm;
+        final secs = (start - _orig.start) * 60 / tb;
         if (start != clip.start) {
           change(() {
             clip.start = start;
@@ -2286,13 +2289,13 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         }
       case _Grab.right:
         final end = _snapDrag(c, _orig.end(bpm) + dBeats);
-        final len = ((end - _orig.start) * 60 / bpm).clamp(minLen, math.max<double>(minLen, dur - _orig.offset));
+        final len = ((end - _orig.start) * 60 / tb).clamp(minLen, math.max<double>(minLen, dur - _orig.offset));
         if (len != clip.length) change(() => clip.length = len);
       case _Grab.fadeIn:
-        final f = (_orig.fadeIn + total.dx / c.pxPerBeat * 60 / bpm).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeOut));
+        final f = (_orig.fadeIn + total.dx / c.pxPerBeat * 60 / tb).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeOut));
         if (f != clip.fadeIn) change(() => clip.fadeIn = f);
       case _Grab.fadeOut:
-        final f = (_orig.fadeOut - total.dx / c.pxPerBeat * 60 / bpm).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeIn));
+        final f = (_orig.fadeOut - total.dx / c.pxPerBeat * 60 / tb).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeIn));
         if (f != clip.fadeOut) change(() => clip.fadeOut = f);
     }
   }
@@ -2318,6 +2321,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       ],
       _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
+      _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('to_midi', Icons.piano, 'Converter em notas (MIDI)'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
     ]);
@@ -2327,6 +2331,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     switch (v) {
       case 'takes':
         await _takesMenu(at);
+      case 'warp':
+        await showWarpDialog(context, c, widget.clip.id);
       case 'to_midi':
         await showConvertToMidi(context, c, widget.clip.id);
       case 'duplicate':
@@ -2380,7 +2386,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     final missing = c.missing.contains(clip.sample);
     final name = c.doc.samples[clip.sample]?.name ?? 'áudio';
     final bpm = c.doc.bpm;
-    final pxPerSec = c.pxPerBeat * bpm / 60;
+    final pxPerSec = c.pxPerBeat * clip.tempoFor(bpm) / 60;
     final width = clip.beats(bpm) * c.pxPerBeat;
     final takes = clip.takes;
     return _ClipGestures(
@@ -2436,6 +2442,10 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
                     ),
+                    if (clip.processed && width >= 40) ...[
+                      const SizedBox(width: 4),
+                      _WarpBadge(clip: clip, pending: c.warpPending(clip), failed: c.warpFailure(clip) != null),
+                    ],
                     if (takes.isNotEmpty && width >= 60) ...[
                       const SizedBox(width: 4),
                       // o nome fica com pelo menos 20 px; o selo encolhe (e corta o texto) antes de estourar
@@ -2450,6 +2460,38 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Selo pequeno do warp no canto do clipe: o que está ligado (W esticado ao andamento, semitons,
+/// R invertido) ou "processando…" enquanto o som novo não fica pronto.
+class _WarpBadge extends StatelessWidget {
+  final AudioClip clip;
+  final bool pending, failed;
+  const _WarpBadge({required this.clip, required this.pending, required this.failed});
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = [
+      if (clip.stretches) 'W',
+      if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${clip.pitch % 1 == 0 ? clip.pitch.toStringAsFixed(0) : clip.pitch.toStringAsFixed(1)}st',
+      if (clip.reverse) 'R',
+    ];
+    final label = pending ? 'processando…' : parts.join(' ');
+    return Tooltip(
+      message: failed ? 'O warp não ficou pronto: o clipe toca o original' : (pending ? 'Processando o warp…' : 'Warp e altura'),
+      child: Container(
+        height: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: failed ? Palette.danger : Colors.white24),
+        ),
+        alignment: Alignment.center,
+        child: Text(label.isEmpty ? 'warp' : label, maxLines: 1, style: const TextStyle(fontSize: 9, height: 1.1, color: Colors.white70)),
       ),
     );
   }

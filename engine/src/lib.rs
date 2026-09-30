@@ -75,6 +75,7 @@ mod metronome;
 pub mod mixer;
 pub mod record;
 pub mod sampler;
+pub mod stretch;
 pub mod synth;
 
 use std::collections::HashMap;

@@ -38,6 +38,8 @@
 //! | `jd_decoded_info(h, *i64 frames, *i32 channels, *f64 rate) -> i32` | 0 ou `ERR_BAD_ARG` |
 //! | `jd_decoded_copy(h, channel, out: *f32) -> i32` | copia `frames` floats do canal |
 //! | `jd_decoded_free(h)` | |
+//! | `jd_stretch(l, r, frames, rate, ratio, semitones) -> u64` | warp offline; handle como o de `jd_decode` |
+//! | `jd_detect_bpm(l, r, frames, rate, *f64 bpm, *f64 conf) -> i32` | andamento 60..200 (0 = não deu) |
 //! | `jd_input_start(device) -> f64` | abre a entrada (0 = padrão); latência em s ou `ERR_*` |
 //! | `jd_input_stop()` | |
 //! | `jd_input_devices(out: *u8, max) -> i32` | JSON `[["id", "nome"], ...]`; bytes necessários |
@@ -324,6 +326,54 @@ pub unsafe extern "C" fn jd_decoded_copy(handle: u64, channel: i32, out: *mut f3
 pub extern "C" fn jd_decoded_free(handle: u64) {
     guard((), || {
         decode::free(handle);
+    })
+}
+
+// ------------------------------------------------------------------ warp
+
+/// Copia os canais vindos do Dart (`right` nulo = mono).
+unsafe fn channels_from(left: *const f32, right: *const f32, frames: usize, rate: f64) -> Option<Vec<Vec<f32>>> {
+    if left.is_null() || frames == 0 || !(rate.is_finite() && rate > 0.0) {
+        return None;
+    }
+    // SAFETY: o contrato da FFI (`frames` floats por ponteiro não nulo)
+    let mut ch = vec![unsafe { std::slice::from_raw_parts(left, frames) }.to_vec()];
+    if !right.is_null() {
+        ch.push(unsafe { std::slice::from_raw_parts(right, frames) }.to_vec());
+    }
+    Some(ch)
+}
+
+/// Estica (`ratio` = duração final / original, 0,25..4) e transpõe (`semitones`, −24..24) um
+/// áudio, offline e na thread que chamar (o Dart usa um isolate). Devolve um handle no mesmo
+/// formato de `jd_decode`: `jd_decoded_info`, `jd_decoded_copy` e `jd_decoded_free` leem e soltam
+/// o resultado. 0 se falhou (argumento inválido, memória).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn jd_stretch(left: *const f32, right: *const f32, frames: usize, rate: f64, ratio: f64, semitones: f64) -> u64 {
+    guard(0, || {
+        let Some(ch) = (unsafe { channels_from(left, right, frames, rate) }) else { return 0 };
+        let out = jopendaw_engine::stretch::stretch(&ch, rate, ratio, semitones);
+        decode::keep(decode::Decoded { channels: out, rate })
+    })
+}
+
+/// Estima o andamento (60..200 BPM): escreve o BPM (0 = não deu) e a confiança (0..1). 0 ou
+/// `ERR_BAD_ARG`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn jd_detect_bpm(left: *const f32, right: *const f32, frames: usize, rate: f64, bpm: *mut f64, confidence: *mut f64) -> i32 {
+    guard(ERR_PANIC, || {
+        let Some(ch) = (unsafe { channels_from(left, right, frames, rate) }) else { return ERR_BAD_ARG };
+        let t = jopendaw_engine::stretch::detect_bpm(&ch, rate);
+        // SAFETY: o contrato da FFI (nulo = quem chama não quer esse valor)
+        unsafe {
+            if !bpm.is_null() {
+                *bpm = t.bpm;
+            }
+            if !confidence.is_null() {
+                *confidence = t.confidence;
+            }
+        }
+        0
     })
 }
 
@@ -644,5 +694,27 @@ mod tests {
         assert_eq!(unsafe { jd_rec_notes(notes.as_mut_ptr(), notes.len()) }, 5);
         assert_eq!(notes[1], 62.0);
         assert_eq!(calls(r#"[["stop"]]"#), 0);
+    }
+    #[test]
+    fn stretch_and_detect_through_ffi() {
+        let rate = 48_000.0;
+        let mut x = vec![0.0f32; 48_000 * 6];
+        for beat in 0..12 {
+            for i in 0..200 {
+                x[beat * 24_000 + i] = if i % 2 == 0 { 0.9 } else { -0.9 };
+            }
+        }
+        let (mut bpm, mut conf) = (0.0f64, 0.0f64);
+        assert_eq!(unsafe { jd_detect_bpm(x.as_ptr(), std::ptr::null(), x.len(), rate, &mut bpm, &mut conf) }, 0);
+        assert!((bpm - 120.0).abs() <= 1.0, "{bpm}");
+        assert_eq!(unsafe { jd_detect_bpm(std::ptr::null(), std::ptr::null(), 10, rate, &mut bpm, &mut conf) }, ERR_BAD_ARG);
+
+        let h = unsafe { jd_stretch(x.as_ptr(), x.as_ptr(), x.len(), rate, 2.0, 0.0) };
+        assert_ne!(h, 0);
+        let (mut frames, mut channels, mut r) = (0i64, 0i32, 0.0f64);
+        assert_eq!(unsafe { jd_decoded_info(h, &mut frames, &mut channels, &mut r) }, 0);
+        assert_eq!((frames, channels), (x.len() as i64 * 2, 2));
+        jd_decoded_free(h);
+        assert_eq!(unsafe { jd_stretch(std::ptr::null(), std::ptr::null(), 10, rate, 2.0, 0.0) }, 0);
     }
 }

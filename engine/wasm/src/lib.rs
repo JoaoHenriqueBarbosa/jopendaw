@@ -401,3 +401,61 @@ pub unsafe extern "C" fn peaks(out: *mut f32, max: usize) -> usize {
     put(e.master_mut().take_peaks());
     n
 }
+
+// ------------------------------------------------------------------ warp (fora do tempo real)
+// Usado só pelo Worker de render (`render-worker.js`), nunca pelo worklet: o resultado fica
+// guardado aqui até `stretch_free`, e o JS lê os canais por ponteiro.
+
+struct Stash(UnsafeCell<Vec<Vec<f32>>>);
+// uma thread só, como o motor
+unsafe impl Sync for Stash {}
+
+static STRETCHED: Stash = Stash(UnsafeCell::new(Vec::new()));
+
+unsafe fn take_channels(left: *mut f32, right: *mut f32, frames: usize) -> Vec<Vec<f32>> {
+    let mut ch = vec![unsafe { take(left, frames) }];
+    if !right.is_null() {
+        ch.push(unsafe { take(right, frames) });
+    }
+    ch
+}
+
+/// Estica (`ratio` = duração final / original) e transpõe (`semitones`) o áudio. `right` nulo é
+/// mono. As memórias de entrada passam a ser da função. Devolve os quadros do resultado, que fica
+/// disponível em `stretch_channel` até `stretch_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn stretch_run(left: *mut f32, right: *mut f32, frames: usize, rate: f64, ratio: f64, semitones: f64) -> usize {
+    let ch = unsafe { take_channels(left, right, frames) };
+    let out = jopendaw_engine::stretch::stretch(&ch, rate, ratio, semitones);
+    let n = out.first().map_or(0, Vec::len);
+    unsafe { *STRETCHED.0.get() = out };
+    n
+}
+
+/// Ponteiro do canal `i` do último `stretch_run` (nulo se não existe). Vale até o próximo
+/// `stretch_run` ou `stretch_free`.
+#[unsafe(no_mangle)]
+pub extern "C" fn stretch_channel(i: usize) -> *const f32 {
+    unsafe { (&*STRETCHED.0.get()).get(i).map_or(std::ptr::null(), |c| c.as_ptr()) }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn stretch_free() {
+    unsafe { *STRETCHED.0.get() = Vec::new() };
+}
+
+/// Estima o andamento: devolve o BPM (0 se não deu) e deixa a confiança (0..1) em `detect_confidence`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn detect_bpm(left: *mut f32, right: *mut f32, frames: usize, rate: f64) -> f64 {
+    let ch = unsafe { take_channels(left, right, frames) };
+    let t = jopendaw_engine::stretch::detect_bpm(&ch, rate);
+    DETECT_CONFIDENCE.store(t.confidence.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    t.bpm
+}
+
+static DETECT_CONFIDENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn detect_confidence() -> f64 {
+    f64::from_bits(DETECT_CONFIDENCE.load(std::sync::atomic::Ordering::Relaxed))
+}

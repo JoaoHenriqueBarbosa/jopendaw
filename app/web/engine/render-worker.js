@@ -12,6 +12,13 @@
 //          { t: 'done', outputs: [[esq, dir], ...], frames }   canais transferidos
 //          { t: 'error', code, message }   code: empty | memory | unsupported | failed
 //
+// Warp de áudio (mesmo Worker, mesmo wasm, sem motor de render):
+//   entra  { t: 'stretch', wasm, channels: [esq, dir?], rate, ratio, semitones }
+//   sai    { t: 'stretched', channels: [esq, dir?], frames }   canais transferidos
+//   entra  { t: 'detect', wasm, channels, rate }
+//   sai    { t: 'tempo', bpm, confidence }
+//          { t: 'error', code, message }   como acima
+//
 // O resto do arquivo (sem `self`) também roda no node, para os testes da lógica de render.
 'use strict';
 
@@ -273,8 +280,45 @@ function renderWith(w, job, onProgress) {
   return { outputs: result, frames: total };
 }
 
+// Copia os canais para a memória do wasm (que toma posse: `stretch_run` e `detect_bpm` os consomem).
+function loadChannels(w, channels) {
+  const [l, r] = channels;
+  if (!l || l.length === 0) throw new RenderError('empty', 'Este áudio está vazio.');
+  const n = l.length;
+  const pl = w.alloc(n);
+  new Float32Array(w.memory.buffer, pl, n).set(l);
+  let pr = 0;
+  if (r && r.length === n) {
+    pr = w.alloc(n);
+    new Float32Array(w.memory.buffer, pr, n).set(r);
+  }
+  return { pl, pr, n };
+}
+
+// Esticar e transpor com as funções do engine.wasm já instanciado. Devolve os canais novos.
+function stretchWith(w, job) {
+  if (typeof w.stretch_run !== 'function') throw new RenderError('unsupported', 'Este motor de áudio não faz warp. Atualize o app e tente de novo.');
+  const { pl, pr, n } = loadChannels(w, job.channels);
+  const frames = w.stretch_run(pl, pr, n, job.rate, job.ratio, job.semitones || 0);
+  const out = [];
+  const count = pr ? 2 : 1;
+  for (let i = 0; i < count; i++) {
+    // cópia: a memória do wasm pode crescer e o buffer é solto no `stretch_free`
+    out.push(new Float32Array(w.memory.buffer, w.stretch_channel(i), frames).slice());
+  }
+  w.stretch_free();
+  return { channels: out, frames };
+}
+
+function detectWith(w, job) {
+  if (typeof w.detect_bpm !== 'function') throw new RenderError('unsupported', 'Este motor de áudio não detecta andamento. Atualize o app e tente de novo.');
+  const { pl, pr, n } = loadChannels(w, job.channels);
+  const bpm = w.detect_bpm(pl, pr, n, job.rate);
+  return { bpm, confidence: w.detect_confidence() };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { renderWith, prepareCalls, frameCounts, tempoOf, RenderError, RENDER_BLOCK, CUT_FADE_SECS };
+  module.exports = { stretchWith, detectWith, renderWith, prepareCalls, frameCounts, tempoOf, RenderError, RENDER_BLOCK, CUT_FADE_SECS };
 }
 
 // ------------------------------------------------------------------ Worker
@@ -282,10 +326,20 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof module === 'undefined') {
   self.onmessage = async (e) => {
     const job = e.data;
-    if (!job || job.t !== 'render') return;
+    if (!job || (job.t !== 'render' && job.t !== 'stretch' && job.t !== 'detect')) return;
     try {
       const instance = job.wasm instanceof WebAssembly.Module ? await WebAssembly.instantiate(job.wasm, {}) : (await WebAssembly.instantiate(job.wasm, {})).instance;
       const w = instance.exports;
+      if (job.t === 'stretch') {
+        const r = stretchWith(w, job);
+        self.postMessage({ t: 'stretched', channels: r.channels, frames: r.frames }, r.channels.map((c) => c.buffer));
+        return;
+      }
+      if (job.t === 'detect') {
+        const r = detectWith(w, job);
+        self.postMessage({ t: 'tempo', bpm: r.bpm, confidence: r.confidence });
+        return;
+      }
       job.releaseSamples = true;
       const r = renderWith(w, job, (p) => self.postMessage({ t: 'progress', p }));
       const transfer = [];

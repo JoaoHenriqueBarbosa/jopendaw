@@ -27,6 +27,7 @@ class AudioEngine implements EngineEvents {
 
   static const _noEngine = 'O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.';
   static const _noRecording = 'A gravação não funciona neste sistema: use o jopendaw no navegador ou no Android.';
+  static const _noWarp = 'Ajustar o áudio ao andamento não funciona neste sistema: use o jopendaw no navegador ou no Android.';
   static const _noRender = 'Exportar e congelar faixas não funcionam neste sistema: use o jopendaw no navegador ou no Android.';
 
   bool get supported => _native != null;
@@ -38,6 +39,20 @@ class AudioEngine implements EngineEvents {
   Future<DecodedAudio> decode(Uint8List bytes) => _native?.decode(bytes) ?? Future.error(UnsupportedError('Sem motor de áudio.'));
 
   void loadSample(int id, DecodedAudio audio) => _native?.loadSample(id, audio);
+
+  /// Warp: esticar ([ratio] = duração final / original, 0,25..4) e transpor ([semitones],
+  /// −24..24) sem mexer no que toca. Roda fora da thread de áudio. [onProgress] (0..1) é opcional:
+  /// no Android só avisa o fim.
+  Future<DecodedAudio> stretch(DecodedAudio a, {required double ratio, double semitones = 0, void Function(double progress)? onProgress}) async {
+    final native = _native;
+    if (native == null) throw UnsupportedError(_noWarp);
+    final out = await native.stretch(a, ratio: ratio, semitones: semitones);
+    onProgress?.call(1);
+    return out;
+  }
+
+  /// Estima o andamento (60..200 BPM) e a confiança (0..1); bpm 0 = não deu para estimar.
+  Future<({double bpm, double confidence})> detectBpm(DecodedAudio a) => _native?.detectBpm(a) ?? Future.error(UnsupportedError(_noWarp));
 
   void calls(List<List<Object>> list) {
     log?.addAll(list);

@@ -3,6 +3,8 @@
 /// blocos da entrada, as notas e o resultado do render.
 library;
 
+import 'dart:async';
+
 import 'package:crypto/crypto.dart';
 
 import 'dart:typed_data';
@@ -177,6 +179,34 @@ class FakeEngine implements AudioEngine {
     renders.add((calls: calls, samples: samples, fromBeat: fromBeat, toBeat: toBeat, tailSeconds: tailSeconds, outputs: outputs, rate: rate));
     onProgress?.call(0.5);
     return renderResult(outputs);
+  }
+
+  /// Os pedidos de warp que chegaram (áudio de origem, razão e semitons), em ordem.
+  final stretches = <({DecodedAudio audio, double ratio, double semitones})>[];
+
+  /// Impede o warp de terminar até o teste completar (null: termina na hora).
+  Completer<void>? stretchGate;
+
+  /// O que o `detectBpm` devolve e as vezes que foi chamado.
+  ({double bpm, double confidence}) tempo = (bpm: 120, confidence: 0.9);
+  int detects = 0;
+
+  /// O derivado de mentira: a duração muda pela razão e cada amostra vira `origem + semitons`,
+  /// então o teste reconhece o que foi processado.
+  @override
+  Future<DecodedAudio> stretch(DecodedAudio a, {required double ratio, double semitones = 0, void Function(double progress)? onProgress}) async {
+    stretches.add((audio: a, ratio: ratio, semitones: semitones));
+    await stretchGate?.future;
+    final n = (a.frames * ratio).round();
+    return DecodedAudio([
+      for (final c in a.channels) Float32List.fromList([for (var i = 0; i < n; i++) c[(i / ratio).floor().clamp(0, c.length - 1)] + semitones * 0.001]),
+    ], a.rate);
+  }
+
+  @override
+  Future<({double bpm, double confidence})> detectBpm(DecodedAudio a) async {
+    detects++;
+    return tempo;
   }
 
   final saved = <(String, Uint8List, String)>[];

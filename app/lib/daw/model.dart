@@ -21,6 +21,20 @@ class AudioClip {
   /// Vazia para clipe importado ou gravado sem loop.
   List<String> takes;
 
+  /// Warp: com ele ligado o clipe é esticado para seguir o andamento do projeto (a razão de
+  /// duração é [sourceBpm] / andamento; sem [sourceBpm] não há o que esticar). É só parâmetro: o
+  /// som derivado nunca entra no documento nem no servidor (ver `warp.dart`).
+  bool warp;
+
+  /// O andamento original do áudio (batidas por minuto), o que o warp usa como base.
+  double? sourceBpm;
+
+  /// Transposição em semitons (−24..24), sem mudar a duração.
+  double pitch;
+
+  /// Toca o áudio de trás para a frente.
+  bool reverse;
+
   AudioClip({
     required this.id,
     required this.sample,
@@ -31,6 +45,10 @@ class AudioClip {
     this.fadeIn = 0,
     this.fadeOut = 0,
     List<String>? takes,
+    this.warp = false,
+    this.sourceBpm,
+    this.pitch = 0,
+    this.reverse = false,
   }) : takes = takes ?? [];
 
   AudioClip.fromJson(Map<String, dynamic> j)
@@ -42,7 +60,11 @@ class AudioClip {
       gain = (j['gain'] as num? ?? 1).toDouble(),
       fadeIn = (j['fade_in'] as num? ?? 0).toDouble(),
       fadeOut = (j['fade_out'] as num? ?? 0).toDouble(),
-      takes = [for (final t in (j['takes'] as List?) ?? const []) t as String];
+      takes = [for (final t in (j['takes'] as List?) ?? const []) t as String],
+      warp = j['warp'] as bool? ?? false,
+      sourceBpm = (j['source_bpm'] as num?)?.toDouble(),
+      pitch = (j['pitch'] as num? ?? 0).toDouble(),
+      reverse = j['reverse'] as bool? ?? false;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -54,10 +76,27 @@ class AudioClip {
     'gain': gain,
     'fade_in': fadeIn,
     'fade_out': fadeOut,
+    // padrões omitidos: documento sem warp fica byte a byte como antes
+    if (warp) 'warp': true,
+    if (sourceBpm != null) 'source_bpm': sourceBpm,
+    if (pitch != 0) 'pitch': pitch,
+    if (reverse) 'reverse': true,
   };
 
+  /// O warp está de fato esticando (ligado e com o andamento original conhecido).
+  bool get stretches => warp && (sourceBpm ?? 0) > 0;
+
+  /// Algum processamento (warp, transposição ou inversão) está ativo.
+  bool get processed => stretches || pitch != 0 || reverse;
+
+  /// Batidas por minuto que valem para converter entre batidas e os segundos do áudio de origem
+  /// (`length`, `offset` e fades são sempre segundos da origem): com warp, o clipe segue o
+  /// andamento do projeto, então um segundo da origem ocupa sempre a mesma fração de batida e o
+  /// andamento que vale é o do próprio áudio; sem warp, o do projeto.
+  double tempoFor(double projectBpm) => stretches ? sourceBpm! : projectBpm;
+
   /// Duração em batidas no andamento dado.
-  double beats(double bpm) => length * bpm / 60;
+  double beats(double bpm) => length * tempoFor(bpm) / 60;
   double end(double bpm) => start + beats(bpm);
 }
 

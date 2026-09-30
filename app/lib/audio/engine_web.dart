@@ -31,6 +31,8 @@ extension type _Host._(JSObject _) implements JSObject {
   external void setOnInputLost(JSFunction cb);
   external JSPromise<_RenderResult> renderOffline(_RenderJob job, JSFunction? onProgress);
   external void cancelRender();
+  external JSPromise<_WarpResult> stretchAudio(_WarpJob job, JSFunction? onProgress);
+  external JSPromise<_WarpResult> detectBpm(_WarpJob job);
   external JSPromise<JSAny?> saveFile(String name, JSUint8Array bytes, String mime);
 }
 
@@ -73,6 +75,21 @@ extension type _RenderSample._(JSObject _) implements JSObject {
 /// (`canceled`, `empty`, `memory`, `unsupported`, `failed`) com a mensagem já em português.
 extension type _RenderResult._(JSObject _) implements JSObject {
   external JSArray<JSArray<JSFloat32Array>>? get outputs;
+  external String? get error;
+  external String? get message;
+}
+
+/// Pedido de warp para o host: os canais (copiados), a taxa e, no esticar, a razão e os semitons.
+extension type _WarpJob._(JSObject _) implements JSObject {
+  external factory _WarpJob({JSArray<JSFloat32Array> channels, double rate, double ratio, double semitones});
+}
+
+/// Resposta do warp: os canais novos ou o andamento e a confiança, ou o código do erro com a
+/// mensagem já em português.
+extension type _WarpResult._(JSObject _) implements JSObject {
+  external JSArray<JSFloat32Array>? get channels;
+  external double? get bpm;
+  external double? get confidence;
   external String? get error;
   external String? get message;
 }
@@ -136,6 +153,28 @@ class AudioEngine {
   Future<DecodedAudio> decode(Uint8List bytes) async {
     final d = await _host.decode(bytes.toJS).toDart;
     return DecodedAudio([for (final c in d.channels.toDart) c.toDart], d.rate);
+  }
+
+  _WarpJob _warpJob(DecodedAudio a, double ratio, double semitones) =>
+      _WarpJob(channels: [for (final c in a.channels) c.toJS].toJS, rate: a.rate, ratio: ratio, semitones: semitones);
+
+  /// Warp: esticar ([ratio] = duração final / original, 0,25..4) e transpor ([semitones],
+  /// −24..24) sem mexer no que toca. Roda num Worker (nunca no worklet nem na tela). [onProgress]
+  /// (0..1) é opcional e só marca o começo e o fim: o wasm é síncrono.
+  Future<DecodedAudio> stretch(DecodedAudio a, {required double ratio, double semitones = 0, void Function(double progress)? onProgress}) async {
+    final r = await _host
+        .stretchAudio(_warpJob(a, ratio, semitones), onProgress == null ? null : ((JSNumber p) => onProgress(p.toDartDouble.clamp(0, 1).toDouble())).toJS)
+        .toDart;
+    final error = r.error;
+    if (error != null) throw StateError(r.message ?? 'Não deu para processar este áudio.');
+    return DecodedAudio([for (final c in r.channels!.toDart) c.toDart], a.rate);
+  }
+
+  /// Estima o andamento (60..200 BPM) e a confiança (0..1); bpm 0 = não deu para estimar.
+  Future<({double bpm, double confidence})> detectBpm(DecodedAudio a) async {
+    final r = await _host.detectBpm(_warpJob(a, 1, 0)).toDart;
+    if (r.error != null) throw StateError(r.message ?? 'Não deu para analisar este áudio.');
+    return (bpm: r.bpm ?? 0, confidence: r.confidence ?? 0);
   }
 
   void loadSample(int id, DecodedAudio audio) => _host.loadSample(id, [for (final c in audio.channels) c.toJS].toJS, audio.rate);
