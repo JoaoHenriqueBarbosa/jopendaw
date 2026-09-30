@@ -221,6 +221,16 @@ Lanes (`AutoLane`, `lib.rs:392`) com pontos `(beat, value, curve)` ordenados; o 
 - `auto_clear` guarda os alvos das lanes apagadas em `auto_restore`; os que não voltarem a ser automatizados retornam ao estático no próximo pedaço, e os que voltarem seguem sem degrau.
 - O parâmetro de faixa-chave do sidechain não é automatizável (mudaria o roteamento a cada pedaço), `Chain::set_param` (`mixer.rs`) o recusa.
 
+### Modulação (`engine/src/modulation.rs`, fase 16 B)
+
+Por faixa (`Engine::mods`, paralelo a `tracks`) e no master (`master_mod`): até 4 moduladores (`Source`) e, por modulador, até 4 destinos (`Dest`). O destino usa o mesmo `Target` da automação (faixa do modulador, `kind`, `slot`, `id`) e uma quantidade −1..1 **do curso do controle**; como o motor não tem as tabelas de faixa, o app manda o curso (`min`, `max`) e a escala (`scale`: 0 linear, 1 log, 2 fader, `ganho = máx·x³`) em cada `mod_dest`.
+
+- Tipos (`mod_source`): LFO (seno, triângulo, serra, quadrada, sample&hold; `rate` em Hz 0,01–50 ou, com `sync`, o índice da divisão `base·3 + variação`, 8 bases de 4 compassos a 1/32 vezes reta/pontilhada/tercina, compasso de 4 tempos), seguidor de envelope (pico do sinal da faixa depois dos inserts e antes do fader, `attack_ms`/`release_ms`, ganho em `depth` 0..8) e macro (`value` 0..1). `bipolar` dá −profundidade..+profundidade, senão 0..profundidade.
+- Valor efetivo do destino = `from_norm(to_norm(base) + Σ quantidade·saída)`, limitado ao curso; vários destinos no mesmo alvo somam no curso. A **base** é a automação tocando o alvo (`AutoLane.last`) ou, senão, o estático guardado (`Track.gain/pan`, `Send.level`, `Lane.statics`, `Slot.statics`). Nada é gravado na base: volume, pan e envio escrevem em `Track.mod_gain`, `mod_pan` e `Send.mod_level` (têm prioridade sobre a automação), instrumento e efeito passam por `apply_auto` só quando base ou efetivo mudam. Com o alvo modulado, `set_param`/`set_fx_param` só guardam o estático (como sob automação) e a modulação reaplica no passo seguinte.
+- Ritmo: `modulate` roda a cada `AUTO_STEP` (32 quadros) **só nas fronteiras dessa grade do relógio do motor** (`clock % 32 == 0`); com modulação viva, o `run` fatia nela (como a automação). Por isso a saída não depende do tamanho do bloco do hospedeiro (múltiplo de 32) e o render offline sai igual ao tempo real. Sincronizado e tocando, a fase é `batida/ciclo` (o mapa de andamento com rampa vale, e o seek cai na fase certa); parado, o relógio anda pelo andamento. LFO livre recomeça no `play`. As formas com salto (serra, quadrada, sample&hold) passam por um polo de 1 ms; sample&hold sorteia por hash do índice do ciclo (determinístico).
+- Chamadas: `mod_clear` marca tudo como não vivo (o app reenvia a lista; o que voltar igual mantém fase e estado, o que não voltar devolve o alvo à base no passo seguinte), `mod_source`, `mod_dest`. Sem alocação: arrays fixos; troca de tipo de efeito zera o estático (a modulação espera o app reenviar os parâmetros) e destino inexistente é inócuo.
+- Testes: `engine/src/modulation_tests.rs` (formas, taxa, 120 bpm em 1/4 = 2 Hz, rampa de andamento, seguidor, escalas, automação, ausência de alocação, blocos diferentes).
+
 ### Parâmetros por id (`*_param`)
 
 Todo parâmetro é um `u32` estável, com valor na unidade da tabela (Hz, s, dB, semitons), nunca normalizado. Os ids estão em `instrument.rs` e `effect.rs`; o espelho é `app/lib/daw/instruments.dart` e `app/lib/daw/effects.dart` (`ParamSpec`). Mudar ou reutilizar um id quebra projetos salvos; id novo entra no fim.
@@ -380,6 +390,9 @@ Convenções abaixo: `faixa` é índice de zero; `bool` é 0/1; batidas são f64
 | `auto_clear` | nenhum | Apaga todas as lanes. |
 | `auto_lane` | `faixa` (i32), `alvo` (u32), `slot` (u32), `id` (u32) | Cria uma lane e **devolve o índice** (u32) para `auto_point`. |
 | `auto_point` | `lane` (u32), `batida` (f64), `valor` (f32), `curva` (f32) | Ponto ordenado na lane; batida mínima 0, curva limitada a −1..1; não finitos e lane inválida são ignorados. |
+| `mod_clear` | nenhum | Marca toda a modulação como não viva (o app reenvia a lista). |
+| `mod_source` | `faixa` (i32), `modulador` (u32), `tipo` (u32), `taxa` (f32), `sincronizado` (u32), `profundidade` (f32), `fase` (f32), `bipolar` (u32), `forma` (u32), `ataque em ms` (f32), `soltura em ms` (f32), `valor` (f32) | Modulador 0–3 da faixa (−1 master): tipo 0 LFO, 1 seguidor, 2 macro; valores fora de faixa são limitados e não finitos viram o padrão. |
+| `mod_dest` | `faixa` (i32), `modulador` (u32), `destino` (u32), `alvo` (u32), `slot` (u32), `id` (u32), `quantidade` (f32), `mínimo` (f32), `máximo` (f32), `escala` (u32) | Destino 0–3 do modulador: alvo como em `auto_lane` (na faixa do modulador), quantidade −1..1 do curso e o curso do parâmetro. |
 | `watch_fx` | `faixa` (i32), `slot` (i32) | Efeito cujo indicador vai em `fx_meter`; slot −1 desliga. |
 | `watch_analyzer` | `faixa` (i32) | Faixa do analisador (−1 master, −2 desliga; abaixo de −2 vira −2); trocar limpa o anel. |
 | `fx_meter` | nenhum | **Devolve** (f32) o indicador do efeito observado, 0 se nenhum: redução de ganho em dB nos de dinâmica e no de-esser; no multibanda, as três reduções empacotadas (`gr0 + 256 × gr1 + 65536 × gr2`, décimos de dB); na imagem estéreo, a correlação de fase (−1..1). |

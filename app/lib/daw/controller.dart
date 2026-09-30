@@ -42,6 +42,7 @@ import 'midi_cc.dart';
 import 'midi_file.dart';
 import 'midi_learn.dart';
 import 'model.dart';
+import 'modulation.dart';
 import 'sync.dart';
 import 'tempo_map.dart';
 import 'templates.dart';
@@ -81,7 +82,7 @@ class Waveform {
 }
 
 /// O que ocupa o painel de baixo.
-enum Dock { none, mixer, editor, instrument, effects }
+enum Dock { none, mixer, editor, instrument, effects, modulation }
 
 /// Grade de encaixe, em batidas (0 = livre).
 enum Snap {
@@ -322,6 +323,9 @@ class _SyncCache {
   List<EngineCc>? ccs = const [];
   final master = _SentChain();
   List<List<Object>>? auto;
+
+  /// A modulação como chamadas (`mod_source` e `mod_dest`) que o motor tem; vazia até a primeira.
+  List<List<Object>> mod = const [];
 
   /// O mapa de andamento e o de compassos que o motor tem, como texto ('' = um andamento e um
   /// compasso só): só reenvia quando muda.
@@ -1284,6 +1288,10 @@ class DawController extends ChangeNotifier {
   /// sem observação e sem entrada.
   List<List<Object>> _fullSyncCalls() => _docCalls(_SyncCache(), loop: (false, 0.0, 0.0), metronome: false);
 
+  /// Nos testes: as chamadas que um motor novo recebe (o render).
+  @visibleForTesting
+  List<List<Object>> debugFullSyncCalls() => _fullSyncCalls();
+
   /// As chamadas que levam o documento a um motor que já recebeu o que [c] registra (vazio: um
   /// motor novo, a lista completa), atualizando [c]. [release] solta o que soa ao vivo antes de os
   /// índices trocarem de instrumento; [observe] entra antes das notas.
@@ -1371,6 +1379,12 @@ class DawController extends ChangeNotifier {
       calls.add(['auto_clear']);
       calls.addAll(auto);
       c.auto = auto;
+    }
+    final mod = _modulationCalls(sends);
+    if (!_sameCalls(mod, c.mod)) {
+      calls.add(['mod_clear']);
+      calls.addAll(mod);
+      c.mod = mod;
     }
     calls.addAll(observe);
     final notes = flattenNotes(d.tracks);
@@ -1556,6 +1570,69 @@ class DawController extends ChangeNotifier {
     }
     add(-1, doc.masterLanes);
     return out;
+  }
+
+  /// A modulação inteira como chamadas (`mod_source` + `mod_dest`), das faixas e do master. Só vão
+  /// os moduladores com algum destino que existe; o índice do modulador e o do destino são os da
+  /// lista do documento (a que o motor limita a [maxModSources] e [maxModDests]).
+  List<List<Object>> _modulationCalls(List<List<(Send, int)>> sends) {
+    final out = <List<Object>>[];
+    void add(int track, TrackModulation m) {
+      for (var si = 0; si < m.sources.length && si < maxModSources; si++) {
+        final src = m.sources[si];
+        final dests = <List<Object>>[];
+        for (var di = 0; di < src.dests.length && di < maxModDests; di++) {
+          final d = src.dests[di];
+          final r = _resolve(track, d.target, sends: track >= 0 ? sends[track] : const []);
+          if (r == null || r.spec?.curve == Curve.choice || r.spec?.curve == Curve.integer) continue;
+          final scale = r.code == 0 || r.code == 4 ? 2 : (r.spec?.curve == Curve.log ? 1 : 0);
+          dests.add(['mod_dest', track, si, di, r.code, r.slot, r.id, d.amount.clamp(-1.0, 1.0).toDouble(), r.min, r.max, scale]);
+        }
+        if (dests.isEmpty) continue;
+        out.add([
+          'mod_source',
+          track,
+          si,
+          src.kind.index,
+          src.sync ? src.division : src.rate,
+          src.sync,
+          src.depth,
+          src.phase,
+          src.bipolar,
+          src.shape.index,
+          src.attack,
+          src.release,
+          src.value,
+        ]);
+        out.addAll(dests);
+      }
+    }
+
+    for (var i = 0; i < doc.tracks.length; i++) {
+      add(i, doc.tracks[i].modulation);
+    }
+    add(-1, doc.masterModulation);
+    return out;
+  }
+
+  /// O alvo existe e a modulação sabe movê-lo (opções e inteiros não se modulam).
+  bool _modTargetOk(int track, AutoTarget target) {
+    if (target.kind == AutoKind.send) return track >= 0 && track < doc.tracks.length && doc.tracks[track].sends.any((s) => s.target == target.ref);
+    final r = _resolve(track, target);
+    return r != null && r.spec?.curve != Curve.choice && r.spec?.curve != Curve.integer;
+  }
+
+  /// A modulação de uma faixa ou do master (−1), só leitura na prática (null se a faixa não existe).
+  /// Para mudar, [editModulation].
+  TrackModulation? modulationOf(int track) =>
+      track == -1 ? doc.masterModulation : (track >= 0 && track < doc.tracks.length ? doc.tracks[track].modulation : null);
+
+  /// Muda a modulação da faixa (ou do master) e manda ao motor. Sem [undoable] é um passo de
+  /// arraste (quem chama guarda o estado antes com [checkpoint]).
+  void editModulation(int track, void Function(TrackModulation m) fn, {bool undoable = true}) {
+    final m = modulationOf(track);
+    if (m == null) return;
+    edit((_) => fn(m), undoable: undoable);
   }
 
   /// Faixa de valores, escala e valor fixo do alvo, na unidade dele, para a gravação de automação;
@@ -2150,6 +2227,11 @@ class DawController extends ChangeNotifier {
       editingClip = null;
       if (dock == Dock.editor) dock = Dock.none;
     }
+    // destinos de modulação cujo alvo sumiu (efeito ou envio apagado, faixa que mudou de tipo)
+    for (var i = -1; i < doc.tracks.length; i++) {
+      final m = modulationOf(i);
+      if (m != null && !m.isEmpty) m.prune((t) => _modTargetOk(i, t));
+    }
     // a faixa do rack sumiu (apagada, desfeita): o rack passa para a selecionada, nunca cai
     // calado no master
     final fx = _effectsId;
@@ -2402,6 +2484,14 @@ class DawController extends ChangeNotifier {
             open: l.open,
           ),
       ];
+      // a modulação leva junto: moduladores com ids novos e os efeitos da cópia como alvo
+      copy.modulation = src.modulation.copy();
+      for (final s in copy.modulation.sources) {
+        s.id = newId();
+      }
+      copy.modulation.remapTargets(
+        (t) => t.kind != AutoKind.effect ? t : (slotIds[t.ref] == null ? null : AutoTarget(AutoKind.effect, ref: slotIds[t.ref], param: t.param)),
+      );
       d.tracks.insert(i + 1, copy);
       // as faixas depois da cópia desceram uma posição: sidechains acompanham
       _remapSidechains((old) => old > i ? old + 1 : old);
@@ -2510,7 +2600,7 @@ class DawController extends ChangeNotifier {
   void _select(int i) {
     selectedTrack = i;
     // com o rack aberto, escolher outra faixa mostra os efeitos dela (como o painel de instrumento)
-    if (dock == Dock.effects && i >= 0 && i < doc.tracks.length) _effectsId = doc.tracks[i].id;
+    if ((dock == Dock.effects || dock == Dock.modulation) && i >= 0 && i < doc.tracks.length) _effectsId = doc.tracks[i].id;
   }
 
   // ------------------------------------------------------------------ clipes
@@ -5150,6 +5240,11 @@ class DawController extends ChangeNotifier {
                 ),
           ],
           clips: [AudioClip(id: newId(), sample: hash, start: from, length: seconds)],
+          // a modulação de volume, pan e envios vai junto (a do instrumento e dos efeitos já está no áudio)
+          modulation: TrackModulation([
+            for (final m in src.modulation.sources)
+              if (m.dests.any((x) => moves.contains(x.target.kind))) m.copy(id: newId())..dests.removeWhere((x) => !moves.contains(x.target.kind)),
+          ]),
         );
         d.samples[hash] = SampleInfo('${src.name} (congelada).wav', seconds);
         final pre = {
@@ -5208,6 +5303,8 @@ class DawController extends ChangeNotifier {
       ..pan = 0
       ..mute = false
       ..lanes.removeWhere((l) => l.target.kind == AutoKind.volume || l.target.kind == AutoKind.pan);
+    // a modulação de volume e pan também fica fora do áudio (a faixa congelada a leva)
+    copy.tracks[track].modulation.prune((t) => t.kind != AutoKind.volume && t.kind != AutoKind.pan);
     return copy;
   }
 

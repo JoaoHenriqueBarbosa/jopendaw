@@ -337,6 +337,41 @@ pub extern "C" fn auto_point(lane: u32, beat: f64, value: f32, curve: f32) {
     engine().add_point(lane, beat, value, curve);
 }
 
+/// Apaga a modulação inteira (antes de reenviá-la com `mod_source` e `mod_dest`).
+#[unsafe(no_mangle)]
+pub extern "C" fn mod_clear() {
+    engine().mod_clear();
+}
+
+/// Modulador `index` da faixa (−1 master): tipo 0 LFO, 1 seguidor de envelope, 2 macro; `rate` em
+/// Hz ou, com `sync` 1, o índice da divisão; `depth` (LFO 0..1, seguidor: ganho 0..8); `phase`
+/// 0..1; `bipolar` 1; `shape` 0 seno, 1 triângulo, 2 dente de serra, 3 quadrada, 4 sample&hold;
+/// `attack_ms`/`release_ms` do seguidor; `value` 0..1 da macro.
+#[unsafe(no_mangle)]
+pub extern "C" fn mod_source(
+    track: i32,
+    index: u32,
+    kind: u32,
+    rate: f32,
+    sync: u32,
+    depth: f32,
+    phase: f32,
+    bipolar: u32,
+    shape: u32,
+    attack_ms: f32,
+    release_ms: f32,
+    value: f32,
+) {
+    engine().mod_source(track, index as usize, kind, rate, sync != 0, depth, phase, bipolar != 0, shape, attack_ms, release_ms, value);
+}
+
+/// Destino `dest` do modulador `index` da faixa: alvo como em `auto_lane`, `amount` −1..1 do curso,
+/// e o curso do parâmetro (`min`, `max`, `scale` 0 linear, 1 log, 2 fader).
+#[unsafe(no_mangle)]
+pub extern "C" fn mod_dest(track: i32, index: u32, dest: u32, target: u32, slot: u32, id: u32, amount: f32, min: f32, max: f32, scale: u32) {
+    engine().mod_dest(track, index as usize, dest as usize, target, slot, id, amount, min, max, scale);
+}
+
 /// Efeito cujo indicador vai em `fx_meter` (slot −1 desliga).
 #[unsafe(no_mangle)]
 pub extern "C" fn watch_fx(track: i32, slot: i32) {

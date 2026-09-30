@@ -407,6 +407,7 @@ class _Fx {
       onChangeEnd: (_) => c.autoRec.release(track, AutoTarget(AutoKind.effect, ref: slot.id, param: p.id)),
       onChanged: (value) => set(p.id, value, undoable: p.curve == Curve.choice),
       extraActions: () => midiLearnActions(c, track, AutoTarget(AutoKind.effect, ref: slot.id, param: p.id)),
+      modRange: () => c.modulationOf(track)?.deltaRange(AutoTarget(AutoKind.effect, ref: slot.id, param: p.id)),
     );
     final target = AutoTarget(AutoKind.effect, ref: slot.id, param: p.id);
     return _Cell(

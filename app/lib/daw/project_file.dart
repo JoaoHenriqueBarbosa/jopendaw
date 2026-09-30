@@ -388,6 +388,13 @@ void remapDocIds(DawDoc doc) {
     m.id = keep(m.id);
   }
 
+  // os destinos da modulação apontam efeitos e envios pelo id, como a automação
+  AutoTarget? modTarget(AutoTarget t) => switch (t.kind) {
+    AutoKind.effect => slotIds[t.ref] == null ? null : AutoTarget(t.kind, ref: slotIds[t.ref], param: t.param),
+    AutoKind.send => trackIds[t.ref] == null ? null : AutoTarget(t.kind, ref: trackIds[t.ref]),
+    _ => t,
+  };
+
   List<AutoLane> lanes(List<AutoLane> list) {
     final out = <AutoLane>[];
     for (final l in list) {
@@ -422,8 +429,10 @@ void remapDocIds(DawDoc doc) {
     // a pasta também vai pelo id: sem reapontar, a filha ficaria órfã (e sem a pasta a que pertence)
     t.groupId = t.groupId == null ? null : trackIds[t.groupId];
     t.lanes = lanes(t.lanes);
+    t.modulation.remapTargets(modTarget);
   }
   doc.masterLanes = lanes(doc.masterLanes);
+  doc.masterModulation.remapTargets(modTarget);
 
   // o mapa de MIDI learn aponta faixas e efeitos/envios pelo id: reaponta junto e descarta o que ficou solto
   final mapped = <MidiMapping>[];

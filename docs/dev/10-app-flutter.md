@@ -487,6 +487,7 @@ edit(fn, undoable: true)
 | cadeia de efeitos (faixas e master, `track = -1`) | `fx_count`, `fx_set track slot code`, `fx_param`, `fx_bypass` | só o que mudou; tipo novo no slot manda tudo daquele slot |
 | envios e saída | `sends_count`, `send_set i k bus level pre`, `track_output i bus` | só o que mudou |
 | automação | `auto_clear`, `auto_lane track code slot id`, `auto_point lane beat value curve` | a automação inteira, **só quando a lista de chamadas muda** |
+| modulação | `mod_clear`, `mod_source track i kind rate sync depth phase bipolar shape attack release value`, `mod_dest track i j code slot id amount min max scale` | a modulação inteira, **só quando a lista muda** (`_SyncCache.mod`); sem modulação nunca sai `mod_clear` |
 | observação (medidor, analisador) | `watch_fx`, `watch_analyzer` | quando muda o alvo |
 | notas dos clipes MIDI | `notes_clear`, `note_add track start length pitch velocity` | a lista inteira quando muda (`flattenNotes`) |
 | entrada monitorada | `input_monitor i on` | só o índice que mudou |
@@ -1443,3 +1444,16 @@ Para conferir a saída: `flutter test 2>&1 | tr '\r' '\n' | grep -E "All tests p
   - `daw/instrument_panel.dart:564-573` e `:2049-2071`: máscaras de portadores e moduladores do FM (`carriers >> n & 1`, `mods[to] >> from & 1`), de poucos bits (4 operadores), seguras.
   - `daw/automation_lane.dart:34,48,63`, `daw/automation_math.dart:42` e `daw/timeline.dart:274`: `(lo + hi) >> 1` em índices de busca binária; seguros enquanto a lista tiver menos de 2^31 itens.
   - Fora dos deslocamentos, os `Uint64` de `audio/engine_ffi.dart` são `dart:ffi` (só Android, 64 bits de verdade); `wav.dart:37` compara `total - 8 > 0xFFFFFFFF` sem operador de bit (comparação normal, exata até 2^53); o LCG de `sampler_zones_test.dart` faz `& 0xFFFFFFFF` sobre um produto de cerca de 2^52, no limite da exatidão da web.
+
+## Modulação (fase 16 B)
+
+| Arquivo | O que tem |
+|---|---|
+| `daw/modulation.dart` | Modelo Dart puro do documento: `ModKind` (o índice é o código do motor), `LfoShape`, `ModSource` (LFO, seguidor, macro), `ModDest` (`AutoTarget` + quantidade −1..1 do curso), `TrackModulation` (`deltaRange` para o anel do knob, `prune`, `remapTargets`), as 24 divisões e os presets de fábrica (`modPresets`: wobble no corte, tremolo no volume, auto-pan, vibrato de afinação) |
+| `daw/model.dart` | `DawTrack.modulation` (`modulation`) e `DawDoc.masterModulation` (`master_modulation`): só vão ao JSON quando há algo, então um documento sem modulação sai igual ao de antes |
+| `daw/controller.dart` | `_modulationCalls` (o documento como `mod_source`/`mod_dest`; `_SyncCache.mod`, reenvio só quando a lista muda), `modulationOf`, `editModulation`, `_prune` (tira destinos cujo alvo sumiu), `duplicateTrack` (ids novos e efeitos da cópia) e congelar (volume, pan e envios vão para a faixa nova; o resto vira som) |
+| `daw/modulation_ops.dart` | Extensão do controlador: `modAssign` (25% de quantidade padrão), `modAddSource`, `modRemoveSource`, `modRemoveDest`, `modApplyPreset`, `canModulate` (opções e inteiros não se modulam) |
+| `daw/modulation_ui.dart` | `ModulationPanel` (aba "Modulação" do dock, na faixa do rack de efeitos), `showModulateDialog` e `modulateAction` (o "Modular…" do menu de contexto do knob e do fader) |
+| `daw/knob.dart` | `Knob.modRange` (o anel ciano por fora do trilho: o intervalo estático em que o valor efetivo se move; o valor mostrado segue sendo a base) e `KnobMenuAction.withContext` |
+
+O motor não devolve o valor modulado em tempo real: o anel é estático. A macro só se controla pelo painel (não há MIDI learn nem automação dela).

@@ -283,6 +283,17 @@ O modo próprio **sobrepõe** o da barra: com a barra em `Ler` e uma raia em `T`
 - [08 Exportação](08-exportacao.md): a automação entra na exportação e no congelar faixa.
 - [Guia: mixagem e automação](../guias/mixagem-e-automacao.md): fade de volume e subida de filtro passo a passo, desenhados (passos 3 e 4) ou gravados com o mouse (passo 5).
 
+## Modulação (LFO, seguidor de envelope e macro)
+
+Além da curva, um controle pode ser movido por um **modulador** que soma por cima do valor (o do knob ou o da automação) sem gravar nada nele: o knob continua mostrando o valor base, e um **anel ciano** por fora do trilho mostra o intervalo em que o valor real se move. `(lido do código; testado só por testes automáticos)`
+
+- **Aba `Modulação`** no painel de baixo (mesma faixa do rack de efeitos, ou o master): até 4 moduladores por faixa, cada um com até 4 destinos. `Adicionar` cria um LFO, um seguidor de envelope ou uma macro; `Presets` cria prontos (`Wobble no corte`, `Tremolo no volume`, `Auto-pan`, `Vibrato de afinação`).
+- **Ligar um controle:** botão direito (ou toque longo) num knob de instrumento ou efeito, ou no fader e no pan do mixer, `Modular…`, e escolha um modulador que já existe ou um novo. O destino nasce com **25%** do curso; ajuste no painel (−100% a +100%, na escala do controle: logarítmica em Hz e segundos, curva do fader no volume e nos envios). Controles de opções e inteiros não se modulam.
+- **LFO:** senoide, triângulo, dente de serra, quadrada ou sample & hold; taxa livre (0,01 a 50 Hz) ou no andamento (de 4 compassos a 1/32, reta, pontilhada ou tercina); profundidade, fase, bipolar ou unipolar. O LFO livre recomeça ao dar play.
+- **Seguidor de envelope:** o nível do sinal da própria faixa (depois dos efeitos, antes do fader), com ataque, soltura e ganho. **Macro:** um valor fixo 0 a 100% que vários destinos seguem.
+- Soma com a automação sem passar dos limites do controle. Desfaz e refaz como qualquer edição; duplicar a faixa leva a modulação; apagar o efeito ou o envio apaga os destinos dele.
+- Limites: a macro só se mexe no painel (sem MIDI learn nem automação); o anel mostra o intervalo, não o valor ao vivo; o LFO sincronizado usa compasso de 4 tempos para as divisões em compassos.
+
 ## Limites e pegadinhas
 
 - **Parado, vale o valor fixo.** Sem tocar, o motor não aplica curva: um parâmetro de instrumento ou efeito responde pelo valor fixo do knob, e o fader, o pan e os knobs mostram o fixo. Se você toca notas ao vivo com o transporte parado, o som usa o valor fixo, não o da curva no cursor. A leitura no cabeçalho da raia, esta sim, mostra o valor da curva no cursor mesmo parado.

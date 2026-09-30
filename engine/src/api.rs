@@ -62,60 +62,223 @@ pub fn apply(engine: &mut Engine, name: &str, args: &[f64]) -> Result<Option<f64
 /// trava até a thread de áudio.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Call {
-    SampleDrop { id: u32 },
-    Tempo { bpm: f64, beats_per_bar: u32 },
+    SampleDrop {
+        id: u32,
+    },
+    Tempo {
+        bpm: f64,
+        beats_per_bar: u32,
+    },
     TempoClear,
-    TempoPoint { beat: f64, bpm: f64, ramp: bool },
+    TempoPoint {
+        beat: f64,
+        bpm: f64,
+        ramp: bool,
+    },
     MeterClear,
-    MeterPoint { bar: u32, num: u32, den: u32 },
+    MeterPoint {
+        bar: u32,
+        num: u32,
+        den: u32,
+    },
     Play,
     Stop,
-    Seek { beat: f64 },
-    LoopSet { on: bool, start: f64, end: f64 },
-    Metronome { on: bool, gain: f32 },
-    Tracks { n: usize },
-    Track { track: usize, gain: f32, pan: f32, mute: bool, solo: bool },
-    Master { gain: f32, pan: f32 },
+    Seek {
+        beat: f64,
+    },
+    LoopSet {
+        on: bool,
+        start: f64,
+        end: f64,
+    },
+    Metronome {
+        on: bool,
+        gain: f32,
+    },
+    Tracks {
+        n: usize,
+    },
+    Track {
+        track: usize,
+        gain: f32,
+        pan: f32,
+        mute: bool,
+        solo: bool,
+    },
+    Master {
+        gain: f32,
+        pan: f32,
+    },
     ClipsClear,
-    ClipAdd { track: usize, sample: u32, start: f64, offset: f64, length: f64, gain: f32, fade_in: f64, fade_out: f64 },
-    ClipFadeShape { fade_in: u32, fade_out: u32 },
-    TrackKind { track: usize, kind: u32 },
-    Param { track: usize, id: u32, value: f32 },
-    InstrumentSample { track: usize, sample: u32 },
+    ClipAdd {
+        track: usize,
+        sample: u32,
+        start: f64,
+        offset: f64,
+        length: f64,
+        gain: f32,
+        fade_in: f64,
+        fade_out: f64,
+    },
+    ClipFadeShape {
+        fade_in: u32,
+        fade_out: u32,
+    },
+    TrackKind {
+        track: usize,
+        kind: u32,
+    },
+    Param {
+        track: usize,
+        id: u32,
+        value: f32,
+    },
+    InstrumentSample {
+        track: usize,
+        sample: u32,
+    },
     NotesClear,
-    NoteAdd { track: usize, start: f64, length: f64, pitch: u32, velocity: f32 },
-    LiveOn { track: usize, pitch: u32, velocity: f32 },
-    LiveOff { track: usize, pitch: u32 },
+    NoteAdd {
+        track: usize,
+        start: f64,
+        length: f64,
+        pitch: u32,
+        velocity: f32,
+    },
+    LiveOn {
+        track: usize,
+        pitch: u32,
+        velocity: f32,
+    },
+    LiveOff {
+        track: usize,
+        pitch: u32,
+    },
     Panic,
-    FxCount { track: i32, n: u32 },
-    FxSet { track: i32, slot: u32, kind: u32 },
-    FxParam { track: i32, slot: u32, id: u32, value: f32 },
-    FxBypass { track: i32, slot: u32, on: bool },
-    SendsCount { track: i32, n: u32 },
-    SendSet { track: i32, index: u32, bus: i32, level: f32, pre: bool },
-    TrackOutput { track: i32, target: i32 },
+    FxCount {
+        track: i32,
+        n: u32,
+    },
+    FxSet {
+        track: i32,
+        slot: u32,
+        kind: u32,
+    },
+    FxParam {
+        track: i32,
+        slot: u32,
+        id: u32,
+        value: f32,
+    },
+    FxBypass {
+        track: i32,
+        slot: u32,
+        on: bool,
+    },
+    SendsCount {
+        track: i32,
+        n: u32,
+    },
+    SendSet {
+        track: i32,
+        index: u32,
+        bus: i32,
+        level: f32,
+        pre: bool,
+    },
+    TrackOutput {
+        track: i32,
+        target: i32,
+    },
     AutoClear,
-    AutoLane { track: i32, target: u32, slot: u32, id: u32 },
-    AutoPoint { lane: u32, beat: f64, value: f32, curve: f32 },
-    WatchFx { track: i32, slot: i32 },
-    WatchAnalyzer { track: i32 },
+    AutoLane {
+        track: i32,
+        target: u32,
+        slot: u32,
+        id: u32,
+    },
+    AutoPoint {
+        lane: u32,
+        beat: f64,
+        value: f32,
+        curve: f32,
+    },
+    WatchFx {
+        track: i32,
+        slot: i32,
+    },
+    WatchAnalyzer {
+        track: i32,
+    },
     FxMeter,
-    InputMonitor { track: i32, on: bool },
+    InputMonitor {
+        track: i32,
+        on: bool,
+    },
     RecNotesStart,
     RecNotesStop,
     CaptureClear,
-    CaptureAdd { track: i32 },
+    CaptureAdd {
+        track: i32,
+    },
     Beat,
     Playing,
     LoudnessReset,
-    Loudness { kind: u32 },
+    Loudness {
+        kind: u32,
+    },
     LatencyFrames,
-    ZonesClear { track: usize },
-    ZoneAdd { track: usize, sample: u32, zone: ZoneDef },
-    LiveBend { track: usize, value: f32 },
-    LiveCc { track: usize, cc: u32, value: f32 },
-    CcAdd { track: usize, cc: u32, beat: f64, value: f32 },
+    ZonesClear {
+        track: usize,
+    },
+    ZoneAdd {
+        track: usize,
+        sample: u32,
+        zone: ZoneDef,
+    },
+    LiveBend {
+        track: usize,
+        value: f32,
+    },
+    LiveCc {
+        track: usize,
+        cc: u32,
+        value: f32,
+    },
+    CcAdd {
+        track: usize,
+        cc: u32,
+        beat: f64,
+        value: f32,
+    },
     CcClear,
+    ModClear,
+    ModSource {
+        track: i32,
+        index: u32,
+        kind: u32,
+        rate: f32,
+        sync: bool,
+        depth: f32,
+        phase: f32,
+        bipolar: bool,
+        shape: u32,
+        attack_ms: f32,
+        release_ms: f32,
+        value: f32,
+    },
+    ModDest {
+        track: i32,
+        index: u32,
+        dest: u32,
+        target_kind: u32,
+        slot: u32,
+        id: u32,
+        amount: f32,
+        min: f32,
+        max: f32,
+        scale: u32,
+    },
 }
 
 /// Tipo de um parâmetro, como na assinatura do export do wasm (booleano é `u32` lá).
@@ -224,6 +387,41 @@ const CALLS: &[Signature] = &[
     sig("live_cc", &[("faixa", Usize), ("controle", U32), ("valor", F32)], None),
     sig("cc_add", &[("faixa", Usize), ("controle", U32), ("batida", F64), ("valor", F32)], None),
     sig("cc_clear", &[], None),
+    sig("mod_clear", &[], None),
+    sig(
+        "mod_source",
+        &[
+            ("faixa", I32),
+            ("modulador", U32),
+            ("tipo", U32),
+            ("taxa", F32),
+            ("sincronizado", U32),
+            ("profundidade", F32),
+            ("fase", F32),
+            ("bipolar", U32),
+            ("forma", U32),
+            ("ataque em ms", F32),
+            ("soltura em ms", F32),
+            ("valor", F32),
+        ],
+        None,
+    ),
+    sig(
+        "mod_dest",
+        &[
+            ("faixa", I32),
+            ("modulador", U32),
+            ("destino", U32),
+            ("alvo", U32),
+            ("slot", U32),
+            ("id", U32),
+            ("quantidade", F32),
+            ("mínimo", F32),
+            ("máximo", F32),
+            ("escala", U32),
+        ],
+        None,
+    ),
 ];
 
 /// Os nomes das chamadas que [`apply`] aceita (a tabela inteira), para os hospedeiros conferirem que
@@ -431,6 +629,33 @@ impl Call {
             "live_cc" => Call::LiveCc { track: a.usize(0), cc: a.u32(1), value: a.f32(2) },
             "cc_add" => Call::CcAdd { track: a.usize(0), cc: a.u32(1), beat: a.f64(2), value: a.f32(3) },
             "cc_clear" => Call::CcClear,
+            "mod_clear" => Call::ModClear,
+            "mod_source" => Call::ModSource {
+                track: a.i32(0),
+                index: a.u32(1),
+                kind: a.u32(2),
+                rate: a.f32(3),
+                sync: a.flag(4),
+                depth: a.f32(5),
+                phase: a.f32(6),
+                bipolar: a.flag(7),
+                shape: a.u32(8),
+                attack_ms: a.f32(9),
+                release_ms: a.f32(10),
+                value: a.f32(11),
+            },
+            "mod_dest" => Call::ModDest {
+                track: a.i32(0),
+                index: a.u32(1),
+                dest: a.u32(2),
+                target_kind: a.u32(3),
+                slot: a.u32(4),
+                id: a.u32(5),
+                amount: a.f32(6),
+                min: a.f32(7),
+                max: a.f32(8),
+                scale: a.u32(9),
+            },
             // os testes passam por toda a tabela: chegar aqui é chamada nova sem conversão
             other => return Err(UnknownCall(format!("{other}: está na tabela de chamadas mas sem conversão (erro no motor)"))),
         })
@@ -524,6 +749,13 @@ impl Call {
             Call::LiveCc { track, cc, value } => e.live_cc(track, cc, value),
             Call::CcAdd { track, cc, beat, value } => e.add_cc(track, cc, beat, value),
             Call::CcClear => e.clear_cc(),
+            Call::ModClear => e.mod_clear(),
+            Call::ModSource { track, index, kind, rate, sync, depth, phase, bipolar, shape, attack_ms, release_ms, value } => {
+                e.mod_source(track, index as usize, kind, rate, sync, depth, phase, bipolar, shape, attack_ms, release_ms, value)
+            }
+            Call::ModDest { track, index, dest, target_kind, slot, id, amount, min, max, scale } => {
+                e.mod_dest(track, index as usize, dest as usize, target_kind, slot, id, amount, min, max, scale)
+            }
         }
         // o que o comando mudou na PDC (latência nova, crescimento dos atrasos) se resolve já, no
         // comando, e não no começo do próximo bloco
@@ -676,6 +908,13 @@ mod tests {
         playing(e);
         e.add_cc(1, 128, 0.0, 1.0);
         run(e, 8);
+    }
+
+    /// Tocando com uma macro cheia (unipolar) modulando o volume da faixa 0 em −50%.
+    fn modulated(e: &mut Engine) {
+        playing(e);
+        e.mod_source(0, 0, 2, 1.0, false, 1.0, 0.0, false, 0, 10.0, 100.0, 1.0);
+        e.mod_dest(0, 0, 0, 0, 0, 0, -0.5, 0.0, 2.0, 2);
     }
 
     fn capturing(e: &mut Engine) {
@@ -933,6 +1172,15 @@ mod tests {
             case(sounding, "live_cc", &[-1.0, 128.0, 1.0], |_| {}, Same),
             case(playing, "cc_add", &[1.0, 128.0, 0.0, 1.0], |e| e.add_cc(1, 128, 0.0, 1.0), Changes),
             case(bent, "cc_clear", &[], |e| e.clear_cc(), Changes),
+            case(modulated, "mod_clear", &[], |e| e.mod_clear(), Changes),
+            case(
+                modulated,
+                "mod_source",
+                &[0.0, 0.0, 2.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 10.0, 100.0, 0.0],
+                |e| e.mod_source(0, 0, 2, 1.0, false, 1.0, 0.0, false, 0, 10.0, 100.0, 0.0),
+                Changes,
+            ),
+            case(modulated, "mod_dest", &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.25, 0.0, 2.0, 2.0], |e| e.mod_dest(0, 0, 0, 0, 0, 0, -0.25, 0.0, 2.0, 2), Changes),
         ]
     }
 

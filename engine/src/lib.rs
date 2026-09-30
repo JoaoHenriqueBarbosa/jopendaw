@@ -77,6 +77,9 @@ mod limiter;
 pub mod loudness;
 mod metronome;
 pub mod mixer;
+pub mod modulation;
+#[cfg(test)]
+mod modulation_tests;
 #[cfg(test)]
 mod pdc_tests;
 pub mod record;
@@ -623,6 +626,12 @@ pub struct Engine {
     auto_restore: Vec<Target>,
     /// A automação está aplicada (tocando): ao parar, tudo volta ao estático.
     auto_live: bool,
+    /// Modulação (ver [`modulation`]): uma por faixa, em paralelo a `tracks`, e a do master.
+    mods: Vec<modulation::TrackMod>,
+    master_mod: modulation::TrackMod,
+    /// Algum destino vivo (ou comando a pôr em dia): as fatias ficam curtas e cada uma modula.
+    mod_busy: bool,
+    mod_dirty: bool,
     /// Efeito observado (faixa, slot; slot −1 = nenhum) e faixa do analisador (−1 master, −2
     /// nenhuma).
     watch_fx: (i32, i32),
@@ -737,6 +746,10 @@ impl Engine {
             auto_count: 0,
             auto_restore: Vec::with_capacity(64),
             auto_live: false,
+            mods: Vec::new(),
+            master_mod: modulation::TrackMod::NEW,
+            mod_busy: false,
+            mod_dirty: false,
             watch_fx: (-1, -1),
             watch_analyzer: -2,
             analyzer: Analyzer::new(),
@@ -887,6 +900,7 @@ impl Engine {
         if !self.playing {
             self.playing = true;
             self.recue = true;
+            self.mod_restart();
             self.tail = 0;
         }
     }
@@ -990,6 +1004,8 @@ impl Engine {
         }
         let (rate, bpm) = (self.rate, self.tempo.bpm0());
         self.tracks.resize_with(n, || Track::new(rate));
+        self.mods.resize(n, modulation::TrackMod::NEW);
+        self.mod_dirty |= self.mod_busy;
         self.lanes.resize_with(n, Lane::new);
         self.strips.resize_with(n, || Strip::new(rate, bpm));
         self.bufs.resize_with(n, || Stereo::new(CHUNK));
@@ -1092,7 +1108,8 @@ impl Engine {
         if !value.is_finite() {
             return;
         }
-        let automated = self.automated(Target::new(i as i32, effect::auto_target::INSTRUMENT, 0, id));
+        let t = Target::new(i as i32, effect::auto_target::INSTRUMENT, 0, id);
+        let automated = self.automated(t) || self.modulated(t);
         let Some(lane) = self.lanes.get_mut(i) else { return };
         if let Some(s) = lane.statics.get_mut(id as usize) {
             *s = value;
@@ -1253,7 +1270,8 @@ impl Engine {
     /// gate) é interceptada aqui (o motor entrega a chave) e também repassada ao efeito. Com a
     /// automação tocando esse parâmetro, o valor só fica guardado como o estático.
     pub fn set_fx_param(&mut self, track: i32, slot: usize, id: u32, value: f32) {
-        let automated = self.automated(Target::new(track, effect::auto_target::EFFECT, slot as u32, id));
+        let t = Target::new(track, effect::auto_target::EFFECT, slot as u32, id);
+        let automated = self.automated(t) || self.modulated(t);
         if let Some(c) = self.chain_mut(track)
             && c.set_param(slot, id, value, true, !automated)
         {
@@ -1670,6 +1688,9 @@ impl Engine {
             lane.last = v;
             let t = lane.target;
             self.apply_auto(t, v, changed);
+            if changed {
+                self.mod_touch(t);
+            }
         }
         self.auto_live = self.auto_count > 0;
     }
@@ -1720,6 +1741,7 @@ impl Engine {
     /// Devolve o alvo ao último valor estático que o app mandou.
     fn restore(&mut self, t: Target) {
         use effect::auto_target as at;
+        self.mod_touch(t);
         for lane in self.auto[..self.auto_count].iter_mut().filter(|l| l.target == t) {
             lane.last = f32::NAN;
         }
@@ -1906,6 +1928,7 @@ impl Engine {
         self.master_fx.collect();
         // volume, pan, porta do solo e envios direto no alvo, com a automação da partida aplicada
         self.automate();
+        self.modulate(true);
         self.solo();
         for t in 0..self.tracks.len() {
             let audible = self.aud[t];
@@ -1964,7 +1987,7 @@ impl Engine {
         while done < n {
             let mut chunk = (n - done).min(CHUNK - (self.clock % CHUNK as u64) as usize);
             // com automação tocando, fatias curtas: cada uma avalia as lanes na posição dela
-            if self.playing && self.auto_count > 0 {
+            if (self.playing && self.auto_count > 0) || self.mod_busy {
                 chunk = chunk.min(AUTO_STEP - (self.clock % AUTO_STEP as u64) as usize);
             }
             // o loop fatia o bloco na volta; tocando depois do fim do loop, segue reto
@@ -2046,6 +2069,7 @@ impl Engine {
         out_r.fill(0.0);
         let n = out_l.len();
         self.automate();
+        self.modulate(false);
         self.solo();
         // barramentos começam o bloco vazios e acumulam o que chega
         for t in 0..self.tracks.len() {
@@ -2091,6 +2115,9 @@ impl Engine {
         } else if to_master {
             self.master_idle = false;
             self.master_quiet = 0;
+        }
+        if self.master_mod.wants_level() {
+            self.master_mod.feed(out_l, out_r);
         }
         self.master.apply_master(out_l, out_r);
         // NaN que escape de algum instrumento ou efeito vira silêncio antes do limitador (senão
@@ -2247,6 +2274,10 @@ impl Engine {
         } else if active {
             strip.idle = false;
             strip.quiet = 0;
+        }
+        // seguidor de envelope: o nível da faixa depois dos inserts, antes do fader
+        if self.mods[t].wants_level() {
+            self.mods[t].feed(bl, br);
         }
         // chave de sidechain: a saída pós-inserts, pré-fader
         if strip.is_key {

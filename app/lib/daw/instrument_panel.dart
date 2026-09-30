@@ -1070,6 +1070,7 @@ class _Ctx {
       onChangeEnd: (_) => c.autoRec.release(ti, AutoTarget(AutoKind.instrument, param: p.id)),
       onChanged: (v) => c.setParam(ti, p.id, v, undoable: p.curve == Curve.choice),
       extraActions: () => midiLearnActions(c, ti, AutoTarget(AutoKind.instrument, param: p.id)),
+      modRange: () => c.modulationOf(ti)?.deltaRange(AutoTarget(AutoKind.instrument, param: p.id)),
     );
     final target = AutoTarget(AutoKind.instrument, param: p.id);
     // com automação e tocando, o knob segue a curva (mexer muda o valor fixo, que volta a valer

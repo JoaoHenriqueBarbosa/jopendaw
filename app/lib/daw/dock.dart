@@ -13,6 +13,8 @@ import 'effects_panel.dart';
 import 'instrument_panel.dart';
 import 'instruments.dart';
 import 'mixer_panel.dart';
+import 'modulation_ops.dart';
+import 'modulation_ui.dart';
 import 'piano_roll.dart';
 
 /// Abre o painel, ou fecha se ele já está aberto (botões da barra e atalhos).
@@ -27,6 +29,12 @@ void toggleDock(DawController c, Dock d) {
 /// Abre o painel. O editor abre no clipe de notas selecionado no arranjo, se houver um; os efeitos,
 /// na faixa selecionada (no master quando não há faixa).
 void showDock(DawController c, Dock d) {
+  if (d == Dock.modulation) {
+    // a modulação fala da mesma faixa que o rack de efeitos (ou do master)
+    c.showEffects(c.selectedTrack < c.doc.tracks.length ? c.selectedTrack : -1);
+    c.setDock(Dock.modulation);
+    return;
+  }
   if (d == Dock.effects) {
     c.showEffects(c.selectedTrack < c.doc.tracks.length ? c.selectedTrack : -1);
     return;
@@ -135,6 +143,7 @@ class _DockPanelState extends State<DockPanel> {
                     Dock.editor => PianoRoll(c: c),
                     Dock.instrument => InstrumentPanel(c: c),
                     Dock.effects => EffectsPanel(c: c),
+                    Dock.modulation => ModulationPanel(c: c),
                     Dock.none => const SizedBox.shrink(),
                   },
                 ),
@@ -187,6 +196,16 @@ class _DockPanelState extends State<DockPanel> {
             // já aberta, não troca o que está à vista (o master aberto pelo mixer, por exemplo)
             onTap: () {
               if (c.dock != Dock.effects) showDock(c, Dock.effects);
+            },
+          ),
+          _Tab(
+            icon: Icons.waves,
+            label: 'Modulação',
+            tooltip: 'Modulação da faixa: LFO, seguidor de envelope e macros',
+            iconOnly: iconsOnly,
+            selected: c.dock == Dock.modulation,
+            onTap: () {
+              if (c.dock != Dock.modulation) showDock(c, Dock.modulation);
             },
           ),
           const SizedBox(width: 12),
@@ -339,6 +358,13 @@ class _Subject extends StatelessWidget {
           text = '${c.doc.tracks[i].name} · $count';
           dot = trackColorAt(c.doc.tracks[i].color);
         }
+      case Dock.modulation:
+        final i = c.effectsTrack;
+        final master = i < 0 || i >= c.doc.tracks.length;
+        final n = c.modulation(master ? -1 : i).sources.length;
+        final count = n == 0 ? 'sem moduladores' : (n == 1 ? '1 modulador' : '$n moduladores');
+        text = master ? 'Master · $count' : '${c.doc.tracks[i].name} · $count';
+        dot = master ? Colors.white : trackColorAt(c.doc.tracks[i].color);
       case Dock.instrument:
         if (c.selectedTrack < c.doc.tracks.length) {
           final t = c.doc.tracks[c.selectedTrack];

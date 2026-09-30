@@ -28,6 +28,9 @@ double knobCellWidth(double size) => math.max(62, size + 18);
 
 const _choiceText = TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
 
+/// A cor do anel de modulação (e dos indicadores de "modulado").
+const modulationColor = Color(0xFF5FD4E8);
+
 /// Largura do texto mais longo de cada lista de opções (as listas são constantes da tabela).
 final _optionsWidth = Expando<double>();
 
@@ -60,7 +63,12 @@ class KnobMenuAction {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  const KnobMenuAction(this.label, this.icon, this.onTap);
+
+  /// Quando a entrada precisa de um contexto (abrir um diálogo), no lugar de [onTap].
+  final void Function(BuildContext context)? onTapWith;
+  const KnobMenuAction(this.label, this.icon, this.onTap) : onTapWith = null;
+  const KnobMenuAction.withContext(this.label, this.icon, void Function(BuildContext context) this.onTapWith) : onTap = _none;
+  static void _none() {}
 }
 
 /// Knob de um parâmetro. Para [Curve.choice] vira um seletor compacto (menu).
@@ -101,6 +109,11 @@ class Knob extends StatefulWidget {
   /// Entradas extras do menu de contexto; null = o botão direito abre direto o campo de digitar.
   final List<KnobMenuAction> Function()? extraActions;
 
+  /// O quanto a modulação afasta o valor da base, em fração do curso (mínimo, máximo); null = sem
+  /// modulação. O knob segue mostrando o valor base; o anel de fora mostra o intervalo em que o
+  /// valor efetivo se move.
+  final (double, double)? Function()? modRange;
+
   const Knob({
     super.key,
     required this.spec,
@@ -115,6 +128,7 @@ class Knob extends StatefulWidget {
     this.dimmed = false,
     this.optionIcon,
     this.extraActions,
+    this.modRange,
   });
 
   @override
@@ -269,6 +283,8 @@ class _KnobState extends State<Knob> {
     if (pick == null || !mounted) return;
     if (pick < 0) {
       await _type();
+    } else if (extra[pick].onTapWith != null) {
+      extra[pick].onTapWith!(context);
     } else {
       extra[pick].onTap();
     }
@@ -363,6 +379,7 @@ class _KnobState extends State<Knob> {
                             active: _active,
                             hover: _hover,
                             dimmed: dim,
+                            mod: widget.modRange?.call(),
                           ),
                         ),
                       ),
@@ -391,6 +408,9 @@ class _KnobPainter extends CustomPainter {
   final Color color;
   final bool active, hover, dimmed;
 
+  /// Afastamento da modulação em relação ao [norm] (fração do curso), ou null.
+  final (double, double)? mod;
+
   _KnobPainter({
     required this.norm,
     required this.origin,
@@ -399,6 +419,7 @@ class _KnobPainter extends CustomPainter {
     required this.active,
     required this.hover,
     required this.dimmed,
+    this.mod,
   });
 
   /// 270° de curso, do canto de baixo à esquerda ao de baixo à direita.
@@ -454,6 +475,19 @@ class _KnobPainter extends CustomPainter {
       canvas.drawArc(rect, from, sweep, false, active);
     }
 
+    // o anel de modulação: por fora do trilho, o intervalo em que o valor efetivo se move
+    final m = mod;
+    if (m != null) {
+      final lo = (norm + m.$1).clamp(0.0, 1.0), hi = (norm + m.$2).clamp(0.0, 1.0);
+      final ringR = arcR + stroke * 0.5 + 1.6;
+      final ring = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round
+        ..color = modulationColor.withValues(alpha: dimmed ? 0.4 : 0.95);
+      canvas.drawArc(Rect.fromCircle(center: c, radius: ringR), _start + _sweep * lo, math.max(0.02, _sweep * (hi - lo)), false, ring);
+    }
+
     // a tampa do knob, com luz vinda de cima
     final capR = arcR - stroke * 1.15;
     if (capR <= 2) return;
@@ -489,7 +523,14 @@ class _KnobPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_KnobPainter o) =>
-      o.norm != norm || o.origin != origin || o.defaultNorm != defaultNorm || o.color != color || o.active != active || o.hover != hover || o.dimmed != dimmed;
+      o.norm != norm ||
+      o.origin != origin ||
+      o.defaultNorm != defaultNorm ||
+      o.color != color ||
+      o.active != active ||
+      o.hover != hover ||
+      o.dimmed != dimmed ||
+      o.mod != mod;
 }
 
 /// Seletor de opções no formato de célula do knob: caixa com a opção atual (e ícone), menu ao

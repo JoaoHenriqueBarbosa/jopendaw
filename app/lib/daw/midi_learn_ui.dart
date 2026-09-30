@@ -10,10 +10,12 @@ import 'package:flutter/material.dart';
 
 import '../widgets/theme.dart';
 import 'controller.dart';
-import 'knob.dart' show KnobMenuAction;
+import 'knob.dart' show KnobMenuAction, modulationColor;
 import 'midi_learn.dart';
 import 'midi_map.dart';
 import 'model.dart';
+import 'modulation_ops.dart';
+import 'modulation_ui.dart';
 
 /// Cor do contorno dos controles no modo aprender.
 const midiLearnColor = Color(0xFFE3B341);
@@ -74,11 +76,24 @@ class MidiLearnControl extends StatelessWidget {
               )
             else if (m != null)
               const Positioned(top: 0, right: 0, child: IgnorePointer(child: _MappedDot())),
+            // controle com modulação (o valor mostrado é a base): um pontinho ciano no canto
+            if (c.modulationOf(track)?.modulates(target) ?? false) const Positioned(top: 0, left: 0, child: IgnorePointer(child: _ModDot())),
           ],
         );
       },
     );
   }
+}
+
+class _ModDot extends StatelessWidget {
+  const _ModDot();
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('mod-dot'),
+    width: 6,
+    height: 6,
+    decoration: const BoxDecoration(color: modulationColor, shape: BoxShape.circle),
+  );
 }
 
 class _MappedDot extends StatelessWidget {
@@ -157,6 +172,7 @@ List<KnobMenuAction> midiLearnActions(DawController c, int track, AutoTarget tar
   return [
     KnobMenuAction('Aprender MIDI', Icons.settings_remote, () => l.arm(track, target)),
     if (m != null) KnobMenuAction('Remover mapeamento (${m.source.label})', Icons.link_off, () => l.removeFor(track, target)),
+    if (c.canModulate(track, target)) modulateAction(c, track, target),
   ];
 }
 
@@ -184,6 +200,11 @@ Future<void> showMidiLearnMenu(BuildContext context, DawController c, int track,
             ],
           ),
         ),
+      if (c.canModulate(track, target))
+        const PopupMenuItem(
+          value: 'modulate',
+          child: Row(children: [Icon(Icons.waves, size: 18), SizedBox(width: 10), Text('Modular…')]),
+        ),
       const PopupMenuItem(
         value: 'panel',
         child: Row(children: [Icon(Icons.list_alt, size: 18), SizedBox(width: 10), Text('Mapeamentos MIDI…')]),
@@ -195,6 +216,8 @@ Future<void> showMidiLearnMenu(BuildContext context, DawController c, int track,
       l.arm(track, target);
     case 'remove':
       l.removeFor(track, target);
+    case 'modulate':
+      if (context.mounted) unawaited(showModulateDialog(context, c, track, target));
     case 'panel':
       if (context.mounted) unawaited(showMidiMapPanel(context, c));
   }

@@ -42,6 +42,10 @@ pub struct Track {
     /// que o app mandou e que a automação sobrepõe sem apagar.
     pub auto_gain: Option<f32>,
     pub auto_pan: Option<f32>,
+    /// Valores efetivos (base + modulação, ver `modulation`); `None` = sem modulador. Sobrepõem a
+    /// automação e o estático sem apagá-los.
+    pub mod_gain: Option<f32>,
+    pub mod_pan: Option<f32>,
     peak_l: f32,
     peak_r: f32,
     /// Ganhos do fader (esq, dir) aplicados agora; `None` até o primeiro bloco, que já começa no
@@ -85,6 +89,8 @@ impl Track {
             solo: false,
             auto_gain: None,
             auto_pan: None,
+            mod_gain: None,
+            mod_pan: None,
             peak_l: 0.0,
             peak_r: 0.0,
             now: None,
@@ -95,8 +101,8 @@ impl Track {
 
     /// Ganho e pan valendo agora (a automação, se houver, senão o estático).
     pub fn effective(&self) -> (f32, f32) {
-        let pan = self.auto_pan.unwrap_or(self.pan);
-        (sane_gain(self.auto_gain.unwrap_or(self.gain)), if pan.is_finite() { pan } else { 0.0 })
+        let pan = self.mod_pan.or(self.auto_pan).unwrap_or(self.pan);
+        (sane_gain(self.mod_gain.or(self.auto_gain).unwrap_or(self.gain)), if pan.is_finite() { pan } else { 0.0 })
     }
 
     /// Alvo do fader: volume e pan, zero no mudo. O solo fica fora (é a porta da saída), para que
@@ -239,6 +245,8 @@ pub struct Send {
     pub pre: bool,
     /// Nível da automação tocando (sobrepõe `level`).
     pub auto_level: Option<f32>,
+    /// Nível efetivo com modulação (sobrepõe a automação).
+    pub mod_level: Option<f32>,
     /// Destino validado pelo motor (−1 = inválido: índice fora, não é barramento ou processado
     /// antes da origem).
     pub(crate) dst: i32,
@@ -249,13 +257,13 @@ pub struct Send {
 
 impl Default for Send {
     fn default() -> Self {
-        Self { bus: -1, level: 0.0, pre: false, auto_level: None, dst: -1, now: None, line: Delay::new() }
+        Self { bus: -1, level: 0.0, pre: false, auto_level: None, mod_level: None, dst: -1, now: None, line: Delay::new() }
     }
 }
 
 impl Send {
     fn target(&self, on: bool) -> f32 {
-        if on { sane_gain(self.auto_level.unwrap_or(self.level)) } else { 0.0 }
+        if on { sane_gain(self.mod_level.or(self.auto_level).unwrap_or(self.level)) } else { 0.0 }
     }
 
     /// Soma a origem no destino com o nível do envio (suavizado com o coeficiente `k`).
@@ -583,6 +591,12 @@ impl Chain {
             fx.set_param(id, value);
         }
         routing
+    }
+
+    /// O último valor que o app mandou para o parâmetro (a base da modulação); `None` se nunca.
+    pub fn static_param(&self, slot: usize, id: u32) -> Option<f32> {
+        let v = *self.slots[..self.count].get(slot)?.statics.get(id as usize)?;
+        (!v.is_nan()).then_some(v)
     }
 
     /// Volta o parâmetro ao último valor que o app mandou (a automação soltou).

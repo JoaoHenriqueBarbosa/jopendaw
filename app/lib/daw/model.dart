@@ -10,6 +10,7 @@ import 'dart:math' as math;
 import 'effects.dart';
 import 'instruments.dart';
 import 'midi_map.dart';
+import 'modulation.dart';
 import 'sampler_zones.dart';
 import 'tempo_map.dart';
 
@@ -425,6 +426,9 @@ class DawTrack {
   String? output;
   List<AutoLane> lanes;
 
+  /// Moduladores (LFO, seguidor, macro) e os destinos deles nesta faixa.
+  TrackModulation modulation;
+
   /// Pasta de faixas (ver `track_groups.dart`): um barramento com esta marca é a linha da pasta e
   /// as faixas dela vêm logo abaixo, com [groupId] igual ao id dele e a saída apontando para ele.
   /// Só faz sentido em [TrackKind.bus]; o motor vê um barramento comum.
@@ -456,6 +460,7 @@ class DawTrack {
     List<Send>? sends,
     this.output,
     List<AutoLane>? lanes,
+    TrackModulation? modulation,
     this.isGroup = false,
     this.groupId,
     this.collapsed = false,
@@ -465,7 +470,8 @@ class DawTrack {
        midi = midi ?? [],
        effects = effects ?? [],
        sends = sends ?? [],
-       lanes = lanes ?? [];
+       lanes = lanes ?? [],
+       modulation = modulation ?? TrackModulation();
 
   DawTrack.fromJson(Map<String, dynamic> j)
     : id = j['id'],
@@ -487,6 +493,7 @@ class DawTrack {
       sends = [for (final x in (j['sends'] as List?) ?? []) Send.fromJson(x)],
       output = j['output'],
       lanes = [for (final x in (j['lanes'] as List?) ?? []) AutoLane.fromJson(x)],
+      modulation = TrackModulation.fromJson(j['modulation']),
       // documento sem pastas (versão anterior): nenhuma faixa é pasta nem filha
       isGroup = (j['group'] as bool? ?? false) && TrackKind.parse(j['kind']) == TrackKind.bus,
       groupId = j['group_id'] as String?,
@@ -513,6 +520,8 @@ class DawTrack {
     'sends': [for (final x in sends) x.toJson()],
     'output': output,
     'lanes': [for (final l in lanes) l.toJson()],
+    // sem modulação o documento fica byte a byte como antes
+    if (!modulation.isEmpty) 'modulation': modulation.toJson(),
     // só com pastas: um documento sem elas sai igual ao de antes
     if (isGroup) 'group': true,
     if (groupId != null) 'group_id': groupId,
@@ -595,6 +604,9 @@ class DawDoc {
   List<EffectSlot> masterEffects;
   List<AutoLane> masterLanes;
 
+  /// A modulação do master (volume, pan e parâmetros dos efeitos dele).
+  TrackModulation masterModulation;
+
   /// Marcadores, sempre ordenados por batida. Ausentes nos documentos antigos.
   List<Marker> markers;
 
@@ -619,6 +631,7 @@ class DawDoc {
     this.recLatencyMs = 0,
     List<EffectSlot>? masterEffects,
     List<AutoLane>? masterLanes,
+    TrackModulation? masterModulation,
     List<Marker>? markers,
     MidiMap? midiMap,
   }) : tempoMap = normalizeTempoPoints(tempoMap ?? const [], bpm),
@@ -628,7 +641,8 @@ class DawDoc {
        midiMap = midiMap ?? MidiMap(),
        samples = samples ?? {},
        masterEffects = masterEffects ?? [],
-       masterLanes = masterLanes ?? [];
+       masterLanes = masterLanes ?? [],
+       masterModulation = masterModulation ?? TrackModulation();
 
   DawDoc.fromJson(Map<String, dynamic> j)
     : bpm = (j['bpm'] as num).toDouble(),
@@ -648,6 +662,7 @@ class DawDoc {
       recLatencyMs = (j['rec_latency_ms'] as num? ?? 0).toDouble(),
       masterEffects = _effects(j['master_effects']),
       masterLanes = [for (final x in (j['master_lanes'] as List?) ?? []) AutoLane.fromJson(x)],
+      masterModulation = TrackModulation.fromJson(j['master_modulation']),
       markers = [for (final x in (j['markers'] as List?) ?? []) Marker.fromJson(x)]..sort((a, b) => a.beat.compareTo(b.beat)),
       midiMap = MidiMap.fromJson(j['midi_map']) {
     _repairGroups();
@@ -684,6 +699,7 @@ class DawDoc {
     'rec_latency_ms': recLatencyMs,
     'master_effects': [for (final e in masterEffects) e.toJson()],
     'master_lanes': [for (final l in masterLanes) l.toJson()],
+    if (!masterModulation.isEmpty) 'master_modulation': masterModulation.toJson(),
     'markers': [for (final m in markers) m.toJson()],
     // só com mapeamentos: um documento sem MIDI learn sai igual ao de antes
     if (!midiMap.isDefault) 'midi_map': midiMap.toJson(),
