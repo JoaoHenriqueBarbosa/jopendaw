@@ -200,6 +200,7 @@ Se você parasse em 19 s (antes do punch out): o clipe novo iria de 16 s a 19 s,
 2. Arme a faixa de áudio e grave (`R`). A cada volta do loop o retângulo vermelho passa a dizer `Tomada 2`, `Tomada 3`…
 3. Pare. Nasce **um clipe** cobrindo o loop, com o selo `N tomadas`. A tomada ativa é a **última passada completa** (uma passada é completa se cobre pelo menos 98% do loop, sem ter começado no meio).
 4. Para trocar, toque o selo `N tomadas` ou use o menu do clipe (`Tomadas`): a lista `TOMADAS` marca a ativa com um visto; escolha outra (posição, corte e fades do clipe ficam).
+5. Para ficar com **uma frase de cada tomada** em vez de uma tomada para o clipe inteiro, use o **comping por trecho** (fase 26): menu do clipe › `Comp por trecho` abre uma raia por tomada, e arrastar numa raia escolhe aquela tomada no trecho, com crossfade de 20 ms nas emendas. Passo a passo e limites em [03f Comping por trecho](03f-comping.md); receitas em [Vocal perfeito com comping](../guias/vocal-perfeito-com-comping.md).
 
 **Gravar notas com o teclado do computador (e fazer overdub)**
 1. Crie uma faixa de instrumento (`Sintetizador`, por exemplo) e arme o ponto dela.
@@ -237,6 +238,7 @@ Se você parasse em 19 s (antes do punch out): o clipe novo iria de 16 s a 19 s,
 - [Áudio e clipes](03-audio-e-clipes.md): o clipe gravado é um clipe de áudio comum (aparar, cortar, mover, fades).
 - [Warp e altura](03b-warp-e-altura.md): esticar ou transpor uma gravação depois; o warp só liga com a gravação parada.
 - [Áudio para MIDI](03d-audio-para-midi.md): uma gravação de voz ou linha de baixo (que sai como WAV) pode virar notas.
+- [Comping por trecho](03f-comping.md): escolher, trecho a trecho, qual das tomadas do loop soa, com emendas em crossfade de 20 ms, `Achatar` e `Fechar`.
 - [Mixer](06-mixer.md): efeitos, fader e envios da faixa; o monitor passa por eles.
 - [Compensação de latência dos efeitos](06e-compensacao-de-latencia.md): por que o som de um projeto com `Limitador` ou `Distorção` sai alguns ms atrasado e o que fazer ao gravar por cima.
 - [Transporte e barra de ferramentas](02-transporte.md): botão gravar, contagem, loop e a janela `Configurações`.

@@ -8,7 +8,7 @@
 
 ## Onde fica
 
-O painel Efeitos é uma das cinco abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos, Modulação). Ele mostra o rack de **uma** faixa por vez, ou do master.
+O painel Efeitos é uma das seis abas fixas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos, Modulação, Áudios). Ele mostra o rack de **uma** faixa por vez, ou do master.
 
 | Como abrir | O que acontece |
 |---|---|

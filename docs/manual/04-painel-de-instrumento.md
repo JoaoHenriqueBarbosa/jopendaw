@@ -4,12 +4,12 @@
 
 ## Onde fica
 
-O painel é uma das cinco abas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos, Modulação). Ele sempre mostra o instrumento da faixa selecionada; trocar de faixa troca o conteúdo. Formas de abrir:
+O painel é uma das seis abas fixas do painel de baixo da tela do projeto (Mixer, Editor, Instrumento, Efeitos, Modulação, Áudios). Ele sempre mostra o instrumento da faixa selecionada; trocar de faixa troca o conteúdo. Formas de abrir:
 
 | Como | Detalhe |
 |---|---|
 | Botão da barra superior, tooltip `Instrumento da faixa (I)` | O ícone acompanha o tipo da faixa selecionada (piano, grade, nota, etc.); numa faixa que não é de instrumento, o ícone é o de piano |
-| Aba `Instrumento` do painel de baixo | Abaixo de 560 px de largura a aba mostra só o ícone (tooltip `Instrumento da faixa (I)`) |
+| Aba `Instrumento` do painel de baixo | Abaixo de 620 px de largura a aba mostra só o ícone (tooltip `Instrumento da faixa (I)`) |
 | Tecla `I` | Abre e fecha o painel |
 | Botão de tipo da faixa, na coluna de faixas do arranjo | Tooltip `Sintetizador: abrir o instrumento (I)` (o nome muda com o tipo); com o painel já aberto na faixa, o tooltip vira `Fechar o instrumento (I)` |
 | Menu `Opções da faixa` (três pontinhos) > `Abrir o instrumento` | Só aparece em faixa de instrumento |

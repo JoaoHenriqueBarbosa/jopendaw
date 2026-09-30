@@ -1587,6 +1587,96 @@ Mensagens da janela (texto exato): `Não deu para compactar` (título), `Não de
 - **Upload grande e o teto de 120 s por pedido** (`ApiClient`): um WAV de centenas de MB numa conexão lenta pode cair em `O servidor demorou demais para responder.` `(lido do código; não reproduzido)`.
 - **Lista de taxas e MP3:** com o formato `mp3` e a taxa do aparelho fora de 44,1/48 kHz, o item `A do aparelho` some da lista; só o `_pickFormat` corrige a taxa. Se as opções guardadas (`_lastOptions`) já tiverem `mp3` com `sampleRate` nulo e o aparelho mudar de taxa, a lista abre sem o item que é o valor inicial `(lido do código; não reproduzido)`.
 
+## Exportação por marcadores e seções (fase 26 C)
+
+> Para quem mexe na janela `Exportar áudio` e no render por intervalo (commit `f12d405`): como o pedido "uma seção por arquivo, só destas faixas, num zip" vira uma lista de intervalos (`export_plan.dart`), como o `exportAudio` a percorre e onde o zip e o cancelar entram. O texto para quem usa está em [Exportação](../manual/08-exportacao.md#exportar-por-marcadores-seções-e-faixas-escolhidas). Nada mudou no motor, nas pontes nem no servidor.
+
+### Visão geral
+
+```
+ExportDialog ── _current() ──► ExportOptions(range, fromMarker, toMarker, sectionIds, trackIds, nameTemplate, zip, ...)
+     │                              │
+     │   planExport(doc, options, project)   (puro: a janela e o controlador usam o MESMO plano)
+     │                              ▼
+     │                       ExportPlan { spans: [ExportSpan(from, to, label, n, base)], problem? }
+     ▼
+ExportProgressDialog ──► DawController.exportAudio(options, sink, onSpan, onProgress)
+                              │ plan = planExport(...)  ·  calls = trackIds == null ? _fullSyncCalls() : _callsFor(_soloDoc(d, picked))
+                              │ para cada span: onSpan → render em lotes → (normaliza/mede) → encodeWav → sink | saveFile
+                              ▼
+            sink = CompressedExport.deliver (FLAC/MP3)  ·  ExportZip.add (zip)  ·  saveFile (WAV solto)
+                              ▼
+            fim: ExportZip.build() → saveExportedFile('<projeto>.zip', bytes, 'application/zip')
+```
+
+### Peças e responsabilidades
+
+| Arquivo | Papel |
+|---|---|
+| `app/lib/daw/export_plan.dart` (novo, 229 linhas) | Tudo puro, sem motor nem tela: `ExportSpan`, `ExportPlan` (`spans` ou `problem`), `ExportSection`, `kSpanEpsilon` (1e-6 batida), `exportSections(doc)`, `sanitizeExportName`, `expandNameTemplate`, `uniqueNames`, `exportTrackIndexes`, `planExport`, `expectedExportFiles` e a classe `ExportZip` |
+| `app/lib/daw/export_options.dart` | `ExportRange` ganha `markers` (`Entre marcadores`) e `sections` (`Uma por seção`); `ExportOptions` ganha `fromMarker`, `toMarker` (ids; null = início/fim), `sectionIds` (ids dos marcadores que abrem as seções; `''` é o `Início`; null = todas), `trackIds` (null = todas), `nameTemplate` (`kDefaultNameTemplate` = `{projeto}-{marcador}-{n}`) e `zip` |
+| `app/lib/daw/export.dart` | `showExportDialog(context, c, {preset})` (o `preset` troca as últimas opções). `ExportDialog`: `_range` (validado por `_validRange`), `_fromMarker`/`_toMarker` (`_markerOr` zera id que sumiu), `_sectionIds`, `_trackIds` (`_initialTracks`), `_template`, `_zip`; `_current()` monta as opções (`sectionIds` e `trackIds` viram null quando tudo está marcado); `_plan` é recalculado no `build`; `_markerPickers`, `_sectionPickers`, `_trackPicker`, `_nameFields`; o `Reunir num .zip` só aparece com `_fileCount > 1`. `ExportProgressDialog`: `_zip` (`ExportZip`), `_zipName`, `_spanCount`/`_spanIndex`/`_spanLabel`, `_canceledSaved`, `_saveZip`, `_zipCanceledName` |
+| `app/lib/daw/controller.dart` | `exportAudio` ganha `onSpan(index, count, label)`; percorre `plan.spans`; `_soloDoc(d, picked)` (cópia por JSON com só as faixas marcadas em solo); `exportReports` (lista `({name, report})`, um por arquivo medido) além do `exportReport` (o último); contagem `skipped` das seções sem som |
+| `app/lib/daw/marker.dart` | `showMarkerMenu` ganha o item `Exportar esta seção…` (valor `'export'`), que chama `showExportDialog(preset: ExportOptions(range: markers, fromMarker: m.id, toMarker: <próximo>.id))` |
+| `app/test/export_regions_test.dart` | 463 linhas: nomes, plano, render por intervalo e a janela (ver Como testar) |
+| `app/test/recording_ui_test.dart` | `FakeDaw.exportAudio` ganha o parâmetro `onSpan`; um teste passou a rolar (`ensureVisible`) até `WAV 24 bits`, porque os seletores novos empurram o formato para baixo da dobra em 640 px de altura |
+
+### Fluxo: o plano e o laço por intervalo
+
+**`planExport(d, o, project)`** devolve `ExportPlan.problem(texto)` ou os `spans`:
+
+1. `trackIds != null` e nenhuma faixa existe mais: problema `Nenhuma faixa escolhida: marque ao menos uma faixa para exportar.`
+2. `song`: `[0, contentEnd]` (problema `O projeto está vazio: não há nada para exportar.` se não passa de `kSpanEpsilon`); `loop`: `[loopStart, loopEnd]` (`A região do loop está vazia: marque o loop antes de exportar.`). Nos dois o `base` é o nome do projeto limpo e não há modelo de nome.
+3. `markers`: acha os dois marcadores pelo id (faltando um: `Um dos marcadores escolhidos não existe mais: escolha de novo.`); `from`/`to` são o beat do marcador ou `0`/`contentEnd`; se `from > to` troca os dois **e** os marcadores (o rótulo sai na ordem da música). Com os dois marcadores no mesmo ponto, problema próprio; depois `to = min(to, contentEnd)`, `from = max(0, from)` e, se sobrou `≤ kSpanEpsilon`, `Não há nada para exportar nesse trecho: ele começa depois do fim da música.` O rótulo: só `De` → nome do marcador; só `Até` → `Início a <nome>`; os dois → `<nome> a <nome>`; nenhum → vazio. `n = 1`, `count = 1`.
+4. `sections`: `exportSections(d)` (ver abaixo), filtradas por `sectionIds`; nomes = `uniqueNames` de `expandNameTemplate(modelo, projeto, marcador: seção.nome, n: i + 1, count: marcadas)`.
+
+**`exportSections(d)`**: ordena os marcadores por beat; funde os que estão a `≤ kSpanEpsilon` um do outro (o nome do primeiro, ou o do seguinte se o primeiro é vazio); se o primeiro começa depois de `kSpanEpsilon`, cria `ExportSection('', 'Início', 0, min(primeiro, fim))`; cada marcador vai até o seguinte (o último até `d.contentEnd`); seção com `to - from ≤ kSpanEpsilon` sai; nome vazio vira `Marcador ${i + 1}` (i = posição entre os marcadores já fundidos). Sem marcadores, lista vazia.
+
+**`exportAudio`** depois do plano (trechos novos do `controller.dart`):
+
+- `picked = exportTrackIndexes(d, options)`; `outputs = [-1, if (stems) ...picked]` (`-1` é a mixagem; ver `renderOffline` em [motor](01-motor.md)). `calls` é `_fullSyncCalls()` se `trackIds == null`, senão `_callsFor(_soloDoc(d, picked))`, então a mixagem é o solo das marcadas e o mudo do projeto segue valendo.
+- Nomes de arquivo de todos os intervalos calculados **antes** do primeiro render (`names[si][k]`): `unique('<span.base>')` para a mixagem e `unique('<span.base> - <_fileName(faixa)>')` para cada stem; `unique` devolve `'$stem.wav'`/`'$stem (k).wav'` contra um `taken` único (minúsculas) para a exportação toda.
+- Laço `for si in spans`: checa `_exportCanceled` (lança `RenderCanceled`, que o `catch on RenderCanceled` engole sem erro); `onSpan(si, n, label)`; `report(p)` = `((si + p) / n)` limitado a 0,999 (a barra é a da exportação toda); cada span tem o **seu** `mixGainDb`, o seu `perOutput` e os seus lotes (`_renderBudget` 384 MiB); a mixagem é medida e normalizada no span (`exportReports.add((name: names[si][0], report))`; `exportReport` fica com o último).
+- Seção sem som: `batch[k] < 0 && peak == 0 && spans.length > 1` → `skipped++` e `continue`; nenhum arquivo nem medição. Com um span só, o silêncio é entregue.
+- Fim: `onProgress(1)`; `error` (que a janela mostra como aviso, pois o render acabou) junta `Exportado sem … neste aparelho.` e `Uma seção sem som ficou de fora.` / `N seções sem som ficaram de fora.`
+
+**`ExportProgressDialog._run`**: refaz `planExport`; `expected = expectedExportFiles(...)` (spans × (1 + faixas marcadas, se `stems`)); se `options.zip && expected > 1`, cria `_zip = ExportZip()` e `_zipName = '${sanitizeExportName(projeto)}.zip'`. O `sink` é, em ordem: `CompressedExport.deliver` (FLAC/MP3, que recebe `save: zipSave` quando há zip: o arquivo compactado entra no zip em vez de ir ao `saveFile`) → `zip.add` (WAV) → nenhum (WAV solto, `saveFile` no controlador). Terminado sem erro, sem `fallbacks`, sem `Salvar` cancelado, `_saveZip()` entrega `zip.build()` por `saveExportedFile(_zipName, bytes, 'application/zip')`. O `_saveWavs` (`Exportar em WAV mesmo assim`) põe os WAV que caíram no mesmo zip e só então chama `_saveZip`.
+
+### Contratos
+
+- **`ExportZip`**: `add(name, bytes)` separa `nome.ext`, limpa o radical (`sanitizeExportName(stem, fallback: 'arquivo')`), desempata sem distinguir maiúsculas contra os já adicionados (`uniqueNames(..., taken: _taken)`) e devolve o nome que ficou; `build()` monta um `Archive` com `ArchiveFile.noCompress(...)` e `ZipEncoder().encodeBytes` (pacote `archive` ^4.3.0): **sem recompressão**; `count` e `names` para a janela e os testes.
+- **`sanitizeExportName(name, {fallback = 'jopendaw', maxLength = 100})`**: `\ / : * ? " < > |` e controle → `_`; `\s+` → espaço; `([-_])\1+` → um; `( ?[-_] ?){2,}` → `-`; tira `[\s.\-_]` das pontas; corta em `maxLength` (e tira as pontas de novo); vazio → `fallback`; primeiro trecho antes de `.` igual a `con|prn|aux|nul|com[1-9]|lpt[1-9]` (sem distinguir maiúsculas) → prefixo `_`. O `_fileName` do controlador (nome de faixa, 80 caracteres, sem as outras regras) **continua** existindo e é usado só na parte da faixa dos stems.
+- **`expandNameTemplate(template, project, marker, n, count)`**: troca `\{([^{}]*)\}` por `projeto`/`marcador`/`n` (trim e minúsculas; `n` com `padLeft(count.toString().length, '0')`); qualquer outra chave vira vazio; passa por `sanitizeExportName` com fallback `sanitizeExportName('$project-$n')`.
+- **Chaves de teste** da janela: `export-range-markers`, `export-range-sections`, `export-from-marker`, `export-to-marker`, `export-sections-all`, `export-sections-none`, `export-section-<id do marcador>`, `export-tracks` (o `ExpansionTile`), `export-tracks-all`, `export-tracks-selected`, `export-track-<id da faixa>`, `export-name-template`, `export-name-preview`, `export-zip`, `export-span-summary`, `export-span-progress`, `export-canceled-partial`, `export-save-canceled`, `export-wav-anyway`.
+- **`CompressedExport.expectedFiles`** deixou de ser `tracks.length + 1`: agora recebe `expected` do plano (um teto: faixa muda e seção sem som não geram arquivo, e a barra não chega a 100% antes do fim).
+- **Menu do marcador**: o `next` do `preset` é o primeiro marcador com `beat > m.beat + 1e-6` na ordem da régua; sem ele, `toMarker` é null (`Fim da música`).
+
+### Decisões e por quê
+
+- **Um plano puro compartilhado.** A janela (prévia de nome, contador, motivo vermelho) e o `exportAudio` chamam a mesma `planExport`, então o que a janela promete é o que o render faz, e tudo (seções, nomes, saneamento) se testa sem motor nem tela.
+- **A mixagem das faixas escolhidas é um solo, não uma soma de stems.** Reusar o solo do motor mantém envios, retornos e o master como no mixer (o retorno que as faixas alimentam soa), sem um modo novo de render. A cópia do documento (`_soloDoc`) evita mexer no projeto aberto e no desfazer.
+- **Loudness por arquivo.** Cada seção é um arquivo de entrega independente; o ganho e o teto são por arquivo. O custo (nivelar seções) está documentado no manual.
+- **Zip em memória, sem recompressão.** Os áudios já são (quase) incompressíveis e o `archive` não precisa de um passo a mais; em troca, nada sai até o fim e a memória soma os arquivos e o zip. Não há teto nem aviso (a janela só confere os 30 min e os 512 MB do FLAC e do MP3 por arquivo).
+- **Nome de tudo antes do primeiro render.** O `{n}` não pula quando uma seção fica sem som, e dois intervalos nunca colidem (o `taken` é da exportação toda).
+- **Cancelar entre intervalos e dentro do render.** `cancelRender` liga `_exportCanceled` e chama `_engine.cancelRender()`; o laço confere a bandeira no começo de cada span e o `CompressedExport` a cada passo. Com zip nada sai, então a janela não tem o que contar.
+
+### Como testar
+
+`cd app && flutter test test/export_regions_test.dart`. Grupos: **nomes** (saneamento, modelo com `{n}` com zeros, colisão ` (2)`), **plano** (música inteira e loop mantêm o nome; sem marcadores `Entre marcadores` e seções recusam; marcador único; marcadores iguais; ordem trocada; marcador depois do fim; nomes duplicados e marcador sem nome; seções escolhidas; faixas vazias e ids velhos; o zip desempata), **exportar por intervalos** (um render por seção, nome do marcador, progresso monotônico de 0 a 1; entre marcadores com stems; cancelar no meio; faixas selecionadas viram solo; nenhuma faixa; seção sem som e loudness por arquivo; sem marcadores) e **janela** (360 px e 1512 px sem estouro; `Só a selecionada`; marcador que sumiu volta à música inteira; o andamento com zip e sem zip). O `FakeEngine` (`test/fake_engine.dart`) guarda `renders` (cada `fromBeat`/`toBeat`/`tailSeconds`/`outputs`/`calls`) e `saved` (`nome`, `bytes`, `mime`); `e.renderResult` devolve o som de cada render. O teste de cancelar usa `c.cancelRender()` de dentro do `renderResult`: o render falso **termina** mesmo assim (o cancelamento só impede o intervalo seguinte), então o que acontece com o render real interrompido só tem a cobertura dos testes do motor. **Nenhum teste exporta pelo motor real, pelo zip aberto fora do Dart nem contra o servidor.**
+
+### Armadilhas conhecidas
+
+- **Zip com 0 ou 1 arquivo.** `zip != null` vem de `expected > 1`, não do que saiu. Se as seções sem som e os stems mudos deixam 1 ou 0 arquivos, o resultado mostra `Os 1 arquivos (…) foram reunidos em …` (plural errado) e, com 0, `_saveZip` devolve `true` sem salvar e a janela diz `Os 0 arquivos … reunidos` `(lido do código; não reproduzido)`.
+- **O chip `Uma por seção` força `_zip = true`.** O comentário diz "o zip é o padrão, mas só até a pessoa mexer nele", mas o `onSelected` do chip reescreve `_zip = true` toda vez que é tocado com 2 ou mais seções marcadas, mesmo que a pessoa o tivesse desligado.
+- **Mensagem enganosa com `De` = `Início do projeto` e `Até` no compasso 1.** Com um marcador na batida 0 como `Até`, o trecho tem duração zero e o texto é `Não há nada para exportar nesse trecho: ele começa depois do fim da música.` (o teste "os dois no mesmo ponto" só vale com dois marcadores escolhidos).
+- **O item `Exportar esta seção…` não confere gravação nem render em andamento.** O botão `Exportar` da barra está desligado nesses casos (`idle`), o item do menu do marcador não: a janela abre e, ao confirmar, o `exportAudio` responde pelo `_busyFor` e a janela de progresso vira `A exportação falhou` com `Pare a gravação antes de exportar.` `(lido do código; não reproduzido)`.
+- **O `Uma por seção` apagado usa o tooltip errado** quando há marcadores mas nenhuma seção com duração (o texto de falta de marcadores só aparece se `markers.isEmpty`).
+- **`sectionIds` velhos.** Se as últimas opções citam ids de marcadores que não existem mais (todos), `_sectionIds` abre vazio (nenhuma caixa marcada, `Nenhuma seção escolhida…`), em vez de voltar a marcar todas como `_initialTracks` faz com as faixas.
+- **Marcar só barramento ou pasta como única faixa.** O solo fica nele, e o que chega pelos envios de faixas em silêncio é cortado: a mixagem provavelmente sai muda; não há aviso `(dedução das regras de solo; não visto)`.
+- **Nomes de stems passam de 100 caracteres.** `sanitizeExportName` corta o intervalo em 100 e o `_fileName`, a faixa em 80; a soma pode chegar a 183 (com ` - `). O que o servidor faz com isso não foi visto.
+- **A `Região do loop` e a `Música inteira` ganharam a limpeza nova no nome.** O nome do projeto `..Meu--projeto` que antes saía `..Meu--projeto` (o `_fileName` só tirava pontos do fim) agora sai `Meu-projeto`: o nome do arquivo pode mudar de uma versão para outra em projetos com esses caracteres.
+- **Sem medição de tempo nem de memória** de um `.zip` grande ou de muitos intervalos `(não medido)`.
+
 ## Tabelas espelhadas do motor (`instruments.dart`, `effects.dart`)
 
 - **`TrackKind`** (`instruments.dart:13`): `audio, synth, drums, sampler, bus, fm, wavetable`. `values[i].index` é o código de `track_kind` no motor: **tipo novo só entra no fim** do enum.
@@ -1827,6 +1917,176 @@ Todas as armadilhas 1 a 6 abaixo foram **resolvidas em `ebea0b1`** (fase 24); fi
 6. **Congelar e mudo. Resolvido em `ebea0b1`.** `trackHasNothing` olhava `t.clips.isEmpty`, então a faixa só com clipes mudos era congelável e o render saía em silêncio. Agora conta os mudos como ausentes (Fluxo, item 13) e `freezeBlocker` devolve `A faixa só tem clipes mudos`; `bounceTrack` também passou a usar `freezeBlocker` (detalhes na seção de congelar).
 7. **Estalo ao mudar o mudo tocando.** O `clips_clear` tira o clipe do motor sem rampa. `(não confirmado ao ouvido)`
 8. **App antigo perde os campos.** Quem abre e salva um projeto com `muted`, `invert` ou `loop_length` num app anterior a `3a27233` os perde (o clipe volta a soar, sem fase invertida e sem loop): o mesmo padrão de "Duas armadilhas de compatibilidade do esquema".
+
+## Comping por trecho (fase 26 A)
+
+> Para quem mexe em como o app escolhe, trecho a trecho, a tomada de uma gravação em loop: o grupo derivado dos clipes, o algoritmo que refatia e emenda, o que entra no histórico e os testes. Usuário: [Comping por trecho](../manual/03f-comping.md) e o guia [Vocal perfeito com comping](../guias/vocal-perfeito-com-comping.md). Linhas de `de20512` (o commit da fase é `ab57a40`); as linhas andam, o nome do símbolo é o que vale. Só o app mudou: nada no motor, nas pontes, no servidor nem no JSON do documento.
+
+### Visão geral
+
+O comp **não é um tipo novo de clipe nem um campo novo**: é um conjunto de `AudioClip` comuns de uma faixa que têm a mesma lista `takes` e o mesmo alinhamento com o áudio. Escolher uma tomada num trecho refatia esse conjunto (mais clipes, offsets certos) e refaz as emendas com o crossfade automático que já existia. O modo de tela (as raias) guarda só uma chave.
+
+```
+menu do clipe / ação edit.comp ─► DawController.startComp ─► _comp = (faixa, takes, origin)   (estado de tela)
+                                        │
+        compGroup = compGroupByKey(doc, faixa, takes, origin)   ◄── sempre derivado dos clipes
+                                        │
+  Timeline (_Layout: uma linha _RowKind.comp por tomada) ─► CompLaneHeader + CompLaneView
+        arrastar / tocar ─► compPick(take, de, até)
+                                        │ editAs('Comp: escolher trecho')
+                                        ▼
+        _compRebuild:  compNormalize ─► compSegments ─► compApply ─► clipes novos ─► _compSeam ─► reconcileAutoFades
+```
+
+### Peças e responsabilidades
+
+| Arquivo | Papel |
+|---|---|
+| `app/lib/daw/comp.dart` | Lógica pura, sem `DawController`: `compFade` (0,02 s), `compMinSeg` (1 ms), `CompSeg`, `CompGroup`, `compPlain` (`:47`), `compGroupOf` (`:60`), `compGroupByKey` (`:66`), `clipStartSec`/`clipEndSec`, `compNormalize` (`:81`), `compSegments` (`:108`), `compView` (`:113`) e `compApply` (`:125`) |
+| `app/lib/daw/controller.dart` | `_comp` (`:5711`), `compGroup` (`:5714`), `compOn`, `compSegs`, `startComp` (`:5730`), `endComp` (`:5756`), `toggleComp` (`:5763`), `compPick` (`:5774`), `compPickAll` (`:5800`), `_compRebuild` (`:5808`), `_compSeam` (`:5855`) e `flattenComp` (`:5878`); reaproveita `_tryCrossfade` (`:3221`) e `reconcileAutoFades` (`:3249`) |
+| `app/lib/daw/comp_ui.dart` | `compLaneHeight` (30), `CompLaneHeader` (nome da tomada, visto, `Achatar` e `Fechar` na primeira) e `CompLaneView` (gestos e `_CompLanePainter`: onda da tomada acesa onde ela soa, fio da emenda, retângulo do arraste) |
+| `app/lib/daw/timeline.dart` | `_RowKind.comp` e `_Row.take`; `_Layout` acrescenta uma linha por tomada sob a faixa do grupo (`:331`, `:351`); os cabeçalhos (`:123`) e as raias (`:2290`); o item `comp` do menu do clipe (`:2930`, só com `takes > 0`) e o `case 'comp'` (`:2968`) |
+| `app/lib/daw/keymap.dart`, `app/lib/screens/project_screen.dart` | ação `edit.comp` (`Comp por trecho (tomadas)`, `Edição`, contexto `arrangement`, sem tecla padrão; `keymap.dart:106`) ligada a `c.toggleComp` (`project_screen.dart:164`) |
+| `app/test/fase26_test.dart` | 18 testes: 16 do controlador e 2 de widget (abaixo) |
+
+### Fluxo de dados e ciclo de vida
+
+1. **Grupo derivado.** `compGroupByKey(d, t, takes, origin)` devolve os clipes de `t` que são `compPlain` (sem warp, reverso, transposição nem loop), têm a mesma lista `takes` (mesma ordem), cujo `sample` está em `takes` e cuja origem `tempo.secondsAt(start) - offset` difere de `origin` em menos de `1e-4` s, ordenados por começo. A origem é o instante onde o segundo 0 das tomadas cairia. O que tira um clipe do grupo: mover (muda a origem), ligar warp, reverso, transposição ou loop; dividir mantém; duplicar vai para outra origem.
+2. **Abrir.** `startComp([clipId])` (o id do clipe do menu, ou o selecionado na ação) recusa com `error` nas três situações da tabela de mensagens abaixo; senão guarda a chave `(faixa, takes, origin)` em `_comp` e seleciona a faixa. O modo **não** entra no histórico. `compGroup` é nulo se a faixa ou os clipes sumiram: as raias somem, mas `_comp` continua preenchido, então desfazer que traz os clipes de volta traz as raias de volta.
+3. **Escolher.** `compPick(take, fromBeat, toBeat)` (batidas, qualquer ordem): recusa tomada ausente (`missing`); converte para segundos; corta o intervalo ao vão do comp (`view.first.s` a `view.last.e`, onde `view = compView`); sai sem passo se já toca essa tomada inteira no trecho ou se sobra menos de `compMinSeg`; senão `editAs('Comp: escolher trecho', _compRebuild)`. `compPickAll(take)` é o mesmo sobre o comp todo (o toque no nome da tomada).
+4. **Refatiar.** `_compRebuild`: (a) `compNormalize` em cada clipe do grupo devolve às bordas nominais o que o crossfade automático somou (tira metade da sobreposição de cada lado: `start`, `offset`, `length`, e restaura `fadeIn`/`fadeOut` e as curvas de `autoFadeIn`/`autoFadeOut`); (b) `compSegments` vira trechos `(s, e, take)` em segundos; (c) `compApply(segs, a, b, take)` faz a álgebra de intervalos: encosta bordas a menos de 1 ms de uma emenda, corta o que o trecho cobre (encurta, apara ou parte), põe o trecho novo e **junta vizinhos colados da mesma tomada quando um deles é novo ou foi cortado** (`dirty`); (d) cada trecho `!dirty` mantém o clipe (mesmo id); os outros viram `AudioClip.fromJson(base.toJson())` com id novo, `sample = takes[take]`, `start = beatAt(s)`, `offset = max(0, s - origin)`, `length = e - s`, onde `base` é o clipe de onde o trecho veio ou, no trecho novo, o **primeiro** clipe do grupo; o fade de uma borda só fica se a borda continua sendo a do clipe-base; (e) os clipes novos entram no lugar do primeiro do grupo na lista da faixa; (f) `_compSeam` em cada par vizinho; (g) `reconcileAutoFades()`.
+5. **Emenda.** `_compSeam(d, a, b)` sai sem fazer nada se `a.sample == b.sample` ou se as bordas não se tocam (mais de `1e-6` s). Senão `xf = min(compFade, min(a.length, b.length) / 2)` e `h = xf / 2`; sai se `xf < 1e-4`, se a duração do `a.sample` (em `d.samples`) é desconhecida, se `a.offset + a.length + h` passa dessa duração ou se `b.offset < h`. Estende `a.length += h` e recua `b` em `h` (`start`, `offset`, `length`) e chama `_tryCrossfade(a, b)` **sem `force`**: se ele recusa (fade do usuário na borda, por exemplo), desfaz a extensão e a emenda fica em corte seco. O que `_tryCrossfade` grava: `autoFadeOut` no `a` e `autoFadeIn` no `b` (com o fade de antes, para o `reconcile` devolver), tamanho = a sobreposição (`2h`, 20 ms no caso geral) e curva `FadeShape.equalPower`.
+6. **Ver.** `compView` dá os trechos como o usuário os vê: a emenda de um crossfade fica no **meio** da sobreposição (começo + `fadeIn/2`, fim − `fadeOut/2` dos lados com fade automático). É o que as raias desenham e o que `compPick` usa para converter batidas.
+7. **Achatar.** `flattenComp` faz `c.takes = []` em todos os clipes do grupo (`editAs('Comp: achatar')`) e zera `_comp`. Não mexe em `d.samples`.
+8. **Motor.** Nada específico: cada pedaço é um clipe e sai como qualquer outro no `_docCalls` (um `clip_add` por pedaço, com o `offset` e o fade que o clipe tem), ao vivo e no render offline.
+
+### Contratos
+
+- **JSON:** nenhum campo novo. Cada pedaço é um `AudioClip` com `sample`, `takes` (a lista inteira), `start`, `offset`, `length`, `fade_in`/`fade_out` com as curvas e `auto_fade_in`/`auto_fade_out` quando há crossfade (ver [O documento, clipe de áudio](#clipe-de-áudio-audioclip-modeldart13)). O teste de JSON confere que só as chaves conhecidas aparecem e que ler e escrever dá o mesmo texto.
+- **Mensagens de `error`:** `Selecione um clipe gravado em loop (com tomadas) para fazer o comp.` (clipe não encontrado), `Este clipe não tem tomadas: o comp é para a gravação em loop, que guarda uma tomada por volta.` (`takes.length < 2`), `O comp não funciona num clipe com warp, reverso, transposição ou loop: desligue isso primeiro.` (`compGroupOf` nulo) e `A tomada N não está neste aparelho: não dá para escolhê-la.` (`compPick`; N a partir de 1).
+- **Rótulos do histórico:** `Comp: escolher trecho`, `Comp: achatar`.
+- **Constantes:** `compFade = 0.02` s; `compMinSeg = 1e-3` s; `compLaneHeight = 30` px.
+
+### Decisões e por quê
+
+- **Clipes comuns em vez de um "clipe de comp".** O motor, os fades, o crossfade automático, a exportação, a sincronização e o `.jopendaw` seguem como estavam; o custo é refatiar (mais clipes) a cada escolha. Mesmo padrão da edição de áudio (fatiar).
+- **Grupo derivado, sem estado no documento.** Qualquer edição comum (desfazer, dividir, abrir o projeto de novo) deixa o grupo coerente sem trabalho extra; o modo de tela guarda só a chave e sobrevive à troca dos clipes.
+- **Normalizar antes de refatiar.** Desfazer os 10 ms de cada lado do crossfade automático devolve as bordas ao ponto que o usuário escolheu, então o desenho e a álgebra de trechos trabalham com emendas exatas e as sobreposições são refeitas no fim, em vez de acumularem.
+- **Crossfade pelo mesmo `_tryCrossfade`** dos clipes sobrepostos, sem `force`: um fade do usuário nunca é sobrescrito, o que vira corte seco (decisão deliberada, sem aviso).
+- **Um passo de desfazer por escolha**, nomeado, e nenhum para a escolha que não muda nada.
+
+### Como testar
+
+```bash
+cd app && flutter test test/fase26_test.dart
+```
+
+`(testado só por testes automáticos; o comando não foi rodado por quem escreveu esta documentação)`. O `withTakes()` do teste monta um clipe de 4 s (8 batidas a 120 BPM) com 3 tomadas de valores 0,1, 0,2 e 0,3 e a tomada 2 ativa. O grupo `comp por trecho` (16 testes) confere: partir em três com offsets e crossfade certos (a emenda em 1 s: o meio começa 10 ms antes, `offset` 0,99, `fadeIn` e `fadeOut` de 0,02, curva `equalPower`); um passo de desfazer com o nome certo e o documento restaurado byte a byte; juntar vizinhos da mesma tomada; o trecho que não mudou segue com o mesmo id; trecho maior que o comp é cortado e escolha repetida não gasta passo; uma borda a 0,2 ms da emenda vira a própria emenda e trecho de 20 ms ainda faz crossfade; tomada mais curta dá corte seco; achatar mantém clipes e crossfades, tira a lista e desfaz; o JSON sem campos novos e a reabertura do comp; dividir mantém o grupo, duplicar e mover tiram; o motor recebe os `clip_add` ao vivo e no render; tomada ausente é recusada; as recusas de abrir; o modo some e volta com os clipes; todos os pedaços alinhados à mesma origem. O grupo `raias do comp na linha do tempo` (2 testes de widget, tela de 1000 x 700) arrasta na raia `comp-lane:a:0` de 1 s a 2 s, toca na raia `comp-lane:a:2`, no cabeçalho `comp-take-0`, em `comp-flatten` e em `comp-close`.
+
+### Armadilhas conhecidas
+
+1. **O trecho novo herda do primeiro clipe do grupo** (`base = s.clip ?? g.clips.first` em `_compRebuild`): ganho, mudo, fase invertida e fades de borda do primeiro, não do pedaço que soava ali. Com `Ganho do clipe…` diferente por pedaço, a escolha pode mudar o volume de um trecho. `(lido do código; não visto rodando)`
+2. **O comentário de `flattenComp` promete mais que o código.** Diz que as tomadas que não entraram "deixam de pesar no projeto", mas só a lista `takes` dos clipes é esvaziada: os hashes seguem em `d.samples`, e tanto `projectHashes`/`hashesOf` quanto a contagem do servidor (`collect_hashes`, que varre o JSON) os continuam citando; o áudio só libera cota quando sai do documento. `(lido do código)`
+3. **A mensagem do warp cobre mais que o warp.** `compGroupOf` também devolve nulo quando o `sample` do clipe não está em `takes`, e `startComp` então mostra `O comp não funciona num clipe com warp, reverso, transposição ou loop…` mesmo sem nada disso ligado. O app não gera esse estado sozinho (`switchTake` só escolhe entre as tomadas).
+4. **`compOn` é global.** O item do menu do clipe escolhe o texto e a ação por `c.compOn` (qualquer comp aberto), não pelo clipe clicado: com um comp aberto, `Fechar o comp` aparece em todo clipe com tomadas e abrir o de outro exige fechar antes.
+5. **A chave `_comp` não se limpa sozinha.** Se o grupo some (clipes apagados, faixa removida), as raias somem, mas o modo volta com o desfazer; é proposital (há teste), só não é óbvio.
+6. **Pedaço movido deixa vão.** O grupo fica sem ele; `compSegs` só lista o que sobrou, e `compPick` corta pelo primeiro e pelo último, então uma escolha que atravessa o vão o preenche. `(lido do código)`
+7. **Fade mexido à mão tira a emenda do automático.** `compNormalize` só desfaz o que tem `autoFade*`; uma emenda cujo fade o usuário editou mantém as bordas estendidas de 10 ms como nominais, e `_compSeam` não a refaz porque as bordas já se sobrepõem (a checagem `1e-6` s falha). O comp trata essa sobreposição de 20 ms como geometria normal. `(lido do código)`
+8. **Os ids mudam.** Todo pedaço com borda mexida (`dirty`) nasce com `newId()`; o clipe selecionado pode deixar de existir depois de uma escolha, e só os trechos intactos mantêm o id.
+9. **Tolerâncias diferentes.** O grupo aceita 0,1 ms (`1e-4`) de diferença de origem; a emenda exige bordas dentro de 1 µs (`1e-6`); trechos de menos de 1 ms não existem. Um pedaço editado por fora do comp a mais de 0,1 ms de origem sai do grupo sem aviso.
+10. **Raia e mapa de andamento.** A raia desenha com `tempo.beatAt`/`secondsAt` (vale com mapa de andamento); o toque usa `secondsAt(beat)` para achar o trecho e **não encaixa na grade** (o arraste sim, por `snapBeat`); o `Alt` não é consultado. `_CompLanePainter.shouldRepaint` devolve sempre `true`. `(lido do código)`
+11. **Tomada ausente só é checada ao escolher.** `startComp` abre o comp normalmente com uma tomada fora do aparelho; só `compPick` recusa, e o cabeçalho dela fica desabilitado.
+
+## Navegador de áudios (fase 26 B)
+
+> Para quem mexe na aba `Áudios` do painel de baixo: a lista que junta os áudios do projeto e da conta pelo hash, a pré-escuta pela voz do motor, a inserção no arranjo e nas zonas do sampler, o download sob demanda e o que ficou de fora. Usuário: [03g Navegador de áudios](../manual/03g-navegador-de-audios.md) e o guia [Achar e usar samples com o navegador](../guias/achar-e-usar-samples-com-o-navegador.md). Motor: [01-motor.md](01-motor.md) (`preview.rs`); pontes: [02](02-pontes-web-e-android.md#chamadas-de-pré-escuta-preview_play-preview_stop). Commits `d567f76` (app e motor) e `de20512` (binários); números de linha não citados de propósito.
+
+### Visão geral
+
+```
+DockPanel (aba Áudios, Dock.browser, Shift+B = panel.browser)
+   └─ BrowserPanel (browser_panel.dart)  ←─ ListenableBuilder(AudioBrowser, DawController)
+        │                                     AudioBrowser.of(c): um por controlador (Expando)
+        ├─ busca / chips Todos·Projeto·Conta / "No andamento do projeto"
+        ├─ _EntryTile ×N  (alça Draggable + LongPressDraggable, play, +, Mais ações, _Progress)
+        └─ BrowserEntry  = doc.samples (projeto) ⨝ GET /api/samples (conta)  por hash
+
+   pré-escuta:  AudioBrowser ──c.engine.calls──▶  preview_play / preview_stop  ──▶ Engine.preview (voz à parte)
+   inserir:     AudioBrowser ──▶ DawController.importBytes / importSampleFile + addZone   (passo do desfazer)
+   soltar:      _Lanes (timeline.dart) ⊂ BrowserDropZone ── DragTarget<BrowserEntry> ──▶ AudioBrowser.dropOnTimeline
+```
+
+O documento não ganha campo nenhum e o protocolo do motor ganha só duas chamadas (`preview_play`, `preview_stop`).
+
+### Peças e responsabilidades
+
+| Arquivo | Papel |
+|---|---|
+| `app/lib/daw/browser.dart` | O modelo, sem widgets. `BrowserEntry` (`hash`, `name`, `duration?`, `size?`, `inProject`, `onServer`, `onDevice`, `projects`), `BrowserScope` (`Todos`, `Projeto`, `Conta`), `foldText` e `filterEntries`, `fmtDuration`, `PreviewPhase`, `previewIdBase`, `previewGain` e `AudioBrowser` (`ChangeNotifier`: lista, download, pré-escuta, inserção, avisos) |
+| `app/lib/daw/browser_panel.dart` | A aba: `BrowserPanel` (busca, chips, avisos, lista), `_EntryTile`, `_Progress` (a barra), `_DragFeedback`, e `BrowserDropZone` com o `_DropPainter` (a linha vertical e o realce da faixa) |
+| `app/lib/daw/controller.dart` | `enum Dock` ganhou `browser` (no fim); `engine` e `sampleEngineId(hash)` expostos para a pré-escuta tocar áudio do projeto sem copiá-lo; `importBytes`, `importSampleFile`, `decodedAudio`, `localStore`, `missing` já existiam |
+| `app/lib/daw/dock.dart` | A aba `Áudios` (ícone `library_music`, tooltip com `shortcutHint('panel.browser')`), o assunto `Áudios do projeto e da conta` e o limite de ícones: `iconsOnly` passou de 560/760 para **620/820 px** (sem/com a aba `Passos`) |
+| `app/lib/daw/keymap.dart`, `app/lib/screens/project_screen.dart` | Ação `panel.browser` (`Navegador de áudios`, `Shift+B`, `KeyContext.global`, `KeyCategory.panels`) e a ligação `panel.browser` → `toggleDock(c, Dock.browser)` |
+| `app/lib/daw/timeline.dart` | O `build` de `_Lanes` virou `BrowserDropZone(rowAt: …, child: _body(context))`: só linhas `_RowKind.track` valem como faixa; as demais (automação, comp, `+ Faixa`, master) devolvem `null` |
+| `app/lib/audio/engine_ffi.dart`, `app/web/engine/render-worker.js`, `app/web/engine/worklet.js` | `preview_play` e `preview_stop` em `renderSkip`, `SKIP` e `OPTIONAL_CALLS` |
+| `app/lib/api/client.dart`, `app/lib/api/storage.dart` | Já existiam: `storageUsage()` (`GET /api/samples`), `getSample(hash)` (`GET /api/samples/{hash}`, `null` no 404), `StoredSample`, `StorageUsage` |
+| `app/test/browser_test.dart`, `app/test/keymap_test.dart` | Testes (abaixo) |
+
+### Fluxo
+
+1. **Abrir.** `BrowserPanel.initState` chama `AudioBrowser.refresh()`: lê as chaves `sample:*` do `localStore` (`_device`, o que o aparelho guarda) e `storageUsage()` (`usage`; se falha, `usageError = 'Não deu para ler os áudios da conta. …'` e a lista segue só com o projeto). `dispose` do painel chama `release()`: para a pré-escuta, solta os ids dela e esquece o áudio de fora do projeto que estava em memória. O `AudioBrowser` vive no `Expando` `_shared` (um por `DawController`), então busca, filtro e o chip de andamento sobrevivem a fechar o painel.
+2. **Junção por hash (`entries`).** Primeiro cada entrada de `doc.samples` (nome do documento; o do servidor e depois `Áudio <8 hex>` de reserva; duração do documento ou do áudio decodificado; tamanho e projetos do servidor quando o hash está lá; `onDevice = decodedAudio(h) != null || (_device.contains(h) && !missing.contains(h))`). Depois o que sobrou do servidor, como `onServer` sem `inProject` (`onDevice = _device.contains(hash)`; **sem duração**). `filterEntries` aplica `scope` (`Projeto` = `inProject`, `Conta` = `onServer`) e a busca (`foldText` tira acento e caixa; todas as palavras do nome, `contains`) e ordena: projeto antes, depois por nome dobrado, depois por hash.
+3. **Bytes e download (`_bytesOf`).** `localStore.get('sample:<hash>')`; se não há, baixa por `_fetchBytes` (`getSample`), grava em `sample:<hash>` e põe em `_device`. `_downloading` evita dois downloads do mesmo hash (o segundo pedido recebe `null`). `download(e)` baixa e, se o áudio é do projeto e não está decodificado, chama `importSampleFile(e.name, bytes)` (registra de novo no projeto; os clipes que o citam voltam a soar).
+4. **Pré-escuta (`playPreview`).** Incrementa `_token` (cancela o que estava em curso), entra em `loading`, pede `engine.resume()` (o navegador só libera o som depois de um gesto) e obtém o áudio (`_audioOf`: o do projeto, o último de fora do projeto em memória, ou baixa e decodifica). O id vem de `sampleEngineId(hash)` (projeto, sem copiar) ou de `_load(chave, áudio)`, que carrega com `engine.loadSample` um id novo a partir de `previewIdBase = 0x40000000`. Com `atProjectTempo`, `_tempoOf` estima o andamento (`engine.detectBpm`, guardado em `_tempos` por hash, inclusive o "não deu"), aceita só confiança ≥ 0,2 e calcula `ratio = clamp(bpm ÷ doc.bpm, 0,25, 4)` com 4 casas; `ratio != 1` passa por `engine.stretch(audio, ratio: ratio)` e o derivado é carregado com a chave `<hash>|<ratio>`. `_dropUnused({id})` solta (`sample_drop`) o que a pré-escuta tinha carregado e não é mais o que toca. Por fim `calls([['preview_play', id, offset, previewGain]])`, `_startedAt`, `phase = playing` e um `Timer.periodic` de 50 ms que chama `tick()`.
+5. **A barra.** `tick()` calcula `previewPosition = offset + (agora − início)`; ao passar de `previewDuration` chama `_end` (a voz do motor já acabou sozinha; **não** manda `preview_stop`). `stopPreview()` incrementa o token, manda `['preview_stop']` e `_end`. `_Progress` faz `playPreview(entry, fraction:)` ao tocar ou soltar o arraste, então cada salto refaz o caminho inteiro (inclusive o esticamento, ver armadilhas).
+6. **Inserir (`insertAtCursor`).** Faixa selecionada de sampler → `addAsZone`; senão `_place(at: null, track: null)` → `importBytes([(nome, bytes)], at:, track:)`: no cursor arredondado por `snapBeat`, na faixa selecionada se é de áudio e livre no trecho (`_occupied`), senão faixa de áudio nova com o nome sem extensão (40 caracteres) e a próxima cor. Um `checkpoint('Importar áudio')`.
+7. **Soltar (`dropOnTimeline(e, beat:, track:)`).** Faixa de sampler → `addAsZone`; senão `_place(at: snapBeat(beat < 0 ? 0 : beat), track: track ?? doc.tracks.length)`, e `importBytes` decide se o clipe cabe na faixa (áudio e livre) ou vai para uma faixa nova. O ponto da régua é `scrollBeat + dx ÷ pxPerBeat` com `dx` local às raias.
+8. **Zona (`addAsZone`).** `_bytesOf` → `importSampleFile` (registra o áudio no projeto, sem clipe) → `c.addZone(track, hash, onNotice:)`. Nasce pelas regras de `nextZoneRange` (teclado todo, maior lacuna, divisão ao meio; 128 zonas). O aviso de divisão vai para o `notice` do navegador: `'<nome> virou uma zona do sampler "<faixa>". <aviso>'`.
+9. **Arrastar.** Cada linha é um `LongPressDraggable<BrowserEntry>` (toque: segurar a linha) com um `Draggable<BrowserEntry>` na alça (`drag_indicator`, cursor `grab`); `dragAnchorStrategy: pointerDragAnchorStrategy`. `BrowserDropZone` é um `DragTarget<BrowserEntry>` sobre as raias: `onMove` guarda a posição (desenha a linha vertical e o realce da faixa), `onAcceptWithDetails` converte a posição global em local e chama `dropOnTimeline`.
+
+### Contratos
+
+- **Aba e atalho.** `Dock.browser` (último valor do `enum Dock`; o painel aberto não é gravado no documento `(não confirmado em outros lugares do app)`). `panel.browser`: `Shift+B`, global, categoria `Painéis`, id estável no `.jokeys`. Com isso o catálogo tem 60 ações (29 `global`, 7 `arrangement`, 20 `pianoRoll`, 4 `playing`; 3 fixas). O teste `keymap_test.dart` ganhou a ação na lista de ids e um ramo `legacyGlobal` (`Shift+B` → `panel.browser`, "tecla que antes não fazia nada").
+- **`BrowserEntry`.** Identidade = `hash` (SHA-256 em hexa minúsculo, o mesmo de `doc.samples` e de `GET /api/samples`). `duration` null quando só a conta conhece; `size` null quando só o projeto conhece.
+- **Chamadas.** `['preview_play', id, inícioEmSegundos, ganho]` (ganho `previewGain = 1.0`, sem controle na tela) e `['preview_stop']`. Ids de pré-escuta: `previewIdBase + n`; o áudio do projeto toca pelo id que o controlador já tem.
+- **Avisos (texto exato).** Estão na tabela do capítulo 03g; o modelo os escreve em `_say` (`notice`, `noticeIsError`).
+- **Servidor.** Só lê: `GET /api/samples` (lista, nome, tamanho, projetos, `recent`; ver [11-servidor.md](11-servidor.md)) e `GET /api/samples/{hash}` (bytes; `404` vira `null` e o aviso `o servidor não tem este áudio`). Nenhuma rota nova.
+
+### Decisões e por quê
+
+- **Voz de pré-escuta no motor, não uma faixa temporária.** Uma faixa de mentira mexeria no documento, no desfazer, na sincronização, na cota e no render, e exigiria o transporte; a voz é só dois números no protocolo e sai do medidor e do render de graça.
+- **Somar depois do limitador.** Evita que o som da pré-escuta mexa no medidor de loudness que o usuário está olhando; o preço é poder passar de 0 dBFS (o `clamp` é seco).
+- **Tocar pelo id do projeto quando dá.** O áudio já está no motor: não copia, e a pré-escuta de um áudio do projeto custa uma chamada.
+- **Junção por hash, não por nome.** O nome muda de projeto para projeto; o hash é a identidade que o servidor e o documento já usam (`doc.samples`, dedução de cota).
+- **`No andamento do projeto` só para a audição.** Esticar o clipe inserido é o warp (`Warp e altura…`), que guarda o `BPM do áudio` no clipe; o navegador não mexe no que entra.
+- **Campo de busca pendurado na raiz do foco.** O estúdio exclui o foco dos botões (`ExcludeFocus`), e isso vale para tudo abaixo; o `Focus(parentNode: rootScope)` permite digitar, e `_grab`/`_leave` devolvem o foco à tela quando a pessoa larga o campo (`Esc`, `Enter` ou clique fora).
+- **Toque longo para arrastar no toque.** Arrastar a linha no toque rola a lista; o toque longo pega o áudio e a alça pega de imediato.
+
+### Como testar
+
+```bash
+cd app && flutter test test/browser_test.dart test/keymap_test.dart
+cargo test -p jopendaw-engine preview
+cargo test -p jopendaw-engine api::        # os três casos de preview_play e preview_stop
+```
+
+`browser_test.dart` (674 linhas, 33 testes executados; `(testado só por testes automáticos)` com o `FakeEngine` a 100 Hz, `MemoryStore` e um servidor de mentira por `loadUsage` e `fetchBytes`; o som real não é medido): `busca` (4: `foldText`, palavras em qualquer ordem, origem e ordem, `fmtDuration`), `lista` (4: junção por hash com tamanho, projetos e `fora deste aparelho`, áudio do projeto que faltou no aparelho, servidor fora do ar, nome pelo hash), `pré-escuta` (10: toca pelo id do projeto sem tocar no documento nem no desfazer nem no transporte, a barra anda e termina sozinha, parar e trocar, a partir de um ponto, fora do aparelho baixa e toca por um id só da pré-escuta, servidor sem o áudio, falha de rede, `No andamento do projeto` com estimativa reaproveitada, sem andamento confiável, solta o que carregou), `inserir` (10: faixa de áudio no cursor num passo do desfazer, áudio só da conta baixado e inserido, faixa que não é de áudio, sampler vira zona, zona numa faixa que não é sampler, soltar no arranjo, abaixo das faixas ou na frente de outro clipe, soltar no sampler, servidor sem o áudio, baixar um áudio do projeto que faltava) e `painel` (5 `testWidgets`: lista, busca e pré-escuta em 360 e 1512 px sem estourar o layout, inserir pelo botão e pelo menu, arrastar do navegador para o arranjo, a aba `Áudios` em 360 px e o atalho). O teste de arrasto usa `BrowserDropZone` com um `rowAt` de mentira (duas linhas de 76 px): o `_Lanes` de verdade **não** foi exercitado num teste de widget nem no Chrome. Motor: `preview_tests.rs` (6) e os casos de `api.rs`.
+
+### Armadilhas conhecidas
+
+Todas lidas do código, nenhuma reproduzida `(lido do código; não reproduzido)`.
+
+1. **Reiniciar o áudio cala a pré-escuta de áudio de fora do projeto.** `restartAudio` recarrega só `_decoded`; os ids de `_owned` (áudio da conta e derivados esticados) somem do motor novo e o `AudioBrowser` continua achando que estão carregados: `preview_play` vira "não carregado" (nada toca, sem erro) e a barra anda até o fim. Consertar: `release()` no reinício, ou limpar `_owned`.
+2. **Pedir ouvir ou inserir um áudio enquanto ele baixa dá a mensagem errada.** `_bytesOf` devolve `null` quando o hash já está em `_downloading`, e os chamadores dizem `o servidor não tem este áudio e ele não está neste aparelho`.
+3. **`addAsZone` importa antes de checar se cabe outra zona.** Com 128 zonas (ou o teclado todo de zonas de uma nota só) o arquivo entra em `doc.samples` mesmo assim; o botão `Adicionar sample como zona` do painel do instrumento checa `zoneAddBlockerOf` antes de importar. Também não seleciona a zona no mapa do instrumento.
+4. **Cada salto na barra refaz o esticamento.** Com `No andamento do projeto`, `playPreview` chama `engine.stretch` mesmo quando o derivado já está em `_owned` (a chave `<hash>|<ratio>` só evita recarregar no motor). Em áudio longo cada toque na barra espera o WSOLA de novo.
+5. **Áudio só da conta nunca mostra duração.** `entries` não passa `duration` para o que só o servidor conhece, mesmo depois de baixado e ouvido (`_offProjectAudio` tem a duração, mas a entrada não a lê). O comentário de `BrowserEntry.duration` diz o contrário, e o de `fmtDuration` cita `7 s` quando o código devolve `0:07`.
+6. **Inserir durante a gravação.** `importBytes` e `importSampleFile` não consultam `_blockedByRecording`; o botão `Importar` da barra é que fica desligado. O navegador não tem essa guarda.
+7. **A posição da barra é do relógio do Dart** (`Stopwatch` e `Timer` de 50 ms), não do motor, que não devolve a posição da voz: com latência de saída alta a barra adianta o que se ouve.
+8. **`refresh` a cada abertura da aba lê todos os documentos no servidor.** `GET /api/samples` passa por `references` (ver [11-servidor.md](11-servidor.md)): abrir e fechar a aba em série repete o custo.
+9. **Andamento inicial só.** `doc.bpm` é o andamento inicial; com mapa de andamento a razão da pré-escuta não segue as mudanças (o warp dos clipes tem a mesma regra).
+10. **`Usado em` inclui o próprio projeto** (o servidor devolve todos os projetos sincronizados que citam o hash).
+11. **O `AudioBrowser` nunca é destruído sozinho.** `of(c)` o guarda num `Expando`; `dispose` só é chamado nos testes. O que importa (parar a voz e soltar ids) está em `release()`, chamado pelo `dispose` do painel.
 
 ## Modulação (fase 16 B)
 

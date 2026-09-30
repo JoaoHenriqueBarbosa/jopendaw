@@ -67,7 +67,7 @@ Abre com a tecla `?` (ou `Shift+/`, que o teclado digita como `?`; ver a nota so
 
 São 8 grupos, nesta ordem: `Transporte`, `Marcadores e loop`, `Visão`, `Edição`, `Painéis`, `Aprender MIDI`, `Teclado do computador (Ctrl+K liga)` (o título escreve as teclas de agora do `Teclado do computador liga/desliga`; no Mac, `⌘+K liga`; se você tirou todos os atalhos dessa ação, o título é só `Teclado do computador`, sem `Sem atalho liga`) e `Piano roll`. Depois vem o grupo `Suspensos enquanto o teclado do computador está ligado`. Antes da fase 16 o grupo `Aprender MIDI` vinha entre `Edição` e `Painéis`.
 
-Nesta página `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). As tabelas abaixo foram conferidas contra `app/lib/daw/keymap.dart` (o catálogo, com as **58 ações** e as teclas padrão; `Punch liga/desliga` e `Tap tempo` entraram na fase 17, `Abrir o histórico` (`Ctrl+Shift+H`, id `history.open`, logo depois de `Importar áudio ou MIDI`) na fase 18 e `Silenciar o clipe` (`0`, id `edit.mute`, entre `Cortar no cursor` e `Apagar o clipe`) na fase 20, em `3a27233`), `shortcuts_dialog.dart` e `project_screen.dart` na versão `53ca96d` `(testado só por testes automáticos: a janela nova, gerada do catálogo, não foi vista no navegador)`. Cada tabela é um grupo da janela: **Ação** é o rótulo do catálogo, **Contexto** diz onde a ação vale (ver [Contextos e camadas](#contextos-e-camadas)), **Texto na janela** só aparece quando a janela escreve algo mais longo que o rótulo, e **Id** é o nome estável da ação no arquivo `.jokeys` ([Formato do arquivo](#exportar-e-importar-o-arquivo-jokeys)).
+Nesta página `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). As tabelas abaixo foram conferidas contra `app/lib/daw/keymap.dart` (o catálogo, com as **60 ações** e as teclas padrão (contagem com `Navegador de áudios`, `panel.browser`, `Shift+B`, da fase 26 B, entre `Efeitos da faixa` e `Fechar o painel`, em `d567f76`, e com `Comp por trecho (tomadas)`, `edit.comp`, da fase 26, sem tecla padrão, entre `Silenciar o clipe` e `Apagar o clipe`, em `ab57a40`); `Punch liga/desliga` e `Tap tempo` entraram na fase 17, `Abrir o histórico` (`Ctrl+Shift+H`, id `history.open`, logo depois de `Importar áudio ou MIDI`) na fase 18 e `Silenciar o clipe` (`0`, id `edit.mute`, entre `Cortar no cursor` e `Apagar o clipe`) na fase 20, em `3a27233`), `shortcuts_dialog.dart` e `project_screen.dart` na versão `53ca96d` `(testado só por testes automáticos: a janela nova, gerada do catálogo, não foi vista no navegador)`. Cada tabela é um grupo da janela: **Ação** é o rótulo do catálogo, **Contexto** diz onde a ação vale (ver [Contextos e camadas](#contextos-e-camadas)), **Texto na janela** só aparece quando a janela escreve algo mais longo que o rótulo, e **Id** é o nome estável da ação no arquivo `.jokeys` ([Formato do arquivo](#exportar-e-importar-o-arquivo-jokeys)).
 
 **Transporte**
 
@@ -112,9 +112,12 @@ O `+` e o `−` andam em passos de 1,25 vez (aproximar) e 0,8 (afastar), ancorad
 | Duplicar o clipe | Arranjo | `Ctrl+D` | | `edit.duplicate` |
 | Cortar no cursor | Arranjo | `S` | | `edit.split` |
 | Silenciar o clipe | Arranjo | `0` | Liga ou desliga o mudo do clipe de áudio selecionado | `edit.mute` |
+| Comp por trecho (tomadas) | Arranjo | (sem atalho: a janela mostra `Sem atalho`) | Abre ou fecha o comp do clipe gravado em loop: escolha, trecho a trecho, a tomada que soa | `edit.comp` |
 | Apagar o clipe | Arranjo | `Delete` · `Backspace` | | `edit.delete` |
 | Importar áudio ou MIDI | Geral | `Ctrl+I` | | `edit.import` |
 | Abrir o histórico | Geral | `Ctrl+Shift+H` | Histórico de desfazer e versões do projeto | `history.open` |
+
+`Comp por trecho (tomadas)` (fase 26 A) liga e desliga o modo comp no clipe de áudio selecionado (só vale em clipe gravado em loop, com tomadas); o mesmo comando está no menu do clipe (`Comp por trecho` / `Fechar o comp`). Atribua uma tecla em `Personalizar` se for usar muito. Ver [03f Comping por trecho](03f-comping.md).
 
 `Importar áudio ou MIDI` abre o mesmo seletor do botão da barra (que aceita áudio e arquivos MIDI `.mid` e `.midi`).
 
@@ -128,6 +131,7 @@ O `+` e o `−` andam em passos de 1,25 vez (aproximar) e 0,8 (afastar), ancorad
 | Editor de notas (piano roll) | Geral | `E` | | `panel.editor` |
 | Instrumento da faixa | Geral | `I` | | `panel.instrument` |
 | Efeitos da faixa | Geral | `F` | | `panel.effects` |
+| Navegador de áudios | Geral | `Shift+B` | Ouvir, buscar e inserir os áudios do projeto e da conta | `panel.browser` |
 | Fechar o painel | Geral | `Esc` (fixa: não muda) | | `panel.close` |
 | Janela de atalhos | Geral | `?` | Esta janela | `help.shortcuts` |
 
@@ -243,7 +247,7 @@ As duas últimas linhas do grupo são `Com Ctrl` (`Com ⌘` no Mac): `Os atalhos
 - Os atalhos do **piano roll** só respondem depois que você clica dentro do editor (ele precisa ser o último lugar clicado); senão `Delete` e `Ctrl+D` continuam sendo do arranjo. `Shift+L` fora do editor faz o loop do clipe/seção; dentro dele, `Legato`.
 - **Gravando**, `Ctrl+Z`, `Ctrl+Y` e `Ctrl+I` são engolidos (não fazem nada) para não apagar ou deslocar a faixa que está recebendo o áudio. `Ctrl+R` fica para o navegador.
 - **Tooltips e menus usam o símbolo do sistema.** Os textos com tecla (`Desfazer (Ctrl+Z)`, `Refazer (Ctrl+Shift+Z)`, `Duplicar (Ctrl+D)`, `Importar áudio ou MIDI (Ctrl+I)`, o tooltip do teclado com `Ctrl+K`, o atalho do item `Duplicar` do menu do clipe) saem do catálogo e escrevem `Mod` como `⌘` no Mac e no iOS (`⌘+Z`) e como `Ctrl` nos outros; a ajuda do piano roll ainda passa por `withMod` (`app/lib/widgets/format.dart`), que troca o `Ctrl` do texto por `⌘`.
-- **Tooltips e dicas acompanham a personalização** (desde a fase 18). As dicas saem do mesmo catálogo da janela `?` (`shortcutHint`/`shortcutLabel` em `keymap.dart`): o texto é o rótulo mais ` (<tecla de agora>)` (ação com mais de um atalho mostra todos separados por ` · `, como `Parar e voltar (Enter · Home)` e `Refazer (Ctrl+Shift+Z · Ctrl+Y)`), e uma ação sem nenhum atalho fica sem o parêntese. Valem para os tooltips da barra (`Parar e voltar`, `Tocar`/`Pausar`, `Gravar`, `Punch`, `Loop`, `Metrônomo`, `Desfazer`, `Refazer`, `Cortar no cursor`, `Duplicar`, `Mixer`, `Editor de notas`, `Instrumento da faixa`, `Efeitos da faixa`, `Importar áudio ou MIDI`, `Atalhos do teclado`), os das abas do painel de baixo e o `Fechar o painel`, o do botão do `Aprender MIDI`, o do armar da faixa (o `R` de gravar), o texto de apoio do metrônomo nas `Configurações`, os itens de menu (`Marcador no cursor`, `Loop no clipe selecionado`, `Enquadrar tudo`, `Enquadrar a seleção`, `Punch in/out`, o atalho à direita dos itens `Duplicar`, `Cortar no cursor`, `Apagar` e `Abrir no editor` do menu do clipe, e `Humanizar…`, `Legato`, `Dividir no cursor` e `Unir notas iguais adjacentes` no menu `Ferramentas` do piano roll) e o resumo `?` do piano roll. A tela do projeto se refaz quando você personaliza, então o texto muda na hora. `(testado só por testes automáticos; não visto na tela)`. **Desde a fase 21 não sobra dica com a tecla escrita à mão:** o tooltip do botão de quantizar do piano roll (`Quantizar a seleção na grade (Q) · força 100%`, ação `pr.quantize`), o texto da janela de edição de áudio (`Dá para desfazer numa vez só (Ctrl+Z).`, ação `edit.undo`) e o tooltip `Apagar o clipe` da barra (`edit.delete`) agora saem do `Keymap` também. Por isso, com os atalhos padrão, o da lixeira lê `Apagar o clipe (Delete · Backspace)` (antes `Apagar o clipe (Delete)`, sem citar o `Backspace`), e quem tira o atalho da ação vê o tooltip sem parêntese. Um teste varre o código do app atrás de tecla escrita à mão em rótulo ou dica (`fase21_test.dart`). `(testado só por testes automáticos)`
+- **Tooltips e dicas acompanham a personalização** (desde a fase 18). As dicas saem do mesmo catálogo da janela `?` (`shortcutHint`/`shortcutLabel` em `keymap.dart`): o texto é o rótulo mais ` (<tecla de agora>)` (ação com mais de um atalho mostra todos separados por ` · `, como `Parar e voltar (Enter · Home)` e `Refazer (Ctrl+Shift+Z · Ctrl+Y)`), e uma ação sem nenhum atalho fica sem o parêntese. Valem para os tooltips da barra (`Parar e voltar`, `Tocar`/`Pausar`, `Gravar`, `Punch`, `Loop`, `Metrônomo`, `Desfazer`, `Refazer`, `Cortar no cursor`, `Duplicar`, `Mixer`, `Editor de notas`, `Instrumento da faixa`, `Efeitos da faixa`, `Importar áudio ou MIDI`, `Atalhos do teclado`), os das abas do painel de baixo (inclusive `Navegador de áudios: ouvir, buscar e inserir (Shift+B)`) e o `Fechar o painel`, o do botão do `Aprender MIDI`, o do armar da faixa (o `R` de gravar), o texto de apoio do metrônomo nas `Configurações`, os itens de menu (`Marcador no cursor`, `Loop no clipe selecionado`, `Enquadrar tudo`, `Enquadrar a seleção`, `Punch in/out`, o atalho à direita dos itens `Duplicar`, `Cortar no cursor`, `Apagar` e `Abrir no editor` do menu do clipe, e `Humanizar…`, `Legato`, `Dividir no cursor` e `Unir notas iguais adjacentes` no menu `Ferramentas` do piano roll) e o resumo `?` do piano roll. A tela do projeto se refaz quando você personaliza, então o texto muda na hora. `(testado só por testes automáticos; não visto na tela)`. **Desde a fase 21 não sobra dica com a tecla escrita à mão:** o tooltip do botão de quantizar do piano roll (`Quantizar a seleção na grade (Q) · força 100%`, ação `pr.quantize`), o texto da janela de edição de áudio (`Dá para desfazer numa vez só (Ctrl+Z).`, ação `edit.undo`) e o tooltip `Apagar o clipe` da barra (`edit.delete`) agora saem do `Keymap` também. Por isso, com os atalhos padrão, o da lixeira lê `Apagar o clipe (Delete · Backspace)` (antes `Apagar o clipe (Delete)`, sem citar o `Backspace`), e quem tira o atalho da ação vê o tooltip sem parêntese. Um teste varre o código do app atrás de tecla escrita à mão em rótulo ou dica (`fase21_test.dart`). `(testado só por testes automáticos)`
 
 ### Contextos e camadas
 
@@ -251,8 +255,8 @@ Cada ação do catálogo tem um **contexto**, que diz em que camada de teclas el
 
 | Contexto | Onde vale | Camada | Ações |
 |---|---|---|---|
-| `Geral` | Em toda a tela do projeto | Camada do estúdio | 28 |
-| `Arranjo` | Em toda a tela do projeto, mas a ação é sobre clipes (duplicar, cortar, silenciar, apagar, loop e enquadrar o clipe) | A mesma camada do `Geral`: `Geral` e `Arranjo` **conflitam entre si** | 6 (eram 5 antes de `edit.mute`) |
+| `Geral` | Em toda a tela do projeto | Camada do estúdio | 29 (eram 28 antes de `panel.browser`) |
+| `Arranjo` | Em toda a tela do projeto, mas a ação é sobre clipes (duplicar, cortar, silenciar, apagar, loop e enquadrar o clipe) | A mesma camada do `Geral`: `Geral` e `Arranjo` **conflitam entre si** | 7 (eram 5 antes de `edit.mute` e 6 antes de `edit.comp`) |
 | `Piano roll` | Só com o editor ativo (o último lugar clicado) e sem digitar num campo | Camada própria, que vem **antes** da do estúdio | 20 |
 | `Teclado tocando` | Só com o teclado do computador ligado; a tecla vale pela posição física | Camada própria, que vem antes de tudo | 4 |
 
@@ -389,7 +393,7 @@ Uma lista vazia (`"transport.metronome": []`) quer dizer "sem atalho". Ação qu
 
 - As **16 teclas de nota** (`A W S E D F T G Y H U J K O L P`).
 - `Esc` (três ações fixas).
-- O que não é do catálogo: as teclas da **raia de automação** (`Delete`, `Ctrl+A`, `Esc` depois de clicar nela), as do editor de zonas do sampler, os gestos de mouse (`Alt` ao arrastar, `Shift` e `Ctrl` com a roda…) e os menus. `(lido do código: só essas 55 ações consultam o catálogo: as 58 menos as 3 fixas; a conta era 54 antes de `edit.mute`)`
+- O que não é do catálogo: as teclas da **raia de automação** (`Delete`, `Ctrl+A`, `Esc` depois de clicar nela), as do editor de zonas do sampler, os gestos de mouse (`Alt` ao arrastar, `Shift` e `Ctrl` com a roda…) e os menus. `(lido do código: só essas 57 ações consultam o catálogo: as 60 menos as 3 fixas; a conta era 54 antes de `edit.mute`, 55 antes de `edit.comp` e 56 antes de `panel.browser`)`
 
 #### Web × Android
 
@@ -589,6 +593,7 @@ Os atalhos deste assunto (as teclas **padrão**; a janela `?` mostra as suas, se
 | `0` | Silenciar o clipe: liga ou desliga o mudo do clipe de áudio selecionado (não é tecla de nota, então vale também com o teclado do computador ligado) |
 | `Delete` · `Backspace` | Apagar o clipe |
 | `+` (ou `=`) / `−` | Aproximar / afastar |
+| `Shift+B` | Abrir ou fechar o painel de baixo na aba `Áudios` ([03g](03g-navegador-de-audios.md); é uma ação do grupo `Painéis`, não vira nota com o teclado do computador ligado) |
 | `Esc` | Fechar o painel de baixo |
 | `Enter` no campo de latência | Confirmar o número digitado |
 

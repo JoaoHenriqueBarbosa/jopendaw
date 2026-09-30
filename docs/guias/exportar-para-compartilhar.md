@@ -28,7 +28,7 @@ O que vale para os três cenários:
 
 1. Com a sessão aberta, toque em `Exportar` na barra do transporte.
 2. Em `FORMATO`, escolha `MP3 (para compartilhar)`. Em `Qualidade do MP3`, deixe `192 kbps (CBR)` (padrão) ou, se quiser o menor arquivo, `128 kbps (CBR)`.
-3. Deixe `INTERVALO` em `Música inteira` (ou `Região do loop`, para mandar só o refrão) e `Cauda` em 2 s.
+3. Deixe `INTERVALO` em `Música inteira` (ou `Região do loop`, para mandar só o refrão; se a música tem marcadores, o menu do marcador tem **Exportar esta seção…**, que já abre em `Entre marcadores`, ver o [guia de seções e stems](entregar-uma-musica-por-secoes-e-stems.md#cenário-2-só-o-refrão-em-mp3-para-uma-prévia)) e `Cauda` em 2 s.
 4. Se quiser que a prévia soe no volume de um serviço de streaming, ligue `Normalizar o loudness` e deixe `Streaming −14,0` com o teto em −1,0 dBTP.
 5. Se quiser o seu nome nos metadados e no nome do arquivo, preencha `Artista (opcional)` (o campo aparece com FLAC e MP3).
 6. Toque em `Exportar`. Acompanhe `Enviando ao servidor…`, `Na fila do servidor…` (só se outra exportação estiver sendo convertida), `Compactando no servidor N%…`, `Baixando o arquivo…`. A barra soma o render (metade) e a conversão (outra metade) e não volta para trás. Ao fim, `Exportação concluída` (o texto sai como `A mixagem foi salva (MP3) em N s.`).
@@ -58,6 +58,7 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 - **FLAC de 16 bits.** Chip `16 bits`: para tocar em aparelho que não lê 24 bits. O WAV que sobe ao servidor é de 16 bits, com dither.
 - **Podcast.** MP3 com `Normalizar o loudness` no chip `Podcast −16,0` (ver [Loudness e master, variações](loudness-e-master.md#variações)).
 - **Guardar em FLAC e ainda tocar em um leitor simples.** Exporte os dois formatos, um de cada vez; a janela guarda as últimas opções.
+- **Uma seção por arquivo, ou só algumas faixas (fase 26 C).** Com marcadores na régua, `Uma por seção` exporta cada parte da música como um arquivo (o nome do marcador vai no nome), o bloco `Faixas` limita a mixagem e os stems às faixas marcadas e `Reunir num .zip` entrega tudo num arquivo só; vale também em MP3 e FLAC, com cada arquivo convertido pelo servidor, um de cada vez. Receita: [Entregar uma música por seções e stems](entregar-uma-musica-por-secoes-e-stems.md). Cuidado: `Normalizar o loudness` passa a valer por arquivo (cada seção vai ao alvo por conta própria).
 - **Vários stems.** Cada arquivo espera a fila do servidor: 8 stems são 8 conversões em série (e, se outra pessoa estiver exportando no mesmo servidor, a sua espera em `Na fila do servidor…`). Deixe a aba aberta até a janela dizer `Exportação concluída`; se ela disser `Exportação cancelada`, no Android, é porque a janela `Salvar` foi fechada (vale para FLAC, MP3 e também para o WAV direto, desde a fase 19: antes o WAV terminava em `Exportação concluída` mesmo sem salvar nada; desde a fase 22 o aviso do WAV direto diz o nome do arquivo e quantos já saíram).
 
 ## Por que funciona

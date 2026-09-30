@@ -13,7 +13,7 @@ As tabelas de teclas estão em [02 Transporte](../manual/02-transporte.md), [02b
 | Clipes: `S`, `Ctrl+D`, `Delete`, `Ctrl+I` | Cortar, repetir, apagar e importar | [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md), [03 Áudio e clipes](../manual/03-audio-e-clipes.md) |
 | Teclado do computador: `Ctrl+K`, `A W S E D F T G Y H U J K O L P`, `Z`/`X` (oitava por tipo de faixa; a bateria parte do `C2`), `C`/`V` | Tocar notas e gravá-las | [03c Gravação](../manual/03c-gravacao.md), [04 Painel de instrumento](../manual/04-painel-de-instrumento.md) |
 | Editor de notas: `Ctrl+A`, `Ctrl+C/X/V/D`, `Q`, `K`, `J`, `Shift+H`, `Shift+L`, setas | Editar notas sem o mouse | [05 Piano roll](../manual/05-piano-roll.md), [05b Ferramentas MIDI](../manual/05b-ferramentas-midi.md) |
-| Painéis: `X`, `E`, `I`, `F`, `Esc`, `?` | Abrir mixer, editor, instrumento, efeitos | [00 Visão geral](../manual/00-visao-geral.md) |
+| Painéis: `X`, `E`, `I`, `F`, `Shift+B`, `Esc`, `?` | Abrir mixer, editor, instrumento, efeitos e o navegador de áudios (`Shift+B`, aba `Áudios`) | [00 Visão geral](../manual/00-visao-geral.md), [03g Navegador de áudios](../manual/03g-navegador-de-audios.md) |
 | Automação: `Delete`, `Ctrl+A`, `Esc` na raia | Apagar pontos | [07 Automação](../manual/07-automacao.md) |
 
 Receitas que usam essas teclas: [Primeira batida do zero](primeira-batida-do-zero.md) (`Ctrl+A`, `Ctrl+D` e as setas) e [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md).
@@ -129,7 +129,7 @@ Só na web e no computador (no app Android a lista da janela `?` é só de leitu
 4. Uma ação aceita até 3 atalhos: o `+` ao lado do chip (tooltip `Adicionar outro atalho`) acrescenta, e `Backspace` ou `Delete` com o chip em gravação tira. O botão de seta circular (`Restaurar o padrão desta ação`) volta uma ação; `Restaurar tudo` volta todas.
 5. `Exportar atalhos…` guarda `atalhos.jokeys`; `Importar atalhos…` no outro aparelho traz tudo de volta (e **substitui** o que havia).
 
-Duas ideias prontas: (a) para tocar com o teclado ligado sem perder o metrônomo e o loop, mande `Metrônomo` e `Loop liga/desliga` para teclas fora de `A W S E D F T G Y H U J K O L P Z X C V`, como `B` e `N` (um `Shift+C` não adianta: o teclado tocando ignora o `Shift` e ainda vê a letra `C`); o grupo `Suspensos enquanto o teclado do computador está ligado` da janela `?` vai encolhendo à medida que você faz isso; (b) para ter o `Seguir o cursor` no teclado (ele vem sem atalho), toque no chip `Sem atalho` dessa ação e escolha uma tecla livre, como `Shift+B`.
+Duas ideias prontas: (a) para tocar com o teclado ligado sem perder o metrônomo e o loop, mande `Metrônomo` e `Loop liga/desliga` para teclas fora de `A W S E D F T G Y H U J K O L P Z X C V`, como `B` e `N` (um `Shift+C` não adianta: o teclado tocando ignora o `Shift` e ainda vê a letra `C`); o grupo `Suspensos enquanto o teclado do computador está ligado` da janela `?` vai encolhendo à medida que você faz isso; (b) para ter o `Seguir o cursor` no teclado (ele vem sem atalho), toque no chip `Sem atalho` dessa ação e escolha uma tecla livre, como `Shift+N` (o `Shift+B` deixou de ser livre na fase 26 B: é o atalho do `Navegador de áudios`, id `panel.browser`; o `B` sozinho e o `N` sozinho seguem livres).
 
 Depois de trocar, as **sequências para decorar** deste guia mudam para as suas teclas, mas os textos dos tooltips (`Metrônomo (C)`) continuam com a tecla de fábrica: confie na janela `?`.
 

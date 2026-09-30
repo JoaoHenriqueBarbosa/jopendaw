@@ -5,6 +5,7 @@
 ## Onde fica
 
 - **Importar:** barra do transporte (a faixa de botões em cima no computador, embaixo no celular). O botão é o ícone de arquivo com tooltip `Importar áudio ou MIDI (Ctrl+I)`; em janela larga (a partir de uns 1540 px, só no computador) ele mostra também o texto `Importar`. No Mac o atalho é `⌘+I`.
+- **Navegador de áudios:** aba `Áudios` do painel de baixo (atalho `Shift+B`): o caminho para reusar um áudio que o projeto ou a sua conta já têm ([03g](03g-navegador-de-audios.md)).
 - **Clipes:** na linha do tempo (o arranjo), dentro da raia da faixa. Clipe de áudio só existe em **faixa de áudio** (tipo `Áudio`).
 - **Menu do clipe:** botão direito no clipe (computador) ou toque longo (celular).
 - **Nova faixa de áudio:** botão `Faixa` no pé da lista de faixas (tooltip `Nova faixa`), item `Áudio`.
@@ -19,6 +20,7 @@
 | Posição do clipe novo | Começa no cursor, **encaixado na grade** (`Livre`, `Compasso`, `1/4`, `1/8`, `1/16`; padrão `1/4`) | Duração do clipe = duração do arquivo | Para importar em ponto exato, mova o cursor antes (clique na régua) |
 | Faixa do clipe novo | O primeiro arquivo vai na faixa **selecionada**, se ela for de áudio e estiver livre naquele trecho; senão (e sempre para o 2.º arquivo em diante) nasce uma **faixa de áudio nova**, com o nome do arquivo sem extensão (até 40 caracteres) | Cor da faixa: a próxima da paleta | Vários arquivos importados juntos começam todos no mesmo ponto, cada um na sua faixa |
 | Nome do clipe | O clipe mostra o nome do arquivo (com extensão) no canto de cima à esquerda | | O nome vem do primeiro arquivo importado com aquele conteúdo |
+| Aba `Áudios` do painel de baixo (`Shift+B`) | Lista os áudios que **já estão** no projeto ou na sua conta, com busca e pré-escuta; `+` ou arrastar pela alça põe um deles no arranjo como clipe (numa faixa de sampler vira zona), sem passar pelo seletor de arquivos | O clipe entra como o do `Importar`: no cursor (ou onde você soltar), na grade, em faixa de áudio livre ou numa faixa nova; um passo do desfazer, `Importar áudio` | Capítulo próprio: [03g Navegador de áudios](03g-navegador-de-audios.md) |
 
 ### Formatos aceitos
 
@@ -119,7 +121,7 @@ Depois de qualquer arrasto que mexeu no clipe, ele passa a ficar **por cima** do
 
 | Item (rótulo exato) | O que faz | Atalho | Dica |
 |---|---|---|---|
-| `Tomadas` (só em clipe gravado em loop, com o número de tomadas) | Abre a lista `TOMADAS`; escolher uma troca o áudio do clipe (posição, corte e fades ficam) | | Ver [Gravação](03c-gravacao.md) |
+| `Tomadas` (só em clipe gravado em loop, com o número de tomadas) | Abre a lista `TOMADAS`; escolher uma troca o áudio do clipe (posição, corte e fades ficam) | | Ver [Gravação](03c-gravacao.md). Para escolher uma tomada **por trecho** (item `Comp por trecho`, logo abaixo), ver [Comping por trecho](03f-comping.md) |
 | `Duplicar` | Cria uma cópia logo depois do clipe (no fim dele, contando todas as repetições de um loop) e seleciona a cópia | `Ctrl+D` (`⌘+D`) | A cópia leva warp, fades (com as curvas), ganho, mudo, fase invertida e loop |
 | `Cortar no cursor` | Parte o clipe em dois no cursor. O fade de entrada fica só no pedaço da esquerda e o de saída só no da direita (os fades da emenda zeram; a marca de fade automático desses lados é limpa) | `S` | Com clipe selecionado corta ele; sem seleção, corta tudo o que o cursor cruza na faixa atual (áudio e notas). Só corta se o cursor está dentro do clipe. Num clipe em loop, cortar no meio de uma repetição pode dar **três** clipes (ver [Cortar um clipe em loop](#cortar-um-clipe-em-loop)); mudo e fase valem nos pedaços |
 | `Warp e altura…` | Abre o diálogo de warp, transposição e reverso | | [Warp e altura](03b-warp-e-altura.md) |
@@ -415,7 +417,9 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 
 - [Warp e altura](03b-warp-e-altura.md): esticar o clipe ao andamento do projeto, transpor e inverter, sem tocar no arquivo original.
 - [Gravação](03c-gravacao.md): clipes que nascem do microfone, tomadas em loop e monitorar a entrada.
+- [Comping por trecho](03f-comping.md): montar uma interpretação a partir das tomadas, escolhendo a tomada de cada trecho, com crossfade de 20 ms nas emendas.
 - [Áudio para MIDI](03d-audio-para-midi.md): transformar um clipe monofônico (voz, baixo, solo) em notas.
+- [Navegador de áudios](03g-navegador-de-audios.md): reaproveitar, sem abrir o seletor, um áudio que o projeto ou a conta já têm (buscar, ouvir sem mexer no projeto e inserir ou arrastar para o arranjo).
 - [Editar áudio](03e-editar-audio.md): dividir por transientes, remover silêncio, normalizar o clipe por pico, RMS ou LUFS e quantizar por fatias; o `Normalizar clipe…` ajusta o mesmo `Ganho do clipe` daqui.
 - [Mixer](06-mixer.md): volume, pan, efeitos e roteamento da faixa onde o clipe está.
 - [Timeline e clipes](02b-timeline-e-clipes.md): o arranjo em geral (faixas, régua, sobreposição, menu de faixa).
@@ -447,7 +451,7 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 - **`Converter em notas (MIDI)` num clipe em loop** é recusado desde a fase 24 (`ebea0b1`): o diálogo mostra `Este clipe está em loop: a conversão em notas lê o trecho uma vez só. Desligue o loop do clipe antes de converter.` e nada é enviado nem criado (ver [Áudio para MIDI](03d-audio-para-midi.md)). Desligue o loop antes de converter (o clipe fica com uma repetição só). `Dividir por transientes…`, `Remover silêncio…` e `Quantizar por fatias…` também recusam o loop (mensagem `Este clipe está em loop: a edição por fatias trabalha no trecho que o clipe toca uma vez só e não enxerga as repetições. Desligue o loop do clipe antes de editar.`); só `Normalizar clipe…` segue valendo, medindo de `offset` até o fim do clipe, o que passa do trecho (ver [03e](03e-editar-audio.md#clipe-em-loop-mudo-ou-com-fase-invertida)) `(testado só por testes automáticos)`.
 - **Mudo, fase e loop num app ou projeto antigo.** Os campos novos do clipe (`muted`, `invert`, `loop_length`) só existem a partir de `3a27233`: um app anterior os ignora ao abrir e os perde ao salvar (o clipe volta a soar, sem fase invertida e sem loop). O motor não mudou (a fase é o ganho com o sinal trocado), então não há `.wasm` nem `.so` novos para isso.
 - Aparar não apaga nada do arquivo: o `offset` e a duração só escolhem o trecho que toca.
-- Não há arrastar-e-soltar de arquivos do sistema sobre a tela: só o botão `Importar` e `Ctrl+I`.
+- Não há arrastar-e-soltar de arquivos do sistema sobre a tela: só o botão `Importar` e `Ctrl+I`. O que existe é arrastar **de dentro do app**: a alça de um áudio da aba `Áudios` ([03g](03g-navegador-de-audios.md#arrastar)) solta um clipe no arranjo.
 - O arquivo `.mid` **não é guardado** no aparelho nem no servidor (ao contrário do áudio): só ficam as notas e os controles que viraram clipes. Importar o mesmo `.mid` duas vezes cria duas levas de faixas.
 - Importar um `.mid` não usa o sha-256, o armazenamento de áudio nem a cota de 4 GB.
 - Importar, exportar e o desfazer ficam bloqueados enquanto se grava; arrastar clipes, aparar e cortar continuam liberados na tela, mas a gravação que está rolando não leva em conta o que mudou.

@@ -1,6 +1,6 @@
 # Exportação e congelamento
 
-> Como transformar o projeto em arquivos WAV, FLAC ou MP3 (a música inteira e, se quiser, uma faixa por arquivo; FLAC e MP3 são convertidos no servidor), como levar a mixagem a um volume-alvo em LUFS (streaming, podcast, rádio e TV) e como congelar uma faixa em áudio para aliviar o projeto ou fixar um som.
+> Como transformar o projeto em arquivos WAV, FLAC ou MP3 (a música inteira, o loop, o trecho entre dois marcadores ou uma seção por arquivo, só com as faixas que você escolher e, se quiser, uma faixa por arquivo e tudo num `.zip`; FLAC e MP3 são convertidos no servidor), como levar a mixagem a um volume-alvo em LUFS (streaming, podcast, rádio e TV) e como congelar uma faixa em áudio para aliviar o projeto ou fixar um som.
 
 ![Diálogo Exportar áudio: intervalo, formato, taxa, Stems, Normalizar, Normalizar o loudness e Cauda; no pé, os botões Projeto inteiro (.jopendaw)…, Notas em MIDI (.mid)…, Cancelar e Exportar.](../img/exportar-audio.jpg)
 
@@ -13,6 +13,7 @@
 ## Onde fica
 
 - **Exportar:** botão **Exportar** (ícone de disquete com seta) na barra do transporte, à direita dos painéis e das entradas de notas. Tooltip: `Exportar áudio (WAV, FLAC ou MP3)` (até a fase 16 era `Exportar a música (e as faixas separadas) em WAV`, que continuava dizendo WAV mesmo com FLAC e MP3 na janela). Em barra estreita ou no celular mostra só o ícone. Não tem atalho de teclado. A mesma janela leva ao arquivo do projeto (`.jopendaw`): botão `Projeto inteiro (.jopendaw)…` no rodapé, descrito na tabela abaixo, e às notas em MIDI padrão: botão `Notas em MIDI (.mid)…`, descrito na seção [Notas em MIDI (.mid)](#notas-em-midi-mid).
+- **Exportar uma seção direto do marcador (fase 26 C):** clique com o botão direito (ou toque longo) na bandeirinha de um marcador na régua e escolha **Exportar esta seção…** (entre `Loop desta seção` e as bolinhas de cor). A janela `Exportar áudio` abre já em `Entre marcadores`, com **De** no marcador clicado e **Até** no marcador seguinte (ou `Fim da música`, se ele é o último). Esse caminho **não** parte das últimas opções da sessão: abre com as opções de fábrica (`WAV 24 bits`, `Cauda` de 2 s, sem `Stems`, todas as faixas), só com o trecho trocado. Detalhes em [Exportar por marcadores, seções e faixas escolhidas](#exportar-por-marcadores-seções-e-faixas-escolhidas).
 - **Congelar e renderizar:** menu de três pontos (**Opções da faixa**) no cabeçalho de cada faixa. Desde a fase 20 há três itens: **Congelar faixa…** (congela no lugar e dá para **Descongelar**), **Converter em áudio…** e **Renderizar em faixa nova** (o antigo **Congelar em áudio**, até a fase 19). O capítulo dos dois primeiros é [Congelar faixa e converter em áudio](02e-congelar-faixa.md); o terceiro está na seção abaixo.
 - Os dois rodam **fora de tempo real**, em um motor separado e sem tocar: não é preciso reproduzir a música, e o render é mais rápido do que tocar (não há medida documentada de quanto, `(não confirmado)`).
 
@@ -26,21 +27,29 @@ Abre ao tocar em **Exportar**. Enquanto o projeto está gravando ou ocupado (imp
 |---|---|---|---|
 | **INTERVALO** > **Música inteira** | Exporta do compasso 1 (batida 0) até o fim do último clipe (de áudio ou de notas) ou, se for maior, até o fim do áudio de uma faixa congelada (cauda dela incluída), mais a cauda. | Padrão. | Começa sempre em 0, mesmo que o primeiro clipe entre depois (o silêncio inicial vai junto). |
 | **INTERVALO** > **Região do loop** | Exporta só a região marcada na régua. Funciona com o loop desligado, desde que a região exista (mais de 0,01 batida). Tooltip: os compassos da região, por exemplo `Compassos 5 a 8`; sem região, `Marque uma região arrastando na régua para exportar só ela` e a opção fica desligada. | | Se a região sumiu desde a última exportação, volta para **Música inteira**. |
-| Linha de resumo (texto pequeno) | Mostra `Compassos 1 a 8 · 0:16` (ou `Compasso 3`), com ` + 2 s de cauda` quando a cauda é maior que zero. Sem nada para exportar mostra `O projeto ainda não tem clipes.` ou `A região do loop está vazia.` | | |
+| **INTERVALO** > **Entre marcadores** (fase 26 C) | Exporta o trecho entre dois marcadores escolhidos nas listas **De** e **Até** (abaixo). Tooltip: `Um trecho entre dois marcadores`; sem nenhum marcador, `Ponha marcadores na régua para exportar o trecho entre eles` e a opção fica desligada. | Um arquivo. | Ver [Entre marcadores](#entre-marcadores). |
+| **INTERVALO** > **Uma por seção** (fase 26 C) | Um arquivo por seção da música (do marcador ao seguinte), com o nome do marcador no nome do arquivo. Tooltip: `Um arquivo por seção, com o nome do marcador`; sem marcadores, `Ponha marcadores na régua para dividir a música em seções` e a opção fica desligada. Ao tocar nela com duas ou mais seções marcadas, liga sozinho o `Reunir num .zip`. | Um arquivo por seção marcada. | Ver [Uma por seção](#uma-por-seção). |
+| **De** e **Até** (listas, só com `Entre marcadores`) | De onde e até onde vai o trecho. Cada item é `<nome do marcador> · compasso N` (marcador sem nome: `Marcador · compasso N`). | **De**: `Início do projeto` (padrão) ou um marcador. **Até**: `Fim da música` (padrão) ou um marcador. | Escolher de trás para frente dá o mesmo trecho (o app põe na ordem da música). |
+| `N de M seções`, **Todas** e **Nenhuma** (só com `Uma por seção`) | O contador das seções marcadas e dois botões de texto que marcam ou desmarcam todas. | Todas marcadas ao abrir. | |
+| Uma caixa por seção (só com `Uma por seção`) | Marca as seções que viram arquivo. Cada linha traz o nome da seção e, embaixo, os compassos e a duração, por exemplo `Compassos 13 a 20 · 0:16`. A lista rola a partir de 220 px de altura. | Todas marcadas. | A seção antes do primeiro marcador chama-se `Início`. |
+| **NOME DOS ARQUIVOS** (campo de texto, só com `Entre marcadores` ou `Uma por seção`) | O modelo do nome dos arquivos. Texto de ajuda: `Use {projeto}, {marcador} e {n}`. Abaixo do campo, a prévia dos nomes (até 3, e `e mais N`). | Até 120 caracteres; padrão `{projeto}-{marcador}-{n}`; vazio volta ao padrão. | Ver [O modelo de nome e a prévia](#o-modelo-de-nome-e-a-prévia). |
+| Linha de resumo (texto pequeno) | Um arquivo só: `Compassos 1 a 8 · 0:16` (ou `Compasso 3`), com ` + 2 s de cauda` quando a cauda é maior que zero. Vários arquivos: `5 arquivos · o maior com 0:16 + 2 s de cauda`. Sem nada para exportar mostra `O projeto ainda não tem clipes.`, `A região do loop está vazia.`, `Escolha o trecho.` (em `Entre marcadores` e `Uma por seção`) ou, com nenhuma faixa marcada, o motivo (`Nenhuma faixa escolhida: marque ao menos uma faixa para exportar.`). | | A duração é a do trecho, sem a cauda, no andamento do mapa de andamento. |
+| **Faixas** (bloco que abre e fecha, fase 26 C) | Escolhe de quais faixas é o arquivo. Fechado mostra `Todas (N)` ou `K de N`. Aberto: botões **Todas** e **Só a selecionada** (este só aparece se há uma faixa selecionada na linha do tempo), um chip por faixa (o nome dela) e o texto `A mixagem leva só as faixas marcadas (o mudo do projeto continua valendo) e os stems também.` | Todas marcadas. | Ver [Faixas escolhidas](#faixas-escolhidas). Fica entre `TAXA DE AMOSTRAGEM` e `Stems`. |
 | **FORMATO** (lista) | Formato do arquivo: WAV de três profundidades, FLAC ou MP3. Veja a tabela abaixo. | Cinco itens: `WAV 16 bits`, `WAV 24 bits` (padrão), `WAV 32 bits float`, `FLAC (sem perda, menor)`, `MP3 (para compartilhar)`. | O texto embaixo da lista explica a escolha. FLAC e MP3 dependem de conta e de rede. |
 | **Profundidade e compressão** (só com FLAC): dois chips `16 bits` e `24 bits` e uma lista | Profundidade do FLAC e quanto ele é comprimido. A lista não tem rótulo próprio: os itens são `Rápido`, `Padrão` e `Menor arquivo`. | `24 bits` e `Padrão` (padrão). `Rápido` = nível 2, `Padrão` = 5, `Menor arquivo` = 8 (de 0 a 8 no servidor). | Mais compressão dá arquivo menor e conversão mais lenta; o som é idêntico. |
 | **Qualidade do MP3** (só com MP3): lista | Taxa de bits do MP3. | `192 kbps (CBR)` (padrão). Itens: `128 kbps (CBR)`, `192 kbps (CBR)`, `256 kbps (CBR)`, `320 kbps (CBR)`, `V0 (VBR, ~245 kbps, a melhor)`, `V1 (VBR, ~225 kbps)`, `V2 (VBR, ~190 kbps)`, `V3 (VBR, ~175 kbps)`, `V4 (VBR, ~165 kbps)`. | Para o master final, `320 kbps (CBR)` ou `V0`. Ver [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
 | **Artista (opcional)** (campo de texto, só com FLAC ou MP3; dica `Vai nos metadados e no nome do arquivo`) | O nome do artista, gravado nos metadados de cada arquivo (`ARTIST` no FLAC, `TPE1` no MP3) e usado no começo do nome do arquivo: `Artista - <nome>.flac`. Vazio: sem artista, e o nome fica como era. | Até 200 caracteres. Vazio por padrão; fica guardado com as últimas opções da sessão. | Vale para a mixagem e para cada stem. O servidor limpa o texto (tira caracteres de controle e espaços repetidos). Ver [Nomes dos arquivos](#nomes-dos-arquivos). |
 | **TAXA DE AMOSTRAGEM** (lista) | Taxa do arquivo. O render já é feito nessa taxa (não é reamostrado depois). | `A do aparelho (48 kHz)` (padrão; o número é a taxa real do aparelho), `44,1 kHz`, `48 kHz`, `88,2 kHz`, `96 kHz` (a que for igual à do aparelho não repete). Com **MP3**, a lista só oferece `44,1 kHz` e `48 kHz` (e `A do aparelho`, se o aparelho já estiver numa dessas). | Taxa maior deixa o arquivo e o render proporcionalmente maiores. Escolher MP3 com uma taxa que ele não aceita passa a taxa para `44,1 kHz` sozinho. |
-| **Stems** (interruptor) | Além da mixagem, gera um arquivo por faixa. Legenda: `Um arquivo por faixa, além da mixagem` (ou `Um arquivo da faixa, além da mixagem` se só há uma faixa com clipes). | Desligado. | Ver a seção Stems. |
+| **Stems** (interruptor) | Além da mixagem, gera um arquivo por faixa. Legenda: `Um arquivo por faixa, além da mixagem` (ou `Um arquivo da faixa, além da mixagem` se só há uma faixa com clipes). | Desligado. | Ver a seção Stems. Com **Faixas** escolhidas, só as marcadas geram stem. |
+| **Reunir num .zip** (interruptor, fase 26 C; só aparece quando saem 2 ou mais arquivos) | Entrega um único arquivo `.zip` com todos os arquivos da exportação, em vez de um download (ou uma janela `Salvar`) por arquivo. Legenda: `Um arquivo só com os N` (com `Stems` ligado acrescenta ` (no máximo: faixa sem som não gera stem)`). O `N` é intervalos × (a mixagem + as faixas marcadas, se há `Stems`). | Desligado; liga sozinho ao tocar em `Uma por seção` com 2 ou mais seções marcadas. | Ver [O zip](#o-zip). Fica entre `Stems` e `Normalizar`. |
 | **Normalizar** (interruptor) | Leva o pico de cada arquivo a −1 dBFS. Legenda: `Sobe (ou desce) tudo até o pico ficar em −1 dBFS`. | Desligado. | Vale para cada arquivo separadamente. Ligar este desliga o `Normalizar o loudness` (e o contrário): são pedidos contrários. |
 | **Normalizar o loudness** (interruptor) | Leva a mixagem inteira ao volume percebido do alvo, em LUFS, sem passar do teto de true peak. Legenda: `Leva a mixagem inteira ao volume percebido do alvo (LUFS), sem passar do teto de pico`. Ao ligar, abrem as quatro linhas abaixo. | Desligado. | Ver a seção Normalizar o loudness. |
 | Chips de alvo (com o loudness ligado): **Streaming −14,0**, **Podcast −16,0**, **Broadcast −23,0**, **Personalizado** | Escolhe o loudness integrado que a mixagem deve ter. O texto embaixo diz para quê: `Spotify, YouTube, Apple Music.`, `podcasts e vídeos.`, `EBU R128, rádio e TV.` | Padrão **Streaming** (−14 LUFS). | Um chip só fica marcado por vez. |
 | **Alvo** (controle deslizante, só com **Personalizado**; valor à direita, ex.: `−14,0 LUFS`) | O alvo livre. Texto: `Alvo de −14,0 LUFS integrado.` | −40 a 0 LUFS, passo de 0,5, começa em −14,0. | Escolher um chip pré-definido depois não apaga o valor do **Alvo**: ele volta se você retornar a **Personalizado**. |
 | **Teto de true peak** (controle deslizante, valor à direita, ex.: `−1,0 dBTP`) | O maior true peak que o arquivo pode ter depois do ganho. Se subir até o alvo passaria disso, o ganho para no teto e o volume fica abaixo do alvo. Texto: `Se subir até o alvo passaria do teto, o ganho para no teto e o volume fica abaixo do alvo: a janela do resultado avisa.` | −10 a 0 dBTP, passo de 0,5, padrão **−1,0 dBTP**. | −1 dBTP é o que serviços de streaming pedem para não estourar na recodificação. |
 | **Stems com o mesmo ganho** (interruptor; só aparece com **Stems** ligado e o loudness ligado). Legenda: `Sem isto os stems saem como renderizados, sem normalização` | Aplica a cada stem o mesmo ganho, em dB, que a mixagem recebeu, mantendo o equilíbrio entre eles. | Desligado. | Ver Stems, abaixo. |
-| **Cauda** (controle deslizante, com o valor à direita) | Segundos extras depois do fim, para o reverb, o delay e a soltura das notas terminarem. Texto: `Tempo depois do fim para o reverb, o delay e a soltura das notas terminarem.` | 0 a 10 s, passo de 0,5 s, padrão 2 s. | Vale também para os stems e para o intervalo `Região do loop`. |
-| Aviso vermelho | `Não há o que exportar: grave, importe ou desenhe um clipe primeiro.` (música inteira) ou `Não há o que exportar: a região do loop não tem duração.` | | Aparece com o intervalo vazio. |
+| **Cauda** (controle deslizante, com o valor à direita) | Segundos extras depois do fim, para o reverb, o delay e a soltura das notas terminarem. Texto: `Tempo depois do fim para o reverb, o delay e a soltura das notas terminarem.` | 0 a 10 s, passo de 0,5 s, padrão 2 s. | Vale também para os stems, para o intervalo `Região do loop` e, **em cada arquivo**, para `Entre marcadores` e `Uma por seção` (toda seção ganha a cauda depois do fim dela). |
+| Aviso vermelho | `Não há o que exportar: grave, importe ou desenhe um clipe primeiro.` (música inteira), `Não há o que exportar: a região do loop não tem duração.` ou, nos intervalos novos e com as faixas, `Não há o que exportar: ` seguido do motivo (lista em [Quando não há o que exportar](#quando-não-há-o-que-exportar)). | | Aparece com o intervalo vazio. |
 | **Projeto inteiro (.jopendaw)…** (botão de texto com ícone de caixa, no rodapé, à esquerda de **Cancelar**) | Troca o WAV pelo arquivo do projeto editável: fecha esta janela sem exportar áudio e abre a janela `Exportar projeto` (o documento como está na tela e os áudios, num zip). Ver [Projeto em arquivo](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw). | | Não guarda as opções da tela como "últimas usadas": só o `Exportar` guarda. |
 | **Notas em MIDI (.mid)…** (botão de texto com ícone de piano, no rodapé, ao lado de **Projeto inteiro (.jopendaw)…**) | Troca o WAV pelas notas em arquivo MIDI padrão: fecha esta janela sem exportar áudio e abre a janela `Exportar MIDI (.mid)`. Ver [Notas em MIDI (.mid)](#notas-em-midi-mid). | | Também não guarda as opções da tela como "últimas usadas". Não depende do intervalo, do formato, da taxa nem da cauda desta janela. |
 | **Cancelar** | Fecha sem exportar. | | |
@@ -49,7 +58,7 @@ Abre ao tocar em **Exportar**. Enquanto o projeto está gravando ou ocupado (imp
 | Aviso `Um efeito está em solo ou ouvindo a banda: a exportação sairá assim (Multibanda (nome da faixa), …). Desligue o solo ou o "Ouvir banda" antes, se não era a intenção.` (fase 17) | Aparece, em qualquer formato, quando algum efeito ligado de uma faixa ou do master está com `Solo` numa banda do `Multibanda` ou com `Ouvir banda` no `De-esser`. Lista cada efeito com o nome da faixa (ou `master`). | Só avisa: o botão `Exportar` continua ligado. | O mesmo estado aparece como selo no cartão do efeito ([06c](06c-painel-de-efeitos.md#cartão-de-efeito)). Efeito em bypass não entra. |
 | **Exportar** (com ícone) | Começa o render. Desligado com o intervalo vazio e, com FLAC ou MP3, quando o trecho mais a cauda passam de 30 minutos ou o WAV a enviar passa de 512 MB. | | |
 
-As últimas opções escolhidas (inclusive alvo, teto e stems com o mesmo ganho) ficam guardadas até você fechar ou recarregar o app: a próxima exportação da sessão já abre com elas.
+As últimas opções escolhidas (inclusive alvo, teto, stems com o mesmo ganho e, desde a fase 26 C, os marcadores de `De` e `Até`, as seções marcadas, as faixas marcadas, o modelo de nome e o `.zip`) ficam guardadas até você fechar ou recarregar o app: a próxima exportação da sessão já abre com elas. Se o que elas citam sumiu do projeto, a janela volta ao que dá: uma região de loop que não existe mais, um marcador de `De` ou `Até` apagado (ou o projeto sem marcadores) leva o intervalo de volta a `Música inteira`, e o mesmo vale para `Uma por seção` quando não sobra nenhuma seção com duração; faixas apagadas saem da escolha (e, se nenhuma sobrou, todas voltam marcadas). A exceção é o caminho **Exportar esta seção…** do marcador, que abre com as opções de fábrica (ver [Onde fica](#onde-fica)). `(testado só por testes automáticos)`
 
 #### Formatos
 
@@ -118,16 +127,169 @@ Abre sozinha depois de **Exportar** e não fecha por fora (clicar fora ou o bot�
 | Título **Exportando…** | Renderizando. |
 | Barra de progresso e texto | `Preparando…` até o primeiro aviso; depois `Renderizando N%`; no fim `Salvando o arquivo…`. O render ocupa até 95% da barra; o resto é converter para WAV e entregar o arquivo. Com **Normalizar o loudness**, dos 95% aos 99% o texto é `Medindo o loudness…` (a mixagem é medida, ganha o ganho e é medida de novo). |
 | Textos extras com FLAC ou MP3 | Enquanto o arquivo está no servidor, o texto do progresso troca por `Enviando ao servidor (N MB)…`, `Na fila do servidor…`, `Compactando no servidor N%…`, `Baixando o arquivo…` e `Salvando…`, e a barra soma as duas fases: de 0 a 50% o render e de 50 a 100% a conversão (a de todos os arquivos, com stems). Desde a fase 17 a barra **nunca recua** (o maior valor mostrado fica) e não chega a 100% antes do fim; com stems, quando o render do lote seguinte recomeça, ela fica parada até passar do que já mostrou `(testado só por testes automáticos)`. O texto `Renderizando N%` continua falando só do render. Ver [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
+| Linha `Intervalo 2 de 5: Refrão` (fase 26 C; só quando saem 2 ou mais intervalos) | Logo acima do texto do render, em negrito: qual intervalo está sendo renderizado, de quantos, e o nome da seção (`Entre marcadores` de um arquivo só não tem a linha). Sem nome, só `Intervalo 2 de 5`. O `Renderizando N%` e a barra contam **a exportação toda** (todos os intervalos), não o intervalo em andamento; no fim de cada intervalo a barra não recua. `Medindo o loudness…` só aparece quando há um intervalo só. `(testado só por testes automáticos)` | 
 | Texto fixo | `O render roda mais rápido que tocar, no próprio aparelho. Deixe esta aba aberta até terminar.` |
-| **Cancelar** | Interrompe o render (e, com FLAC ou MP3, a espera pelo servidor, que cancela a tarefa) e fecha. Vira `Cancelando…`; no WAV fica desligado depois de 100% do render (com FLAC ou MP3 continua ligado durante a conversão). Não salva o lote que estava rodando (lotes anteriores já entregues ficam). |
+| **Cancelar** | Interrompe o render (e, com FLAC ou MP3, a espera pelo servidor, que cancela a tarefa) e fecha. Vira `Cancelando…`; no WAV fica desligado depois de 100% do render (com FLAC ou MP3 continua ligado durante a conversão). Não salva o lote que estava rodando (lotes anteriores já entregues ficam). Com vários intervalos (fase 26 C) o render em andamento é interrompido e o próximo nem começa; os arquivos dos intervalos que já tinham saído ficam, **exceto** com `.zip`, em que nada é salvo (ver [Cancelar no meio](#cancelar-no-meio)). |
+| Título **Exportação cancelada** com `Exportação cancelada no meio: …` (fase 26 C) | Você tocou em **Cancelar** depois de um ou mais arquivos já terem sido salvos (sem `.zip`). Aviso: `Exportação cancelada no meio: um arquivo já tinha sido salvo e continua nos downloads ou onde você escolheu. Os outros não foram gerados.` (ou `N arquivos já tinham sido salvos e continuam …`). Só o botão **Fechar**. Se nenhum arquivo tinha saído, a janela fecha na hora, sem aviso. |
 | Título **Exportação cancelada** (fase 17; também no WAV direto desde a fase 19) | No Android: a janela `Salvar` foi fechada sem escolher onde. Aviso `Exportação cancelada: você não escolheu onde salvar "<nome>".` (com FLAC, MP3 ou WAV direto; o WAV direto saía sem o nome e sem essa linha na fase 19 e passou a dizê-los na fase 22) e, se algum arquivo já tinha sido salvo, a linha `O arquivo anterior já tinha sido salvo.` ou `Os N arquivos anteriores já tinham sido salvos.`, e botões **Fechar** e **Voltar às opções**. Detalhes em [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
 | Título **Não deu para compactar** | Só com FLAC ou MP3 quando a conversão falhou: aviso com o motivo e os botões **Fechar**, **Voltar às opções** e **Exportar em WAV mesmo assim**. Detalhes em [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
-| Título **Exportação concluída** | `A mixagem foi salva (WAV 24 bits) em N s. No navegador, o arquivo fica nos downloads.` Com stems: `A mixagem e os stems foram salvos (...) em N s. ...`. Botão **Fechar**. Com FLAC e MP3 sai só o nome curto (`(FLAC)`, `(MP3)`); depois de **Exportar em WAV mesmo assim** sai só `(WAV)`. |
-| Frase do loudness (só com **Normalizar o loudness**) | Logo abaixo da mensagem, diz o que a normalização fez e o que o arquivo mediu de verdade, por exemplo `A mixagem subiu 4,0 dB até o alvo e mediu −14,0 LUFS · −2,0 dBTP.` Se o ganho ficou abaixo de 0,05 dB (o arquivo já estava no alvo), a frase é `A mixagem já estava no alvo e mediu −14,0 LUFS · −1,6 dBTP.`, sem repetir a menção ao alvo. Quando o teto segurou o ganho, ou não deu para medir, a frase vem em aviso (caixa destacada). Detalhes na seção Normalizar o loudness. |
-| Aviso no resultado | Se algum áudio do projeto não está neste aparelho: `Exportado sem um áudio que não está neste aparelho.` (ou `N áudios que não estão`). O arquivo sai sem esses clipes. Com FLAC ou MP3, também aparecem aqui os avisos de perda que o servidor devolver. |
+| Título **Exportação concluída** | `A mixagem foi salva (WAV 24 bits) em N s. No navegador, o arquivo fica nos downloads.` Com stems: `A mixagem e os stems foram salvos (...) em N s. ...`. Botão **Fechar**. Com FLAC e MP3 sai só o nome curto (`(FLAC)`, `(MP3)`); depois de **Exportar em WAV mesmo assim** sai só `(WAV)`. Com vários intervalos e sem `.zip` (fase 26 C): `Os arquivos de N intervalos foram salvos (WAV 24 bits) em N s. No navegador, eles ficam nos downloads.` (a frase não fala de stems, mesmo com `Stems` ligado). Com `.zip`: `Os N arquivos (WAV 24 bits) foram reunidos em "Projeto.zip" em N s. No navegador, o arquivo fica nos downloads.` |
+| Frase do loudness (só com **Normalizar o loudness**) | Logo abaixo da mensagem, diz o que a normalização fez e o que o arquivo mediu de verdade, por exemplo `A mixagem subiu 4,0 dB até o alvo e mediu −14,0 LUFS · −2,0 dBTP.` Se o ganho ficou abaixo de 0,05 dB (o arquivo já estava no alvo), a frase é `A mixagem já estava no alvo e mediu −14,0 LUFS · −1,6 dBTP.`, sem repetir a menção ao alvo. Quando o teto segurou o ganho, ou não deu para medir, a frase vem em aviso (caixa destacada). Detalhes na seção Normalizar o loudness. Com vários arquivos (fase 26 C): `O loudness foi normalizado em cada um dos N arquivos.` e, só para os que o teto segurou ou que não deu para medir, uma caixa `<nome>.wav: <frase>` (ver [Loudness e cauda por arquivo](#loudness-e-cauda-por-arquivo)). |
+| Aviso no resultado | Se algum áudio do projeto não está neste aparelho: `Exportado sem um áudio que não está neste aparelho.` (ou `N áudios que não estão`). Com seções sem som (fase 26 C): `Uma seção sem som ficou de fora.` ou `N seções sem som ficaram de fora.`, na mesma caixa (as duas frases se juntam). O arquivo sai sem esses clipes. Com FLAC ou MP3, também aparecem aqui os avisos de perda que o servidor devolver. |
 | Título **A exportação falhou** | A mensagem do erro. Botões **Fechar** e **Voltar às opções** (reabre a janela de opções com as mesmas escolhas). |
 
 Erros de exportação que você pode ver: `O projeto está vazio: não há nada para exportar.`, `A região do loop está vazia: marque o loop antes de exportar.`, `Pare a gravação antes de exportar.`, `Espere o render em andamento terminar antes de exportar.`, `A exportação não terminou: ...` (com o motivo, por exemplo falta de memória) e o do limite de 4 GB.
+
+## Exportar por marcadores, seções e faixas escolhidas
+
+A fase 26 C (`f12d405`) fez a janela `Exportar áudio` entregar mais que a música inteira: o trecho entre dois marcadores, **um arquivo por seção** da música, só com as **faixas** que você marcar, com **nome** montado por um modelo e, se quiser, tudo num **`.zip`**. A receita com valores está em [Entregar uma música por seções e stems](../guias/entregar-uma-musica-por-secoes-e-stems.md).
+
+O que foi visto rodando: a janela abre e, sem marcadores, `Entre marcadores` e `Uma por seção` ficam apagados, com o tooltip que manda pôr marcadores na régua (visto no Chrome pela sessão que escreveu o código). **Nada daqui foi exportado de verdade num aparelho**: o render por intervalo, o nome dos arquivos, o `.zip`, o cancelar no meio e o loudness por arquivo só têm testes automáticos, com motor e servidor falsos (`app/test/export_regions_test.dart`) `(testado só por testes automáticos)`. Nenhum arquivo foi ouvido nem aberto num programa externo.
+
+| Intervalo | Quantos arquivos | O nome do arquivo usa o modelo? |
+|---|---|---|
+| `Música inteira` | 1 (mais os stems, se ligados) | Não: `<projeto>.wav` |
+| `Região do loop` | 1 | Não: `<projeto>.wav` |
+| `Entre marcadores` | 1 | Sim (com `{n}` = 1) |
+| `Uma por seção` | 1 por seção marcada | Sim |
+
+### Entre marcadores
+
+Um arquivo, do marcador de **De** ao de **Até**. Os extremos `Início do projeto` (batida 0) e `Fim da música` (fim do último clipe, ver [O que entra no arquivo](#o-que-entra-no-arquivo)) valem quando você não escolhe marcador. O que entra em `{marcador}` (exemplos com o projeto `Minha Música`, o modelo padrão e nenhum `Stems`):
+
+| De | Até | Trecho | `{marcador}` | Arquivo |
+|---|---|---|---|---|
+| `Início do projeto` | `Fim da música` | A música inteira | (vazio) | `Minha Música-1.wav` |
+| `Refrão · compasso 13` | `Fim da música` | Do `Refrão` ao fim | `Refrão` | `Minha Música-Refrão-1.wav` |
+| `Início do projeto` | `Refrão · compasso 13` | Do começo até o `Refrão` | `Início a Refrão` | `Minha Música-Início a Refrão-1.wav` |
+| `Verso · compasso 5` | `Refrão · compasso 13` | Do `Verso` ao `Refrão` | `Verso a Refrão` | `Minha Música-Verso a Refrão-1.wav` |
+
+- **A ordem não importa.** Se **De** está depois de **Até**, o app troca os dois e o nome sai na ordem da música (`Verso a Refrão`).
+- **Marcador sem nome** entra como `Marcador` (`Marcador a Refrão`). Os marcadores criados com `M` já nascem com nome (`Marcador N`).
+- O trecho nunca passa do fim da música: um **Até** depois do último clipe é cortado nele (o que soa depois disso é só a `Cauda`).
+- **Exportar esta seção…** no menu do marcador abre esta mesma opção com **De** no marcador e **Até** no seguinte. Como ela usa `Entre marcadores` e não `Uma por seção`, o nome sai `Minha Música-Refrão a Ponte-1.wav` (com o marcador de baixo no nome), e não `Minha Música-Refrão-3.wav`; no último marcador **Até** é `Fim da música` e o nome é só `Minha Música-Final-1.wav`.
+
+### Uma por seção
+
+Uma **seção** é o trecho de um marcador até o marcador seguinte; a última vai até o fim da música (o fim do último clipe, ou do áudio de uma faixa congelada, cauda dela incluída). Regras, na ordem da régua:
+
+- Antes do primeiro marcador, se ele não está no compasso 1, há uma seção chamada `Início` (da batida 0 até ele). Se o primeiro marcador está no começo, não há `Início`.
+- Marcadores no mesmo ponto (diferença de no máximo 1/1.000.000 de batida) valem um só; o nome é o do primeiro, ou o do segundo se o primeiro não tinha.
+- Marcador no fim da música ou depois dele não faz seção (sem duração). Marcador sem nome dá `Marcador N`, com N a posição do marcador na régua.
+- Sem marcadores, a opção fica desligada; se há marcadores mas nenhum deixa seção com duração (projeto vazio, marcadores depois do fim), também.
+
+Exemplo: projeto `Minha Música` a 120 BPM em 4/4, marcadores `Intro` (compasso 1), `Verso` (5), `Refrão` (13), `Ponte` (21) e `Final` (25), último clipe no fim do compasso 32. A janela lista, cada seção com uma caixa marcada:
+
+| Seção (caixa) | Linha de baixo | Arquivo (modelo padrão) |
+|---|---|---|
+| `Intro` | `Compassos 1 a 4 · 0:08` | `Minha Música-Intro-1.wav` |
+| `Verso` | `Compassos 5 a 12 · 0:16` | `Minha Música-Verso-2.wav` |
+| `Refrão` | `Compassos 13 a 20 · 0:16` | `Minha Música-Refrão-3.wav` |
+| `Ponte` | `Compassos 21 a 24 · 0:08` | `Minha Música-Ponte-4.wav` |
+| `Final` | `Compassos 25 a 32 · 0:16` | `Minha Música-Final-5.wav` |
+
+A linha de resumo diz `5 arquivos · o maior com 0:16 + 2 s de cauda`; o contador, `5 de 5 seções`. **Nenhuma** desmarca tudo (e o aviso `Nenhuma seção escolhida: marque ao menos uma.` desliga o **Exportar**); **Todas** marca de volta. O `{n}` conta só as seções **marcadas**, na ordem da música: se você desmarca `Intro`, o `Verso` passa a ser `-1`.
+
+### Faixas escolhidas
+
+O bloco **Faixas** diz de quais faixas saem os arquivos. Todas as faixas do projeto aparecem como chip, inclusive pastas e barramentos.
+
+- **A mixagem é o solo das faixas marcadas.** O app renderiza uma cópia do projeto em que só as faixas marcadas estão em solo (o documento de verdade não é mexido), então valem as regras de solo do [mixer](06-mixer.md#solo-e-mudo): entra o que as faixas marcadas alimentam (o barramento da saída delas e os retornos dos envios delas, em cadeia), com o master e o limitador. **O mudo do projeto continua valendo**: uma faixa marcada que está muda fica muda. O solo que você tinha deixado em outras faixas é ignorado nessa exportação.
+- **Os stems são só das faixas marcadas**, pelas mesmas regras de [Stems](#stems). Com `Stems` desligado sai só a mixagem (das faixas marcadas).
+- **Marcar todas** equivale a não escolher: o projeto sai como está, com o solo que tiver. **Só a selecionada** deixa marcada só a faixa selecionada na linha do tempo. Desmarcar todas liga o aviso `Nenhuma faixa escolhida: marque ao menos uma faixa para exportar.` e desliga o **Exportar**.
+- Um retorno de reverb ou delay que as faixas marcadas alimentam **soa na mixagem**, mas só gera stem se você o marcar também (o stem da faixa sai sem o retorno: ver [Stems](#stems)). Marcar **só** um barramento deixa só ele soar, com o que chega pelos envios das faixas que ficaram em silêncio: o resultado provavelmente sai mudo `(dedução das regras de solo; não visto)`.
+- Sem multisseleção no app: a escolha das faixas é feita **dentro** desta janela, e não pelo que está selecionado na linha do tempo (a seleção só alimenta o botão **Só a selecionada**).
+
+### O modelo de nome e a prévia
+
+O campo **NOME DOS ARQUIVOS** vale em `Entre marcadores` e `Uma por seção` (na música inteira e no loop o nome é sempre `<projeto>`). O modelo aceita três palavras entre chaves, sem distinguir maiúsculas:
+
+| Palavra | Vira | Exemplo |
+|---|---|---|
+| `{projeto}` | O nome do projeto (já limpo, ver abaixo) | `Minha Música` |
+| `{marcador}` | O nome da seção ou o texto da tabela de [Entre marcadores](#entre-marcadores) | `Refrão` |
+| `{n}` | A posição do arquivo entre os marcados, a partir de 1, com zeros à esquerda até a largura do total (até 9 arquivos, `1`; de 10 a 99, `01`; de 100, `001`) | `03` |
+
+Qualquer outra coisa entre chaves (`{banda}`) **some**. Texto fora das chaves fica. Modelo vazio volta ao padrão `{projeto}-{marcador}-{n}`. Exemplos com 12 seções e a 3ª chamada `Refrão`:
+
+| Modelo | Arquivo |
+|---|---|
+| `{projeto}-{marcador}-{n}` (padrão) | `Minha Música-Refrão-03.wav` |
+| `{n} {marcador}` | `03 Refrão.wav` |
+| `{marcador} ({projeto})` | `Refrão (Minha Música).wav` |
+| `{marcador}` (duas seções chamadas `Refrão`) | `Refrão.wav` e `Refrão (2).wav` |
+| `{PROJETO}_{x}_{n}` | `Minha Música_03.wav` (o `{x}` some e o `_` duplo vira um) |
+
+**A limpeza do nome** (sempre aplicada, inclusive ao que você digita no modelo):
+
+- `\ / : * ? " < > |` e caracteres de controle viram `_`; espaços seguidos viram um. Portanto `Refrão/Final` vira `Refrão_Final`, e **não cria pasta** (nem dentro do `.zip`).
+- Dois ou mais `-` (ou `_`) seguidos viram um só (um marcador sem nome não deixa `--`); sequências de separadores como ` - - ` viram `-`.
+- Espaços, pontos, `-` e `_` nas pontas saem. O nome tem no máximo 100 caracteres. Vazio cai para `jopendaw` (o projeto) ou `<projeto>-<n>` (o modelo).
+- Nomes que o Windows não aceita (`CON`, `PRN`, `AUX`, `NUL`, `COM1` a `COM9`, `LPT1` a `LPT9`, com ou sem extensão) ganham um `_` na frente (`_CON`).
+- **Colisão:** nomes repetidos, sem distinguir maiúsculas (o Windows e o macOS não distinguem), ganham ` (2)`, ` (3)`… Vale entre todos os arquivos da exportação, stems incluídos.
+
+A **prévia** abaixo do campo mostra os nomes da **mixagem** de cada intervalo, já com a extensão do formato, até 3 e depois `e mais N`: `Minha Música-Intro-1.wav, Minha Música-Verso-2.wav, Minha Música-Refrão-3.wav e mais 2`. Ela muda a cada tecla. Não mostra os stems (saem `<nome do intervalo> - <faixa>`, por exemplo `Minha Música-Refrão-3 - Baixo.wav`), nem o nome do `.zip`, nem o `<artista> - ` que o servidor põe na frente em FLAC e MP3 (ver [Nomes dos arquivos](#nomes-dos-arquivos)).
+
+### O zip
+
+O interruptor **Reunir num .zip** aparece quando saem 2 ou mais arquivos: várias seções, ou `Stems`. Ligado:
+
+- **Um só arquivo de saída**: `<projeto>.zip` (limpo como os outros nomes, por exemplo `Minha Música.zip`), tipo `application/zip`. Na web é um download; no Android, uma janela `Salvar` só.
+- **Dentro dele**: os mesmos arquivos que sairiam soltos (WAV, FLAC ou MP3, como você escolheu), na ordem em que são gerados (a mixagem de cada intervalo e depois os stems dele), sem pastas. Os nomes passam pela limpeza e pelo desempate de novo. O zip guarda os áudios **sem recompressão** (um `.zip` de WAV não fica menor que os arquivos somados).
+- **Nada é salvo até o fim.** Enquanto renderiza, os arquivos ficam na memória do aparelho e o zip só é entregue depois do último. Consequência: cancelar no meio não deixa nada (ver [Cancelar no meio](#cancelar-no-meio)), e a memória sobe com a soma de todos os arquivos **mais** o zip montado (não há limite nem aviso para isso no código `(lido do código; não medido)`). Em WAV 24 bits a 48 kHz uma seção de 16 s com 2 s de cauda pesa cerca de 5,2 MB (conta a partir da fórmula do WAV), e o zip do exemplo de 5 seções cerca de 21 MB.
+- **Com FLAC ou MP3**, cada arquivo passa pelo servidor, um de cada vez, e depois entra no zip (as regras de conta, rede e 30 minutos por arquivo são as de [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor)). Se a compactação falha, a janela vira `Não deu para compactar` com o texto `Nada foi salvo ainda: os arquivos ficam prontos para o .zip. Dá para exportar tudo em WAV (os N que falharam vão em WAV, o resto já compactado) sem renderizar de novo.` e os três botões de sempre. **Exportar em WAV mesmo assim** acrescenta ao zip os que falharam, como `.wav`, e entrega o zip (que pode levar `.mp3` e `.wav` misturados; o resultado diz `(2 em MP3, 1 em WAV)`). **Fechar** descarta tudo: nenhum arquivo foi salvo.
+- **Android, janela `Salvar` fechada**: `Exportação cancelada: você não escolheu onde salvar "Minha Música.zip".`, com **Fechar** e **Voltar às opções** (que refaz o render de tudo).
+- **Quando liga sozinho**: ao tocar em `Uma por seção` com 2 ou mais seções marcadas (o chip **sempre** liga o zip nesse momento, mesmo que você o tivesse desligado antes). Depois você pode desligar. Em qualquer outro intervalo, o padrão é desligado (e o interruptor guardado nas últimas opções volta como estava).
+- **Quando o zip não vale**: com 1 arquivo esperado o interruptor nem aparece e não há zip. O contrário tem uma falha: se eram 2 ou mais esperados e sobram 1 ou nenhum (seções sem som, stems mudos), o zip sai mesmo assim e o resultado diz `Os 1 arquivos (…) foram reunidos em "….zip"` (ou `Os 0 arquivos`, sem nada ter sido salvo) `(lido do código; não reproduzido)`.
+
+### Cancelar no meio
+
+**Cancelar** na janela `Exportando…` interrompe o render em andamento e **não começa o próximo intervalo**; a tarefa de conversão que estivesse no servidor também é cancelada. O render interrompido não sai (nem o arquivo que estivesse em conversão). O que já estava salvo:
+
+- **Sem `.zip`**: os arquivos dos intervalos anteriores já estão nos downloads (ou onde você escolheu) e **continuam lá**. A janela vira `Exportação cancelada` com `Exportação cancelada no meio: um arquivo já tinha sido salvo e continua nos downloads ou onde você escolheu. Os outros não foram gerados.` (ou `N arquivos já tinham sido salvos e continuam …`).
+- **Com `.zip`**: nada foi salvo (o zip só sai no fim); a janela fecha sem aviso.
+- Se cancelou antes de sair qualquer arquivo, a janela também fecha sem aviso.
+
+`(testado só por testes automáticos)`: o teste confere que o intervalo seguinte não é renderizado e que o que já saiu fica; o render interrompido de verdade no motor e a janela com o aviso não foram vistos.
+
+### Loudness e cauda por arquivo
+
+Com vários intervalos cada arquivo é tratado **por conta própria**:
+
+- **`Normalizar o loudness`** mede e ajusta a mixagem de **cada** seção até o alvo (o ganho é por arquivo, o teto de true peak vale por arquivo), e **`Stems com o mesmo ganho`** dá a cada stem o ganho da mixagem **do mesmo intervalo**. Isso nivela as seções entre si: uma `Intro` baixa sobe até o mesmo `I` que o `Refrão`, e a diferença de dinâmica entre seções que a música tinha **se perde**. Para entregar seções que serão coladas de novo, deixe `Normalizar` e `Normalizar o loudness` desligados (ou normalize a música inteira e exporte sem normalizar).
+- **`Normalizar`** (pico) também vale por arquivo: cada um vai a −1 dBFS.
+- **Resultado:** com um arquivo só, a frase de sempre (`A mixagem subiu 4,0 dB até o alvo e mediu …`). Com dois ou mais: `O loudness foi normalizado em cada um dos N arquivos.` e uma caixa de aviso por arquivo que o teto segurou ou que não deu para medir, `<nome>.wav: <frase>` (o nome é o do WAV, mesmo em FLAC ou MP3). Seção de menos de 400 ms, ou muda, sai sem normalizar (`Não deu para medir o loudness …`).
+- **`Cauda`:** cada arquivo termina com a `Cauda` (2 s, padrão) depois do fim **dele**. Numa seção do meio a cauda é o reverb, o delay e as notas soltando do que tocava até o fim da seção; o que a seção seguinte toca **não** entra (o render acaba no fim da seção) `(dedução do código; não ouvido)`. Clipes que atravessam o fim da seção são cortados ali, com o fade de 10 ms de sempre (ver [Fim do trecho](#o-que-entra-no-arquivo)). A cauda faz cada arquivo durar a seção mais `Cauda`: o resumo diz `o maior com 0:16 + 2 s de cauda`.
+- **Começo do trecho:** o render começa posicionando o transporte no começo do trecho (como na `Região do loop`). Um clipe ou nota que começou antes e ainda soa, e o reverb da seção anterior, não são reproduzidos como seriam ao vivo `(não confirmado: dedução do código; não ouvido)`.
+
+### Seção sem som
+
+Com 2 ou mais intervalos, uma seção cuja **mixagem é silêncio** nas faixas escolhidas (nada toca ali, ou as faixas marcadas estão mudas, ou só restam faixas de outro lugar) **não gera arquivo**. A janela de resultado avisa `Uma seção sem som ficou de fora.` ou `N seções sem som ficaram de fora.` A numeração `{n}` **não** pula: o arquivo seguinte mantém o número dele (a seção 2 sem som deixa `-1` e `-3`). Stems silenciosos são pulados como sempre, em qualquer exportação.
+
+Com **um intervalo só** (uma seção marcada, `Entre marcadores`), o silêncio **é exportado** como arquivo de silêncio, sem aviso `(lido do código; nenhum teste cobre esse caso)`.
+
+### Quando não há o que exportar
+
+O **Exportar** fica desligado e a caixa vermelha começa com `Não há o que exportar: ` (ou o motivo aparece assim no resumo). Motivos:
+
+| Texto | Quando |
+|---|---|
+| `Nenhuma faixa escolhida: marque ao menos uma faixa para exportar.` | Nenhuma chip de **Faixas** marcada |
+| `Um dos marcadores escolhidos não existe mais: escolha de novo.` | `Entre marcadores` com um marcador apagado enquanto a janela estava guardada |
+| `Os dois marcadores estão no mesmo ponto: não há trecho entre eles.` | **De** e **Até** na mesma batida |
+| `Não há nada para exportar nesse trecho: ele começa depois do fim da música.` | O trecho começa depois do último clipe (ou não tem duração) |
+| `Não há marcadores: ponha marcadores na régua para dividir a música em seções.` | `Uma por seção` sem marcadores (só chega pelas últimas opções: o chip fica apagado) |
+| `Os marcadores não deixam nenhuma seção com duração.` | Há marcadores, mas todos no fim da música ou depois |
+| `Nenhuma seção escolhida: marque ao menos uma.` | Todas as caixas de seção desmarcadas |
+
+### Limites e o que fica por ver
+
+- **Muitos arquivos soltos**: sem `.zip`, cada arquivo é um download (na web o navegador pode pedir permissão para baixar vários `(não confirmado)`) ou uma janela `Salvar` no Android (com 5 seções e 3 stems ligados são até 20). Por isso o `.zip` é o padrão em `Uma por seção`.
+- **Cada arquivo** tem o teto de 30 minutos e de 512 MB no envio ao servidor (FLAC e MP3); a janela confere o **maior** intervalo.
+- **Tempo:** cada intervalo é um render à parte (e, com stems muito longos, em lotes), e o servidor converte um arquivo por vez: 5 seções em MP3 são 5 conversões em fila.
+- **Marcadores não são salvos no arquivo de áudio**: o nome da seção só existe no nome do arquivo.
+- **Do menu do marcador** o item está ligado mesmo com o botão **Exportar** da barra desligado (gravando, ou com outro trabalho em andamento): a janela abre, e ao confirmar vem `A exportação falhou` com `Pare a gravação antes de exportar.` (ou o aviso do render em andamento). `(lido do código; não reproduzido)`
+- **`Uma por seção` apagada com marcadores** (todos depois do fim da música) mostra o tooltip de `Um arquivo por seção, com o nome do marcador`, não o de falta de marcadores.
 
 ## O que entra no arquivo
 
@@ -137,14 +299,14 @@ O render aplica ao motor as mesmas chamadas do projeto e processa tudo até o fi
 - **Não entra:** o metrônomo, o loop (o arquivo é linear, do começo ao fim), a entrada do microfone e o monitoramento, notas tocadas ao vivo.
 - **Mudo, fase e loop do clipe (fase 20, `3a27233`):** o render roda as mesmas chamadas do que soa ao vivo, então o arquivo sai como se ouve. Um **clipe mudo** (`Silenciar o clipe`, selo `M`) **não entra** na mixagem, nem no stem da faixa dele, nem no [congelamento](#congelar-uma-faixa); é diferente do mudo da **faixa** (`M` no cabeçalho e no mixer), que já existia. Um clipe com a **fase invertida** (`Ø`) entra com o sinal trocado, que só muda o que se ouve onde ele soma com outro sinal (o ganho do clipe vai ao motor com sinal negativo). Um clipe em **loop** (`L`) entra com todas as repetições, cada uma como um clipe do render, com o fade de entrada só na primeira e o de saída só na última; a regra de **Fim do trecho** (abaixo) vale para cada repetição: a repetição que atravessa o fim é cortada ali, com o fade curto de saída, e as que começam depois dele saem. `(testado só por testes automáticos: os testes conferem a lista de chamadas ao motor e o espelho do ganho negativo; nenhum arquivo exportado foi ouvido)`. Desde a fase 24 (`ebea0b1`) o fade de entrada ou de saída de um loop é limitado ao tamanho da repetição em que está (sem degrau na emenda) e, com `Inverter o áudio`, a última repetição cortada toca o começo do trecho invertido; nos dois casos o arquivo sai como se ouve `(testado só por testes automáticos)`. Uma faixa de áudio em que **todos** os clipes estão mudos não conta mais como congelável: `Congelar faixa…`, `Converter em áudio…` e `Renderizar em faixa nova` a recusam com `A faixa só tem clipes mudos` (até a fase 23 o render saía em silêncio, `A faixa "nome" não soou nada: nada para congelar.`).
 - **Warp pendente:** se algum clipe ainda está processando o warp, a barra mostra `Processando o warp…` e a exportação espera terminar.
-- **Fim do trecho:** clipes que atravessam o fim terminam ali (com um fade de 10 ms, ou o que restar do fade de saída que já tinham, se passar de 10 ms; a curva desse fade é a de saída do próprio clipe `(lido do código; testado só por testes automáticos)`); notas que atravessam terminam com a soltura do instrumento; a cauda deixa soar o que já estava tocando (reverb, delay, releases) e a automação continua valendo nela. Nada novo começa depois do fim.
+- **Fim do trecho:** clipes que atravessam o fim terminam ali (com um fade de 10 ms, ou o que restar do fade de saída que já tinham, se passar de 10 ms; a curva desse fade é a de saída do próprio clipe `(lido do código; testado só por testes automáticos)`); notas que atravessam terminam com a soltura do instrumento; a cauda deixa soar o que já estava tocando (reverb, delay, releases) e a automação continua valendo nela. Nada novo começa depois do fim. Nos intervalos por marcador o "fim" é o da seção (ou do trecho) e vale para cada arquivo; a última seção termina no fim da música (ver [Loudness e cauda por arquivo](#loudness-e-cauda-por-arquivo)).
 - **Limitador do master:** a mixagem passa pelo limitador de segurança do motor (teto de −0,3 dBFS, antecipação de 1,5 ms, liberação de 80 ms). Por isso, sem normalização, a mixagem não passa de −0,3 dBFS em nenhum formato, nem em 32 bits float.
 - **Ganho final (opcional):** com **Normalizar** ou **Normalizar o loudness**, um ganho fixo é aplicado ao arquivo **depois** do render, portanto depois do limitador do master. O primeiro leva o pico de amostra a −1 dBFS; o segundo leva o loudness integrado ao alvo (seção abaixo). Nenhum dos dois é compressor nem limitador: só multiplicam todas as amostras pelo mesmo número.
 - **Estéreo:** todos os arquivos saem estéreo (2 canais).
 
 ### Stems
 
-Com **Stems** ligado, saem a mixagem e um arquivo por faixa, na ordem das faixas. Cada stem é a saída da faixa **depois do fader, do pan, do mudo e da porta do solo** (a mesma posição dos medidores), com os efeitos da faixa, mas **sem a cadeia do master e sem o limitador**. Consequências:
+Com **Stems** ligado, saem a mixagem e um arquivo por faixa, na ordem das faixas (desde a fase 26 C, só das faixas marcadas em **Faixas**, e a mixagem é só delas: ver [Faixas escolhidas](#faixas-escolhidas); e, com `Uma por seção` ou `Entre marcadores`, um conjunto de stems por intervalo, nomeado `<nome do intervalo> - <faixa>`). Cada stem é a saída da faixa **depois do fader, do pan, do mudo e da porta do solo** (a mesma posição dos medidores), com os efeitos da faixa, mas **sem a cadeia do master e sem o limitador**. Consequências:
 
 - A soma dos stems não é igual à mixagem: faltam os efeitos e o limitador do master. Um barramento gera o próprio stem (com o que recebeu).
 - **Pastas:** uma pasta é um barramento e gera o próprio stem (`<projeto> - <nome da pasta>.wav`, na posição dela na lista, antes das faixas dela): é a soma das faixas da pasta depois do fader e dos efeitos **da pasta**. Cada faixa da pasta continua gerando o seu stem, **sem** o fader, o mudo e os efeitos da pasta (o stem é o da saída da faixa, antes de entrar nela). Recolher a pasta não muda nada nos stems. Por isso o stem da pasta e os das faixas dela **contêm o mesmo som**: para remontar a mixagem em outro programa, use o stem da pasta **ou** os das faixas, não os dois. Com `M` na pasta o stem dela é silêncio e por isso é pulado, mas os stems das faixas saem. `(lido do código; testado só por testes automáticos)`
@@ -198,10 +360,13 @@ Regra de bolso: chegar ao alvo com o teto de −1 dBTP exige que a diferença en
 |---|---|
 | Mixagem | `<nome do projeto>.wav` |
 | Stem | `<nome do projeto> - <nome da faixa>.wav` |
+| Mixagem de um intervalo (`Entre marcadores`, `Uma por seção`; fase 26 C) | `<modelo de nome>.wav`, padrão `<projeto>-<marcador>-<n>.wav` (ver [O modelo de nome e a prévia](#o-modelo-de-nome-e-a-prévia)) |
+| Stem de um intervalo | `<modelo de nome> - <nome da faixa>.wav`, por exemplo `Minha Música-Refrão-3 - Baixo.wav` |
+| Todos juntos (`Reunir num .zip`) | `<nome do projeto>.zip`, com os arquivos acima dentro ([O zip](#o-zip)) |
 | Stem com nome repetido | `<nome do projeto> - <nome da faixa> (2).wav`, `(3)`, … (a comparação ignora maiúsculas) |
 | Com FLAC ou MP3 | O nome sugerido pelo servidor (desde a fase 17): o do WAV com a extensão `.flac` ou `.mp3` no lugar de `.wav` e, se o campo **Artista (opcional)** foi preenchido, `<artista> - <nome>.flac` (por exemplo `Fulana - Meu projeto - Baixo.flac`). O servidor limpa o nome à sua maneira: `/ \ : * ? " < > \|` viram `-` (e não `_`), cada nome é cortado em 100 caracteres. Se o servidor não devolver um nome que termine na extensão, o app usa o do WAV com a extensão trocada. Tipo de arquivo: `audio/flac` e `audio/mpeg`. |
 
-Os nomes são limpos para os sistemas de arquivos: `\ / : * ? " < > |` e caracteres de controle viram `_`, espaços seguidos viram um, pontos e espaços no fim saem, e cada parte é cortada em 80 caracteres. Projeto sem nome vira `jopendaw`; faixa sem nome vira `Faixa N` (N é a posição da faixa, contando de 1).
+Os nomes são limpos para os sistemas de arquivos: `\ / : * ? " < > |` e caracteres de controle viram `_`, espaços seguidos viram um, pontos e espaços no fim saem. Projeto sem nome vira `jopendaw`; faixa sem nome vira `Faixa N` (N é a posição da faixa, contando de 1). **Desde a fase 26 C** o nome do projeto (e o de cada intervalo) passa por uma limpeza mais rígida que a do nome da faixa: também tira pontos, `-` e `_` do começo, junta `-` e `_` repetidos, põe `_` na frente de nomes reservados do Windows (`CON`, `NUL`, `COM1`…) e corta em **100** caracteres; o nome da **faixa** continua cortado em **80** e sem essas regras (as regras completas e o desempate por ` (2)` estão em [O modelo de nome e a prévia](#o-modelo-de-nome-e-a-prévia)). Com nomes longos, a soma `<projeto> - <faixa>` pode passar de 100 caracteres; o que o servidor faz com isso no FLAC e no MP3 não foi visto `(não confirmado)`.
 
 - **No navegador**, cada arquivo é um download (`<a download>`); fica na pasta de downloads. Com stems são vários downloads seguidos; o navegador pode pedir permissão para baixar vários arquivos (`(não confirmado)`).
 - **No Android**, cada arquivo abre o seletor **Salvar como** do sistema, com o título `Salvar <nome>` (o mesmo seletor para cada stem: com 8 faixas soando são até 9 janelas). Se o aparelho não tem o app de arquivos, abre a folha de compartilhar. Cancelar uma janela não é erro: a exportação termina em `Exportação cancelada` (WAV direto, FLAC ou MP3) e não abre as janelas dos arquivos que faltavam.
@@ -348,6 +513,21 @@ Limites e pegadinhas do `.mid`:
 2. Em **Exportar**, escolha **Região do loop**; o resumo mostra `Compassos N a M`.
 3. Confirme com **Exportar**.
 
+**Exportar uma seção pelo marcador (fase 26 C)**
+1. Na régua, clique com o botão direito (ou toque longo) na bandeirinha do marcador do começo da seção e escolha **Exportar esta seção…**.
+2. A janela abre em `Entre marcadores`, com **De** e **Até** já preenchidos; confira a linha de resumo (`Compassos 13 a 20 · 0:16 + 2 s de cauda`) e a prévia do nome.
+3. Escolha o **FORMATO** (abriu em `WAV 24 bits`) e toque em **Exportar**.
+
+**Uma seção por arquivo, tudo num zip (fase 26 C)**
+1. Ponha um marcador no começo de cada seção ([Timeline e clipes](02b-timeline-e-clipes.md#marcadores-e-seções)).
+2. Em **Exportar**, escolha **Uma por seção**: todas as seções vêm marcadas e o `Reunir num .zip` liga sozinho.
+3. Desmarque as seções que não quer, confira o modelo de nome e a prévia e toque em **Exportar**; ao fim sai `<projeto>.zip`.
+
+**Só algumas faixas (fase 26 C)**
+1. Em **Exportar**, abra **Faixas** e marque as faixas (ou **Só a selecionada**).
+2. Para um arquivo por faixa, ligue **Stems**; a mixagem sai só com as marcadas.
+3. Receita completa, com valores: [Entregar uma música por seções e stems](../guias/entregar-uma-musica-por-secoes-e-stems.md).
+
 **Exportar stems para outro programa**
 1. **Stems** ligado, **Normalizar** desligado, formato **WAV 32 bits float**.
 2. **Cauda** de 4 a 6 s se há reverb longo.
@@ -384,6 +564,8 @@ Limites e pegadinhas do `.mid`:
 - [Guia: MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): melodia para outro DAW, pacote de acordes e backup das notas.
 - [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o áudio congelado (ou renderizado em faixa nova) é um áudio novo do projeto: sobe como os outros e conta na cota de 4 GB (o servidor considera em uso qualquer hash citado no documento; ver [01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)); o WAV temporário do FLAC e do MP3 conta na cota enquanto está no servidor.
 - [Guia: exportar para compartilhar e arquivar](../guias/exportar-para-compartilhar.md): prévia em MP3 por mensagem, arquivo em FLAC e o master final (WAV 24 bits e MP3 320).
+- [Timeline e clipes, Marcadores e seções](02b-timeline-e-clipes.md#marcadores-e-seções): onde se criam os marcadores que dão os intervalos e o menu do marcador com **Exportar esta seção…**.
+- [Guia: entregar uma música por seções e stems](../guias/entregar-uma-musica-por-secoes-e-stems.md): cinco seções num zip de WAV, só o refrão em MP3 e stems de três faixas com cauda de reverb.
 - Receitas: pasta [`../guias/`](../guias/).
 
 ## Limites e pegadinhas
@@ -396,7 +578,8 @@ Limites e pegadinhas do `.mid`:
 - **Uma mixagem que já está perto do limitador de segurança desce.** Com true peak em torno de −0,3 dBTP e o teto padrão de −1,0, o ganho nunca é maior que −0,7 dB, mesmo que o alvo peça menos.
 - **Loudness só na mixagem.** Os stems só recebem o ganho (opcional); nenhum é medido.
 - **`Normalizar clipe…` × `Normalizar o loudness`.** O item `Editar áudio` › `Normalizar clipe…` (modo `LUFS`, [03e](03e-editar-audio.md#normalizar-clipe)) usa a mesma conta de loudness integrado, mas mede **um clipe** no arquivo original (sem fader, pan nem efeitos) e ajusta o `Ganho do clipe` no projeto; a exportação mede a **mixagem renderizada** e aplica um ganho só ao arquivo, depois do limitador do master. Duas vozes com o mesmo LUFS de clipe não chegam iguais à mixagem se passarem por efeitos ou faders diferentes. O do clipe é para igualar as fontes; o da exportação, para entregar no alvo.
-- **O fim é o último clipe** (ou o fim do áudio de uma faixa congelada, cauda dela incluída, desde a fase 24). Automação, marcadores e loop depois dele não estendem o arquivo; use **Cauda** para o que precisa soar depois.
+- **O fim é o último clipe** (ou o fim do áudio de uma faixa congelada, cauda dela incluída, desde a fase 24). Automação, marcadores e loop depois dele não estendem o arquivo; use **Cauda** para o que precisa soar depois. Pelo mesmo motivo, um marcador depois do fim da música não faz seção em `Uma por seção` e um **Até** depois dele é cortado no fim (ver [Uma por seção](#uma-por-seção)).
+- **Vários arquivos de uma vez (fase 26 C):** `Uma por seção`, `Stems` e as faixas escolhidas multiplicam os arquivos; sem o `.zip` cada um é um download ou uma janela `Salvar`. O `.zip` guarda tudo na memória até o fim e não sai se você cancelar ([O zip](#o-zip)). O loudness é normalizado por arquivo: seções deixam de ter a dinâmica relativa original ([Loudness e cauda por arquivo](#loudness-e-cauda-por-arquivo)).
 - **Áudios que faltam** (`áudio fora deste aparelho`) saem como silêncio, com o aviso ao final. Abra o projeto no aparelho que tem os arquivos ou sincronize antes.
 - **Deixe a aba aberta** durante o render no navegador; feche o app e o render some sem salvar.
 - **Um render por vez**, e não é possível exportar nem congelar gravando.

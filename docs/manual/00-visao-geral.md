@@ -126,9 +126,9 @@ Ocupa o meio da tela. À esquerda, uma coluna de cabeçalhos de faixa; à direit
 
 Os gestos sobre os clipes (arrastar, aparar, fades, duplo clique) estão no [capítulo 02b](02b-timeline-e-clipes.md).
 
-### Painel inferior (abas Mixer / Editor / Passos / Instrumento / Efeitos / Modulação)
+### Painel inferior (abas Mixer / Editor / Passos / Instrumento / Efeitos / Modulação / Áudios)
 
-Um painel só, com cinco abas fixas e uma sexta, `Passos`, que só aparece com uma faixa de bateria ou de sampler com zonas selecionada; mostra um conteúdo por vez.
+Um painel só, com seis abas fixas (`Mixer`, `Editor`, `Instrumento`, `Efeitos`, `Modulação` e `Áudios`) e uma sétima, `Passos`, que só aparece com uma faixa de bateria ou de sampler com zonas selecionada; mostra um conteúdo por vez.
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
@@ -138,12 +138,13 @@ Um painel só, com cinco abas fixas e uma sexta, `Passos`, que só aparece com u
 | Aba `Instrumento` (tooltip `Instrumento da faixa (I)`) | Presets e controles do instrumento da faixa | Em faixa de áudio ou barramento diz `sem instrumento` | [Capítulo 04](04-painel-de-instrumento.md) |
 | Aba `Efeitos` (tooltip `Efeitos da faixa (F)`) | Cadeia de efeitos da faixa selecionada, ou do master | Subtítulo: `<faixa> · N efeitos` ou `Master · sem efeitos` | [Capítulo 06c](06c-painel-de-efeitos.md) |
 | Aba `Modulação` (tooltip `Modulação da faixa: LFO, seguidor de envelope e macros`) | Moduladores da faixa selecionada, ou do master: LFO, seguidor de envelope e macro, cada um com até 4 destinos; `Adicionar` e `Presets` no topo | Subtítulo: `<faixa> · sem moduladores`, `<faixa> · 1 modulador` ou `<faixa> · N moduladores` | [Capítulo 06g](06g-modulacao.md) |
-| Assunto (texto ao lado das abas) | Diz de quem é o painel: o clipe no editor, a faixa no instrumento, nos efeitos e na modulação | Com ponto na cor da faixa | |
+| Aba `Áudios` (tooltip `Navegador de áudios: ouvir, buscar e inserir (Shift+B)`; fica depois de `Modulação`) | O navegador de áudios: lista os áudios do projeto e da conta, busca pelo nome, ouve sem mexer no projeto (voz de pré-escuta à parte do transporte) e insere no arranjo com `+` ou arrastando pela alça (clipe em faixa de áudio, zona em sampler) | Assunto: `Áudios do projeto e da conta`. Atalho `Shift+B` | [Capítulo 03g](03g-navegador-de-audios.md) |
+| Assunto (texto ao lado das abas) | Diz de quem é o painel: o clipe no editor, a faixa no instrumento, nos efeitos e na modulação; no navegador, `Áudios do projeto e da conta` | Com ponto na cor da faixa | |
 | `Maximizar o painel` / `Restaurar a altura` | Alterna entre a altura escolhida e a máxima | Só no computador | Duplo clique na alça faz o mesmo |
 | `Fechar o painel (Esc)` | Fecha o painel | | |
 | Alça (fio fino de 6 px acima das abas; também a área vazia da barra de abas) | Arrastar muda a altura | Só no computador; mínimo 230 px; o arranjo nunca fica com menos de 150 px | A altura escolhida vale até fechar o app |
 
-No computador o painel abre com a metade do espaço (mínimo 320 px). No celular ocupa 60% do espaço, sem alça e sem botão de maximizar; abaixo de 560 px de largura as abas mostram só o ícone (com a aba `Passos` presente, o limite sobe para 760 px).
+No computador o painel abre com a metade do espaço (mínimo 320 px). No celular ocupa 60% do espaço, sem alça e sem botão de maximizar; abaixo de 620 px de largura as abas mostram só o ícone (com a aba `Passos` presente, o limite sobe para 820 px; eram 560 e 760 px antes da aba `Áudios`).
 
 ### Aviso de falha do áudio (`Reiniciar o áudio`)
 
@@ -237,6 +238,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Pan | Posição da faixa entre a esquerda e a direita. |
 | Pasta (grupo) | Linha que reúne faixas de áudio e de instrumento sob um barramento de grupo: um volume, um mudo, um solo e uma cadeia de efeitos para o conjunto, e uma seta para recolher as faixas. Ver [02c Pastas de faixa](02c-pastas-de-faixa.md). |
 | Piano roll | O editor de notas (aba `Editor`). |
+| Pré-escuta | Ouvir um áudio do navegador (aba `Áudios`) sem mexer no projeto: uma voz do motor à parte do transporte, que não entra no medidor, na exportação nem no desfazer ([03g](03g-navegador-de-audios.md)). |
 | Preset | Ajuste pronto de instrumento ou efeito. |
 | Quantizar | Puxar as notas para a grade (`Q` no piano roll). |
 | Sampler | Instrumento que toca um áudio seu como notas. |
@@ -261,6 +263,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 - [01 Projetos, modelos e conta](01-projetos-modelos-conta.md): entrar e criar o primeiro projeto.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): vários aparelhos, conflitos e cotas.
 - [02 Transporte](02-transporte.md) e [02b Timeline e clipes](02b-timeline-e-clipes.md): as duas áreas que você mais usa. [02c Pastas de faixa](02c-pastas-de-faixa.md): agrupar e recolher faixas. [02d Histórico e versões](02d-historico-e-versoes.md): voltar atrás passo a passo ou a uma cópia nomeada do projeto.
+- [03g Navegador de áudios](03g-navegador-de-audios.md): achar, ouvir e inserir os áudios que o projeto e a conta já têm.
 - [06 Mixer](06-mixer.md) e [08 Exportação](08-exportacao.md): fechar a mixagem e tirar o WAV.
 - [09 Configurações, atalhos e Android](09-configuracoes-atalhos-android.md): teclas e diferenças de plataforma.
 - Receitas prontas: pasta `../guias/`.
@@ -291,7 +294,7 @@ Os atalhos mais usados, com as teclas **padrão** (a lista completa, a tela `Per
 | `C` | Metrônomo |
 | `P` | Punch liga/desliga (fase 17) |
 | `T` | Tap tempo: bata no ritmo (fase 17) |
-| `X` / `E` / `I` / `F` | Mixer / editor de notas / instrumento / efeitos |
+| `X` / `E` / `I` / `F` / `Shift+B` | Mixer / editor de notas / instrumento / efeitos / navegador de áudios |
 | `Esc` | Fechar o painel |
 | `Z` | Enquadrar o projeto |
 | `Ctrl+Z` (`⌘Z` no Mac) | Desfazer |

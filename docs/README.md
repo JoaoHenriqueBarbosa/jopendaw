@@ -23,6 +23,8 @@ Comece por aqui, na ordem:
 | [03c Gravação](manual/03c-gravacao.md) | Microfone, tomadas, MIDI ao vivo, punch in/out, pré-roll e opções do metrônomo |
 | [03d Áudio para MIDI](manual/03d-audio-para-midi.md) | Converter melodia cantada em notas |
 | [03e Editar áudio](manual/03e-editar-audio.md) | Dividir um clipe por transientes, em partes iguais ou na grade, remover silêncio, normalizar por pico, RMS ou LUFS e quantizar por fatias |
+| [03f Comping por trecho](manual/03f-comping.md) | Escolher, trecho a trecho, qual das tomadas de uma gravação em loop soa: raias por tomada, emendas com crossfade de 20 ms, `Achatar` e `Fechar` |
+| [03g Navegador de áudios](manual/03g-navegador-de-audios.md) | Aba `Áudios` (`Shift+B`): áudios do projeto e da conta com busca, filtros, pré-escuta numa voz à parte do transporte, `No andamento do projeto`, inserir com `+` ou arrastar (clipe ou zona do sampler) e `Baixar` |
 | [04 Painel de instrumento](manual/04-painel-de-instrumento.md) | Presets, teclado, knobs |
 | [04a Sintetizador](manual/04a-sintetizador.md) | Subtrativo |
 | [04b Bateria](manual/04b-bateria.md) | 12 peças sintetizadas |
@@ -40,7 +42,7 @@ Comece por aqui, na ordem:
 | [06f MIDI learn](manual/06f-midi-learn.md) | Ligar knobs, faders e pedais de um controlador MIDI a controles do app |
 | [06g Modulação](manual/06g-modulacao.md) | LFO, seguidor de envelope e macro movendo os controles por cima do valor do knob, na aba `Modulação` |
 | [07 Automação](manual/07-automacao.md) | Mover parâmetros no tempo |
-| [08 Exportação](manual/08-exportacao.md) | WAV, FLAC e MP3 (pelo servidor), stems, `Renderizar em faixa nova` (antigo congelar em áudio) |
+| [08 Exportação](manual/08-exportacao.md) | WAV, FLAC e MP3 (pelo servidor), intervalos por marcador e seção, faixas escolhidas, `.zip`, stems, `Renderizar em faixa nova` (antigo congelar em áudio) |
 | [09 Configurações, atalhos e Android](manual/09-configuracoes-atalhos-android.md) | Ajustes, teclas, diferenças de plataforma |
 
 ### Guias de combinações
@@ -63,9 +65,11 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Organizar um projeto com pastas](guias/organizar-um-projeto-com-pastas.md) | Bateria com compressor no grupo, coro com reverb no grupo, projeto grande recolhido |
 | [Loudness e master](guias/loudness-e-master.md) | Nível competitivo e seguro |
 | [Exportar para compartilhar e arquivar](guias/exportar-para-compartilhar.md) | Prévia em MP3 por mensagem, arquivo em FLAC e master final em WAV 24 bits e MP3 320 |
+| [Entregar uma música por seções e stems](guias/entregar-uma-musica-por-secoes-e-stems.md) | Cinco seções num zip de WAV para o mixer, só o refrão em MP3 e stems de três faixas com cauda de reverb |
 | [Remix com warp e altura](guias/remix-com-warp-e-altura.md) | Esticar, transpor e sobrepor |
 | [Editar áudio: dividir, limpar silêncios e nivelar](guias/editar-audio-dividir-quantizar-normalizar.md) | Loop de bateria fatiado e reordenado, voz sem silêncios longos e três vozes no mesmo LUFS |
 | [Fades e crossfades na prática](guias/fades-e-crossfades.md) | Emendar tomadas de voz, loop sem clique, entrada suave de um pad, com a curva de cada caso |
+| [Vocal perfeito com comping](guias/vocal-perfeito-com-comping.md) | Vocal de 3 tomadas com emendas nas frases, solo de guitarra escolhido compasso a compasso e conserto de uma palavra com o comp por trecho |
 | [Congelar faixas e poupar CPU](guias/congelar-faixas-e-poupar-cpu.md) | Baixo pesado congelado para mixar o resto, descongelar para mudar uma nota, converter em áudio para cortar e esticar, e a cauda certa para o reverb |
 | [Loops e polaridade de clipes](guias/loops-e-polaridade-de-clipes.md) | 1 compasso esticado em 8 com o loop do clipe, fase de dois microfones numa caixa (mutar e inverter) e A/B de tomadas mutando clipes |
 | [Trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md) | Nuvem, conflito, offline |
@@ -73,6 +77,7 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Voltar atrás: histórico e versões](guias/voltar-atras-historico-e-versoes.md) | Experimentar uma mixagem e voltar (A contra B), recuperar o projeto de ontem, tirar uma cópia para uma variação |
 | [Mapa de andamento e compasso](guias/mapa-de-andamento-e-compasso.md) | Virada de andamento, ritardando em rampa, 4/4 para 3/4 e 6/8 |
 | [MIDI de e para outros programas](guias/midi-de-e-para-outros-programas.md) | Exportar e importar `.mid`: melodia para outro DAW, pacote de acordes, backup das notas |
+| [Achar e usar samples com o navegador de áudios](guias/achar-e-usar-samples-com-o-navegador.md) | Batida de 1 compasso arrastando samples da conta, loop conferido no andamento antes de inserir e áudios reaproveitados de outro projeto |
 | [Atalhos e fluxo rápido](guias/atalhos-e-fluxo-rapido.md) | Trabalhar sem tirar a mão do teclado |
 | [Controlador MIDI e MIDI learn](guias/controlador-midi-e-midi-learn.md) | Knobs no mixer, pedal de expressão no filtro, faders gravando automação |
 
@@ -88,7 +93,7 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [10 App Flutter](dev/10-app-flutter.md) | Modelo do documento (JSON), controlador, como adicionar recursos |
 | [11 Servidor](dev/11-servidor.md) | Rotas, banco, armazenamento, jobs |
 | [12 Sincronização](dev/12-sincronizacao.md) | Protocolo e máquina de estados |
-| [20 Processo e histórico](dev/20-processo-e-historico.md) | Como o projeto é construído e a cronologia por fase |
+| [20 Processo e histórico](dev/20-processo-e-historico.md) | O ciclo de levas (achados, agentes em worktree, cherry-pick, teste de uso, aviso à documentação), as regras do dono, a cronologia das fases 1 a 26, defeitos achados e lacunas |
 
 ## Manutenção
 

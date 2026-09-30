@@ -204,6 +204,7 @@ A linha **Nova faixa** (botão `+ Faixa` com uma seta) fica logo depois da últi
 | Item | O que faz |
 |---|---|
 | **Tomadas** (só com tomadas; mostra a quantidade) | Abre a lista `TOMADAS` (`Tomada 1`, `Tomada 2`…, a ativa marcada; `fora deste aparelho` nas que faltam). Escolher troca o áudio; posição, corte e fades ficam. Desfazível. |
+| **Comp por trecho** (só com tomadas; vira **Fechar o comp** com o modo aberto; a ação `edit.comp` não tem tecla padrão) | Abre o comp: uma **raia de 30 px por tomada** sob a faixa do clipe. Arrastar numa raia escolhe aquela tomada no trecho (com encaixe na grade), tocar numa raia usa a tomada no trecho entre emendas, tocar no nome usa no comp inteiro; `Achatar` e `Fechar` ficam na primeira raia. O resultado são clipes comuns com crossfade automático de 20 ms nas emendas. Passos `Comp: escolher trecho` e `Comp: achatar`. Ver [Comping por trecho](03f-comping.md). |
 | **Duplicar** (Ctrl+D) | Copia para logo depois (no fim do clipe inteiro, contando as repetições do loop); a cópia leva mudo, fase invertida e loop. |
 | **Cortar no cursor** (S) | Divide no cursor. Num clipe em loop, cortar no meio de uma repetição pode dar três clipes (a sobra da repetição, sem loop, e o loop que recomeça depois). Ver [Cortar um clipe em loop](03-audio-e-clipes.md#cortar-um-clipe-em-loop). |
 | **Warp e altura…** | Abre a janela de warp. Ver [Warp e altura](03b-warp-e-altura.md). |
@@ -293,12 +294,12 @@ Marcadores são bandeirinhas na régua (etiqueta de até 96 px com o nome, haste
 | Ir até ele | Clicar na bandeirinha | Leva o cursor ao marcador (e rola a janela se estiver fora) e o seleciona (borda branca). Gravando, o cursor não se move. |
 | Mover | Arrastar a bandeirinha | Move com encaixe (Alt: livre). O arraste inteiro é um passo do desfazer, e só entra se o marcador andou. |
 | Renomear | Duplo clique | Janela **Nome do marcador**. |
-| Menu | Botão direito, ou toque longo | **Renomear**, **Loop desta seção** (leva o cursor ao marcador e faz loop da seção dele), seis bolinhas de cor (`Cor do marcador`: âmbar, vermelho, azul, verde, roxo, rosa) e **Apagar o marcador**. |
+| Menu | Botão direito, ou toque longo | **Renomear**, **Loop desta seção** (leva o cursor ao marcador e faz loop da seção dele), **Exportar esta seção…** (fase 26 C: abre a janela `Exportar áudio` em `Entre marcadores`, do marcador até o seguinte, ou até o fim da música se ele é o último; ver [Exportação](08-exportacao.md#exportar-por-marcadores-seções-e-faixas-escolhidas)), seis bolinhas de cor (`Cor do marcador`: âmbar, vermelho, azul, verde, roxo, rosa) e **Apagar o marcador**. |
 | Pular | **[** e **]** | Cursor no marcador anterior / seguinte. Sem marcador antes, `[` vai ao compasso 1. |
 
 Tooltip da bandeirinha: `nome · posição` e `Arraste para mover · duplo clique renomeia · botão direito: menu`.
 
-**Seções:** a seção de um marcador vai dele até o próximo marcador; a última vai até o fim do arranjo (o maior entre o último clipe, o último marcador e o fim do loop ligado). Antes do primeiro marcador não há seção. O menu **Seções e marcadores** da barra faz os loops de seção, entre marcadores e do clipe (ver [Transporte](02-transporte.md)). Todos ligam o loop e são um passo do desfazer; não funcionam gravando.
+**Seções:** a seção de um marcador vai dele até o próximo marcador; a última vai até o fim do arranjo (o maior entre o último clipe, o último marcador e o fim do loop ligado). Antes do primeiro marcador não há seção. O menu **Seções e marcadores** da barra faz os loops de seção, entre marcadores e do clipe (ver [Transporte](02-transporte.md)). Todos ligam o loop e são um passo do desfazer; não funcionam gravando. A janela `Exportar áudio` também usa as seções (desde a fase 26 C): **Uma por seção** gera um arquivo por seção, com o nome do marcador. Lá a última seção vai só até o fim do último clipe (ou do áudio de uma faixa congelada), e não até o último marcador nem o fim do loop como no parágrafo acima; a seção antes do primeiro marcador (`Início`) também entra na exportação, embora aqui não haja seção ali ([Exportação](08-exportacao.md#uma-por-seção)).
 
 ### Dock: o painel de baixo
 
@@ -306,7 +307,7 @@ O painel de baixo divide a altura com a timeline. Abre pelos botões da barra (X
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Aba **Mixer** (`Mixer (X)`) | Mostra o mixer. | | Em janela abaixo de 560 px todas as abas mostram só o ícone. |
+| Aba **Mixer** (`Mixer (X)`) | Mostra o mixer. | | Em janela abaixo de 620 px (820 px com a aba `Passos`) todas as abas mostram só o ícone. |
 | Aba **Editor** (`Editor de notas (E)`) | Piano roll. Abre no clipe de notas selecionado, se houver. | | |
 | Aba **Instrumento** (`Instrumento da faixa (I)`) | Painel do instrumento; o ícone é o do tipo da faixa selecionada. | | |
 | Aba **Efeitos** (`Efeitos da faixa (F)`) | Cadeia da faixa selecionada (master se não há faixa). Clicar nela com o painel já em Efeitos não troca o que está à vista (por exemplo, o master aberto pelo mixer). | | |
@@ -337,6 +338,7 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 1. Ponha o cursor no começo do refrão e aperte Shift+M; digite `Refrão`.
 2. Repita para cada parte.
 3. Abra **Seções e marcadores** e escolha um marcador para ir até ele, ou **Loop desta seção** para ensaiar a parte.
+4. Para levar uma seção para fora, clique com o botão direito no marcador e escolha **Exportar esta seção…**; para levar todas, use **Uma por seção** na janela `Exportar áudio` ([Exportação](08-exportacao.md#exportar-por-marcadores-seções-e-faixas-escolhidas)).
 
 **Reordenar uma faixa**
 1. Segure o cabeçalho da faixa até ele ganhar uma borda colorida (comece a segurar no nome ou num espaço vazio, a mais de 15 px, acima ou abaixo, e 4 px, dos lados, do mini fader de volume: por cima dele o toque longo não reordena).
@@ -365,6 +367,7 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 - [Áudio e clipes, Mudo, fase invertida e loop do clipe](03-audio-e-clipes.md#mudo-fase-invertida-e-loop-do-clipe): `Silenciar o clipe`, `Inverter a fase (polaridade)` e `Repetir em loop (estique a borda direita)`, com os selos `M`, `Ø` e `L`. Guia: [Loops e polaridade de clipes](../guias/loops-e-polaridade-de-clipes.md).
 - [Warp e altura](03b-warp-e-altura.md), [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe) (`Ganho do clipe…`), [Editar áudio](03e-editar-audio.md) (`Editar áudio`) e [Áudio para MIDI](03d-audio-para-midi.md): itens do menu do clipe de áudio.
 - [Piano roll](05-piano-roll.md): editar o clipe de notas.
+- [Comping por trecho](03f-comping.md): as raias de tomada (`Comp por trecho` no menu do clipe), 30 px cada, que aparecem sob a faixa do clipe gravado em loop.
 - [Histórico e versões](02d-historico-e-versoes.md): cada gesto daqui (`Mover clipe`, `Aparar o início do clipe`, `Cortar clipe`, `Mudo`, `Solo`, `Adicionar marcador`…) vira um passo com nome no histórico do desfazer; as `Versões` guardam cópias do projeto para voltar depois.
 - [Mixer](06-mixer.md), [Automação](07-automacao.md) e [Exportação](08-exportacao.md) (**Renderizar em faixa nova**): botões do cabeçalho e do menu da faixa. [Congelar faixa e converter em áudio](02e-congelar-faixa.md): `Congelar faixa…`, `Descongelar` e `Converter em áudio…`.
 - [Pastas de faixa](02c-pastas-de-faixa.md): agrupar faixas sob um barramento, recolher e expandir, desagrupar. Guia: [organizar um projeto com pastas](../guias/organizar-um-projeto-com-pastas.md).
