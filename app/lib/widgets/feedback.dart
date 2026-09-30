@@ -24,7 +24,11 @@ class InlineNotice extends StatelessWidget {
   final String text;
   final bool error;
   final VoidCallback? onClose;
-  const InlineNotice(this.text, {super.key, this.error = true, this.onClose});
+
+  /// Botão de ação do aviso (ex.: "Reiniciar o áudio"); [onAction] null o desabilita.
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const InlineNotice(this.text, {super.key, this.error = true, this.onClose, this.actionLabel, this.onAction});
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +52,7 @@ class InlineNotice extends StatelessWidget {
           Expanded(
             child: Padding(padding: const EdgeInsets.only(top: 1), child: Text(text)),
           ),
+          if (actionLabel != null) TextButton(onPressed: onAction, child: Text(actionLabel!)),
           if (onClose != null)
             SizedBox(
               width: 28,

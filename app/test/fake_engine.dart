@@ -66,6 +66,22 @@ class FakeEngine implements AudioEngine {
   void Function(EngineState state)? onState;
 
   @override
+  void Function(String message)? onEngineFailed;
+
+  /// Quantas vezes o motor foi reiniciado (e o que o restart lança, se o teste quiser falha).
+  int restarts = 0;
+  Object? restartFailure;
+
+  @override
+  Future<double> restart() async {
+    restarts++;
+    final f = restartFailure;
+    if (f != null) throw f;
+    loaded.clear();
+    return 100;
+  }
+
+  @override
   void Function(LoudnessReading reading)? onLoudness;
 
   @override

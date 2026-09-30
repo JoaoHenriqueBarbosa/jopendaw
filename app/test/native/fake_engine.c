@@ -25,6 +25,7 @@ static int g_capture = 0;
 static int g_rec_blocks = 0;   // blocos na fila da captura
 static int g_rec_sent = 0;     // blocos já lidos
 static int g_notes_ready = 0;  // notas publicadas ao desligar a captura
+static int g_state_error = 0;    // jd_state devolve este código (−5 = a thread de áudio caiu)
 static int g_notes_pending = 0;  // jd_rec_notes devolve −1 (como o Rust enquanto o fim não chegou)
 static int g_slow_us = 0;      // atraso por bloco do render (para dar tempo de cancelar)
 static int g_offline_samples = 0;
@@ -34,6 +35,7 @@ size_t fake_last_calls(uint8_t *out, size_t max) {
   if (g_calls) memcpy(out, g_calls, n);
   return g_calls_len;
 }
+void fake_set_state_error(int code) { g_state_error = code; }
 void fake_set_notes_pending(int on) { g_notes_pending = on; }
 int fake_calls_count(void) { return g_calls_count; }
 int fake_live(void) { return g_live; }
@@ -80,6 +82,7 @@ void jd_sample_drop(intptr_t id) { (void)id; }
 
 // [batida, tocando, fxMeter, n, picos...] em f64, como o jd_state do Rust
 int32_t jd_state(double *out, size_t max) {
+  if (g_state_error) return g_state_error;
   if (max < 8) return 0;
   out[0] = 2.5;
   out[1] = 1;

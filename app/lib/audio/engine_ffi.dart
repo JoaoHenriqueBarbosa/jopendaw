@@ -94,6 +94,9 @@ abstract interface class EngineEvents {
   void Function(List<RecordedNote> notes)? get onCaptureEnd;
   void Function(String message)? get onInputLost;
 
+  /// A thread de áudio caiu (`jd_state` devolveu `ERR_PANIC`): só [FfiEngine.restart] a traz de volta.
+  void Function(String message)? get onEngineFailed;
+
   /// Batida do primeiro quadro do bloco que [onRecord] está entregando.
   double get recordBeat;
   set recordBeat(double beat);
@@ -965,14 +968,38 @@ final class FfiEngine {
     cb(r);
   }
 
+  /// `ERR_PANIC` do motor (engine/android/src/lib.rs): a thread de áudio caiu.
+  static const _errPanic = -5;
+
+  bool _failed = false;
+
+  void _reportFailure() {
+    if (_failed) return;
+    _failed = true;
+    debugPrint('motor de áudio: a thread de áudio caiu (ERR_PANIC)');
+    _events.onEngineFailed?.call('A thread de áudio do motor caiu.');
+  }
+
+  /// Fecha e reabre a saída depois de uma falha (o `jd_start` recria o motor, vazio: quem chama
+  /// manda de novo os áudios e o documento); devolve a taxa.
+  Future<double> restart() {
+    stop();
+    _failed = false;
+    return start();
+  }
+
   void _pollState(EngineLib lib) {
     final onState = _events.onState;
-    if (onState == null) return;
+    if (onState == null || _failed) return;
     if (_stateBuf == nullptr) {
       _stateBuf = calloc<Double>(_stateMax);
       _stateF64 = _stateBuf.asTypedList(_stateMax);
     }
     final n = lib.state(_stateBuf, _stateMax);
+    if (n == _errPanic) {
+      _reportFailure();
+      return;
+    }
     if (_analyzing && _tick % _spectrumEvery == 0) {
       if (_spectrumBuf == nullptr) _spectrumBuf = calloc<Float>(_spectrumBins);
       final bins = math.min(lib.spectrum(_spectrumBuf, _spectrumBins), _spectrumBins);

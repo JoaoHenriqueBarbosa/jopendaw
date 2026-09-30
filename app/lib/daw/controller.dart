@@ -636,6 +636,7 @@ class DawController extends ChangeNotifier {
       engineRate = await _engine.start();
       _engine.onState = _onEngineState;
       _engine.onLoudness = _onLoudness;
+      _engine.onEngineFailed = _onEngineFailed;
       final saved = await _store.get(_docKey);
       // o andamento e o compasso são do documento (o servidor só os espelha, ver [_mirrorTempo]):
       // só um documento novo parte dos do projeto
@@ -678,6 +679,60 @@ class DawController extends ChangeNotifier {
       error = e is UnsupportedError ? e.message : '$e';
     }
     if (!_disposed) notifyListeners();
+  }
+
+  /// O motor de áudio caiu (trap do wasm, thread de áudio morta): o som ficou mudo e o projeto
+  /// segue intacto. A tela mostra o aviso com "Reiniciar o áudio" ([restartAudio]).
+  String? audioFailure;
+
+  /// [restartAudio] em andamento.
+  bool audioRestarting = false;
+
+  void _onEngineFailed(String message) {
+    if (_disposed) return;
+    audioFailure = 'O motor de áudio parou de responder e o som ficou mudo. O projeto não foi perdido: reinicie o áudio para continuar.';
+    playing.value = false;
+    notifyListeners();
+  }
+
+  /// Recria o motor de áudio depois de uma falha: manda de novo os áudios e o documento (o motor
+  /// novo é vazio) e reabre a entrada de áudio, se alguma faixa a usa. Chamar de um gesto do
+  /// usuário (o navegador só deixa o áudio sair depois dele).
+  Future<void> restartAudio() async {
+    if (_disposed || audioRestarting) return;
+    audioRestarting = true;
+    notifyListeners();
+    try {
+      engineRate = await _engine.restart();
+      if (_disposed) return;
+      for (final e in _decoded.entries) {
+        _engine.loadSample(e.key, e.value);
+      }
+      _cache.tracks.clear();
+      _cache.ids = const [];
+      _cache.notes = null;
+      _cache.ccs = const [];
+      _cache.auto = null;
+      _cache.master
+        ..count = -1
+        ..slots.clear();
+      _sentWatchFx = null;
+      _sentWatchAnalyzer = null;
+      _live.clear();
+      _keyNotes.clear();
+      _midiNotes.clear();
+      _inputOpen = false;
+      inputLevel.value = 0;
+      playing.value = false;
+      audioFailure = null;
+      _sync();
+      if (doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
+    } catch (e) {
+      audioFailure = 'Não deu para reiniciar o áudio: ${e is UnsupportedError ? e.message : e}';
+    } finally {
+      audioRestarting = false;
+      if (!_disposed) notifyListeners();
+    }
   }
 
   void _onEngineState(EngineState s) {
@@ -798,6 +853,7 @@ class DawController extends ChangeNotifier {
     ]);
     if (_engine.onState == _onEngineState) _engine.onState = null;
     if (_engine.onLoudness == _onLoudness) _engine.onLoudness = null;
+    if (_engine.onEngineFailed == _onEngineFailed) _engine.onEngineFailed = null;
     if (_engine.onMidi == _onMidi) _engine.onMidi = null;
     if (_engine.onMidiInputs == _onMidiInputs) _engine.onMidiInputs = null;
     // gravação pela metade some com a tela; a entrada fecha (o navegador apaga o aviso de microfone)

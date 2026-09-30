@@ -27,6 +27,51 @@
     probe.peaks.length = peaks.length;
   }
 
+  // ------------------------------------------------------------ falha do motor
+
+  // Um trap do wasm (`panic=abort`) ou um erro no processamento deixa o nó mudo, sem aviso: o
+  // navegador só dispara `processorerror`. Aqui isso, uma mensagem fatal do worklet e a falta de
+  // estados com o áudio rodando viram um aviso ao app (`onEngineFailed`), que oferece reiniciar.
+  let onEngineFailed = null;
+  let failed = false;
+  // o worklet manda um estado a cada ~46 ms; sem nenhum por tanto tempo, com o contexto rodando, ele morreu
+  const STALL_MS = 4000;
+  const WATCH_MS = 1000;
+  let lastStateAt = 0;
+  let lastWatchAt = 0;
+  let watchdog = null;
+
+  function stopWatchdog() {
+    if (watchdog) clearInterval(watchdog);
+    watchdog = null;
+  }
+
+  function failEngine(message) {
+    if (failed) return;
+    failed = true;
+    stopWatchdog();
+    console.error('motor de áudio:', message);
+    if (onEngineFailed) onEngineFailed(message);
+  }
+
+  function startWatchdog() {
+    stopWatchdog();
+    lastStateAt = lastWatchAt = performance.now();
+    watchdog = setInterval(() => {
+      const now = performance.now();
+      const late = now - lastWatchAt > 2 * WATCH_MS;
+      lastWatchAt = now;
+      if (failed || !ctx || !node) return;
+      // contexto suspenso (aba sem gesto do usuário) ou a página mesma travada (o timer atrasou, e
+      // os estados esperam na fila dela): não é falha do motor
+      if (ctx.state !== 'running' || late) {
+        lastStateAt = now;
+        return;
+      }
+      if (now - lastStateAt > STALL_MS) failEngine('O motor de áudio parou de responder.');
+    }, WATCH_MS);
+  }
+
   // Os bytes do engine.wasm, baixados uma vez: o worklet recebe uma cópia (os bytes vão
   // transferidos) e o render compila o módulo dele a partir daqui, sem depender da rede de novo.
   let wasmBytes = null;
@@ -54,10 +99,15 @@
       // levaria junto o motor e tudo o que ele sabe). Sem nada ligado, o worklet vê zero canais.
       node = new AudioWorkletNode(ctx, 'jopendaw-engine', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
       node.connect(ctx.destination);
+      const mine = node;
+      node.onprocessorerror = () => {
+        if (node === mine) failEngine('O processamento do áudio caiu (erro no motor).');
+      };
       const ready = new Promise((resolve, reject) => {
         node.port.onmessage = (e) => {
           const m = e.data;
           if (m.t === 'state') {
+            lastStateAt = performance.now();
             if (!m.analyzing) spectrum = null;
             else if (m.spectrum) spectrum = m.spectrum;
             const fxMeter = m.fxMeter || 0;
@@ -73,10 +123,13 @@
             onRecBlock(m);
           } else if (m.t === 'captured') {
             if (onCaptureEnd) onCaptureEnd(m.notes);
-          } else if (m.t === 'ready') resolve(m.rate);
-          else if (m.t === 'error') {
+          } else if (m.t === 'ready') {
+            startWatchdog();
+            resolve(m.rate);
+          } else if (m.t === 'error') {
             console.error('motor de áudio:', m.message);
             reject(new Error(m.message));
+            if (m.fatal && node === mine) failEngine(`O motor de áudio caiu: ${String(m.message).split('\n')[0]}`);
           }
         };
       });
@@ -85,6 +138,44 @@
       return ready;
     })();
     return starting;
+  }
+
+  // Recria o contexto, o nó e o motor depois de uma falha (ou quando o app quiser): a entrada de
+  // áudio fecha (o app a reabre), e o app manda de novo os áudios e o documento. Devolve a taxa.
+  async function restart() {
+    const oldCtx = ctx;
+    const oldNode = node;
+    closeInput();
+    stopWatchdog();
+    if (oldNode) {
+      oldNode.onprocessorerror = null;
+      oldNode.port.onmessage = null;
+      try {
+        oldNode.disconnect();
+      } catch (_) {
+        // já desligado
+      }
+    }
+    node = null;
+    ctx = null;
+    starting = null;
+    failed = false;
+    spectrum = null;
+    probe.beat = 0;
+    probe.playing = false;
+    probe.peaks = [];
+    probe.fxMeter = 0;
+    probe.loudness = null;
+    if (oldCtx) {
+      try {
+        await oldCtx.close();
+      } catch (_) {
+        // já fechado
+      }
+    }
+    const rate = await start();
+    await resume();
+    return rate;
   }
 
   // O navegador só deixa o áudio sair depois de um gesto do usuário.
@@ -484,12 +575,16 @@
 
   window.jopendawEngine = {
     start,
+    restart,
     resume,
     decode,
     loadSample,
     calls,
     setOnState: (cb) => { onState = cb; },
     setOnLoudness: (cb) => { onLoudness = cb; },
+    setOnEngineFailed: (cb) => { onEngineFailed = cb; },
+    // para testes e depuração: derruba o motor como um trap do wasm faria
+    debugFail: (message) => failEngine(message || 'falha simulada'),
     latency: () => (ctx ? (ctx.baseLatency || 0) + (ctx.outputLatency || 0) : 0),
     idbGet: (key) => tx('readonly', (s) => s.get(key)).then((v) => v ?? null),
     idbPut: (key, value) => tx('readwrite', (s) => s.put(value, key)),

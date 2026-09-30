@@ -62,6 +62,13 @@ class AudioEngine implements EngineEvents {
   @override
   void Function(EngineState state)? onState;
 
+  /// O motor caiu; só [restart] o traz de volta (ver engine_web.dart).
+  @override
+  void Function(String message)? onEngineFailed;
+
+  /// Recria o motor, vazio (quem chama manda de novo os áudios e o documento); devolve a taxa.
+  Future<double> restart() => _native?.restart() ?? Future.error(UnsupportedError(_noEngine));
+
   /// Loudness do master (LUFS/dBTP), ~20 vezes por segundo quando muda (ver engine_web.dart).
   void Function(LoudnessReading reading)? get onLoudness => _onLoudness;
   set onLoudness(void Function(LoudnessReading reading)? cb) {

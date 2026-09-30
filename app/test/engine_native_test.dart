@@ -17,6 +17,7 @@ class Events implements EngineEvents {
   final states = <EngineState>[];
   final levels = <double>[];
   final lost = <String>[];
+  final failures = <String>[];
   final blocks = <(double, Float32List, Float32List)>[];
   final ends = <List<RecordedNote>>[];
 
@@ -45,12 +46,16 @@ class Events implements EngineEvents {
   void Function(String message)? onInputLost;
 
   @override
+  void Function(String message)? onEngineFailed;
+
+  @override
   double recordBeat = 0;
 
   Events() {
     onState = states.add;
     onInputLevel = levels.add;
     onInputLost = lost.add;
+    onEngineFailed = failures.add;
     onRecord = (l, r) {
       blocks.add((recordBeat, l, r));
       order.add('bloco');
@@ -170,6 +175,27 @@ void main() {
       expect(state.asTypedList(8).sublist(0, 4), [2.5, 1, -3, 4]);
     } finally {
       calloc.free(state);
+    }
+  }, skip: skip);
+
+  test('a thread de áudio que cai (ERR_PANIC) avisa uma vez; reiniciar traz o motor de volta', () async {
+    void setStateError(int code) => fake.lookupFunction<Void Function(Int32), void Function(int)>('fake_set_state_error')(code);
+    await engine.start();
+    await until(() => events.states.isNotEmpty);
+    setStateError(-5);
+    try {
+      await until(() => events.failures.isNotEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(events.failures, hasLength(1), reason: 'avisa uma vez, não a cada leitura');
+      setStateError(0);
+      events.states.clear();
+      expect(await engine.restart(), 48000);
+      await until(() => events.states.isNotEmpty);
+      // e cai de novo: avisa de novo
+      setStateError(-5);
+      await until(() => events.failures.length == 2);
+    } finally {
+      setStateError(0);
     }
   }, skip: skip);
 

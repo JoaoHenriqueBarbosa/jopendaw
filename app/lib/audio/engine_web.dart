@@ -8,6 +8,8 @@ external _Host get _host;
 
 extension type _Host._(JSObject _) implements JSObject {
   external JSPromise<JSNumber> start();
+  external JSPromise<JSNumber> restart();
+  external void setOnEngineFailed(JSFunction cb);
   external JSPromise<JSString> sha256(JSUint8Array bytes);
   external JSPromise<JSAny?> resume();
   external JSPromise<_Decoded> decode(JSUint8Array bytes);
@@ -146,7 +148,33 @@ class AudioEngine {
       );
     }
     _hookLoudness();
+    _hookFailure();
     return (await _host.start().toDart).toDartDouble;
+  }
+
+  /// O motor caiu (um trap do wasm, um erro no processamento ou nenhum estado por vários segundos
+  /// com o áudio rodando): o nó fica mudo e só [restart] o traz de volta. Vem a mensagem técnica.
+  void Function(String message)? onEngineFailed;
+  bool _failureHooked = false;
+
+  void _hookFailure() {
+    if (_failureHooked) return;
+    _failureHooked = true;
+    _host.setOnEngineFailed(
+      ([JSString? message]) {
+        onEngineFailed?.call(message?.toDart ?? 'O motor de áudio parou.');
+      }.toJS,
+    );
+  }
+
+  /// Recria o contexto de áudio e o motor (vazio: quem chama manda de novo os áudios e o documento)
+  /// e devolve a taxa. Fecha a entrada de áudio, que o controlador reabre. Chame de um gesto do
+  /// usuário (o botão "Reiniciar o áudio"): o navegador segura o áudio até lá.
+  Future<double> restart() async {
+    _hookInput();
+    _hookLoudness();
+    _hookFailure();
+    return (await _host.restart().toDart).toDartDouble;
   }
 
   /// Loudness do master (~30 por segundo, só quando muda): momentâneo, curto prazo, integrado,

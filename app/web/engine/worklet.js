@@ -37,6 +37,10 @@ const EXPRESSION_CALLS = new Set(['live_bend', 'live_cc', 'cc_add', 'cc_clear'])
 // arredondamento: um milionésimo de batida é bem menos que um quadro.
 const BEAT_EPS = 1e-6;
 
+// Trap do wasm: `panic=abort` vira `unreachable`, e uma memória fora do limite ou uma pilha estourada
+// também são `RuntimeError`.
+const isTrap = (err) => typeof WebAssembly !== 'undefined' && err instanceof WebAssembly.RuntimeError;
+
 class EngineProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
@@ -60,7 +64,9 @@ class EngineProcessor extends AudioWorkletProcessor {
       try {
         this.onMessage(e.data);
       } catch (err) {
-        this.port.postMessage({ t: 'error', message: String((err && err.stack) || err) });
+        // um trap do wasm (panic=abort, memória fora do limite) deixa o motor num estado que não dá
+        // para confiar: o host avisa o app, que oferece reiniciar o áudio
+        this.port.postMessage({ t: 'error', message: String((err && err.stack) || err), fatal: isTrap(err) });
       }
     };
   }
@@ -223,7 +229,20 @@ class EngineProcessor extends AudioWorkletProcessor {
     this.port.postMessage({ t: 'rec', left, right, frames, beat: this.recBeat }, [left.buffer, right.buffer]);
   }
 
+  // Um erro aqui mataria o nó em silêncio (o navegador só dispara `processorerror` na thread da
+  // página, sem a causa): pega, avisa o host com a mensagem e para o processador.
   process(inputs, outputs) {
+    if (this.dead) return false;
+    try {
+      return this.run(inputs, outputs);
+    } catch (err) {
+      this.dead = true;
+      this.port.postMessage({ t: 'error', message: String((err && err.stack) || err), fatal: true });
+      return false;
+    }
+  }
+
+  run(inputs, outputs) {
     const out = outputs[0];
     if (!this.wasm || !out || out.length === 0) return true;
     const w = this.wasm;

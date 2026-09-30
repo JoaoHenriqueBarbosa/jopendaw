@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -209,6 +211,15 @@ class _DawStudioState extends State<DawStudio> {
           builder: (context, _) => Column(
             children: [
               if (desktop) transport,
+              if (c.audioFailure != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: InlineNotice(
+                    c.audioFailure!,
+                    actionLabel: c.audioRestarting ? 'Reiniciando…' : 'Reiniciar o áudio',
+                    onAction: c.audioRestarting ? null : () => unawaited(c.restartAudio()),
+                  ),
+                ),
               if (c.error != null)
                 Padding(
                   padding: const EdgeInsets.all(8),
