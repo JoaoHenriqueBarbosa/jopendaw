@@ -689,6 +689,17 @@ class _TrackHeaderState extends State<_TrackHeader> {
   // ícone, menu) esperando um segundo toque
   final _taps = _DoubleTap();
 
+  /// O deslizador de volume do cabeçalho grava automação como o fader do mixer (Escrever/Toque/Trava).
+  void _miniStart(int index) {
+    c.autoRec.touch(index, const AutoTarget(AutoKind.volume));
+    c.checkpoint();
+  }
+
+  void _miniGain(int index, double g) {
+    c.autoRec.value(index, const AutoTarget(AutoKind.volume), g);
+    c.mutate((d) => d.tracks[index].gain = g);
+  }
+
   /// Arraste para reordenar (toque longo + arrastar na vertical: o arraste simples rola a lista).
   double _dragFrom = 0;
   int? _dragTo;
@@ -815,17 +826,23 @@ class _TrackHeaderState extends State<_TrackHeader> {
                               _EffectsChip(c: c, track: index),
                               const SizedBox(width: 4),
                               Expanded(
-                                child: c.automated(index, AutoKind.volume)
-                                    ? ValueListenableBuilder<double>(
-                                        valueListenable: c.beat,
-                                        builder: (_, _, _) => _MiniFader(
-                                          gain: c.liveValue(index, AutoKind.volume),
-                                          automated: c.playing.value,
-                                          onStart: c.checkpoint,
-                                          onGain: (g) => c.mutate((_) => t.gain = g),
-                                        ),
-                                      )
-                                    : _MiniFader(gain: t.gain, onStart: c.checkpoint, onGain: (g) => c.mutate((_) => t.gain = g)),
+                                // um só widget nos dois casos: a raia ganha pontos no meio do arraste e trocar a
+                                // árvore aqui derrubaria o gesto
+                                child: ListenableBuilder(
+                                  listenable: Listenable.merge([c.beat, c.autoRec]),
+                                  builder: (_, _) {
+                                    const volume = AutoTarget(AutoKind.volume);
+                                    final hand = c.autoRec.isRecording(index, volume);
+                                    final follows = c.automated(index, AutoKind.volume) && !hand;
+                                    return _MiniFader(
+                                      gain: follows ? c.liveValue(index, AutoKind.volume) : t.gain,
+                                      automated: follows && c.playing.value,
+                                      onStart: () => _miniStart(index),
+                                      onGain: (g) => _miniGain(index, g),
+                                      onEnd: () => c.autoRec.release(index, volume),
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ],
@@ -1276,7 +1293,10 @@ class _MiniFader extends StatelessWidget {
   final bool automated;
   final VoidCallback onStart;
   final ValueChanged<double> onGain;
-  const _MiniFader({required this.gain, required this.onStart, required this.onGain, this.automated = false});
+
+  /// Soltou o deslizador (fecha a passada de gravação de automação).
+  final VoidCallback? onEnd;
+  const _MiniFader({required this.gain, required this.onStart, required this.onGain, this.onEnd, this.automated = false});
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -1291,7 +1311,12 @@ class _MiniFader extends StatelessWidget {
       ),
       child: SizedBox(
         height: 22,
-        child: Slider(value: gainToFader(gain).clamp(0, 1), onChangeStart: (_) => onStart(), onChanged: (v) => onGain(faderToGain(v))),
+        child: Slider(
+          value: gainToFader(gain).clamp(0, 1),
+          onChangeStart: (_) => onStart(),
+          onChanged: (v) => onGain(faderToGain(v)),
+          onChangeEnd: (_) => onEnd?.call(),
+        ),
       ),
     ),
   );

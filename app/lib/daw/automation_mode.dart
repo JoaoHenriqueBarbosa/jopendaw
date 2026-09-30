@@ -74,11 +74,15 @@ class AutoModeMenu extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.show_chart, size: 18, color: color),
-                    const SizedBox(width: 4),
-                    Text(
-                      compact ? m.short : 'Automação: ${m.label}',
-                      style: TextStyle(fontWeight: on ? FontWeight.w700 : FontWeight.w500, color: color),
-                    ),
+                    // só o ícone em Ler (o padrão): com o rótulo a barra passava de 1500 px e a nuvem e os
+                    // atalhos saíam da tela; gravando, o modo aparece em vermelho com o nome
+                    if (on) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        compact ? m.short : m.label,
+                        style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                      ),
+                    ],
                   ],
                 ),
               ),

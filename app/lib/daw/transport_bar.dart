@@ -21,7 +21,6 @@ import 'model.dart';
 import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
 import 'structure_menu.dart';
-import 'sync_ui.dart';
 import 'tempo_lane.dart' show showMeterChangeDialog;
 import 'tempo_map.dart';
 import 'warp_dialog.dart' show formatBpm, parseBpm;
@@ -187,7 +186,7 @@ class TransportBar extends StatelessWidget {
           ),
         ];
         const divider = Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
+          padding: EdgeInsets.symmetric(horizontal: 4),
           child: SizedBox(width: 1, height: 28, child: ColoredBox(color: Palette.hairline)),
         );
         // importar e exportar mexem no documento inteiro: nem no meio de outro trabalho nem no de
@@ -254,7 +253,6 @@ class TransportBar extends StatelessWidget {
                       icon: const Icon(Icons.settings_outlined),
                     ),
                     IconButton(tooltip: 'Atalhos do teclado (?)', onPressed: () => showShortcuts(context), icon: const Icon(Icons.keyboard_command_key)),
-                    SyncIndicator(c: c),
                     if (c.status != null) ...[
                       const SizedBox(width: 12),
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),

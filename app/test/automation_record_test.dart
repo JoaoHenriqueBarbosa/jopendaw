@@ -69,13 +69,13 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Automação: Ler'), findsOneWidget);
-    await tester.tap(find.text('Automação: Ler'));
+    expect(find.byTooltip('Automação: Ler. Só toca a automação; mexer no controle não grava.'), findsOneWidget);
+    await tester.tap(find.byTooltip('Automação: Ler. Só toca a automação; mexer no controle não grava.'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Toque').last);
     await tester.pumpAndSettle();
     expect(c.autoRec.mode, AutoMode.touch);
-    expect(find.text('Automação: Toque'), findsOneWidget);
+    expect(find.text('Toque'), findsOneWidget);
     expect(find.text('T'), findsOneWidget, reason: 'a raia segue a barra');
     await tester.tap(find.text('T'));
     await tester.pumpAndSettle();

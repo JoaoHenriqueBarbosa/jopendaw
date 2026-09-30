@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api/client.dart';
+import '../daw/sync_ui.dart';
 import '../daw/controller.dart';
 import '../daw/warp_dialog.dart' show formatBpm;
 import '../daw/shortcuts_dialog.dart';
@@ -72,6 +73,8 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
         title: p?.name ?? 'Projeto',
         subtitle: p == null ? null : projectSubtitle(p, daw != null && daw.ready ? daw.doc : null),
         showBack: true,
+        // a nuvem fica no cabeçalho: na barra do transporte ela saía da tela em janelas de 1500 px
+        actions: [if (daw != null && daw.ready) SyncIndicator(c: daw)],
         body: daw == null
             ? (error != null ? ErrorState(error: error!, onRetry: reload) : const LoadingState())
             : !daw.ready
