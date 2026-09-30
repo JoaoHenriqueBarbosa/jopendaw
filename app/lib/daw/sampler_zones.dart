@@ -238,8 +238,10 @@ String zoneNoteName(int n) {
 /// Como escolher os cortes: [count] fatias iguais ou, sem ele, um corte em cada transiente
 /// ([sensitivity] 0..1).
 List<double> slicePoints(DecodedAudio a, {int? count, double sensitivity = 0.5}) {
-  final n = a.channels.map((c) => c.length).fold<int>(1 << 62, (x, y) => math.min(x, y));
-  if (a.channels.isEmpty || n == 0 || !(a.rate.isFinite && a.rate > 0)) return const [];
+  // sem `1 << 62`: na web (dart2js) o deslocamento é de 32 bits e dava 0, então nada era fatiado
+  if (a.channels.isEmpty) return const [];
+  final n = a.channels.map((c) => c.length).reduce(math.min);
+  if (n == 0 || !(a.rate.isFinite && a.rate > 0)) return const [];
   final frames = count != null ? _equalCuts(n, count) : _transientCuts(a.channels, n, a.rate, sensitivity);
   return [for (final f in frames) f / a.rate];
 }

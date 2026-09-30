@@ -46,8 +46,8 @@ class ProjectFileLimits {
   final int maxEntries;
 
   const ProjectFileLimits({
-    this.maxFileBytes = 1 << 30,
-    this.maxTotalBytes = 2 << 30,
+    this.maxFileBytes = 1024 * 1024 * 1024,
+    this.maxTotalBytes = 2 * 1024 * 1024 * 1024,
     this.maxSampleBytes = 512 << 20,
     this.maxJsonBytes = 64 << 20,
     this.maxEntries = 20000,
