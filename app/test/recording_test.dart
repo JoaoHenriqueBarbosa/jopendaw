@@ -495,6 +495,47 @@ void main() {
     });
   });
 
+  group('latência do motor na gravação', () {
+    test('o áudio descarta também a latência do motor (PDC), somada à do aparelho e à manual', () async {
+      final c = fakeController(e);
+      c.doc.countIn = false;
+      // 50 ms do contexto + 30 ms do motor + 100 ms da entrada + 50 ms manuais = 23 quadros a 100 Hz
+      e.latency = 0.05;
+      e.engineLatency = 0.03;
+      e.inputLatency = 0.1;
+      c.doc.recLatencyMs = 50;
+      c.beat.value = 4;
+      c.setArmed(0, true);
+      await settle();
+      expect(c.monitorLatency, closeTo(0.18, 1e-9), reason: 'ida e volta monitorada: entrada, motor e saída');
+      await c.toggleRecord();
+      e.feed(0, 320, (i) => i / 1000);
+      await c.toggleRecord();
+      final audio = loadedFor(e, c, c.doc.tracks[0].clips.single.sample);
+      expect(audio.frames, 320 - 23);
+      expect(audio.channels[0][0], closeTo(0.023, 1e-6));
+    });
+
+    test('as notas voltam para antes da latência do motor e do aparelho, sem passar do começo', () async {
+      final c = fakeController(e);
+      c.addInstrumentTrack(TrackKind.synth);
+      c.doc.countIn = false;
+      // 0,1 s do motor + 0,05 s do aparelho = 0,15 s = 0,3 batida a 120 bpm
+      e.latency = 0.05;
+      e.engineLatency = 0.1;
+      c.setArmed(1, true);
+      c.beat.value = 4;
+      await c.toggleRecord();
+      e.notes = Float32List.fromList([1, 60, 5, 6, 0.8, 1, 62, 4, 4.5, 0.8]);
+      c.debugRecordingElapsed(const Duration(seconds: 2));
+      await c.toggleRecord();
+      final clip = c.doc.tracks[1].midi.single;
+      final notes = [for (final n in clip.notes) (n.pitch, double.parse(n.start.toStringAsFixed(6)), double.parse(n.length.toStringAsFixed(6)))]
+        ..sort((a, b) => a.$1 - b.$1);
+      expect(notes, [(60, 0.7, 1.0), (62, 0.0, 0.2)]);
+    });
+  });
+
   group('gravar notas', () {
     Future<DawController> recordNotes(
       List<double> notes, {

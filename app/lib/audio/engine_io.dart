@@ -80,6 +80,9 @@ class AudioEngine implements EngineEvents {
 
   double get latency => _native?.latency ?? 0;
 
+  /// Latência do próprio motor (PDC, cadeia do master, limitador), em segundos; soma-se à do aparelho.
+  double get engineLatency => _native?.engineLatency ?? 0;
+
   /// Nos testes: guarda aqui as chamadas que iriam ao motor (null não guarda).
   @visibleForTesting
   List<List<Object>>? log;

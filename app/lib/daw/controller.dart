@@ -351,6 +351,7 @@ class _Recording {
     required this.countBeats,
     required this.zone,
     required this.latency,
+    this.midiLatency = 0,
     required this.skip,
     required this.metronomeTemp,
     this.startFromCapture = false,
@@ -391,8 +392,19 @@ class _Recording {
   /// de tudo; null quando ela toca antes do cursor.
   final double? zone;
 
-  /// Latência total da gravação (s): contexto, entrada e a compensação manual.
+  /// Latência total da gravação (s): a do motor (PDC, cadeia do master, limitador), a do aparelho
+  /// (contexto e entrada) e a compensação manual.
   final double latency;
+
+  /// Quanto o som sai depois do transporte (s): a latência do motor mais a de saída do aparelho. As
+  /// notas tocadas ouvindo o que soa chegam esse tanto atrasadas e voltam para antes.
+  final double midiLatency;
+
+  /// A batida [b] adiantada de [midiLatency] (pelo mapa de andamento da gravação).
+  double shiftBeat(double b) {
+    if (!(midiLatency > 0) || !b.isFinite) return b;
+    return math.max(0.0, tempo.beatAt(tempo.secondsAt(b) - midiLatency));
+  }
 
   /// Quadros descartados do começo do que a entrada mandou: a contagem e a latência (negativo:
   /// silêncio acrescentado).
@@ -3584,6 +3596,17 @@ class DawController extends ChangeNotifier {
   /// Latência de entrada que o navegador informou ao abrir (s).
   double _inputLatency = 0;
 
+  /// Quanto o som sai depois do transporte (s): a latência de saída do aparelho mais a do próprio
+  /// motor (PDC dos efeitos, cadeia do master e limitador de segurança).
+  double get _outputLatency {
+    final v = _engine.latency + _engine.engineLatency;
+    return v.isFinite && v > 0 ? v : 0;
+  }
+
+  /// Latência de ida e volta de uma faixa monitorada (s): a entrada do aparelho, o motor com a PDC
+  /// e a saída do aparelho. É o que o músico ouve de atraso entre tocar e escutar.
+  double get monitorLatency => _outputLatency + (_inputLatency.isFinite && _inputLatency > 0 ? _inputLatency : 0);
+
   /// A entrada escolhida fica no aparelho (é do hardware, não do projeto).
   static const _inputKey = 'rec:input';
 
@@ -3896,7 +3919,9 @@ class DawController extends ChangeNotifier {
       }
     }
     final rate = engineRate;
-    final latency = audio ? _engine.latency + _inputLatency + d.recLatencyMs / 1000 : 0.0;
+    // o som sai do motor com a latência dele (PDC, cadeia do master, limitador de segurança) além da do aparelho
+    final outLatency = _outputLatency;
+    final latency = audio ? outLatency + _inputLatency + d.recLatencyMs / 1000 : 0.0;
     final r = _Recording(
       start: start,
       bpm: d.bpm,
@@ -3911,6 +3936,7 @@ class DawController extends ChangeNotifier {
       countBeats: count ? bar : 0,
       zone: zone,
       latency: latency.isFinite ? latency : 0,
+      midiLatency: outLatency,
       // a contagem e a latência saem do começo do que a entrada mandou (latência negativa, da
       // compensação manual, acrescenta silêncio)
       skip: (count ? _countFrames(d.tempo, d.bpm, rate, bar, zone ?? start - bar) : 0) + (latency.isFinite ? (latency * rate).round() : 0),
@@ -4321,7 +4347,14 @@ class DawController extends ChangeNotifier {
     final wrapped = r.loopOn && r.start < le && (r.recordedBeats >= le - r.start || heldAcross);
     if (r.midiIds.isEmpty) return (out, wrapped);
     const early = 0.25, minLength = 1 / 64;
+    // o músico toca ouvindo o som com a latência do motor e do aparelho: as notas voltam para antes
+    // dela (sem passar do começo da gravação nem do loop)
+    final floor = math.min(r.start, r.loopOn ? ls : r.start);
     void add(String id, int pitch, double s, double e, double v) {
+      if (r.midiLatency > 0) {
+        s = math.max(r.shiftBeat(s), math.min(s, floor));
+        e = math.max(r.shiftBeat(e), s);
+      }
       if (e - s < minLength) e = s + minLength;
       out.putIfAbsent(id, () => []).add((pitch: pitch, start: math.max(0.0, s), end: e, velocity: v.isFinite ? v.clamp(0.0, 1.0).toDouble() : 0.8));
     }
@@ -4376,7 +4409,7 @@ class DawController extends ChangeNotifier {
       if (n.pitch < ccPitchBase || !n.start.isFinite || !n.velocity.isFinite) continue;
       final cc = n.pitch - ccPitchBase;
       if (!ccKinds.contains(cc)) continue;
-      byTrack.putIfAbsent(n.track, () => []).add((cc: cc, beat: n.start, value: MidiCc.clampValue(cc, n.velocity)));
+      byTrack.putIfAbsent(n.track, () => []).add((cc: cc, beat: r.shiftBeat(n.start), value: MidiCc.clampValue(cc, n.velocity)));
     }
     final zone = r.zone, ls = r.loopStart;
     for (final e in byTrack.entries) {

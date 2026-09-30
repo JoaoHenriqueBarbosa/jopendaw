@@ -40,6 +40,7 @@
 ///     void   jd_offline_captured(handle, i32 index, f32* l, f32* r, usize n)
 ///     void   jd_offline_free(handle)
 ///     f64    jd_latency()                                 latência de saída (s)
+///     f64    jd_engine_latency()                          latência do próprio motor (quadros)
 ///
 /// O render usa as capturas do motor para toda saída, inclusive o master (`capture_add(-1)`, que é
 /// exatamente o que o `process` devolve), então não depende de onde o `jd_offline_process` deixa a
@@ -170,6 +171,7 @@ final class EngineLib {
       );
   late final offlineFree = _lib.lookupFunction<Void Function(Uint64), void Function(int)>('jd_offline_free');
   late final latency = _lib.lookupFunction<Double Function(), double Function()>('jd_latency');
+  late final engineLatencyFrames = _lib.lookupFunction<Double Function(), double Function()>('jd_engine_latency');
   late final loudness = _lib.lookupFunction<Double Function(Int32), double Function(int)>('jd_loudness');
 }
 
@@ -890,6 +892,20 @@ final class FfiEngine {
     try {
       final l = lib.latency();
       return l.isFinite && l > 0 ? l : 0;
+    } on ArgumentError {
+      return 0;
+    }
+  }
+
+  /// Latência do próprio motor (PDC dos efeitos, cadeia do master e limitador de segurança) em
+  /// segundos: o som sai isso depois do transporte, além da latência do aparelho ([latency]). Uma
+  /// biblioteca de antes da PDC não tem `jd_engine_latency`: vale 0.
+  double get engineLatency {
+    final lib = _lib, rate = _rate;
+    if (lib == null || rate == null || rate <= 0) return 0;
+    try {
+      final frames = lib.engineLatencyFrames();
+      return frames.isFinite && frames > 0 ? frames / rate : 0;
     } on ArgumentError {
       return 0;
     }

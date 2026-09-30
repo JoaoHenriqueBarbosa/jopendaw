@@ -348,6 +348,16 @@ class EngineProcessor extends AudioWorkletProcessor {
         this.port.postMessage({ t: 'loudness', v });
       }
     }
+    // latência do próprio motor (PDC, cadeia do master e limitador de segurança), em quadros: o
+    // app soma à do aparelho para compensar a gravação; só quando muda (um motor mais antigo não
+    // tem a função)
+    if (this.blocks % 12 === 6 && typeof w.latency_frames === 'function') {
+      const frames = w.latency_frames();
+      if (frames !== this.lastLatency) {
+        this.lastLatency = frames;
+        this.port.postMessage({ t: 'latency', frames });
+      }
+    }
     return true;
   }
 }

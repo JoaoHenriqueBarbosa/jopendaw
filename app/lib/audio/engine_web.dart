@@ -18,6 +18,7 @@ extension type _Host._(JSObject _) implements JSObject {
   external void setOnState(JSFunction cb);
   external void setOnLoudness(JSFunction cb);
   external double latency();
+  external double engineLatency();
   external JSPromise<JSAny?> idbGet(String key);
   external JSPromise<JSAny?> idbPut(String key, JSAny value);
   external JSPromise<JSAny?> idbDelete(String key);
@@ -275,6 +276,18 @@ class AudioEngine {
 
   /// Latência de saída em segundos (base + dispositivo).
   double get latency => _host.latency();
+
+  /// Latência do próprio motor em segundos (PDC, cadeia do master, limitador de segurança), que o
+  /// worklet publica quando muda; soma-se à [latency] do aparelho. Uma página de antes da PDC não
+  /// tem a função no host: vale 0.
+  double get engineLatency {
+    try {
+      final v = _host.engineLatency();
+      return v.isFinite && v > 0 ? v : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
 
   static JSAny _js(Object v) => switch (v) {
     final String s => s.toJS,

@@ -9,6 +9,9 @@
   let onState = null;
   // loudness do master: [momentâneo, curto prazo, integrado, true peak, faixa]; −200 = sem medida
   let onLoudness = null;
+  // latência do motor em quadros (PDC + cadeia do master + limitador de segurança), como o worklet
+  // a publica; 0 antes da primeira leitura ou com um motor sem a função
+  let engineFrames = 0;
 
   // Último estado do motor e o maior pico de cada canal desde a última leitura: para conferir de
   // fora (console, testes automatizados) que o áudio está saindo mesmo, sem precisar ouvir.
@@ -116,6 +119,8 @@
           } else if (m.t === 'loudness') {
             probe.loudness = m.v;
             if (onLoudness) onLoudness(m.v[0], m.v[1], m.v[2], m.v[3], m.v[4]);
+          } else if (m.t === 'latency') {
+            engineFrames = Number.isFinite(m.frames) && m.frames > 0 ? m.frames : 0;
           } else if (m.t === 'level') {
             probe.inputPeak = Math.max(probe.inputPeak, m.peak);
             if (onInputLevel) onInputLevel(m.peak);
@@ -166,6 +171,7 @@
     probe.peaks = [];
     probe.fxMeter = 0;
     probe.loudness = null;
+    engineFrames = 0;
     if (oldCtx) {
       try {
         await oldCtx.close();
@@ -586,6 +592,8 @@
     // para testes e depuração: derruba o motor como um trap do wasm faria
     debugFail: (message) => failEngine(message || 'falha simulada'),
     latency: () => (ctx ? (ctx.baseLatency || 0) + (ctx.outputLatency || 0) : 0),
+    // latência do próprio motor em segundos (a do aparelho vem em `latency`)
+    engineLatency: () => (ctx && engineFrames > 0 ? engineFrames / ctx.sampleRate : 0),
     idbGet: (key) => tx('readonly', (s) => s.get(key)).then((v) => v ?? null),
     idbPut: (key, value) => tx('readwrite', (s) => s.put(value, key)),
     idbDelete: (key) => tx('readwrite', (s) => s.delete(key)),

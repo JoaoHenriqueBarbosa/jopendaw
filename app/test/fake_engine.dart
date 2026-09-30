@@ -88,6 +88,9 @@ class FakeEngine implements AudioEngine {
   double latency = 0;
 
   @override
+  double engineLatency = 0;
+
+  @override
   void Function(int status, int data1, int data2)? onMidi;
 
   @override

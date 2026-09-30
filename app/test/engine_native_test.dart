@@ -146,12 +146,14 @@ void main() {
     ]);
     e.loadSample(1, DecodedAudio([Float32List(4)], 48000));
     expect(e.latency, 0);
+    expect(e.engineLatency, 0);
   });
 
   test('start devolve a taxa, o estado chega por polling e a latência vem do motor', () async {
     expect(await engine.start(), 48000);
     expect(await engine.start(), 48000, reason: 'ligado, só devolve a taxa');
     expect(engine.latency, 0.02);
+    expect(engine.engineLatency, closeTo(0.002, 1e-12), reason: '96 quadros a 48 kHz');
     await until(() => events.states.isNotEmpty);
     final s = events.states.first;
     expect((s.beat, s.playing, s.fxMeter), (2.5, true, -3));

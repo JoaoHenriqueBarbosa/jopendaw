@@ -99,6 +99,9 @@ int32_t jd_spectrum(float *out, size_t n) {
 
 double jd_latency(void) { return 0.02; }
 
+// latência do próprio motor (PDC, cadeia do master, limitador): 96 quadros = 2 ms a 48 kHz
+double jd_engine_latency(void) { return 96.0; }
+
 // loudness do master: momentâneo -20, curto prazo -21, integrado -22, true peak -1,5 e faixa 6,5
 double jd_loudness(int32_t kind) {
   static const double v[5] = {-20.0, -21.0, -22.0, -1.5, 6.5};
