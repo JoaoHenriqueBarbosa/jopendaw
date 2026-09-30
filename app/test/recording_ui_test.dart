@@ -115,7 +115,7 @@ class FakeDaw extends DawController {
   }
 
   @override
-  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress}) async {
+  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress, Future<void> Function(String name, Uint8List wav)? sink}) async {
     exported = options;
     onProgress?.call(0.25);
     await exportGate?.future;

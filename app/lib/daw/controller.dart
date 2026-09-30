@@ -4864,7 +4864,10 @@ class DawController extends ChangeNotifier {
   /// (`<projeto>.wav`, pós-limitador) e, com stems, uma por faixa (`<projeto> - <faixa>.wav`,
   /// pós-fader; as que não soam nada no trecho ficam de fora). Normalizar leva o pico de cada
   /// arquivo a −1 dBFS. Falha ou aviso ficam em [error].
-  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress}) async {
+  ///
+  /// [sink] recebe cada WAV renderizado (nome com `.wav`) no lugar do salvamento direto: é por onde o FLAC e o MP3
+  /// passam pelo servidor (`export_compressed.dart`). Sem ele, o arquivo é salvo como WAV.
+  Future<void> exportAudio(ExportOptions options, {void Function(double progress)? onProgress, Future<void> Function(String name, Uint8List wav)? sink}) async {
     if (!ready || _busyFor('exportar')) return;
     final d = doc;
     final loop = options.range == ExportRange.loop;
@@ -4950,8 +4953,12 @@ class DawController extends ChangeNotifier {
           } else if (options.normalize && peak > 0) {
             _scale(channels, dbToGain(-1) / peak);
           }
-          final bytes = encodeWav(channels, rate.round(), options.format);
-          await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
+          final bytes = encodeWav(channels, rate.round(), options.renderFormat);
+          if (sink != null) {
+            await sink(names[batch[k]]!, bytes);
+          } else {
+            await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
+          }
           if (_disposed) return;
         }
       }
@@ -4967,6 +4974,9 @@ class DawController extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     }
   }
+
+  /// Salva um arquivo exportado pelo mesmo caminho dos WAV (seletor do aparelho, downloads no navegador).
+  Future<bool> saveExportedFile(String name, Uint8List bytes, String mime) => _engine.saveFile(name, bytes, mime);
 
   /// Interrompe o render em andamento (exportação ou congelamento): ele termina sem salvar nada e
   /// sem aviso.

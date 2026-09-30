@@ -52,6 +52,12 @@ As últimas opções escolhidas (inclusive alvo, teto e stems com o mesmo ganho)
 | **WAV 16 bits** | Inteiro de 16 bits, com dither TPDF (ruído triangular de ±1 LSB) | `Qualidade de CD, o menor arquivo. Para ouvir e publicar.` | 11,5 MB por minuto |
 | **WAV 24 bits** | Inteiro de 24 bits, com dither TPDF | `O padrão de estúdio: folga para masterizar depois.` | 17,3 MB por minuto |
 | **WAV 32 bits float** | Ponto flutuante de 32 bits (formato IEEE float, com o bloco `fact`), sem dither e sem teto | `Sem perda nenhuma, nem acima de 0 dB. Para levar a outro programa.` | 23,0 MB por minuto |
+| **FLAC (sem perda, menor)** | Compactado sem perda pelo servidor. Escolha **16 ou 24 bits** e a compressão (**Rápido**, **Padrão**, **Menor arquivo**) | `Sem perda, com bem menos espaço que o WAV. Convertido no servidor: precisa de conta e de rede.` | cerca de metade do WAV |
+| **MP3 (para compartilhar)** | Com perda, pelo servidor. Qualidade: **128, 192, 256 ou 320 kbps** (taxa constante) ou **V0 a V4** (taxa variável) | `Leve, para compartilhar e ouvir em qualquer lugar (com perda). Convertido no servidor: precisa de conta e de rede.` | 1,4 a 2,4 MB por minuto |
+
+**FLAC e MP3 passam pelo servidor.** O app renderiza o WAV no aparelho como sempre, sobe para a sua conta, espera a conversão (a janela mostra `Enviando ao servidor…`, `Na fila do servidor…`, `Compactando no servidor N%…` e `Baixando o arquivo…`), salva o `.flac` ou `.mp3` e apaga da conta o WAV temporário e o resultado (se não conseguir, ficam como áudio sem uso, que a limpeza da tela **Conta** apaga). Limites: até 30 minutos por arquivo (a janela avisa e desliga **Exportar**), MP3 só a 44,1 ou 48 kHz (a lista de taxas se limita a elas). Com **Stems**, cada arquivo é convertido em série. Os nomes ficam como no WAV, com a extensão trocada; o título (e o álbum, com o nome do projeto) vão como etiquetas no arquivo.
+
+**Sem conta, sem rede ou com erro do servidor**, a janela mostra `Não deu para compactar` com o motivo e oferece **Exportar em WAV mesmo assim**, que salva o WAV que já estava renderizado, sem renderizar de novo. **Voltar às opções** refaz o render.
 
 Nos formatos de 16 e 24 bits, o que passar de 0 dBFS é cortado (limitado a ±1). O tamanho dobra a 96 kHz. O WAV tem limite de 4 GB por arquivo: passando disso a exportação falha com `O arquivo passaria de 4 GB, o limite do WAV: exporte um trecho menor ou em 16 bits.`
 

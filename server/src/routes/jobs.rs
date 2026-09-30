@@ -27,6 +27,7 @@ use crate::{
     AppState,
     audio::{self, MidiParams},
     auth::Auth,
+    encode,
     entities::{job, prelude::Job},
     storage::{self, RegisterError},
 };
@@ -50,6 +51,9 @@ fn check_params(kind: &str, params: Option<Value>) -> Result<Option<Value>, ApiE
         Some(Value::Object(o)) => o,
         Some(_) => return Err(bad("params precisa ser um objeto")),
     };
+    if kind == "encode_audio" {
+        return check_encode_params(&obj).map(Some);
+    }
     if kind != "audio_to_midi" {
         return Ok(None);
     }
@@ -95,9 +99,93 @@ fn check_params(kind: &str, params: Option<Value>) -> Result<Option<Value>, ApiE
     Ok(Some(Value::Object(out)))
 }
 
+/// Parâmetros de `encode_audio`: `format` (`flac` | `mp3`, obrigatório); FLAC: `bits` (16, 24 ou 32; 32 vira 24 com
+/// aviso) e `level` (0 a 8); MP3: `bitrate` (CBR 128, 192, 256 ou 320) ou `vbr` (V0 a V4), nunca os dois;
+/// `title`, `artist` e `album` (texto de até 200 caracteres, limpo de caracteres de controle).
+fn check_encode_params(obj: &Map<String, Value>) -> Result<Value, ApiError> {
+    let bad = |m: String| err(StatusCode::BAD_REQUEST, m);
+    let known = ["format", "bits", "level", "bitrate", "vbr", "title", "artist", "album"];
+    if let Some(k) = obj.keys().find(|k| !known.contains(&k.as_str())) {
+        return Err(bad(format!("{k}: parâmetro desconhecido")));
+    }
+    let format = obj.get("format").and_then(Value::as_str).unwrap_or_default();
+    if !matches!(format, "flac" | "mp3") {
+        return Err(bad("format: flac ou mp3".into()));
+    }
+    let int = |key: &str| -> Result<Option<u64>, ApiError> {
+        match obj.get(key).filter(|v| !v.is_null()) {
+            None => Ok(None),
+            Some(v) => v.as_u64().map(Some).ok_or_else(|| bad(format!("{key}: número inteiro"))),
+        }
+    };
+    let mut out = Map::new();
+    out.insert("format".into(), json!(format));
+    let (bits, level, bitrate, vbr) = (int("bits")?, int("level")?, int("bitrate")?, int("vbr")?);
+    if format == "flac" {
+        if bitrate.is_some() || vbr.is_some() {
+            return Err(bad("bitrate e vbr valem só para MP3".into()));
+        }
+        if let Some(b) = bits {
+            if !matches!(b, 16 | 24 | 32) {
+                return Err(bad("bits: 16, 24 ou 32".into()));
+            }
+            out.insert("bits".into(), json!(b));
+        }
+        if let Some(l) = level {
+            if l > 8 {
+                return Err(bad("level: nível de compressão de 0 a 8".into()));
+            }
+            out.insert("level".into(), json!(l));
+        }
+    } else {
+        if bits.is_some() || level.is_some() {
+            return Err(bad("bits e level valem só para FLAC".into()));
+        }
+        match (bitrate, vbr) {
+            (Some(_), Some(_)) => return Err(bad("informe bitrate (CBR) ou vbr, não os dois".into())),
+            (Some(b), None) => {
+                if !encode::CBR_RATES.contains(&b) {
+                    return Err(bad("bitrate: 128, 192, 256 ou 320 (kbps)".into()));
+                }
+                out.insert("bitrate".into(), json!(b));
+            }
+            (None, Some(q)) => {
+                if q > encode::VBR_MAX {
+                    return Err(bad(format!("vbr: de 0 (melhor) a {}", encode::VBR_MAX)));
+                }
+                out.insert("vbr".into(), json!(q));
+            }
+            (None, None) => {}
+        }
+    }
+    for key in ["title", "artist", "album"] {
+        match obj.get(key).filter(|v| !v.is_null()) {
+            None => {}
+            Some(Value::String(t)) => {
+                // o que vai para o banco já está limpo; passar do limite (antes ou depois da limpeza) recusa
+                let too_long = || bad(format!("{key}: no máximo {} caracteres", encode::META_MAX_CHARS));
+                if t.chars().count() > encode::META_MAX_CHARS * 4 {
+                    return Err(too_long());
+                }
+                if let Some(clean) = encode::clean_text(t) {
+                    if clean.chars().count() > encode::META_MAX_CHARS {
+                        return Err(too_long());
+                    }
+                    out.insert(key.into(), json!(clean));
+                }
+            }
+            Some(_) => return Err(bad(format!("{key}: texto"))),
+        }
+    }
+    Ok(Value::Object(out))
+}
+
 pub async fn create(State(s): State<AppState>, auth: Auth, Json(b): Json<NewJob>) -> Result<(StatusCode, Json<Value>), ApiError> {
-    if !matches!(b.kind.as_str(), "flac" | "audio_to_midi") {
-        return Err(err(StatusCode::BAD_REQUEST, "kind: flac ou audio_to_midi"));
+    if !matches!(b.kind.as_str(), "flac" | "audio_to_midi" | "encode_audio") {
+        return Err(err(StatusCode::BAD_REQUEST, "kind: flac, audio_to_midi ou encode_audio"));
+    }
+    if b.kind == "encode_audio" && b.params.as_ref().is_none_or(Value::is_null) {
+        return Err(err(StatusCode::BAD_REQUEST, "params: informe o formato (format: flac ou mp3)"));
     }
     if !storage::valid_hash(&b.sample) {
         return Err(err(StatusCode::BAD_REQUEST, "sample: hash SHA-256 inválido"));
@@ -129,6 +217,21 @@ pub async fn create(State(s): State<AppState>, auth: Auth, Json(b): Json<NewJob>
 
 pub async fn get(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>) -> ApiResult<job::Model> {
     Job::find_by_id(id).filter(job::Column::OwnerId.eq(auth.user_id)).one(&s.db).await?.map(Json).ok_or_else(ApiError::not_found)
+}
+
+/// Tira uma tarefa do histórico da conta (a espera do app foi cancelada, ou ele já baixou o resultado). Tarefa
+/// rodando não se interrompe: 409, e o resultado dela fica como áudio sem uso para a limpeza da conta.
+pub async fn delete(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>) -> Result<StatusCode, ApiError> {
+    let r = sqlx::query("DELETE FROM jobs WHERE id = $1 AND owner_id = $2 AND status <> 'running'").bind(id).bind(auth.user_id).execute(&s.pool).await?;
+    if r.rows_affected() > 0 {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+    let exists: Option<(i32,)> =
+        sqlx::query_as("SELECT 1 FROM jobs WHERE id = $1 AND owner_id = $2").bind(id).bind(auth.user_id).fetch_optional(&s.pool).await?;
+    match exists {
+        Some(_) => Err(err(StatusCode::CONFLICT, "a tarefa está em andamento e não pode ser cancelada agora")),
+        None => Err(ApiError::not_found()),
+    }
 }
 
 pub async fn list(State(s): State<AppState>, auth: Auth) -> ApiResult<Vec<job::Model>> {
@@ -206,11 +309,43 @@ pub async fn worker(s: AppState) {
 
 enum Output {
     Flac(Vec<u8>),
+    /// Arquivo gerado pela exportação compactada e os campos do resultado (nome, MIME, avisos).
+    Encoded(Vec<u8>, Value),
     Result(Value),
+}
+
+/// Uma exportação por vez no processo: o WAV decodificado (até 30 min) ocupa centenas de MB, e duas juntas
+/// (mais a cópia do arquivo lido) passariam do que uma instância pequena aguenta.
+static ENCODE_ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn compute_encode(bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
+    let _turn = ENCODE_ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+    let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
+    let params = params.ok_or("parâmetros ausentes")?;
+    let format = encode::Format::from_params(params);
+    let meta = encode::Meta::from_params(Some(params));
+    let wav = audio::decode_wav_for_encode(&bytes)?;
+    drop(bytes);
+    set(0.05);
+    let duration = wav.pcm.data.len() as f64 / wav.pcm.channels as f64 / wav.pcm.rate as f64;
+    let done = encode::encode(&wav, format, &meta, &|f| set(0.05 + 0.95 * f))?;
+    let info = json!({
+        "format": format.extension(),
+        "mime": format.mime(),
+        "filename": encode::suggested_name(&meta, format.extension()),
+        "duration": duration,
+        "rate": wav.pcm.rate,
+        "channels": wav.pcm.channels,
+        "warnings": done.warnings,
+    });
+    Ok(Output::Encoded(done.bytes, info))
 }
 
 /// O trabalho pesado, síncrono: decodificar e processar o áudio já lido do armazenamento. Roda em `spawn_blocking`.
 fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
+    if kind == "encode_audio" {
+        return compute_encode(bytes, params, progress);
+    }
     let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
     let span = audio::Span {
         start: params.and_then(|p| p.get("start")).and_then(Value::as_f64).unwrap_or(0.0),
@@ -294,16 +429,18 @@ async fn run(s: &AppState, job: Claimed) {
         }
         Ok(Err(msg)) => Err(msg),
         Ok(Ok(Output::Result(v))) => Ok(v),
-        Ok(Ok(Output::Flac(bytes))) => save_flac(s, job.owner_id, bytes).await,
+        Ok(Ok(Output::Flac(bytes))) => save_output(s, job.owner_id, bytes, json!({})).await,
+        Ok(Ok(Output::Encoded(bytes, info))) => save_output(s, job.owner_id, bytes, info).await,
     };
     finish(&s.pool, job.id, outcome).await;
 }
 
-/// O FLAC gerado entra no armazenamento da conta como qualquer outro áudio (e conta na cota).
-async fn save_flac(s: &AppState, owner: Uuid, bytes: Vec<u8>) -> Result<Value, String> {
+/// O arquivo gerado (FLAC ou MP3) entra no armazenamento da conta como qualquer outro áudio (e conta na cota). O
+/// resultado da tarefa leva o hash em `sample`, o tamanho em `bytes` e o que mais `info` trouxer.
+async fn save_output(s: &AppState, owner: Uuid, bytes: Vec<u8>, info: Value) -> Result<Value, String> {
     let hash = storage::hex_sha256(&bytes);
     let internal = |what: &str, e: &dyn std::fmt::Display| {
-        tracing::error!(error = %e, "falha ao {what} o FLAC");
+        tracing::error!(error = %e, "falha ao {what} o arquivo gerado");
         "erro interno ao gravar o arquivo".to_string()
     };
     // a trava do hash cobre gravar e registrar: apagar o mesmo conteúdo de outra conta não pode cair no meio
@@ -314,10 +451,16 @@ async fn save_flac(s: &AppState, owner: Uuid, bytes: Vec<u8>) -> Result<Value, S
         lock.commit().await.map_err(|e| internal("liberar a trava do", &e))?;
     }
     match registered {
-        Ok(()) => Ok(json!({"sample": hash, "bytes": bytes.len()})),
+        Ok(()) => {
+            let mut out = json!({"sample": hash, "bytes": bytes.len()});
+            if let (Some(o), Value::Object(extra)) = (out.as_object_mut(), info) {
+                o.extend(extra);
+            }
+            Ok(out)
+        }
         Err(RegisterError::Quota) => Err(storage::QUOTA_MESSAGE.into()),
         Err(RegisterError::Db(e)) => {
-            tracing::error!(error = %e, "falha ao registrar o FLAC");
+            tracing::error!(error = %e, "falha ao registrar o arquivo gerado");
             Err("erro interno ao registrar o arquivo".into())
         }
     }

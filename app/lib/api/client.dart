@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../auth/session.dart';
 import '../models/account.dart';
 import '../models/project.dart';
+import 'export_api.dart';
 import 'storage.dart';
 import 'sync_api.dart';
 
@@ -36,7 +37,7 @@ class Unauthenticated implements Exception {
 ///
 /// Toda chamada leva o JWT de acesso. Num 401 tenta UMA renovação (dividida entre as chamadas
 /// simultâneas) e repete; se a renovação também falha, a sessão acabou.
-class ApiClient implements SyncApi {
+class ApiClient implements SyncApi, ExportApi {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
@@ -273,6 +274,7 @@ class ApiClient implements SyncApi {
 
   /// Apaga um áudio sem uso; devolve os bytes liberados. Em uso, o servidor responde 409; enviado na última hora,
   /// também 409, e aí lança [SampleRecent] (com [force] apaga mesmo assim).
+  @override
   Future<int> deleteSample(String hash, {bool force = false}) async {
     final r = await _send('DELETE', '/api/samples/$hash', q: force ? {'force': 'true'} : null);
     if (r.statusCode == 409) {
@@ -291,4 +293,7 @@ class ApiClient implements SyncApi {
 
   @override
   Future<SyncJob> job(String id) async => SyncJob.fromJson(await _get('/api/jobs/$id') as Map<String, dynamic>);
+
+  @override
+  Future<void> deleteJob(String id) => _delete('/api/jobs/$id');
 }

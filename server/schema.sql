@@ -115,7 +115,7 @@ CREATE INDEX IF NOT EXISTS samples_hash ON samples (hash);
 CREATE TABLE IF NOT EXISTS jobs (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  kind        TEXT        NOT NULL CHECK (kind IN ('flac', 'audio_to_midi')),
+  kind        TEXT        NOT NULL CHECK (kind IN ('flac', 'audio_to_midi', 'encode_audio')),
   sample_hash TEXT        NOT NULL,
   params      JSONB,
   status      TEXT        NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'done', 'failed')),

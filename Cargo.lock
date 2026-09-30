@@ -1457,6 +1457,7 @@ dependencies = [
  "rand 0.8.8",
  "reqwest",
  "rusty-s3",
+ "rusty_mp3",
  "sea-orm",
  "serde",
  "serde_json",
@@ -2445,6 +2446,12 @@ dependencies = [
  "url",
  "zeroize",
 ]
+
+[[package]]
+name = "rusty_mp3"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2f55a456c3ee21793595c31f1e89419172e556bbb35390f2a39569c09f5a2db"
 
 [[package]]
 name = "ryu"

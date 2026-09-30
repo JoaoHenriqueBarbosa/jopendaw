@@ -11,6 +11,9 @@ pub const UNSUPPORTED: &str = "formato de áudio não suportado (aceitos: WAV, F
 /// Duração máxima que uma tarefa decodifica: a memória e o tempo de análise crescem com ela.
 pub const MAX_SECONDS: f64 = 600.0;
 
+/// Duração máxima de um WAV a exportar em FLAC ou MP3 (`encode_audio`): uma música ou sessão inteira.
+pub const ENCODE_MAX_SECONDS: f64 = 1800.0;
+
 fn too_long() -> String {
     format!("áudio longo demais: o máximo é {} minutos", (MAX_SECONDS / 60.0) as u32)
 }
@@ -76,6 +79,27 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
 
 /// Como [`decode_wav`], mas só o trecho `span` vira amostras.
 pub fn decode_wav_span(bytes: &[u8], span: Span) -> Result<Pcm, String> {
+    parse_wav(bytes, span, MAX_SECONDS).map(|w| w.pcm)
+}
+
+/// O WAV já em 24 bits mais o que o arquivo dizia ser (para avisar de perda ao gravar em 16 bits, por exemplo).
+pub struct WavIn {
+    pub pcm: Pcm,
+    /// Profundidade do arquivo de origem (16, 24 ou 32).
+    pub bits: usize,
+    /// Ponto flutuante de 32 bits (a origem passa a 24 bits inteiros ao ser lida).
+    pub float: bool,
+}
+
+/// Lê um WAV inteiro para a exportação (`encode_audio`): só WAV, até [`ENCODE_MAX_SECONDS`].
+pub fn decode_wav_for_encode(bytes: &[u8]) -> Result<WavIn, String> {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("o arquivo enviado não é um WAV (a exportação compactada parte de um WAV de 16, 24 ou 32 bits)".into());
+    }
+    parse_wav(bytes, Span::default(), ENCODE_MAX_SECONDS)
+}
+
+fn parse_wav(bytes: &[u8], span: Span, max_seconds: f64) -> Result<WavIn, String> {
     let bad = || UNSUPPORTED.to_string();
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err(bad());
@@ -117,8 +141,12 @@ pub fn decode_wav_span(bytes: &[u8], span: Span) -> Result<Pcm, String> {
     let (from, to) = span.frames(rate);
     let (from, to) = (from.min(total), to.min(total));
     let usable = &usable[from * frame.max(1)..to.max(from) * frame.max(1)];
-    if usable.len() / frame.max(1) > (MAX_SECONDS * rate as f64) as usize {
-        return Err(span.too_long_error());
+    if usable.len() / frame.max(1) > (max_seconds * rate as f64) as usize {
+        return Err(if max_seconds > MAX_SECONDS {
+            format!("áudio longo demais: o máximo é {} minutos", (max_seconds / 60.0) as u32)
+        } else {
+            span.too_long_error()
+        });
     }
     let samples: Vec<i32> = match (tag, bits) {
         (1, 16) => usable.as_chunks::<2>().0.iter().map(|c| (i16::from_le_bytes(*c) as i32) << 8).collect(),
@@ -139,7 +167,7 @@ pub fn decode_wav_span(bytes: &[u8], span: Span) -> Result<Pcm, String> {
     if samples.is_empty() {
         return Err(span.empty_error());
     }
-    Ok(Pcm { rate, channels, data: samples })
+    Ok(WavIn { pcm: Pcm { rate, channels, data: samples }, bits, float: tag == 3 })
 }
 
 /// Decodifica qualquer formato aceito: o WAV pelo caminho rápido próprio e o resto (FLAC, MP3, OGG
@@ -287,6 +315,15 @@ impl Pcm {
 
 /// Codifica em FLAC de 24 bits (puro Rust, sem depender de libFLAC instalada).
 pub fn encode_flac(pcm: &Pcm) -> Result<Vec<u8>, String> {
+    encode_flac_with(pcm, 24, FLAC_DEFAULT_LEVEL)
+}
+
+/// Nível de compressão padrão do FLAC (0 a 8, como o `flac -N`): o padrão do flacenc.
+pub const FLAC_DEFAULT_LEVEL: u8 = 5;
+
+/// Codifica em FLAC de `bits` (16 ou 24) no nível de compressão `level` (0 a 8; mais alto = arquivo menor e
+/// mais lento). De 24 para 16 bits arredonda (sem dither) e satura.
+pub fn encode_flac_with(pcm: &Pcm, bits: u32, level: u8) -> Result<Vec<u8>, String> {
     use flacenc::{
         bitsink::ByteSink,
         component::{BitRepr, Stream},
@@ -294,12 +331,41 @@ pub fn encode_flac(pcm: &Pcm) -> Result<Vec<u8>, String> {
         source::{Context, FrameBuf, MemSource, Source},
     };
     let fail = |what: &str, e: &dyn std::fmt::Debug| format!("falha no FLAC ({what}): {e:?}");
-    let config = flacenc::config::Encoder::default().into_verified().map_err(|e| fail("configuração", &e))?;
+    if !matches!(bits, 16 | 24) {
+        return Err("FLAC: só 16 ou 24 bits".into());
+    }
+    let mut config = flacenc::config::Encoder::default();
+    // 0 a 2: só preditores fixos (rápido); 3 a 8: LPC de ordem crescente
+    match level {
+        0 => {
+            config.subframe_coding.use_lpc = false;
+            config.subframe_coding.fixed.max_order = 1;
+            config.stereo_coding.use_leftside = false;
+            config.stereo_coding.use_rightside = false;
+            config.stereo_coding.use_midside = false;
+        }
+        1 | 2 => config.subframe_coding.use_lpc = false,
+        3 => config.subframe_coding.qlpc.lpc_order = 6,
+        4 => config.subframe_coding.qlpc.lpc_order = 8,
+        5 => {}
+        6 => config.subframe_coding.qlpc.lpc_order = 12,
+        7 => config.subframe_coding.qlpc.lpc_order = 16,
+        8 => config.subframe_coding.qlpc.lpc_order = 24,
+        _ => return Err("FLAC: nível de compressão de 0 a 8".into()),
+    }
+    let config = config.into_verified().map_err(|e| fail("configuração", &e))?;
     let block = config.block_size;
-    let mut src = MemSource::from_samples(&pcm.data, pcm.channels, 24, pcm.rate as usize);
-    let mut stream = Stream::new(pcm.rate as usize, pcm.channels, 24).map_err(|e| fail("cabeçalho", &e))?;
+    let narrowed: Vec<i32>;
+    let samples: &[i32] = if bits == 24 {
+        &pcm.data
+    } else {
+        narrowed = pcm.data.iter().map(|&s| ((s + 128) >> 8).clamp(-32_768, 32_767)).collect();
+        &narrowed
+    };
+    let mut src = MemSource::from_samples(samples, pcm.channels, bits as usize, pcm.rate as usize);
+    let mut stream = Stream::new(pcm.rate as usize, pcm.channels, bits as usize).map_err(|e| fail("cabeçalho", &e))?;
     stream.stream_info_mut().set_block_sizes(block, block).map_err(|e| fail("blocos", &e))?;
-    let mut buf = (FrameBuf::with_size(pcm.channels, block).map_err(|e| fail("buffer", &e))?, Context::new(24, pcm.channels));
+    let mut buf = (FrameBuf::with_size(pcm.channels, block).map_err(|e| fail("buffer", &e))?, Context::new(bits as usize, pcm.channels));
 
     // o laço é o do `encode_with_fixed_block_size` do flacenc, aberto para corrigir o cabeçalho no
     // fim (ver abaixo): decodificadores estritos (symphonia, que o motor usa no Android) recusam

@@ -119,7 +119,7 @@ void main() {
     test('ida e volta em 16, 24 e 32 float', () {
       final l = f32([0, 0.25, -0.75, 0.999]);
       final r = f32([0.5, -0.5, 0.125, -1]);
-      for (final f in ExportFormat.values) {
+      for (final f in ExportFormat.values.where((f) => !f.compressed)) {
         final w = decodeWav(encodeWav([l, r], 22050, f, dither: false));
         expect(w.sampleRate, 22050);
         expect(w.bits, f.bits);

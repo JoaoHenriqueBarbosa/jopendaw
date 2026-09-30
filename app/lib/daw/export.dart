@@ -8,9 +8,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../api/client.dart';
+import '../api/export_api.dart';
+import '../auth/session.dart';
 import '../widgets/feedback.dart';
+import '../widgets/format.dart' show sentence;
 import '../widgets/responsive_scaffold.dart';
 import 'controller.dart';
+import 'export_compressed.dart';
 import 'export_options.dart';
 import 'loudness.dart';
 import 'loudness_panel.dart';
@@ -77,7 +82,12 @@ String _formatHint(ExportFormat f) => switch (f) {
   ExportFormat.wav16 => 'Qualidade de CD, o menor arquivo. Para ouvir e publicar.',
   ExportFormat.wav24 => 'O padrão de estúdio: folga para masterizar depois.',
   ExportFormat.wav32f => 'Sem perda nenhuma, nem acima de 0 dB. Para levar a outro programa.',
+  ExportFormat.flac => 'Sem perda, com bem menos espaço que o WAV. Convertido no servidor: precisa de conta e de rede.',
+  ExportFormat.mp3 => 'Leve, para compartilhar e ouvir em qualquer lugar (com perda). Convertido no servidor: precisa de conta e de rede.',
 };
+
+/// MP3 só nas taxas que o servidor aceita.
+bool _mp3Rate(int rate) => rate == 44100 || rate == 48000;
 
 /// As opções da exportação: formato, taxa, intervalo, stems, normalizar e cauda. Devolve as
 /// [ExportOptions] escolhidas (null ao cancelar).
@@ -114,6 +124,9 @@ class _ExportDialogState extends State<ExportDialog> {
   late double _ceiling = widget.initial.ceilingDbtp.clamp(kMinCeiling, kMaxCeiling).toDouble();
   late bool _loudStems = widget.initial.normalizeStems;
   late double _tail = widget.initial.tail.clamp(0, 10).toDouble();
+  late int _flacBits = widget.initial.flacBits == 16 ? 16 : 24;
+  late FlacLevel _flacLevel = widget.initial.flacLevel;
+  late Mp3Quality _mp3 = widget.initial.mp3Quality;
   // só taxas que a lista oferece; a do aparelho é o null (ela pode ter mudado desde a última vez)
   late int? _rate = _rates.contains(widget.initial.sampleRate) && widget.initial.sampleRate != widget.c.engineRate.round() ? widget.initial.sampleRate : null;
 
@@ -126,6 +139,17 @@ class _ExportDialogState extends State<ExportDialog> {
   double get _spanSeconds => _doc.tempo.isSingle ? (_span.$2 - _span.$1) * 60 / _doc.bpm : _doc.secondsAt(_span.$2) - _doc.secondsAt(_span.$1);
 
   bool get _empty => _span.$2 - _span.$1 <= _minLoop;
+
+  int get _effectiveRate => _rate ?? widget.c.engineRate.round();
+
+  /// O servidor recusa arquivo com mais de 30 minutos (a duração já inclui a cauda).
+  bool get _tooLongForServer => _format.compressed && !_empty && _spanSeconds + _tail > kEncodeMaxSeconds;
+
+  /// Ao escolher MP3 numa taxa que ele não aceita, passa para 44,1 kHz.
+  void _pickFormat(ExportFormat f) {
+    _format = f;
+    if (f == ExportFormat.mp3 && !_mp3Rate(_effectiveRate)) _rate = 44100;
+  }
 
   String _bars(double from, double to) {
     final bpb = _doc.beatsPerBar;
@@ -148,6 +172,9 @@ class _ExportDialogState extends State<ExportDialog> {
       normalizeStems: _loud && _stems && _loudStems,
       tail: _tail,
       sampleRate: _rate,
+      flacBits: _flacBits,
+      flacLevel: _flacLevel,
+      mp3Quality: _mp3,
     ),
   );
 
@@ -201,19 +228,50 @@ class _ExportDialogState extends State<ExportDialog> {
               initialValue: _format,
               isExpanded: true,
               items: [for (final f in ExportFormat.values) DropdownMenuItem(value: f, child: Text(f.label))],
-              onChanged: (v) => setState(() => _format = v ?? _format),
+              onChanged: (v) => setState(() => _pickFormat(v ?? _format)),
             ),
             const SizedBox(height: 4),
             Text(_formatHint(_format), style: muted),
+            if (_format == ExportFormat.flac) ...[
+              const SizedBox(height: 12),
+              _Label('Profundidade e compressão', style: muted),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final b in const [16, 24])
+                    ChoiceChip(key: Key('flac-bits-$b'), label: Text('$b bits'), selected: _flacBits == b, onSelected: (_) => setState(() => _flacBits = b)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<FlacLevel>(
+                key: const Key('flac-level'),
+                initialValue: _flacLevel,
+                isExpanded: true,
+                items: [for (final l in FlacLevel.values) DropdownMenuItem(value: l, child: Text(l.label))],
+                onChanged: (v) => setState(() => _flacLevel = v ?? _flacLevel),
+              ),
+            ],
+            if (_format == ExportFormat.mp3) ...[
+              const SizedBox(height: 12),
+              _Label('Qualidade do MP3', style: muted),
+              DropdownButtonFormField<Mp3Quality>(
+                key: const Key('mp3-quality'),
+                initialValue: _mp3,
+                isExpanded: true,
+                items: [for (final q in Mp3Quality.values) DropdownMenuItem(value: q, child: Text(q.label))],
+                onChanged: (v) => setState(() => _mp3 = v ?? _mp3),
+              ),
+            ],
             const SizedBox(height: 16),
             _Label('Taxa de amostragem', style: muted),
             DropdownButtonFormField<int?>(
               initialValue: _rate,
               isExpanded: true,
               items: [
-                DropdownMenuItem(value: null, child: Text('A do aparelho (${_khz(engineRate)})')),
+                if (_format != ExportFormat.mp3 || _mp3Rate(engineRate)) DropdownMenuItem(value: null, child: Text('A do aparelho (${_khz(engineRate)})')),
                 for (final r in _rates)
-                  if (r != engineRate) DropdownMenuItem(value: r, child: Text(_khz(r))),
+                  if (r != engineRate && (_format != ExportFormat.mp3 || _mp3Rate(r))) DropdownMenuItem(value: r, child: Text(_khz(r))),
               ],
               onChanged: (v) => setState(() => _rate = v),
             ),
@@ -261,6 +319,10 @@ class _ExportDialogState extends State<ExportDialog> {
             ),
             Slider(value: _tail, max: 10, divisions: 20, label: _seconds(_tail), onChanged: (v) => setState(() => _tail = v)),
             Text('Tempo depois do fim para o reverb, o delay e a soltura das notas terminarem.', style: muted),
+            if (_tooLongForServer) ...[
+              const SizedBox(height: 12),
+              const InlineNotice('O servidor converte até 30 minutos por arquivo: escolha um trecho menor, diminua a cauda ou exporte em WAV.'),
+            ],
             if (_empty) ...[
               const SizedBox(height: 12),
               InlineNotice(
@@ -293,7 +355,7 @@ class _ExportDialogState extends State<ExportDialog> {
             label: const Text('Notas em MIDI (.mid)…'),
           ),
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        FilledButton.icon(onPressed: _empty ? null : _submit, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),
+        FilledButton.icon(onPressed: _empty || _tooLongForServer ? null : _submit, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),
       ],
     );
   }
@@ -317,7 +379,11 @@ class _Label extends StatelessWidget {
 class ExportProgressDialog extends StatefulWidget {
   final DawController c;
   final ExportOptions options;
-  const ExportProgressDialog({super.key, required this.c, required this.options});
+
+  /// O servidor (FLAC e MP3) e a sessão; os testes trocam por falsos.
+  final ExportApi? api;
+  final bool Function()? signedIn;
+  const ExportProgressDialog({super.key, required this.c, required this.options, this.api, this.signedIn});
 
   @override
   State<ExportProgressDialog> createState() => _ExportProgressDialogState();
@@ -337,6 +403,14 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
   bool _canceled = false;
   final _elapsed = Stopwatch();
 
+  /// FLAC e MP3: a conversão no servidor, arquivo por arquivo, e o WAV guardado se ela falhar.
+  CompressedExport? _cx;
+
+  /// A compactação falhou e há WAV renderizado esperando a pessoa decidir.
+  bool _fallback = false;
+  bool _savingWav = false;
+  int _wavSaved = 0;
+
   @override
   void initState() {
     super.initState();
@@ -350,9 +424,21 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
     // o controlador não lança: falha e aviso chegam no error dele, que começa limpo
     c.clearError();
     String? error;
+    final options = widget.options;
+    if (options.format.compressed) {
+      _cx = CompressedExport(
+        api: widget.api ?? ApiClient.instance,
+        options: options,
+        album: c.project.name,
+        expectedFiles: options.stems ? c.doc.tracks.length + 1 : 1,
+        save: c.saveExportedFile,
+        signedIn: widget.signedIn ?? () => Session.instance.signedIn,
+      )..addListener(() => mounted ? setState(() {}) : null);
+    }
     try {
       await c.exportAudio(
-        widget.options,
+        options,
+        sink: _cx?.deliver,
         onProgress: (p) {
           if (!mounted || !p.isFinite) return;
           final v = p.clamp(0.0, 1.0);
@@ -382,8 +468,10 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         error ??= said;
       }
     }
+    final pending = _cx?.fallbacks.isNotEmpty ?? false;
     setState(() {
-      _done = error == null;
+      _fallback = error == null && pending;
+      _done = error == null && !pending;
       _error = error;
       _warning = warning;
     });
@@ -391,18 +479,59 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
 
   void _cancel() {
     setState(() => _canceled = true);
+    _cx?.cancel();
     widget.c.cancelRender();
   }
 
-  bool get _running => !_done && _error == null;
+  /// "Exportar em WAV mesmo assim": salva os WAV que já estavam renderizados.
+  Future<void> _saveWavs() async {
+    setState(() => _savingWav = true);
+    try {
+      final n = await _cx!.saveWavs();
+      if (!mounted) return;
+      setState(() {
+        _wavSaved = n;
+        _fallback = false;
+        _done = true;
+        _savingWav = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = describeActionError(e);
+        _fallback = false;
+        _savingWav = false;
+      });
+    }
+  }
+
+  bool get _running => !_done && _error == null && !_fallback;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall!.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final p = _progress;
+    final cx = _cx;
+    final stage = cx?.stage;
+    final p = stage != null ? cx!.fraction : _progress;
     final Widget body;
-    if (_running) {
+    if (_fallback) {
+      final n = cx!.fallbacks.length;
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InlineNotice('Não deu para exportar em ${widget.options.format == ExportFormat.mp3 ? 'MP3' : 'FLAC'}: ${cx.failure ?? 'o servidor não respondeu.'}'),
+          const SizedBox(height: 12),
+          Text(
+            cx.compressed > 0
+                ? '${cx.compressed} ${cx.compressed == 1 ? 'arquivo foi salvo' : 'arquivos foram salvos'} compactados. '
+                      '${n == 1 ? 'O outro já está renderizado' : 'Os outros $n já estão renderizados'} em WAV: dá para salvar assim, sem renderizar de novo.'
+                : 'O ${n == 1 ? 'arquivo já está renderizado' : 'áudio já está renderizado ($n arquivos)'} em WAV: dá para salvar assim, sem renderizar de novo.',
+          ),
+        ],
+      );
+    } else if (_running) {
       body = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -411,12 +540,13 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
           const SizedBox(height: 10),
           Text(
             // o render termina antes do arquivo: no fim ainda falta converter e entregar os bytes
-            p == null
-                ? 'Preparando…'
-                : p >= 1
-                ? 'Salvando o arquivo…'
-                // depois dos 95% o render acabou e a mixagem está sendo medida e normalizada
-                : (p >= 0.95 && widget.options.normalizesLoudness ? 'Medindo o loudness…' : 'Renderizando ${(p * 100).floor()}%'),
+            stage ??
+                (p == null
+                    ? 'Preparando…'
+                    : p >= 1
+                    ? 'Salvando o arquivo…'
+                    // depois dos 95% o render acabou e a mixagem está sendo medida e normalizada
+                    : (p >= 0.95 && widget.options.normalizesLoudness ? 'Medindo o loudness…' : 'Renderizando ${(p * 100).floor()}%')),
             style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
           ),
           const SizedBox(height: 6),
@@ -424,7 +554,7 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         ],
       );
     } else if (_done) {
-      final format = widget.options.format.label;
+      final format = _wavSaved > 0 ? 'WAV' : widget.options.format.label;
       final secs = math.max(1, (_elapsed.elapsedMilliseconds / 1000).ceil());
       final warning = _warning;
       final report = widget.options.normalizesLoudness ? widget.c.exportReport : null;
@@ -452,6 +582,7 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
             if (report.limitedByCeiling || report.unmeasurable) InlineNotice(report.describe()) else Text(report.describe()),
           ],
           if (warning != null) ...[const SizedBox(height: 12), InlineNotice(warning)],
+          for (final w in cx?.warnings ?? const <String>[]) ...[const SizedBox(height: 12), InlineNotice(sentence(w))],
         ],
       );
     } else {
@@ -462,12 +593,21 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
       child: AlertDialog(
         scrollable: true,
         insetPadding: isDesktop(context) ? const EdgeInsets.symmetric(horizontal: 40, vertical: 24) : const EdgeInsets.all(16),
-        title: Text(_running ? 'Exportando…' : (_done ? 'Exportação concluída' : 'A exportação falhou')),
+        title: Text(_running ? 'Exportando…' : (_fallback ? 'Não deu para compactar' : (_done ? 'Exportação concluída' : 'A exportação falhou'))),
         content: SizedBox(width: 400, child: body),
         actions: [
           if (_running)
             TextButton(onPressed: _canceled || (p ?? 0) >= 1 ? null : _cancel, child: Text(_canceled ? 'Cancelando…' : 'Cancelar'))
-          else if (_error != null) ...[
+          else if (_fallback) ...[
+            TextButton(onPressed: _savingWav ? null : () => Navigator.pop(context, false), child: const Text('Fechar')),
+            TextButton(onPressed: _savingWav ? null : () => Navigator.pop(context, true), child: const Text('Voltar às opções')),
+            FilledButton.icon(
+              key: const Key('export-wav-anyway'),
+              onPressed: _savingWav ? null : _saveWavs,
+              icon: const Icon(Icons.save_alt),
+              label: const Text('Exportar em WAV mesmo assim'),
+            ),
+          ] else if (_error != null) ...[
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Fechar')),
             FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Voltar às opções')),
           ] else if (_done)

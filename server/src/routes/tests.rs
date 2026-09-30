@@ -1098,3 +1098,7 @@ async fn muitas_chamadas_simultaneas_com_a_trava_nao_esgotam_o_pool() {
     // o que não pode aparecer é 5xx (timeout de conexão do pool vira 500)
     assert!(out.iter().all(|s| !s.is_server_error()), "{out:?}");
 }
+
+// a macro `env_or_skip!` só vale para o que vem depois dela
+#[path = "tests_encode.rs"]
+mod encode_routes;

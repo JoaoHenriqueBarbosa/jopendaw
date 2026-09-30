@@ -2,6 +2,9 @@ mod audio;
 mod auth;
 mod config;
 mod db;
+mod encode;
+#[cfg(test)]
+mod encode_tests;
 mod entities;
 mod mail;
 mod oauth;

@@ -105,7 +105,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/samples/{hash}", get(samples::download).put(samples::upload).delete(samples::delete).layer(DefaultBodyLimit::disable()))
         // tarefas pesadas
         .route("/api/jobs", get(jobs::list).post(jobs::create))
-        .route("/api/jobs/{id}", get(jobs::get))
+        .route("/api/jobs/{id}", get(jobs::get).delete(jobs::delete))
         // `if_not_present`: a rota de download dos áudios põe o próprio Cache-Control (imutável, por
         // hash) e o resto da API cai no no-store
         .layer(SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
