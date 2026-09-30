@@ -21,6 +21,12 @@ use crate::dsp::{Adsr, Stage};
 use crate::instrument::{Instrument, sampler_param as param};
 use crate::{Sample, hermite};
 
+// zonas de teclado e velocidade (multi-sample) e fatiamento de loops: ver `sampler_zones.rs`
+#[path = "sampler_zones.rs"]
+mod zones;
+pub use zones::{FIRST_SLICE_NOTE, MAX_SLICES, MAX_ZONES, SliceMode, ZoneDef, slice_points, slice_zones};
+use zones::{MAX_GROUPS, Span, Zone};
+
 /// Vozes tocáveis ao mesmo tempo.
 pub const VOICES: usize = 16;
 /// Vagas totais: as tocáveis e as que terminam o fade de uma voz roubada.
@@ -82,7 +88,6 @@ fn butterworth4(nu: f64) -> [Biquad; 2] {
     [Biquad::lowpass(nu, 0.541_196_1), Biquad::lowpass(nu, 1.306_563)]
 }
 
-#[derive(Debug)]
 struct Voice {
     on: bool,
     pitch: u8,
@@ -113,6 +118,10 @@ struct Voice {
     /// Fade da voz roubada: ganho atual e quanto cai por quadro (0 = não está roubada).
     fade: f32,
     fade_step: f32,
+    /// Trecho, loop, pan e afinação da zona que disparou a voz (`Span::whole` no sampler sem zonas).
+    span: Span,
+    /// O áudio da zona: a voz o guarda para que mexer nas zonas com ela soando não a corte.
+    own: Option<Arc<Sample>>,
 }
 
 impl Voice {
@@ -135,6 +144,8 @@ impl Voice {
             age: 0,
             fade: 1.0,
             fade_step: 0.0,
+            span: Span::whole(0),
+            own: None,
         }
     }
 
@@ -167,7 +178,7 @@ impl Voice {
             self.aa = Some(butterworth4(0.45 / step));
         }
         // o histórico começa com o silêncio antes do áudio (x[-1]) e os três primeiros quadros
-        self.next = 0;
+        self.next = self.span.first;
         let (c0, c1) = channels(sample, self.stereo);
         for _ in 0..3 {
             self.push(c0, c1);
@@ -203,6 +214,7 @@ impl Voice {
     fn kill(&mut self) {
         self.on = false;
         self.env.reset();
+        self.own = None;
     }
 
     /// Lê o próximo quadro do áudio (silêncio depois do fim) para o histórico.
@@ -210,9 +222,17 @@ impl Voice {
     fn push(&mut self, c0: &[f32], c1: &[f32]) {
         let k = self.next;
         self.next += 1;
-        let mut x = [c0.get(k).copied().unwrap_or(0.0), 0.0];
+        // loop da zona: o quadro `end` nunca é lido, a leitura volta para `start` (sem emenda)
+        if let Some((start, end)) = self.span.looped
+            && self.next >= end
+        {
+            self.next = start;
+        }
+        // depois do fim do trecho da zona é silêncio
+        let inside = k < self.span.limit;
+        let mut x = [if inside { c0.get(k).copied().unwrap_or(0.0) } else { 0.0 }, 0.0];
         let chans = if self.stereo {
-            x[1] = c1.get(k).copied().unwrap_or(0.0);
+            x[1] = if inside { c1.get(k).copied().unwrap_or(0.0) } else { 0.0 };
             2
         } else {
             1
@@ -237,7 +257,7 @@ impl Voice {
         }
         let (c0, c1) = channels(sample, self.stereo);
         // a posição atual é `next - 3 + frac`; passou do último quadro, a voz acabou
-        let end = self.len + 3;
+        let end = self.span.limit + 3;
         for (i, (l, r)) in left.iter_mut().zip(right.iter_mut()).enumerate() {
             if self.next >= end {
                 self.kill();
@@ -257,6 +277,13 @@ impl Voice {
                 }
                 g *= self.fade;
             }
+            if self.span.fade > 0.0 {
+                // fim do trecho da zona: desce a zero em ~1 ms, sem estalo nas fatias
+                let left = self.span.limit as f64 - (self.next as f64 - 3.0 + self.frac);
+                if left < self.span.fade {
+                    g *= (left / self.span.fade).max(0.0) as f32;
+                }
+            }
             let t = self.frac as f32;
             let [a, b, c, d] = self.hist[0];
             let yl = hermite(a, b, c, d, t);
@@ -266,8 +293,8 @@ impl Voice {
             } else {
                 yl
             };
-            *l += yl * g;
-            *r += yr * g;
+            *l += yl * g * self.span.gl;
+            *r += yr * g * self.span.gr;
             self.frac += self.step;
             while self.frac >= 1.0 {
                 self.frac -= 1.0;
@@ -303,6 +330,9 @@ pub struct Sampler {
     /// Quanto do caminho até o volume pedido sobra a cada quadro.
     level_pole: f32,
     fade_step: f32,
+    /// Zonas (vazio = instrumento de sample único) e o contador do round-robin de cada grupo.
+    zones: Vec<Zone>,
+    rr: [u32; MAX_GROUPS],
 }
 
 impl Sampler {
@@ -323,13 +353,20 @@ impl Sampler {
             level_now: 0.8,
             level_pole: (-1.0 / (LEVEL_SECS * rate)).exp() as f32,
             fade_step: (1.0 / (STEAL_FADE_SECS * rate)) as f32,
+            zones: Vec::with_capacity(MAX_ZONES),
+            rr: [0; MAX_GROUPS],
         }
     }
 
     /// Quadros do áudio por quadro de saída para tocar `pitch` a partir de `sample`; `None` se o
     /// áudio não dá para tocar (taxa inválida, vazio).
     fn step_for(&self, pitch: u8, sample: &Sample) -> Option<f64> {
-        let semis = pitch as f64 - self.root as f64 + self.tune as f64 / 100.0;
+        self.step_at(pitch, sample, self.root, self.tune)
+    }
+
+    /// Como [`Sampler::step_for`] com a nota base e a afinação (cents) dadas: as da zona.
+    fn step_at(&self, pitch: u8, sample: &Sample, root: f32, cents: f32) -> Option<f64> {
+        let semis = pitch as f64 - root as f64 + cents as f64 / 100.0;
         let step = (semis / 12.0).exp2() * sample.rate() / self.rate;
         (step.is_finite() && step > 0.0 && sample.frames() > 0).then(|| step.min(MAX_STEP))
     }
@@ -340,8 +377,9 @@ impl Sampler {
             if !v.on {
                 continue;
             }
-            let src = if v.old { self.old.as_deref() } else { self.sample.as_deref() };
-            if let Some(step) = src.and_then(|s| self.step_for(v.pitch, s)) {
+            let src = v.own.as_deref().or(if v.old { self.old.as_deref() } else { self.sample.as_deref() });
+            let (root, cents) = if v.span.zone { (v.span.root, v.span.cents + self.tune) } else { (self.root, self.tune) };
+            if let Some(step) = src.and_then(|s| self.step_at(v.pitch, s, root, cents)) {
                 self.voices[i].retune(step);
             }
         }
@@ -357,6 +395,10 @@ impl Sampler {
 
 impl Instrument for Sampler {
     fn note_on(&mut self, pitch: u8, velocity: f32) {
+        if !self.zones.is_empty() {
+            self.note_on_zones(pitch, velocity);
+            return;
+        }
         let Some(sample) = self.sample.as_deref() else { return };
         let Some(step) = self.step_for(pitch, sample) else { return };
         let v = velocity.clamp(0.0, 1.0);
@@ -383,14 +425,15 @@ impl Instrument for Sampler {
             voices.iter().enumerate().filter(|(_, w)| w.fading()).min_by(|a, b| a.1.fade.total_cmp(&b.1.fade)).map_or(0, |(i, _)| i)
         });
         self.age += 1;
+        voices[slot].span = Span::whole(sample.frames());
+        voices[slot].own = None;
         voices[slot].start(pitch, gain, step, sample, self.adsr, self.age);
     }
 
     fn note_off(&mut self, pitch: u8) {
-        if self.one_shot {
-            return;
-        }
-        for v in self.voices.iter_mut().filter(|v| v.held() && !v.released && v.pitch == pitch) {
+        // com zonas, quem manda é o modo da zona; sem elas, o parâmetro do instrumento
+        let global = self.one_shot;
+        for v in self.voices.iter_mut().filter(|v| v.held() && !v.released && v.pitch == pitch && !(if v.span.zone { v.span.one_shot } else { global })) {
             v.release();
         }
     }
@@ -476,6 +519,18 @@ impl Instrument for Sampler {
         self.old = if sounding { previous } else { None };
     }
 
+    fn zones_clear(&mut self) {
+        self.clear_zones();
+    }
+
+    fn zone_add(&mut self, def: ZoneDef, sample_id: u32, sample: Option<Arc<Sample>>) {
+        self.add_zone(def, sample_id, sample);
+    }
+
+    fn zone_sample(&mut self, id: u32, sample: Option<Arc<Sample>>) {
+        self.bind_zone_sample(id, sample);
+    }
+
     fn render(&mut self, left: &mut [f32], right: &mut [f32]) {
         let n = left.len().min(right.len());
         if n == 0 {
@@ -489,9 +544,14 @@ impl Instrument for Sampler {
 
         let (current, old) = (self.sample.as_deref(), self.old.as_deref());
         for v in self.voices.iter_mut().filter(|v| v.on) {
-            match if v.old { old } else { current } {
+            // a voz de zona lê o áudio que guarda (a zona pode ter mudado ou perdido o áudio)
+            let own = v.own.take();
+            match own.as_deref().or(if v.old { old } else { current }) {
                 Some(s) => v.render(s, &mut left[..n], &mut right[..n], l0, dl),
                 None => v.kill(),
+            }
+            if v.on {
+                v.own = own;
             }
         }
     }

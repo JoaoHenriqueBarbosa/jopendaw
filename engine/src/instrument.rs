@@ -26,6 +26,12 @@ pub trait Instrument: Send {
     fn set_param(&mut self, id: u32, value: f32);
     /// O áudio que o instrumento toca (só o sampler usa).
     fn set_sample(&mut self, _sample: Option<Arc<Sample>>) {}
+    /// Apaga as zonas do instrumento (só o sampler tem zonas).
+    fn zones_clear(&mut self) {}
+    /// Acrescenta uma zona que toca o áudio `sample_id` (`sample` é o áudio, se já foi carregado).
+    fn zone_add(&mut self, _def: crate::sampler::ZoneDef, _sample_id: u32, _sample: Option<Arc<Sample>>) {}
+    /// O áudio `id` chegou (ou foi descartado, com `None`): as zonas que o citam passam a usá-lo.
+    fn zone_sample(&mut self, _id: u32, _sample: Option<Arc<Sample>>) {}
     /// Soma o som no bloco (`left.len() == right.len() <= MAX_BLOCK`). Não zera a saída.
     fn render(&mut self, left: &mut [f32], right: &mut [f32]);
     /// Alguma voz soando (inclusive em release)? Faixa sem voz ativa pode pular o `render`.

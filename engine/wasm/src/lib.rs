@@ -155,6 +155,55 @@ pub extern "C" fn instrument_sample(i: usize, sample_id: u32) {
     engine().set_instrument_sample(i, sample_id);
 }
 
+/// Apaga as zonas do sampler da faixa `i` (volta a tocar o áudio único de `instrument_sample`).
+#[unsafe(no_mangle)]
+pub extern "C" fn zones_clear(i: usize) {
+    engine().clear_zones(i);
+}
+
+/// Zona do sampler da faixa `i`: áudio `sample_id`, nota base, notas `lo..=hi`, velocidades
+/// `vlo..=vhi` (1..127), afinação em cents, ganho em dB, pan, modo (0 sustentado, ≠ 0 até o fim),
+/// trecho e loop em segundos do áudio (fim ≤ 0 é o fim do áudio) e grupo de round-robin (0 nenhum).
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn zone_add(
+    i: usize,
+    sample_id: u32,
+    root: u32,
+    lo: u32,
+    hi: u32,
+    vlo: u32,
+    vhi: u32,
+    cents: f32,
+    gain_db: f32,
+    pan: f32,
+    mode: u32,
+    start: f64,
+    end: f64,
+    loop_start: f64,
+    loop_end: f64,
+    group: u32,
+) {
+    let byte = |v: u32| v.min(127) as u8;
+    let def = jopendaw_engine::sampler::ZoneDef {
+        root: byte(root),
+        lo: byte(lo),
+        hi: byte(hi),
+        vlo: byte(vlo),
+        vhi: byte(vhi),
+        cents,
+        gain_db,
+        pan,
+        one_shot: mode != 0,
+        group: group.min(255) as u8,
+        start,
+        end,
+        loop_start,
+        loop_end,
+    };
+    engine().add_zone(i, sample_id, def);
+}
+
 /// Apaga as notas do sequenciador de todas as faixas (antes de reenviá-las com `note_add`).
 #[unsafe(no_mangle)]
 pub extern "C" fn notes_clear() {

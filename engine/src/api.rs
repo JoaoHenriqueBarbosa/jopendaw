@@ -27,6 +27,7 @@
 
 use std::fmt;
 
+use crate::sampler::ZoneDef;
 use crate::{Clip, Engine};
 use Ty::{F32, F64, I32, U32, Usize};
 
@@ -103,6 +104,8 @@ pub enum Call {
     Playing,
     LoudnessReset,
     Loudness { kind: u32 },
+    ZonesClear { track: usize },
+    ZoneAdd { track: usize, sample: u32, zone: ZoneDef },
 }
 
 /// Tipo de um parâmetro, como na assinatura do export do wasm (booleano é `u32` lá).
@@ -178,6 +181,29 @@ const CALLS: &[Signature] = &[
     sig("playing", &[], Some(U32)),
     sig("loudness_reset", &[], None),
     sig("loudness", &[("tipo", U32)], Some(F64)),
+    sig("zones_clear", &[("faixa", Usize)], None),
+    sig(
+        "zone_add",
+        &[
+            ("faixa", Usize),
+            ("sample", U32),
+            ("nota base", U32),
+            ("nota mínima", U32),
+            ("nota máxima", U32),
+            ("velocidade mínima", U32),
+            ("velocidade máxima", U32),
+            ("afinação em cents", F32),
+            ("ganho em dB", F32),
+            ("pan", F32),
+            ("modo", U32),
+            ("início", F64),
+            ("fim", F64),
+            ("início do loop", F64),
+            ("fim do loop", F64),
+            ("grupo", U32),
+        ],
+        None,
+    ),
 ];
 
 /// Exports do wasm que não passam por aqui: `init` recria o motor com a taxa do hospedeiro (quem
@@ -344,6 +370,31 @@ impl Call {
             "playing" => Call::Playing,
             "loudness_reset" => Call::LoudnessReset,
             "loudness" => Call::Loudness { kind: a.u32(0) },
+            "zones_clear" => Call::ZonesClear { track: a.usize(0) },
+            "zone_add" => {
+                // notas, velocidades e grupo passam pelo limite do MIDI; o modo é "diferente de zero" = até o fim
+                let byte = |k: usize| a.u32(k).min(127) as u8;
+                Call::ZoneAdd {
+                    track: a.usize(0),
+                    sample: a.u32(1),
+                    zone: ZoneDef {
+                        root: byte(2),
+                        lo: byte(3),
+                        hi: byte(4),
+                        vlo: byte(5),
+                        vhi: byte(6),
+                        cents: a.f32(7),
+                        gain_db: a.f32(8),
+                        pan: a.f32(9),
+                        one_shot: a.flag(10),
+                        start: a.f64(11),
+                        end: a.f64(12),
+                        loop_start: a.f64(13),
+                        loop_end: a.f64(14),
+                        group: a.u32(15).min(255) as u8,
+                    },
+                }
+            }
             // os testes passam por toda a tabela: chegar aqui é chamada nova sem conversão
             other => return Err(UnknownCall(format!("{other}: está na tabela de chamadas mas sem conversão (erro no motor)"))),
         })
@@ -425,6 +476,8 @@ impl Call {
             Call::Playing => return Some(f64::from(u32::from(e.playing()))),
             Call::LoudnessReset => e.loudness_reset(),
             Call::Loudness { kind } => return Some(e.loudness(kind)),
+            Call::ZonesClear { track } => e.clear_zones(track),
+            Call::ZoneAdd { track, sample, zone } => e.add_zone(track, sample, zone),
         }
         None
     }
@@ -533,6 +586,12 @@ mod tests {
         playing(e);
         e.live_on(1, 60, 1.0);
         run(e, 4);
+    }
+
+    /// O sampler da faixa 2 com uma zona que cobre o teclado inteiro, tocando o sample 1.
+    fn zoned(e: &mut Engine) {
+        playing(e);
+        e.add_zone(2, 1, ZoneDef::default().sanitized());
     }
 
     fn recording(e: &mut Engine) {
@@ -761,6 +820,14 @@ mod tests {
             case(send, "send_set", &[0.0, 0.0, 3.0, 0.25, 1.0], |e| e.set_send(0, 0, 3, 0.25, true), Changes),
             case(playing, "track_output", &[0.0, 3.0], |e| e.set_output(0, 3), Changes),
             case(automated, "auto_clear", &[], |e| e.clear_automation(), Changes),
+            case(zoned, "zones_clear", &[2.0], |e| e.clear_zones(2), Changes),
+            case(
+                playing,
+                "zone_add",
+                &[2.0, 1.0, 60.0, 0.0, 127.0, 1.0, 127.0, 0.0, -3.0, 0.25, 1.0, 0.1, 0.5, 0.0, 0.0, 2.0],
+                |e| e.add_zone(2, 1, ZoneDef { gain_db: -3.0, pan: 0.25, one_shot: true, start: 0.1, end: 0.5, group: 2, ..ZoneDef::default() }),
+                Changes,
+            ),
             valued(playing, "auto_lane", &[0.0, 0.0, 0.0, 0.0], |e| f64::from(e.add_lane(0, 0, 0, 0)), Changes).post(|e| e.add_point(0, 0.0, 0.05, 0.0)),
             case(lane, "auto_point", &[0.0, 0.0, 0.05, 0.0], |e| e.add_point(0, 0.0, 0.05, 0.0), Changes),
             case(compressor, "watch_fx", &[0.0, 0.0], |e| e.watch_fx(0, 0), Changes),
@@ -874,7 +941,7 @@ mod tests {
         for s in CALLS {
             let mut e = Engine::new(RATE);
             e.set_track_count(2);
-            let got = apply(&mut e, s.name, &[0.0; 8]).unwrap_or_else(|err| panic!("{err}"));
+            let got = apply(&mut e, s.name, &[0.0; 16]).unwrap_or_else(|err| panic!("{err}"));
             assert_eq!(got.is_some(), s.ret.is_some(), "{}: devolveu {got:?}", s.name);
         }
     }
@@ -948,6 +1015,7 @@ mod tests {
         // atravessa uma fila sem trava de elementos fixos até a thread de áudio, sem heap
         fn plain<T: Copy + Send + 'static>() {}
         plain::<Call>();
-        assert!(std::mem::size_of::<Call>() <= 64, "{} bytes", std::mem::size_of::<Call>());
+        // a maior é `zone_add` (uma zona inteira, com o trecho e o loop em f64)
+        assert!(std::mem::size_of::<Call>() <= 96, "{} bytes", std::mem::size_of::<Call>());
     }
 }

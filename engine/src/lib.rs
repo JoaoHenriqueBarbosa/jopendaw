@@ -749,6 +749,10 @@ impl Engine {
                 inst.set_sample(Some(sample.clone()));
             }
         }
+        // as zonas do sampler citam áudios por id, em qualquer faixa
+        for inst in self.lanes.iter_mut().filter_map(|l| l.instrument.as_mut()) {
+            inst.zone_sample(id, Some(sample.clone()));
+        }
         self.samples.insert(id, sample);
     }
 
@@ -760,6 +764,9 @@ impl Engine {
             if let Some(inst) = lane.instrument.as_mut() {
                 inst.set_sample(None);
             }
+        }
+        for inst in self.lanes.iter_mut().filter_map(|l| l.instrument.as_mut()) {
+            inst.zone_sample(id, None);
         }
     }
 
@@ -876,6 +883,23 @@ impl Engine {
         lane.sample = sample;
         if let Some(inst) = lane.instrument.as_mut() {
             inst.set_sample(if sample == 0 { None } else { self.samples.get(&sample).cloned() });
+        }
+    }
+
+    /// Apaga as zonas do sampler da faixa (volta a ser o de sample único). As notas que soam
+    /// terminam: cada voz guarda o trecho e o áudio da zona que a disparou.
+    pub fn clear_zones(&mut self, i: usize) {
+        if let Some(inst) = self.lanes.get_mut(i).and_then(|l| l.instrument.as_mut()) {
+            inst.zones_clear();
+        }
+    }
+
+    /// Acrescenta uma zona ao sampler da faixa; `sample` é o id de [`Engine::load_sample`] (pode
+    /// vir antes do áudio chegar). Em faixa que não é de sampler não faz nada.
+    pub fn add_zone(&mut self, i: usize, sample: u32, def: sampler::ZoneDef) {
+        let audio = self.samples.get(&sample).cloned();
+        if let Some(inst) = self.lanes.get_mut(i).and_then(|l| l.instrument.as_mut()) {
+            inst.zone_add(def, sample, audio);
         }
     }
 
