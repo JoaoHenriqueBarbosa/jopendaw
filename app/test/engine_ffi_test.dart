@@ -310,45 +310,23 @@ process.stdout.write(JSON.stringify(input.cases.map((c) => {
   });
 
   group('leituras do motor', () {
-    (Float32List, Float64List) memory(int max) {
-      final f64 = Float64List(max);
-      return (Float32List.view(f64.buffer), f64);
-    }
-
-    test('estado em f32: batida, tocando, indicador e os picos', () {
-      final (f32, f64) = memory(16);
-      f32.setAll(0, [12.25, 1, -4.5, 4, 0.5, 0.25, 1, 0.75]);
-      final s = parseEngineState(f32, f64, 8)!;
-      expect(s.beat, 12.25);
-      expect(s.playing, isTrue);
-      expect(s.fxMeter, -4.5);
-      expect(s.peaks, [0.5, 0.25, 1, 0.75]);
-      expect(s.spectrum, isNull);
-      final spectrum = Float32List.fromList([-60, -50]);
-      expect(parseEngineState(f32, f64, 8, spectrum: spectrum)!.spectrum, same(spectrum));
-    });
-
-    test('estado escrito em f64 também é entendido (a batida longe do zero não perde precisão)', () {
-      final (f32, f64) = memory(16);
-      f64.setAll(0, [1234.000123, 1, -2, 2, 0.5, 0.125]);
-      final s = parseEngineState(f32, f64, 6)!;
+    test('estado em f64: batida longe do zero sem perder precisão, tocando, indicador e os picos', () {
+      final v = Float64List(16)..setAll(0, [1234.000123, 1, -2, 2, 0.5, 0.125]);
+      final s = parseEngineState(v, 6)!;
       expect(s.beat, 1234.000123);
       expect(s.playing, isTrue);
       expect(s.fxMeter, -2);
       expect(s.peaks, [0.5, 0.125]);
-      // parado no zero, as duas leituras dão o mesmo
-      f64.setAll(0, [0, 0, 0, 0]);
-      final z = parseEngineState(f32, f64, 4)!;
+      expect(s.spectrum, isNull);
+      final spectrum = Float32List.fromList([-60, -50]);
+      expect(parseEngineState(v, 6, spectrum: spectrum)!.spectrum, same(spectrum));
+      // parado no zero
+      final z = parseEngineState(Float64List(16), 4)!;
       expect((z.beat, z.playing, z.peaks.length), (0, false, 0));
     });
 
     test('estado sem sentido (pouco, contagem maior que o escrito, tocando fora de 0/1) é ignorado', () {
-      // cada caso numa memória nova, com valores que não fazem sentido nem lidos como f64
-      EngineState? parse(List<double> values, int n) {
-        final (f32, f64) = memory(16);
-        f32.setAll(0, values);
-        return parseEngineState(f32, f64, n);
-      }
+      EngineState? parse(List<double> values, int n) => parseEngineState(Float64List(16)..setAll(0, values), n);
 
       expect(parse(const [1, 1, 0], 3), isNull);
       expect(parse(const [1, 1, 0.25, 9, 0.5], 5), isNull, reason: 'mais picos que o escrito');

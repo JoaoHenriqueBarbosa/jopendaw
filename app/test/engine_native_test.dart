@@ -150,10 +150,27 @@ void main() {
     await until(() => events.states.isNotEmpty);
     final s = events.states.first;
     expect((s.beat, s.playing, s.fxMeter), (2.5, true, -3));
-    expect(s.peaks, [
-      for (final p in [0.1, 0.2, 0.3, 0.4]) closeTo(p, 1e-6),
-    ]);
+    expect(s.peaks, [0.5, 1, 1.5, 2]);
     expect(s.spectrum, isNull, reason: 'sem ninguém observando, sem espectro');
+  }, skip: skip);
+
+  test('os retornos i32 vêm com o sinal certo (um −1 não vira 4294967295) e o estado é f64', () {
+    final lib = EngineLib.open(path!);
+    fake.lookupFunction<Void Function(Int32), void Function(int)>('fake_set_notes_pending')(1);
+    final out = calloc<Float>(64);
+    try {
+      expect(lib.recNotes(out, 64), -1, reason: 'jd_rec_notes: o fim da captura ainda não chegou');
+    } finally {
+      fake.lookupFunction<Void Function(Int32), void Function(int)>('fake_set_notes_pending')(0);
+      calloc.free(out);
+    }
+    final state = calloc<Double>(16);
+    try {
+      expect(lib.state(state, 16), 8);
+      expect(state.asTypedList(8).sublist(0, 4), [2.5, 1, -3, 4]);
+    } finally {
+      calloc.free(state);
+    }
   }, skip: skip);
 
   test('a medida de loudness chega por polling, só quando muda', () async {

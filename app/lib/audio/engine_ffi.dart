@@ -6,8 +6,9 @@
 /// indicador do efeito, espectro) vem por polling a ~60 Hz, como o worklet mandaria; o que é pesado
 /// (decodificar, renderizar, sha-256 de arquivo grande) roda num isolate para a tela não travar.
 ///
-/// Contrato binário assumido (C ABI). Inteiros vão como `intptr_t`, que serve para `u32`, `i32` e
-/// `usize` do lado do Rust (o chamado só olha os bits do tipo dele); handles são do tamanho de
+/// Contrato binário assumido (C ABI). Argumentos inteiros vão como `intptr_t`, que serve para `u32`, `i32` e
+/// `usize` do lado do Rust (o chamado só olha os bits do tipo dele); já os RETORNOS `i32` são lidos
+/// como `Int32` (o registrador de retorno tem lixo nos 32 bits altos e um −1 viraria 4294967295); handles são do tamanho de
 /// ponteiro (0 = falhou); áudio é f32; taxas, batidas e latências são f64:
 ///
 ///     f64    jd_start()                                   taxa da saída (≤ 0: não abriu)
@@ -15,8 +16,8 @@
 ///     i32    jd_calls(u8* json, usize len)                0 ok, < 0 erro
 ///     void   jd_sample_load(id, f32* l, f32* r, usize frames, f64 rate)   r nulo = mono; copia
 ///     void   jd_sample_drop(id)
-///     usize  jd_state(f32* out, usize max)                [batida, tocando, fxMeter, n, picos...]; em f64 também serve
-///     usize  jd_spectrum(f32* out, usize n)               faixas em dB; 0 sem nada observado
+///     i32    jd_state(f64* out, usize max)                [batida, tocando, fxMeter, n, picos...]; n valores ou < 0
+///     i32    jd_spectrum(f32* out, usize n)                faixas em dB; 0 sem nada observado
 ///     handle jd_decode(u8* bytes, usize len)
 ///     void   jd_decoded_info(handle, *frames, *channels, f64* rate)   inteiros de até 64 bits
 ///     void   jd_decoded_copy(handle, usize channel, f32* out)          `frames` floats
@@ -25,11 +26,11 @@
 ///     i32    jd_detect_bpm(f32* l, f32* r, usize frames, f64 rate, f64* bpm, f64* confidence)
 ///     f64    jd_input_start(i32 device)                   latência de entrada (s); < 0 erro; −1 = padrão
 ///     void   jd_input_stop()
-///     usize  jd_input_devices(u8* out, usize max)         tamanho do JSON (maior que max: não coube)
+///     i32    jd_input_devices(u8* out, usize max)         tamanho do JSON (maior que max: não coube)
 ///     void   jd_capture(on)
-///     usize  jd_recorded(f32* l, f32* r, usize max, f64* out_beat)     quadros; batida do primeiro
+///     i32    jd_recorded(f32* l, f32* r, usize max, f64* out_beat)     quadros; batida do primeiro
 ///     f32    jd_input_level()                             pico desde a leitura; < 0: a entrada caiu
-///     usize  jd_rec_notes(f32* out, usize max)            grupos de 5 floats, como o rec_notes do wasm
+///     i32    jd_rec_notes(f32* out, usize max)            grupos de 5 floats, como o rec_notes do wasm
 ///     handle jd_offline_new(f64 rate)
 ///     void   jd_offline_calls(handle, u8* json, usize len)
 ///     void   jd_offline_sample(handle, id, f32* l, f32* r, usize frames, f64 rate)
@@ -118,8 +119,8 @@ final class EngineLib {
         'jd_sample_load',
       );
   late final sampleDrop = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_sample_drop');
-  late final state = _lib.lookupFunction<IntPtr Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_state');
-  late final spectrum = _lib.lookupFunction<IntPtr Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_spectrum');
+  late final state = _lib.lookupFunction<Int32 Function(Pointer<Double>, IntPtr), int Function(Pointer<Double>, int)>('jd_state');
+  late final spectrum = _lib.lookupFunction<Int32 Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_spectrum');
   late final decode = _lib.lookupFunction<IntPtr Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_decode');
   late final decodedInfo = _lib
       .lookupFunction<
@@ -140,15 +141,15 @@ final class EngineLib {
       >('jd_detect_bpm');
   late final inputStart = _lib.lookupFunction<Double Function(IntPtr), double Function(int)>('jd_input_start');
   late final inputStop = _lib.lookupFunction<Void Function(), void Function()>('jd_input_stop');
-  late final inputDevices = _lib.lookupFunction<IntPtr Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_input_devices');
+  late final inputDevices = _lib.lookupFunction<Int32 Function(Pointer<Uint8>, IntPtr), int Function(Pointer<Uint8>, int)>('jd_input_devices');
   late final capture = _lib.lookupFunction<Void Function(IntPtr), void Function(int)>('jd_capture');
   late final recorded = _lib
       .lookupFunction<
-        IntPtr Function(Pointer<Float>, Pointer<Float>, IntPtr, Pointer<Double>),
+        Int32 Function(Pointer<Float>, Pointer<Float>, IntPtr, Pointer<Double>),
         int Function(Pointer<Float>, Pointer<Float>, int, Pointer<Double>)
       >('jd_recorded');
   late final inputLevel = _lib.lookupFunction<Float Function(), double Function()>('jd_input_level');
-  late final recNotes = _lib.lookupFunction<IntPtr Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_rec_notes');
+  late final recNotes = _lib.lookupFunction<Int32 Function(Pointer<Float>, IntPtr), int Function(Pointer<Float>, int)>('jd_rec_notes');
   late final offlineNew = _lib.lookupFunction<IntPtr Function(Double), int Function(double)>('jd_offline_new');
   late final offlineCalls = _lib.lookupFunction<Void Function(IntPtr, Pointer<Uint8>, IntPtr), void Function(int, Pointer<Uint8>, int)>('jd_offline_calls');
   late final offlineSample = _lib
@@ -230,14 +231,9 @@ T _withNativeFloats<T>(Float32List? data, int frames, T Function(Pointer<Float> 
   return (json: utf8.encode(b.toString()), skipped: skipped);
 }
 
-/// O estado que `jd_state` escreveu ([n] valores): batida, tocando (0/1), indicador do efeito,
-/// quantos picos e os picos. Lido como f32 (o contrato) e, se não fizer sentido assim, como f64
-/// (uma biblioteca que escreva tudo em f64 para não perder precisão na batida): as duas vistas são
-/// da mesma memória, reservada com espaço para `max` doubles. Nenhuma das duas válida: null.
-EngineState? parseEngineState(Float32List asF32, Float64List asF64, int n, {Float32List? spectrum}) =>
-    _stateFrom(asF32, n, spectrum) ?? _stateFrom(asF64, n, spectrum);
-
-EngineState? _stateFrom(List<double> v, int n, Float32List? spectrum) {
+/// O estado que `jd_state` escreveu ([n] valores, em f64 como no Rust): batida, tocando (0/1),
+/// indicador do efeito, quantos picos e os picos. Sem sentido (n negativo é código de erro): null.
+EngineState? parseEngineState(Float64List v, int n, {Float32List? spectrum}) {
   if (n < 4 || n > v.length) return null;
   final playing = v[1];
   final count = v[3];
@@ -911,9 +907,8 @@ final class FfiEngine {
   // memórias nativas das leituras, reservadas uma vez; com espaço para doubles, para uma leitura
   // escrita em f64 não passar do fim
   Pointer<Double> _stateBuf = nullptr;
-  Float32List? _stateF32;
   Float64List? _stateF64;
-  Pointer<Double> _spectrumBuf = nullptr;
+  Pointer<Float> _spectrumBuf = nullptr;
 
   /// Liga o polling quando alguém precisa dele: o estado com o app na frente, a captura e o pico
   /// da entrada sempre (em segundo plano o que chega da entrada precisa continuar saindo da fila).
@@ -975,17 +970,16 @@ final class FfiEngine {
     if (onState == null) return;
     if (_stateBuf == nullptr) {
       _stateBuf = calloc<Double>(_stateMax);
-      _stateF32 = _stateBuf.cast<Float>().asTypedList(2 * _stateMax);
       _stateF64 = _stateBuf.asTypedList(_stateMax);
     }
-    final n = lib.state(_stateBuf.cast<Float>(), _stateMax);
+    final n = lib.state(_stateBuf, _stateMax);
     if (_analyzing && _tick % _spectrumEvery == 0) {
-      if (_spectrumBuf == nullptr) _spectrumBuf = calloc<Double>(_spectrumBins);
-      final bins = math.min(lib.spectrum(_spectrumBuf.cast<Float>(), _spectrumBins), _spectrumBins);
+      if (_spectrumBuf == nullptr) _spectrumBuf = calloc<Float>(_spectrumBins);
+      final bins = math.min(lib.spectrum(_spectrumBuf, _spectrumBins), _spectrumBins);
       // sem faixa observada ainda (o motor leva um bloco): fica o último
-      if (bins > 0) _spectrum = _spectrumBuf.cast<Float>().asTypedList(bins).sublist(0);
+      if (bins > 0) _spectrum = _spectrumBuf.asTypedList(bins).sublist(0);
     }
-    final s = parseEngineState(_stateF32!, _stateF64!, n, spectrum: _analyzing ? _spectrum : null);
+    final s = parseEngineState(_stateF64!, n, spectrum: _analyzing ? _spectrum : null);
     if (s != null) onState(s);
   }
 

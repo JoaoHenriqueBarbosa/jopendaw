@@ -25,6 +25,7 @@ static int g_capture = 0;
 static int g_rec_blocks = 0;   // blocos na fila da captura
 static int g_rec_sent = 0;     // blocos já lidos
 static int g_notes_ready = 0;  // notas publicadas ao desligar a captura
+static int g_notes_pending = 0;  // jd_rec_notes devolve −1 (como o Rust enquanto o fim não chegou)
 static int g_slow_us = 0;      // atraso por bloco do render (para dar tempo de cancelar)
 static int g_offline_samples = 0;
 
@@ -33,6 +34,7 @@ size_t fake_last_calls(uint8_t *out, size_t max) {
   if (g_calls) memcpy(out, g_calls, n);
   return g_calls_len;
 }
+void fake_set_notes_pending(int on) { g_notes_pending = on; }
 int fake_calls_count(void) { return g_calls_count; }
 int fake_live(void) { return g_live; }
 void fake_set_level(float level) { g_level = level; }
@@ -76,20 +78,20 @@ void jd_sample_load(intptr_t id, const float *l, const float *r, size_t frames, 
 
 void jd_sample_drop(intptr_t id) { (void)id; }
 
-// [batida, tocando, fxMeter, n, picos...] em f32
-size_t jd_state(float *out, size_t max) {
+// [batida, tocando, fxMeter, n, picos...] em f64, como o jd_state do Rust
+int32_t jd_state(double *out, size_t max) {
   if (max < 8) return 0;
-  out[0] = 2.5f;
+  out[0] = 2.5;
   out[1] = 1;
   out[2] = -3;
   out[3] = 4;
-  for (int i = 0; i < 4; i++) out[4 + i] = 0.1f * (float)(i + 1);
+  for (int i = 0; i < 4; i++) out[4 + i] = 0.5 * (double)(i + 1);
   return 8;
 }
 
-size_t jd_spectrum(float *out, size_t n) {
+int32_t jd_spectrum(float *out, size_t n) {
   for (size_t i = 0; i < n; i++) out[i] = -60.0f;
-  return n;
+  return (int32_t)n;
 }
 
 double jd_latency(void) { return 0.02; }
@@ -149,11 +151,11 @@ double jd_input_start(int32_t device) {
 
 void jd_input_stop(void) { g_input = 0; }
 
-size_t jd_input_devices(uint8_t *out, size_t max) {
+int32_t jd_input_devices(uint8_t *out, size_t max) {
   const char *s = "[{\"id\":-1,\"name\":\"Padrão\"},{\"id\":3,\"name\":\"Microfone\"},{\"id\":7,\"name\":\"USB\"}]";
   size_t n = strlen(s);
   if (n <= max) memcpy(out, s, n);
-  return n;
+  return (int32_t)n;
 }
 
 float jd_input_level(void) { return g_level; }
@@ -170,7 +172,7 @@ void jd_capture(int32_t on) {
   }
 }
 
-size_t jd_recorded(float *l, float *r, size_t max, double *out_beat) {
+int32_t jd_recorded(float *l, float *r, size_t max, double *out_beat) {
   if (g_rec_sent >= g_rec_blocks) return 0;
   size_t n = 100 < max ? 100 : max;
   int k = g_rec_sent++;
@@ -179,10 +181,11 @@ size_t jd_recorded(float *l, float *r, size_t max, double *out_beat) {
     r[i] = -(float)(k + 1);
   }
   *out_beat = 4.0 + k;
-  return n;
+  return (int32_t)n;
 }
 
-size_t jd_rec_notes(float *out, size_t max) {
+int32_t jd_rec_notes(float *out, size_t max) {
+  if (g_notes_pending) return -1;  // o fim da captura ainda não chegou à thread de áudio
   if (!g_notes_ready || max < 5) return 0;
   g_notes_ready = 0;
   out[0] = 1;
