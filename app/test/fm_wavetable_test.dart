@@ -120,7 +120,7 @@ void main() {
       for (var n = 0; n < 4; n++) {
         final ps = [for (var k = 0; k < 8; k++) fmParams.firstWhere((p) => p.id == FmId.op(n, k))];
         expect(ps.map((p) => p.group).toSet(), {'Operador ${n + 1}'});
-        expect(ps.map((p) => p.name), ['Razão', 'Fino', 'Nível', 'Ataque', 'Decaimento', 'Sustentação', 'Soltura', 'Velocidade']);
+        expect(ps.map((p) => p.name), ['Razão', 'Fino', 'Nível', 'Ataque', 'Decaimento', 'Sustentação', 'Soltura', 'Sens. vel.']);
         expect(ps[0].min, 0.25);
         expect(ps[0].max, 16);
       }

@@ -154,7 +154,7 @@ const delayParams = <ParamSpec>[
 
 const chorusParams = <ParamSpec>[
   ParamSpec(0, 'Mistura', 'Chorus', 0, 1, 0.5, unit: '%'),
-  ParamSpec(1, 'Velocidade', 'Chorus', 0.02, 10, 0.8, unit: 'Hz', curve: Curve.log),
+  ParamSpec(1, 'Taxa', 'Chorus', 0.02, 10, 0.8, unit: 'Hz', curve: Curve.log),
   ParamSpec(2, 'Profundidade', 'Chorus', 0, 1, 0.5, unit: '%'),
   ParamSpec(3, 'Atraso', 'Chorus', 0.001, 0.03, 0.012, unit: 's'),
   ParamSpec(4, 'Vozes', 'Chorus', 1, 4, 2, curve: Curve.integer),
@@ -164,7 +164,7 @@ const chorusParams = <ParamSpec>[
 
 const phaserParams = <ParamSpec>[
   ParamSpec(0, 'Mistura', 'Phaser', 0, 1, 0.5, unit: '%'),
-  ParamSpec(1, 'Velocidade', 'Phaser', 0.02, 10, 0.5, unit: 'Hz', curve: Curve.log),
+  ParamSpec(1, 'Taxa', 'Phaser', 0.02, 10, 0.5, unit: 'Hz', curve: Curve.log),
   ParamSpec(2, 'Profundidade', 'Phaser', 0, 1, 0.7, unit: '%'),
   ParamSpec(3, 'Centro', 'Phaser', 100, 8000, 1000, unit: 'Hz', curve: Curve.log),
   ParamSpec(4, 'Realimentação', 'Phaser', -0.95, 0.95, 0.5, unit: '%'),
@@ -173,7 +173,7 @@ const phaserParams = <ParamSpec>[
 ];
 
 const tremoloParams = <ParamSpec>[
-  ParamSpec(0, 'Velocidade', 'Tremolo', 0.05, 20, 4, unit: 'Hz', curve: Curve.log),
+  ParamSpec(0, 'Taxa', 'Tremolo', 0.05, 20, 4, unit: 'Hz', curve: Curve.log),
   ParamSpec(1, 'Profundidade', 'Tremolo', 0, 1, 0.5, unit: '%'),
   ParamSpec.choice(2, 'Onda', 'Tremolo', ['Senoide', 'Triângulo', 'Quadrada']),
   ParamSpec(3, 'Estéreo', 'Tremolo', 0, 1, 0, unit: '%'),
@@ -200,7 +200,7 @@ const filterParams = <ParamSpec>[
   ParamSpec(7, 'Drive', 'Filtro', 0, 1, 0, unit: '%'),
   ParamSpec(8, 'Mistura', 'Filtro', 0, 1, 1, unit: '%'),
   ParamSpec.choice(9, 'Tempo', 'LFO', ['Livre', 'Andamento']),
-  ParamSpec(3, 'Velocidade', 'LFO', 0.02, 20, 1, unit: 'Hz', curve: Curve.log),
+  ParamSpec(3, 'Taxa', 'LFO', 0.02, 20, 1, unit: 'Hz', curve: Curve.log),
   ParamSpec.choice(10, 'Nota', 'LFO', noteValues, def: 8),
   ParamSpec(4, 'Profundidade', 'LFO', 0, 6, 0, unit: 'oct'),
   ParamSpec.choice(5, 'Onda', 'LFO', ['Senoide', 'Triângulo', 'Serra', 'Quadrada', 'Aleatório']),

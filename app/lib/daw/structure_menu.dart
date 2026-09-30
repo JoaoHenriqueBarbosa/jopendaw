@@ -79,6 +79,9 @@ class SectionsMenu extends StatelessWidget {
   }
 }
 
+/// O plural que o menu Visão usa (P/M/G não são atalhos, então a letra não aparece).
+const _laneScalePlural = {LaneScale.small: 'pequenas', LaneScale.medium: 'médias', LaneScale.large: 'grandes'};
+
 /// Zoom e visão: enquadrar, altura das faixas, seguir o cursor e a régua em tempo.
 class ViewMenu extends StatelessWidget {
   final DawController c;
@@ -108,8 +111,7 @@ class ViewMenu extends StatelessWidget {
       PopupMenuItem(value: 'all', child: _row(Icons.fit_screen, 'Enquadrar tudo (Z)')),
       PopupMenuItem(value: 'sel', child: _row(Icons.center_focus_strong_outlined, 'Enquadrar a seleção (Shift+Z)')),
       const PopupMenuDivider(),
-      for (final s in LaneScale.values)
-        CheckedPopupMenuItem(value: 'h:${s.name}', checked: c.laneScale == s, child: Text('Faixas ${s.label.toLowerCase()} (${s.letter})')),
+      for (final s in LaneScale.values) CheckedPopupMenuItem(value: 'h:${s.name}', checked: c.laneScale == s, child: Text('Faixas ${_laneScalePlural[s]}')),
       const PopupMenuDivider(),
       CheckedPopupMenuItem(value: 'follow', checked: c.follow, child: const Text('Seguir o cursor')),
       CheckedPopupMenuItem(value: 'time', checked: c.rulerTime, child: const Text('Régua em minutos e segundos')),

@@ -454,4 +454,23 @@ void main() {
     await open(t, ['Escala e acordes', 'Prender na escala']);
     await settle(t);
   });
+
+  mac('humanizar: a legenda diz o teto real da velocidade e o menu diz o que a tercina faz', (t) async {
+    await sized(t);
+    final c = TestDaw(notes: riff());
+    await t.pumpWidget(host(c, height: 500));
+    await t.pump();
+    await open(t, ['Seleção', 'Humanizar…']);
+    // o código usa 0,3 da escala: 0,3 × 127 = 38
+    expect(find.textContaining('até 38 de 127'), findsOneWidget);
+    await t.tap(find.text('Cancelar'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Ferramentas'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Seleção'));
+    await t.pumpAndSettle();
+    expect(find.text('Dividir colcheias em 3 notas'), findsOneWidget);
+    expect(find.textContaining('tercinas'), findsNothing);
+    await settle(t);
+  });
 }

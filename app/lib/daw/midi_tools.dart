@@ -389,8 +389,8 @@ List<MidiNote> reverseOrder(List<MidiNote> notes) {
   return out;
 }
 
-/// Cada nota de duração [unit] (colcheia, por padrão) vira uma tercina: três notas iguais que
-/// dividem a duração dela. As outras ficam como estão.
+/// Cada nota de duração [unit] (colcheia, por padrão) vira três notas iguais que dividem a
+/// duração dela (o efeito de uma tercina de semicolcheia; não muda o ritmo de tercina do compasso). As outras ficam como estão.
 List<MidiNote> tripletize(List<MidiNote> notes, {double unit = .5}) {
   final out = <MidiNote>[];
   for (final n in notes) {

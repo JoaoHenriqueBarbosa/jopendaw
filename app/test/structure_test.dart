@@ -176,6 +176,23 @@ void main() {
         await flushSave(t);
       });
 
+      testWidgets('rótulos: plural das alturas no menu Visão e contagem de faixas na régua', (t) async {
+        final c = studio();
+        await mount(t, c, size);
+        expect(find.text('${c.doc.tracks.length} faixas'), findsOneWidget);
+        const tip = 'Visão: enquadrar, altura das faixas, seguir o cursor';
+        await t.ensureVisible(find.byTooltip(tip));
+        await t.tap(find.byTooltip(tip));
+        await t.pumpAndSettle();
+        for (final l in ['Faixas pequenas', 'Faixas médias', 'Faixas grandes']) {
+          expect(find.text(l), findsOneWidget, reason: l);
+        }
+        expect(find.textContaining('(P)'), findsNothing);
+        await t.tapAt(const Offset(2, 2));
+        await t.pumpAndSettle();
+        await flushSave(t);
+      });
+
       testWidgets('o menu Seções leva o cursor ao marcador', (t) async {
         final c = studio();
         c.addMarker(beat: 12, name: 'Ponte');

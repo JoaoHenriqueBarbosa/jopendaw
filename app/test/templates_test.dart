@@ -36,4 +36,17 @@ void main() {
       expect(t.midi.single.notes.every((n) => n.start >= 0 && n.end <= 16 + 1e-9), isTrue);
     }
   });
+
+  test('nenhum envio dos modelos nasce mudo (nível 0): ou tem som ou nem existe', () {
+    for (final t in ProjectTemplate.values) {
+      final doc = t.build(bpm: 120, beatsPerBar: 4);
+      for (final x in doc.tracks) {
+        for (final s in x.sends) {
+          expect(s.level, greaterThan(0), reason: '${t.label}: envio de ${x.name}');
+        }
+      }
+    }
+    final band = ProjectTemplate.values.firstWhere((t) => t.label.contains('banda')).build(bpm: 120, beatsPerBar: 4);
+    expect(band.tracks.firstWhere((x) => x.name == 'Baixo').sends, isEmpty);
+  });
 }

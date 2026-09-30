@@ -129,11 +129,12 @@ DawDoc _beat(double bpm, int beatsPerBar) {
 
 DawDoc _band(double bpm, int beatsPerBar) {
   final reverb = DawTrack(id: newId(), name: 'Reverb', color: 4, kind: TrackKind.bus, effects: [_returnReverb('Placa')]);
-  DawTrack audio(String name, int color, double send) => DawTrack(
+  // sem envio (null) a faixa vai só para o master: o baixo fica seco, senão o reverb empasta os graves
+  DawTrack audio(String name, int color, double? send) => DawTrack(
     id: newId(),
     name: name,
     color: color,
-    sends: [Send(target: reverb.id, level: send)],
+    sends: [if (send != null) Send(target: reverb.id, level: send)],
   );
   return DawDoc(
     bpm: bpm,
@@ -144,7 +145,7 @@ DawDoc _band(double bpm, int beatsPerBar) {
     tracks: [
       audio('Voz', 0, 0.3),
       audio('Violão', 1, 0.2),
-      audio('Baixo', 5, 0),
+      audio('Baixo', 5, null),
       DawTrack(
         id: newId(),
         name: 'Bateria',

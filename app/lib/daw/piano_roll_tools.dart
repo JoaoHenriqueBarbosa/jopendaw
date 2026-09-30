@@ -284,7 +284,7 @@ extension _Tools on _PianoRollState {
         _slider('Tempo', timing, 0, 1, 20, pct, (v) => set(() => timing = v)),
         _slider('Velocidade', vel, 0, 1, 20, pct, (v) => set(() => vel = v)),
         _slider('Semente', seed.toDouble(), 1, 99, 98, (v) => '${v.round()}', (v) => set(() => seed = v.round())),
-        const _Caption('Tempo 100% desloca até 1/32 de nota; velocidade 100%, até 30 de 127. A mesma semente dá sempre o mesmo resultado.'),
+        _Caption('Tempo 100% desloca até 1/32 de nota; velocidade 100%, até ${(.3 * 127).round()} de 127. A mesma semente dá sempre o mesmo resultado.'),
       ],
       actions: [('ok', 'Humanizar')],
     );
@@ -461,7 +461,7 @@ extension _Tools on _PianoRollState {
           item(Icons.flip, 'Inverter no tempo', has ? () => _transform(mirrorTime, controls: _mirrorCc()) : null),
           item(Icons.swap_vert, 'Inverter na altura', has && melodic ? () => _transform((n) => _keepSnap(mirrorPitch(n))) : null),
           item(Icons.history, 'Reverter a ordem das notas', has ? () => _transform(reverseOrder) : null),
-          item(Icons.looks_3, 'Colcheias em tercinas', has ? () => _transform(tripletize) : null),
+          item(Icons.looks_3, 'Dividir colcheias em 3 notas', has ? () => _transform(tripletize) : null),
         ]),
         group(Icons.straighten, 'Escalar o tempo', [
           item(Icons.zoom_in, '×0,5 (metade)', has ? () => _transform((n) => scaleTime(n, .5), controls: _scaleCc(.5)) : null),

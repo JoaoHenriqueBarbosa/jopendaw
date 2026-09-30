@@ -625,7 +625,7 @@ Map<int, double> _kit(Map<int, _Piece> pieces, {double master = 0.8}) => {
 const _kick = 0, _snare = 1, _clap = 2, _closedHat = 3, _openHat = 4, _lowTom = 5, _midTom = 6, _highTom = 7, _crash = 8, _ride = 9, _rim = 10, _cowbell = 11;
 
 final drumKits = <Preset>[
-  const Preset('Padrão', 'Kits', {}),
+  const Preset('Inicial', 'Kits', {}),
   Preset(
     '808',
     'Kits',
@@ -1279,7 +1279,7 @@ const wavetablePresets = <Preset>[
 
 /// Envelopes do sampler. Nota base e afinação são do áudio escolhido: nenhum preset mexe nelas.
 const samplerPresets = <Preset>[
-  Preset('Padrão', 'Sampler', {}),
+  Preset('Inicial', 'Sampler', {}),
   Preset('Instrumento', 'Sampler', {SamplerId.attack: 0.003, SamplerId.decay: 0.5, SamplerId.sustain: 1, SamplerId.release: 0.35, SamplerId.velocity: 0.8}),
   Preset('Percussão (até o fim)', 'Sampler', {SamplerId.oneShot: 1, SamplerId.attack: 0.0005, SamplerId.release: 0.05, SamplerId.velocity: 0.8}),
   Preset('Pad lento', 'Sampler', {SamplerId.attack: 0.8, SamplerId.decay: 1, SamplerId.sustain: 0.9, SamplerId.release: 1.8, SamplerId.velocity: 0.3}),
