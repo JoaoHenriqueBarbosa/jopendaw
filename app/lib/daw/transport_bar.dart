@@ -168,12 +168,7 @@ class TransportBar extends StatelessWidget {
             // a oitava à vista (é o que muda com Z/X sem outro retorno na tela) e o aviso de que as letras
             // viraram notas: os atalhos delas ficam suspensos até desligar
             label: c.keyboardOn ? 'C${c.keyboardOctave} · sem atalhos' : null,
-            tooltip: c.keyboardOn
-                ? withMod(
-                    'Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C${c.keyboardOctave}, '
-                    'Z/X mudam a oitava, C/V a intensidade ($velocity%). Ctrl+K desliga',
-                  )
-                : withMod('Tocar com o teclado do computador (Ctrl+K)'),
+            tooltip: keyboardTooltip(on: c.keyboardOn, octave: c.keyboardOctave, velocityPercent: velocity),
             onTap: c.toggleKeyboard,
           ),
           _Toggle(

@@ -67,15 +67,34 @@ Future<void> importMidiFlow(BuildContext context, DawController c, String name, 
   );
 }
 
-/// "Usar o andamento do arquivo (X BPM)?" — true para levar andamento e compasso para o projeto.
+/// "Usar os andamentos do arquivo (N mudanças, a partir de X BPM)?" — true para levar o mapa de
+/// andamento e de compassos do arquivo para o projeto.
 Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController c) async {
-  final bpm = d.firstBpm;
-  final parts = <String>[if (bpm != null) '${appBpmFor(bpm)} BPM', if (d.beatsPerBar != null) 'compasso ${d.beatsPerBar}/4'];
-  final now = '${c.doc.bpm.round()} BPM, ${c.doc.beatsPerBar}/4';
+  final pts = d.tempoPoints;
+  final bpm = pts.isEmpty ? null : pts.first.bpm;
+  final changes = pts.length - 1;
+  final meterChanges = d.meterMap.length - 1;
+  final title = changes > 0
+      ? 'Usar os andamentos do arquivo ($changes ${changes == 1 ? 'mudança' : 'mudanças'}, a partir de ${_bpmText(bpm!)} BPM)?'
+      : bpm != null
+      ? 'Usar o andamento do arquivo (${appBpmFor(bpm)} BPM)?'
+      : meterChanges > 0
+      ? 'Usar os compassos do arquivo ($meterChanges ${meterChanges == 1 ? 'mudança' : 'mudanças'})?'
+      : 'Usar o compasso do arquivo?';
+  final meter = d.meterMap.isNotEmpty ? d.meterMap.first : null;
+  final parts = <String>[
+    if (bpm != null) changes > 0 ? '${_bpmText(bpm)} BPM e $changes mudança${changes == 1 ? '' : 's'} de andamento' : '${appBpmFor(bpm)} BPM',
+    if (meter != null)
+      'compasso ${meter.numerator}/${meter.denominator}${meterChanges > 0 ? ' e $meterChanges mudança${meterChanges == 1 ? '' : 's'} de compasso' : ''}'
+    else if (d.beatsPerBar != null)
+      'compasso ${d.beatsPerBar}/4',
+  ];
+  final nc = c.doc.tempoMap.length - 1;
+  final now = '${c.doc.bpm.round()} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${c.doc.beatsPerBar}/4';
   final r = await showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(
-      title: Text(bpm != null ? 'Usar o andamento do arquivo (${appBpmFor(bpm)} BPM)?' : 'Usar o compasso do arquivo?'),
+      title: Text(title),
       content: Text('O arquivo traz ${parts.join(' e ')}; o projeto está em $now. As notas ficam nas mesmas batidas, só a velocidade muda.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Manter o do projeto')),
@@ -84,6 +103,11 @@ Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController
     ),
   );
   return r ?? false;
+}
+
+String _bpmText(double bpm) {
+  final r = bpm.round();
+  return (bpm - r).abs() < 0.05 ? '$r' : bpm.toStringAsFixed(1).replaceAll('.', ',');
 }
 
 /// Abre a janela de exportar MIDI (.mid): o clipe selecionado ou todas as faixas de notas.
@@ -193,10 +217,7 @@ class _ExportMidiDialogState extends State<ExportMidiDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Leva o andamento (${c.doc.bpm.round()} BPM) e o compasso (${c.doc.beatsPerBar}/4), as notas e o pitch bend, a modulação e o pedal.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text('Leva os andamentos e compassos do projeto, as notas e o pitch bend, a modulação e o pedal.', style: Theme.of(context).textTheme.bodySmall),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),

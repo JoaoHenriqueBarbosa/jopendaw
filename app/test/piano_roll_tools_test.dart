@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
 import 'package:jopendaw_app/daw/model.dart';
+import 'package:jopendaw_app/daw/piano_roll.dart' show dropSnapCollisions;
+import 'package:jopendaw_app/widgets/format.dart';
 
 import 'piano_roll_test.dart' show TestDaw, click, geoFor, host, key, mac, riff, settle;
 
@@ -472,5 +474,31 @@ void main() {
     expect(find.text('Dividir colcheias em 3 notas'), findsOneWidget);
     expect(find.textContaining('tercinas'), findsNothing);
     await settle(t);
+  });
+
+  test('encaixe de acorde em escala curta não duplica: sobra a nota mais perto do grau', () {
+    MidiNote n(int pitch, double start) => MidiNote(pitch: pitch, start: start, length: 1);
+    // 61 e 63 caíram ambas no 62 (o mais perto de 63 é 62; de 61 também): sobra a primeira do empate
+    final before = [n(60, 0), n(61, 0), n(63, 0), n(61, 1)];
+    final after = [n(60, 0), n(62, 0), n(62, 0), n(62, 1)];
+    final r = dropSnapCollisions(before, after);
+    expect(r.map((x) => (x.pitch, x.start)), [(60, 0.0), (62, 0.0), (62, 1.0)]);
+    expect(identical(r[1], after[1]), isTrue);
+    // a mais perto ganha, mesmo depois
+    final after2 = [n(62, 0), n(62, 0)];
+    final r2 = dropSnapCollisions([n(59, 0), n(62, 0)], after2);
+    expect(r2.length, 1);
+    expect(identical(r2.single, after2[1]), isTrue);
+    // duplicatas que já existiam (sem nada movido) ficam
+    final same = [n(60, 0), n(60, 0)];
+    expect(dropSnapCollisions(same, same).length, 2);
+  });
+
+  test('o tooltip do teclado do computador é um só, com oitava e o atalho', () {
+    final on = keyboardTooltip(on: true, octave: 4, velocityPercent: 80);
+    expect(on, contains('C4'));
+    expect(on, contains('(80%)'));
+    expect(on, contains('K desliga'));
+    expect(keyboardTooltip(on: false, octave: 4, velocityPercent: 80), contains('K)'));
   });
 }

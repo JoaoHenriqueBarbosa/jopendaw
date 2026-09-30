@@ -16,6 +16,7 @@ import 'dart:typed_data';
 
 import 'instruments.dart';
 import 'model.dart';
+import 'tempo_map.dart';
 
 /// Problema no arquivo, com a mensagem pronta para a tela (português).
 class MidiFormatException implements Exception {
@@ -31,11 +32,9 @@ const midiExportPpq = 480;
 /// Duração mínima de uma nota (em batidas) quando o arquivo traz nota de duração zero.
 const midiMinNoteBeats = 1 / 32;
 
-/// Um ponto do mapa de andamento do arquivo: a batida (semínimas) e o BPM dali em diante.
-///
-/// GANCHO do mapa de andamento: hoje o app usa só o primeiro ponto (`DawController.importMidiBytes`
-/// em `controller.dart`, que chama `applyImportedTempo`); quando o documento tiver mapa de
-/// andamento, é lá que se passa a lista inteira ([MidiFileData.tempoMap]) em vez do primeiro BPM.
+/// Um ponto do mapa de andamento do arquivo: a batida (semínimas) e o BPM dali em diante. A
+/// importação leva a lista inteira ([MidiFileData.tempoMap], simplificada por [simplifyTempo]) para o
+/// mapa de andamento do projeto (`DawController.applyImportedTempo`).
 class MidiTempoPoint {
   final double beat, bpm;
   const MidiTempoPoint(this.beat, this.bpm);
@@ -81,18 +80,101 @@ class MidiFileData {
   /// Tempos por compasso (semínimas) do primeiro compasso do arquivo, ou null.
   final int? beatsPerBar;
 
+  /// As fórmulas de compasso do arquivo como mudanças do app (compasso 1 = o primeiro); vazio quando
+  /// o arquivo não traz nenhuma. O tempo do compasso 4/4 padrão vale até a primeira, se ela vier depois do início.
+  final List<MeterChange> meterMap;
+
   /// Avisos para a pessoa (arquivo cortado, notas presas, peças de bateria que não existem…).
   final List<String> warnings;
 
-  MidiFileData({required this.format, required this.ppq, required this.tracks, required this.tempoMap, required this.beatsPerBar, required this.warnings});
+  MidiFileData({
+    required this.format,
+    required this.ppq,
+    required this.tracks,
+    required this.tempoMap,
+    required this.beatsPerBar,
+    required this.warnings,
+    this.meterMap = const [],
+  });
 
   int get noteCount => tracks.fold(0, (a, t) => a + t.notes.length);
 
   /// O primeiro andamento (BPM real, sem arredondar), ou null.
   double? get firstBpm => tempoMap.isEmpty ? null : tempoMap.first.bpm;
 
+  /// O andamento do arquivo como vai para o projeto: os pontos sem os de diferença desprezível e em
+  /// no máximo [midiMaxTempoPoints]. Vazio se o arquivo não traz andamento.
+  late final List<TempoPoint> tempoPoints = simplifyTempo(tempoMap);
+
   /// O andamento muda no meio do arquivo.
   bool get hasTempoChanges => tempoMap.any((p) => (p.bpm - tempoMap.first.bpm).abs() > 0.5);
+}
+
+/// Pontos de andamento que a importação leva para o projeto (o motor reserva 256 sem realocar).
+const midiMaxTempoPoints = 256;
+
+/// Diferença de BPM abaixo da qual um ponto é fundido no anterior (um arquivo com rampa gravada em
+/// dezenas de milhares de eventos vira poucas centenas de pontos).
+const midiTempoEpsilon = 0.05;
+
+/// Simplifica o andamento do arquivo: funde os pontos que diferem menos de [epsilon] BPM do último
+/// mantido e, se ainda passar de [maxPoints], dobra o [epsilon] até caber. O primeiro ponto fica
+/// sempre; se ele não estiver na batida 0, o andamento inicial é 120 BPM (padrão MIDI).
+List<TempoPoint> simplifyTempo(List<MidiTempoPoint> input, {int maxPoints = midiMaxTempoPoints, double epsilon = midiTempoEpsilon}) {
+  if (input.isEmpty) return const [];
+  final src = input.first.beat > 0 ? [const MidiTempoPoint(0, 120), ...input] : input;
+  var eps = epsilon;
+  while (true) {
+    final out = <TempoPoint>[TempoPoint(0, src.first.bpm.clamp(minBpm, maxBpm).toDouble())];
+    for (final p in src.skip(1)) {
+      final bpm = p.bpm.clamp(minBpm, maxBpm).toDouble();
+      if ((bpm - out.last.bpm).abs() < eps) continue;
+      out.add(TempoPoint(p.beat, bpm));
+    }
+    if (out.length <= maxPoints || eps > maxBpm) return out;
+    eps *= 2;
+  }
+}
+
+/// O andamento que a importação deixa no documento: o BPM inicial e o mapa (vazio com um andamento
+/// só, caso em que o BPM é inteiro como o app sempre guardou). Null se o arquivo não traz andamento.
+({double bpm, List<TempoPoint> points})? importedTempo(MidiFileData d) {
+  final pts = d.tempoPoints;
+  if (pts.isEmpty) return null;
+  if (pts.length == 1) return (bpm: appBpmFor(pts.first.bpm).toDouble(), points: const []);
+  final bpm = pts.first.bpm;
+  return (bpm: bpm, points: normalizeTempoPoints([pts.first.copyWith(bpm: bpm), ...pts.skip(1)], bpm));
+}
+
+/// O compasso que a importação deixa no documento (`beatsPerBar` do primeiro compasso e as mudanças
+/// do mapa, vazias quando só sobra um n/4). Null se o arquivo não traz compasso.
+({int beatsPerBar, List<MeterChange> changes})? importedMeter(MidiFileData d) {
+  if (d.meterMap.isEmpty) {
+    final bpb = d.beatsPerBar;
+    return bpb == null ? null : (beatsPerBar: bpb, changes: const []);
+  }
+  final first = d.meterMap.first;
+  final bpb = (first.denominator == 4 ? first.numerator : first.barBeats.round()).clamp(1, 32);
+  return (beatsPerBar: bpb, changes: normalizeMeterChanges(d.meterMap, bpb));
+}
+
+/// O andamento ou o compasso do arquivo diferem dos do documento (então vale perguntar).
+bool midiTempoDiffers(MidiFileData d, DawDoc doc) {
+  final t = importedTempo(d);
+  if (t != null) {
+    if (t.bpm.round() != doc.bpm.round() || t.points.length != doc.tempoMap.length) return true;
+    for (var i = 0; i < t.points.length; i++) {
+      if (t.points[i] != doc.tempoMap[i]) return true;
+    }
+  }
+  final m = importedMeter(d);
+  if (m != null) {
+    if (m.beatsPerBar != doc.beatsPerBar || m.changes.length != doc.meterMap.length) return true;
+    for (var i = 0; i < m.changes.length; i++) {
+      if (m.changes[i] != doc.meterMap[i]) return true;
+    }
+  }
+  return false;
 }
 
 // ------------------------------------------------------------------ bateria GM
@@ -314,21 +396,66 @@ Future<MidiFileData> parseMidiFile(Uint8List bytes, {int yieldEvery = 20000}) as
   }
   sigs.sort((a, b) => a.$1.compareTo(b.$1));
   int? bpb;
+  final meters = <MeterChange>[];
   if (sigs.isNotEmpty) {
-    final (_, nn, dd) = sigs.first;
-    var den = 1;
-    for (var i = 0; i < math.min(dd, 6); i++) {
-      den *= 2;
+    // uma fórmula por instante (a última vale); antes da primeira, se ela vier depois do início, vale 4/4
+    final bySig = <int, (int, int)>{};
+    var meterApprox = false, misaligned = false;
+    for (final (tick, nn, dd) in sigs) {
+      if (nn <= 0) continue;
+      var num = nn, den = 1;
+      var e = dd;
+      while (e > 0 && den < 32) {
+        den *= 2;
+        e--;
+      }
+      // denominador acima de 32: mesma duração com fusas
+      if (e > 0) {
+        var f = 1.0;
+        for (var i = 0; i < e; i++) {
+          f *= 2;
+        }
+        num = math.max(1, (nn / f).round());
+        meterApprox = true;
+      }
+      if (num > 64) {
+        num = 64;
+        meterApprox = true;
+      }
+      bySig[tick] = (num, den);
     }
-    if (nn > 0) {
-      final exact = nn * 4 / den;
-      bpb = exact.round().clamp(1, 12);
-      if (exact != bpb) warnings.add('O compasso $nn/$den foi aproximado para $bpb/4, o mais próximo que o app tem.');
+    final ticks = bySig.keys.toList()..sort();
+    var curStart = 0.0; // batida em que começa o compasso da última mudança
+    if (ticks.isNotEmpty && ticks.first > 0) meters.add(const MeterChange(1, 4, 4));
+    for (final tk in ticks) {
+      final (num, den) = bySig[tk]!;
+      if (meters.isEmpty) {
+        meters.add(MeterChange(1, num, den));
+        continue;
+      }
+      final cur = meters.last;
+      final elapsed = (tk / ppq - curStart) / cur.barBeats;
+      final k = elapsed.round();
+      if ((elapsed - k).abs() > 1e-6) misaligned = true;
+      if (num == cur.numerator && den == cur.denominator) continue;
+      if (k < 1) {
+        // antes do fim do compasso vigente: a fórmula nova o substitui
+        meters.removeLast();
+        meters.add(MeterChange(cur.bar, num, den));
+      } else {
+        curStart += k * cur.barBeats;
+        meters.add(MeterChange(cur.bar + k, num, den));
+      }
     }
-    if (sigs.any((s) => s.$2 != nn || s.$3 != dd)) warnings.add('O arquivo muda de compasso no meio: o app usa só o primeiro ($nn/$den).');
+    if (meters.isNotEmpty) bpb = importedMeterBeats(meters.first);
+    if (meterApprox) warnings.add('Uma fórmula de compasso do arquivo passa dos limites do app (denominador até 32, numerador até 64) e foi aproximada.');
+    if (misaligned) warnings.add('Uma mudança de compasso caiu no meio de um compasso: alinhei ao compasso mais próximo.');
   }
-  return MidiFileData(format: format, ppq: ppq, tracks: tracks, tempoMap: tempoMap, beatsPerBar: bpb, warnings: warnings);
+  return MidiFileData(format: format, ppq: ppq, tracks: tracks, tempoMap: tempoMap, beatsPerBar: bpb, warnings: warnings, meterMap: meters);
 }
+
+/// Tempos (semínimas) do primeiro compasso do arquivo, do jeito que o app guarda no `beatsPerBar`.
+int importedMeterBeats(MeterChange first) => first.barBeats.round().clamp(1, 12);
 
 class _ParseCtx {
   final int ppq, yieldEvery;
@@ -519,12 +646,17 @@ MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, Strin
   u16(outs.length + 1);
   u16(midiExportPpq);
 
-  // trilha de andamento e compasso
+  // trilha de andamento e compasso: todo o mapa do projeto (no clipe avulso, a partir do começo dele)
   final head = <int>[];
   _meta(head, 0x03, utf8.encode(title));
-  final us = (60000000 / (doc.bpm.isFinite && doc.bpm > 0 ? doc.bpm : 120)).round().clamp(1, 16777215);
-  _meta(head, 0x51, [us ~/ 65536 % 256, us ~/ 256 % 256, us % 256]);
-  _meta(head, 0x58, [doc.beatsPerBar.clamp(1, 255), 2, 24, 8]);
+  var prevHead = 0;
+  for (final e in _tempoMeterEvents(doc, only != null ? -only.start : 0)) {
+    _vlq(head, e.tick - prevHead);
+    prevHead = e.tick;
+    head.addAll([0xFF, e.type]);
+    _vlq(head, e.data.length);
+    head.addAll(e.data);
+  }
   _meta(head, 0x2F, const []);
   chunk(head);
 
@@ -578,6 +710,82 @@ MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, Strin
     chunk(body);
   }
   return MidiExport(Uint8List.fromList(file), outs.length, notes, skipped);
+}
+
+/// Passos de uma rampa de andamento no arquivo: 1/16 de batida (o SMF só tem degraus).
+const _rampStepsPerBeat = 16;
+
+/// Os eventos de andamento (FF 51) e compasso (FF 58) do mapa do projeto, em ticks, ordenados
+/// (andamento antes de compasso no mesmo instante). [shift] soma-se às batidas (o clipe avulso vai
+/// para o começo do arquivo: vale o andamento e o compasso que havia no começo dele). Rampas viram
+/// degraus de 1/16 de batida; eventos no mesmo tick ficam com o último e valores repetidos somem.
+List<({int tick, int type, List<int> data})> _tempoMeterEvents(DawDoc doc, double shift) {
+  final start = -shift;
+  final out = <({int tick, int type, List<int> data})>[];
+  int tickOf(double beat) => math.max(0, ((beat + shift) * midiExportPpq).round());
+
+  // andamento: degraus (batida, bpm) de todo o mapa
+  final pts = doc.tempo.points;
+  final steps = <(double, double)>[];
+  for (var i = 0; i < pts.length; i++) {
+    final p = pts[i];
+    final next = i + 1 < pts.length ? pts[i + 1] : null;
+    if (next != null && p.ramp && (next.bpm - p.bpm).abs() > 1e-9) {
+      final len = next.beat - p.beat;
+      final n = math.min(4096, math.max(1, (len * _rampStepsPerBeat).ceil()));
+      for (var k = 0; k < n; k++) {
+        final beat = p.beat + k * len / n;
+        steps.add((beat, p.bpm + (next.bpm - p.bpm) * k / n));
+      }
+    } else {
+      steps.add((p.beat, p.bpm));
+    }
+  }
+  var inEffect = steps.first.$2;
+  final later = <(double, double)>[];
+  for (final (beat, bpm) in steps) {
+    if (beat <= start + 1e-9) {
+      inEffect = bpm;
+    } else {
+      later.add((beat, bpm));
+    }
+  }
+  final tempos = <int, int>{}; // tick → µs por semínima, em ordem de inserção
+  int usOf(double bpm) => (60000000 / (bpm.isFinite && bpm > 0 ? bpm : 120)).round().clamp(1, 16777215);
+  tempos[0] = usOf(start > 0 && !doc.tempo.isSingle ? doc.tempo.bpmAt(start) : inEffect);
+  int? last = tempos[0];
+  for (final (beat, bpm) in later) {
+    final us = usOf(bpm);
+    final tk = tickOf(beat);
+    if (us == last && !tempos.containsKey(tk)) continue;
+    tempos.remove(tk);
+    tempos[tk] = us;
+    last = us;
+  }
+  final ticks = tempos.keys.toList()..sort();
+  for (final tk in ticks) {
+    final us = tempos[tk]!;
+    out.add((tick: tk, type: 0x51, data: [us ~/ 65536 % 256, us ~/ 256 % 256, us % 256]));
+  }
+
+  // compasso
+  final meter = doc.meter;
+  List<int> sig(MeterChange m) => [m.numerator.clamp(1, 255), math.max(0, meterDenominators.indexOf(m.denominator)), 24, 8];
+  final (bar0, _) = meter.barOf(math.max(0.0, start));
+  out.add((tick: 0, type: 0x58, data: sig(meter.changeAt(bar0))));
+  for (final m in meter.changes) {
+    final at = meter.barStart(m.bar);
+    if (at > start + 1e-9) out.add((tick: tickOf(at), type: 0x58, data: sig(m)));
+  }
+  // estável: andamento antes de compasso no mesmo tick, que já é a ordem de inserção
+  final indexed = [for (var i = 0; i < out.length; i++) (i, out[i])];
+  indexed.sort((a, b) {
+    final c = a.$2.tick.compareTo(b.$2.tick);
+    if (c != 0) return c;
+    final t = a.$2.type.compareTo(b.$2.type);
+    return t != 0 ? t : a.$1.compareTo(b.$1);
+  });
+  return [for (final e in indexed) e.$2];
 }
 
 void _vlq(List<int> out, int v) {

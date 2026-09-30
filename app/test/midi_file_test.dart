@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
 import 'package:jopendaw_app/daw/midi_file.dart';
 import 'package:jopendaw_app/daw/model.dart';
+import 'package:jopendaw_app/daw/tempo_map.dart';
 
 import 'fake_engine.dart';
 
@@ -189,13 +190,14 @@ void main() {
       expect(d.firstBpm, 120);
     });
 
-    test('compasso 6/8 vira 3/4; 7/8 é aproximado com aviso', () async {
+    test('compasso 6/8 vira 3/4 no beatsPerBar; 7/8 fica exato no mapa, sem aviso', () async {
       final six = [0, 0xFF, 0x58, 4, 6, 3, 24, 8, 0, 0x90, 60, 64, 5, 0x80, 60, 0, ...eot];
       expect((await parseMidiFile(smf(0, 480, [six]))).beatsPerBar, 3);
       final seven = [0, 0xFF, 0x58, 4, 7, 3, 24, 8, 0, 0x90, 60, 64, 5, 0x80, 60, 0, ...eot];
       final d = await parseMidiFile(smf(0, 480, [seven]));
       expect(d.beatsPerBar, 4);
-      expect(d.warnings.single, contains('7/8'));
+      expect(d.meterMap, [const MeterChange(1, 7, 8)]);
+      expect(d.warnings, isEmpty);
     });
 
     test('PPQ diferentes: 1, 96, 960 e 32767', () async {
@@ -402,6 +404,70 @@ void main() {
     });
   });
 
+  group('mapa de andamento e de compassos', () {
+    DawDoc mapDoc({List<TempoPoint>? tempo, List<MeterChange>? meter, double start = 0}) => DawDoc(
+      bpm: 100,
+      beatsPerBar: 4,
+      tempoMap: tempo,
+      meterMap: meter,
+      tracks: [
+        synth('Lead', [
+          MidiClip(id: 'l', start: start, length: 32, notes: [note(60, 0, 1), note(62, 10.25, 0.5)]),
+        ]),
+      ],
+    );
+
+    test('salto, rampa e compassos voltam iguais', () async {
+      final tempo = const [TempoPoint(0, 100), TempoPoint(4, 150), TempoPoint(8, 90, ramp: true), TempoPoint(16, 140)];
+      final meter = const [MeterChange(1, 4, 4), MeterChange(3, 6, 8), MeterChange(5, 7, 8)];
+      final doc = mapDoc(tempo: tempo, meter: meter);
+      final out = buildMidiFile(doc);
+      final d = await parseMidiFile(out.bytes);
+      // a rampa 90 → 140 em 8 batidas vira degraus de 1/16 de batida
+      expect(d.tempoMap.length, greaterThan(128));
+      expect(d.tempoMap.length, lessThan(140));
+      expect(d.meterMap, meter);
+      expect(d.warnings, isEmpty);
+      final back = TempoMap(d.tempoPoints.first.bpm, d.tempoPoints);
+      for (final b in [0.0, 2.0, 4.0, 4.5, 8.0, 10.0, 12.5, 15.99, 16.0, 20.0, 40.0]) {
+        expect(back.secondsAt(b), closeTo(doc.tempo.secondsAt(b), 0.015), reason: 'batida $b');
+      }
+      // e importar leva tudo para o projeto
+      final c = fakeController(FakeEngine());
+      await c.importMidiBytes('mapa.mid', out.bytes, confirmTempo: (_) async => true);
+      expect(c.doc.meterMap, meter);
+      expect(c.doc.bpm, 100);
+      expect(c.doc.tempoMap.first, const TempoPoint(0, 100));
+      expect(c.doc.tempoMap[1], const TempoPoint(4, 150));
+    });
+
+    test('um andamento e um compasso só: um evento de cada, como antes', () async {
+      final d = await parseMidiFile(buildMidiFile(mapDoc()).bytes);
+      expect(d.tempoMap.length, 1);
+      expect(d.tempoMap.single.bpm, closeTo(100, 0.001));
+      expect(d.meterMap, const [MeterChange(1, 4, 4)]);
+    });
+
+    test('clipe avulso leva o andamento e o compasso que valiam no começo dele', () async {
+      final doc = mapDoc(
+        start: 8,
+        tempo: const [TempoPoint(0, 100), TempoPoint(4, 200), TempoPoint(12, 60)],
+        meter: const [MeterChange(1, 4, 4), MeterChange(3, 3, 4), MeterChange(5, 6, 8)],
+      );
+      final clip = doc.tracks.single.midi.single;
+      final d = await parseMidiFile(buildMidiFile(doc, only: clip, onlyTrack: doc.tracks.single).bytes);
+      // o clipe começa na batida 8 (200 BPM, compasso 3/4 até o compasso 5 = batida 14)
+      expect(d.tempoMap.map((p) => (p.beat, p.bpm.round())), [(0.0, 200), (4.0, 60)]);
+      expect(d.meterMap, const [MeterChange(1, 3, 4), MeterChange(3, 6, 8)]);
+    });
+
+    test('sem dart2js quebrando: nenhum deslocamento de bits no arquivo MIDI', () {
+      // o teste geral que varre o código cobre o resto; aqui só o VLQ de um andamento longo
+      final doc = mapDoc(tempo: const [TempoPoint(0, 100), TempoPoint(100000, 200)]);
+      expect(() => buildMidiFile(doc), returnsNormally);
+    });
+  });
+
   group('desempenho', () {
     test('100 mil notas: escrita e leitura rápidas, e a leitura cede o controle ao laço de eventos', () async {
       final notes = [for (var i = 0; i < 100000; i++) note(24 + i % 90, i * 0.25, 0.2, (1 + i % 127) / 127)];
@@ -472,11 +538,102 @@ void main() {
       expect(asked, 2); // 3/4 ainda difere do projeto: pergunta
     });
 
-    test('mudança de andamento no meio avisa que só o primeiro vale', () async {
-      final c = fakeController(FakeEngine());
+    Uint8List midTempoFile() {
       final track = [0, 0xFF, 0x51, 3, 0x07, 0xA1, 0x20, 0, 0x90, 60, 64, ...vlq(480), 0xFF, 0x51, 3, 0x03, 0xD0, 0x90, ...vlq(10), 0x80, 60, 0, ...eot];
-      final r = await c.importMidiBytes('t.mid', smf(0, 480, [track]), confirmTempo: (_) async => true);
-      expect(r!.warnings.any((w) => w.contains('muda de andamento') && w.contains('120') && w.contains('240')), isTrue);
+      return smf(0, 480, [track]);
+    }
+
+    test('andamento no meio do arquivo vira o mapa do projeto, sem o aviso antigo', () async {
+      final c = fakeController(FakeEngine());
+      var changes = -1;
+      final r = await c.importMidiBytes(
+        't.mid',
+        midTempoFile(),
+        confirmTempo: (d) async {
+          changes = d.tempoPoints.length - 1;
+          return true;
+        },
+      );
+      expect(changes, 1);
+      expect(r!.tempoApplied, isTrue);
+      expect(c.doc.bpm, 120);
+      expect(c.doc.tempoMap, const [TempoPoint(0, 120), TempoPoint(1, 240)]);
+      expect(r.warnings.any((w) => w.contains('primeiro') || w.contains('ignoradas') || w.contains('muda de andamento')), isFalse);
+      // 1 batida a 120 (0,5 s) e 1 a 240 (0,25 s)
+      expect(c.doc.tempo.secondsAt(2), closeTo(0.75, 1e-9));
+      c.undo();
+      expect(c.doc.tempoMap, isEmpty);
+    });
+
+    test('recusar o mapa do arquivo avisa que ficou o andamento do projeto', () async {
+      final c = fakeController(FakeEngine());
+      final r = await c.importMidiBytes('t.mid', midTempoFile(), confirmTempo: (_) async => false);
+      expect(r!.tempoApplied, isFalse);
+      expect(c.doc.tempoMap, isEmpty);
+      expect(r.warnings.any((w) => w.contains('mantive')), isTrue);
+    });
+
+    test('arquivo com dezenas de milhares de eventos de andamento é simplificado para caber', () async {
+      final ev = <int>[];
+      for (var i = 0; i < 30000; i++) {
+        final bpm = 100 + 40 * i / 30000;
+        final us = (60000000 / bpm).round();
+        ev.addAll([...vlq(i == 0 ? 0 : 1), 0xFF, 0x51, 3, us ~/ 65536 % 256, us ~/ 256 % 256, us % 256]);
+      }
+      final track = [...ev, 0, 0x90, 60, 64, ...vlq(10), 0x80, 60, 0, ...eot];
+      final bytes = smf(0, 480, [track]);
+      final data = await parseMidiFile(bytes);
+      expect(data.tempoMap.length, 30000);
+      expect(data.tempoPoints.length, lessThanOrEqualTo(midiMaxTempoPoints));
+      expect(data.tempoPoints.length, greaterThan(50));
+      expect(data.tempoPoints.first.bpm, closeTo(100, 0.01));
+      expect(data.tempoPoints.last.bpm, closeTo(140, 0.5));
+      final c = fakeController(FakeEngine());
+      final r = await c.importMidiBytes('rampa.mid', bytes, confirmTempo: (_) async => true);
+      expect(c.doc.tempoMap.length, lessThanOrEqualTo(midiMaxTempoPoints));
+      expect(r!.warnings.any((w) => w.contains('fundi')), isTrue);
+    });
+
+    test('poucos pontos com diferenças pequenas: funde só as menores que 0,05 BPM', () {
+      final pts = simplifyTempo([
+        const MidiTempoPoint(0, 120),
+        const MidiTempoPoint(1, 120.02),
+        const MidiTempoPoint(2, 120.04),
+        const MidiTempoPoint(3, 120.06), // 0,06 acima do último mantido: fica
+        const MidiTempoPoint(4, 90),
+      ]);
+      expect(pts.map((p) => p.beat), [0, 3, 4]);
+      expect(simplifyTempo(const []), isEmpty);
+      // primeiro andamento depois do começo: 120 antes dele
+      expect(simplifyTempo(const [MidiTempoPoint(4, 90)]).map((p) => (p.beat, p.bpm)), [(0.0, 120.0), (4.0, 90.0)]);
+    });
+
+    test('compassos do arquivo (6/8 no compasso 3, 7/8 depois) entram no mapa do projeto', () async {
+      final conductor = [
+        0, 0xFF, 0x58, 4, 4, 2, 24, 8, //
+        ...vlq(3840), 0xFF, 0x58, 4, 6, 3, 24, 8, // batida 8 = compasso 3
+        ...vlq(2880), 0xFF, 0x58, 4, 7, 3, 24, 8, // + 6 batidas = compasso 5
+        ...eot,
+      ];
+      final notes = [0, 0x90, 60, 64, 10, 0x80, 60, 0, ...eot];
+      final c = fakeController(FakeEngine());
+      final r = await c.importMidiBytes('m.mid', smf(1, 480, [conductor, notes]), confirmTempo: (_) async => true);
+      expect(r!.warnings, isEmpty);
+      expect(c.doc.meterMap, const [MeterChange(1, 4, 4), MeterChange(3, 6, 8), MeterChange(5, 7, 8)]);
+      expect(c.doc.beatsPerBar, 4);
+      expect(c.doc.meter.barStart(5), 14);
+    });
+
+    test('compasso no meio de um compasso alinha e avisa', () async {
+      final conductor = [0, 0xFF, 0x58, 4, 4, 2, 24, 8, ...vlq(2400), 0xFF, 0x58, 4, 3, 2, 24, 8, ...eot]; // batida 5
+      final d = await parseMidiFile(
+        smf(1, 480, [
+          conductor,
+          [0, 0x90, 60, 64, 10, 0x80, 60, 0, ...eot],
+        ]),
+      );
+      expect(d.meterMap.length, 2);
+      expect(d.warnings.any((w) => w.contains('meio de um compasso')), isTrue);
     });
 
     test('arquivo ruim vira erro legível e não mexe no documento', () async {

@@ -2527,11 +2527,7 @@ class DawController extends ChangeNotifier {
     status = null;
     if (_disposed) return null;
     var useTempo = false;
-    final fileBpm = data.firstBpm;
-    if (confirmTempo != null && (fileBpm != null || data.beatsPerBar != null)) {
-      final differs = (fileBpm != null && appBpmFor(fileBpm) != doc.bpm.round()) || (data.beatsPerBar != null && data.beatsPerBar != doc.beatsPerBar);
-      if (differs) useTempo = await confirmTempo(data);
-    }
+    if (confirmTempo != null && midiTempoDiffers(data, doc)) useTempo = await confirmTempo(data);
     if (_disposed) return null;
     final bar = useTempo ? (data.beatsPerBar ?? doc.beatsPerBar) : doc.beatsPerBar;
     final items = midiImportTracks(data, beatsPerBar: bar, start: at ?? snapBeat(beat.value), newId: newId);
@@ -2555,24 +2551,32 @@ class DawController extends ChangeNotifier {
     });
     if (useTempo) await _mirrorTempo();
     final warnings = [...data.warnings];
-    if (data.hasTempoChanges) {
-      final bpms = [for (final p in data.tempoMap) p.bpm];
+    final bpms = [for (final p in data.tempoMap) p.bpm];
+    if (useTempo && data.tempoPoints.length < data.tempoMap.length) {
       warnings.add(
-        'O arquivo muda de andamento no meio (de ${bpms.reduce(math.min).round()} a ${bpms.reduce(math.max).round()} BPM): '
-        'o app tem um andamento só, então as mudanças foram ignoradas.',
+        'O arquivo tem ${data.tempoMap.length - 1} mudanças de andamento; fundi as que diferem menos de $midiTempoEpsilon BPM e '
+        '${data.tempoPoints.length - 1} ficaram no mapa (o limite é $midiMaxTempoPoints pontos).',
       );
+    } else if (!useTempo && data.hasTempoChanges) {
+      warnings.add('O arquivo muda de andamento no meio (de ${bpms.reduce(math.min).round()} a ${bpms.reduce(math.max).round()} BPM); mantive o do projeto.');
     }
     return MidiImportReport(tracks: items.length, notes: data.noteCount, tempoApplied: useTempo, warnings: warnings);
   }
 
-  /// GANCHO do mapa de andamento: hoje só o primeiro andamento e o primeiro compasso do arquivo
-  /// entram no documento. Quando o documento tiver mapa de andamento, aqui é o lugar de passar
-  /// [MidiFileData.tempoMap] inteiro (batida em semínimas, BPM real) em vez do primeiro ponto.
+  /// Leva o mapa de andamento e o de compassos do arquivo para o documento (substituem os do
+  /// projeto; as notas continuam nas mesmas batidas). Sem andamento ou sem compasso no arquivo, o
+  /// respectivo do projeto fica como está.
   void applyImportedTempo(DawDoc d, MidiFileData data) {
-    final bpm = data.firstBpm;
-    if (bpm != null) d.bpm = appBpmFor(bpm).toDouble();
-    final bpb = data.beatsPerBar;
-    if (bpb != null) d.beatsPerBar = bpb;
+    final t = importedTempo(data);
+    if (t != null) {
+      d.bpm = t.bpm;
+      d.tempoMap = t.points;
+    }
+    final m = importedMeter(data);
+    if (m != null) {
+      d.beatsPerBar = m.beatsPerBar;
+      d.meterMap = m.changes;
+    }
   }
 
   /// Decodifica, guarda no aparelho e registra no motor e no documento (se ainda não estiver);

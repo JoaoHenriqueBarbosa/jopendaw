@@ -19,13 +19,14 @@ extension _Tools on _PianoRollState {
   List<MidiNote> _snapToScale(List<MidiNote> notes, {bool preferUp = false}) {
     final s = _scale;
     if (s == null || _dims.drums) return notes;
-    return [
+    final snapped = [
       for (final n in notes)
         () {
           final p = s.snap(n.pitch, preferUp: preferUp);
           return n.copy()..pitch = _rows?.rowOf(p) != null ? p : n.pitch;
         }(),
     ];
+    return dropSnapCollisions(notes, snapped);
   }
 
   /// Nas operações que mudam a altura, o encaixe continua valendo se "Prender na escala" e
@@ -498,4 +499,30 @@ class _Caption extends StatelessWidget {
     padding: const EdgeInsets.only(top: 10, bottom: 6),
     child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white54)),
   );
+}
+
+/// Depois de encaixar na escala, duas notas de um acorde podem cair na mesma altura (escala curta):
+/// entre as que ficaram com a mesma altura e o mesmo início, sobra a que estava mais perto do grau
+/// da escala (a primeira, no empate). Só mexe nos grupos em que o encaixe moveu alguma nota;
+/// duplicatas que já existiam ficam como estavam. [before] e [after] têm a mesma ordem.
+List<MidiNote> dropSnapCollisions(List<MidiNote> before, List<MidiNote> after) {
+  final groups = <(int, double), List<int>>{};
+  for (var i = 0; i < after.length; i++) {
+    (groups[(after[i].pitch, after[i].start)] ??= []).add(i);
+  }
+  final drop = <int>{};
+  for (final g in groups.values) {
+    if (g.length < 2 || g.every((i) => before[i].pitch == after[i].pitch)) continue;
+    var best = g.first;
+    for (final i in g.skip(1)) {
+      if ((before[i].pitch - after[i].pitch).abs() < (before[best].pitch - after[best].pitch).abs()) best = i;
+    }
+    drop.addAll(g.where((i) => i != best));
+  }
+  return drop.isEmpty
+      ? after
+      : [
+          for (var i = 0; i < after.length; i++)
+            if (!drop.contains(i)) after[i],
+        ];
 }
