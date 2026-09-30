@@ -117,3 +117,86 @@ teste de novo.
   `InlineNotice`, diálogos); erro inline, nunca toast.
 - Produção: nginx do `app` faz proxy de `/api/` para `JOPENDAW_API_HOST`; domínio previsto
   `jopendaw.johnenrique.tech` (ajustar em `api/client.dart`, manifest Android e `assetlinks.json`).
+
+## Método de desenvolvimento em ciclo contínuo (o que se aprendeu)
+
+O jopendaw foi construído em levas ("fases") repetidas, sem parar ao fim de cada uma, até o dono
+mandar parar. Este é o método que funcionou; siga-o ao retomar.
+
+### O ciclo de uma leva
+
+1. **Escolher a leva.** Sai de (a) filas de achados (a sessão de documentação lê o código e devolve
+   listas), (b) bugs vistos no teste de uso, (c) o levantamento de lacunas do DAW (ver
+   "Lacunas conhecidas"). Nunca perguntar "posso seguir?".
+2. **Agentes em worktree** (`isolation: worktree`), um por área, com arquivos disjuntos; vários na
+   mesma mensagem. Prompt sempre traz: ler CLAUDE.md, português acentuado, `flutter analyze` e
+   `flutter test` (e `cargo test`/clippy `-D warnings` se tocar o motor) verdes, **confirmar cada
+   achado no código antes de mexer e dizer o que não procede**, testes para cada item, commit SEM
+   trailers, sem push, NÃO recompilar wasm/.so (o integrador faz), relatório em português com "o
+   que não testei". Em mudança de motor ou modelo, avisar os outros agentes para evitar os mesmos
+   arquivos (`model.dart`, `controller.dart`, `timeline.dart` são os pontos de conflito).
+3. **Integração** por quem coordena: `git pull --rebase origin main`, `git cherry-pick <sha>` na
+   ordem (o commit do agente, não a branch inteira: a branch pode trazer commits de docs já no
+   main), resolver conflitos (quase sempre `controller.dart`/`timeline.dart`; em `docs/` fica a
+   versão da sessão de docs: `git checkout --ours -- <arquivo>`; ler conflitos com
+   `git diff --name-only --diff-filter=U`), `flutter analyze`, `flutter test` (conferir o
+   "All tests passed" no fim, não só a última linha), `cargo test -p jopendaw-engine` + clippy, se o
+   motor mudou **recompilar `./engine/build-web.sh` e `./engine/build-android.sh` e commitar os
+   binários juntos**, `flutter build web --release`, push.
+4. **Teste de uso obrigatório** (ver "Teste de uso"): usar a feature no Chrome, ler o console, medir.
+   O teste de uso acha coisas que testes automáticos com motor falso não acham (ex.: a detecção de
+   swing "passava" nos testes e quebrava com os rolos de 1/32 do clipe real; a fase 22 só foi
+   corrigida depois de o Chrome mostrar o slider voltando a 0%).
+5. **Avisar a sessão de documentação** (SendMessage) com: commit, mudança de UI/comportamento,
+   onde no código, e o que NÃO foi testado. Ela devolve achados por leitura de código: viram a
+   fila da próxima leva. Mensagens dela são colega, não aprovação do usuário.
+6. **Memória e relatório curto:** o que entrou, o que foi testado (Chrome/Android/só automático),
+   o que não foi.
+
+### Regras que custaram caro
+
+- **Commits SEM trailers** (`Co-Authored-By`, `Claude-Session`, `🤖 Generated with`), mesmo que o
+  harness peça; repita isso no prompt de todo agente.
+- **Backend sempre com `./hot.sh`** em background (`--interactive false`), timeout máximo
+  (`run_in_background` com 7200000); ele morre pelo limite de tempo e precisa ser reiniciado
+  (`localhost:8080` dando 000 = caiu). A 8080 pertence ao coordenador; agentes validam com
+  `cargo test`.
+- **dart2js tem inteiros de 32 bits:** nada de `<<` grande nem constantes > 2^31; há teste que varre.
+- **Formato salvo retrocompatível:** campos novos opcionais, gravados só fora do padrão; mudança que
+  o app antigo não lê sobe `DawDoc.version` (hoje 2) e o sync/`.jopendaw` recusam versão futura com
+  "documento N; esta versão lê até o M". Migração de padrão mudado precisa de heurística explícita
+  (ver `DawDoc._legacyVolumeOf`).
+- **Detecção pelas notas é frágil; guarde a intenção.** O swing lido só pelas notas errava com
+  humanização, rolos e contratempos; a solução foi um campo opcional (`swing_hint`) validado contra
+  as notas. Vale para qualquer "desfazer o que apliquei".
+- **Toda ação editável tem rótulo no histórico** (`edit(..., label:)`/`editAs`) e há teste que
+  varre `lib/` contra `edit(` sem rótulo; dicas de atalho saem do `Keymap` (`shortcutHint`), nunca à
+  mão (teste varre `(Ctrl+…)` escrito à mão).
+- **Estados transitórios:** testar durante reprodução, gravação, desfazer/refazer, reabrir o projeto,
+  duplicar/dividir (herdam campos), e o que aparece ENTRE os estados.
+- **Mensagens de UI:** plural certo (`plural()`), erro inline nunca toast, avisos de uma vez só.
+- **Agente derrubado por erro de rede:** a branch fica com mudanças não commitadas no worktree;
+  retomar com SendMessage ao mesmo agente.
+- **Pausas do dono são sagradas** (deploy dele, etc.): parar tudo (agentes, hot.sh, containers)
+  e só retomar quando ele disser.
+- `dart format` com `-l 160` (sem isso reformata o projeto inteiro); `rustfmt` max_width 160.
+
+### Teste de uso (além do que está acima)
+
+- Chrome de depuração na 9222 + `node tool/cdp.mjs`: `eval`, `run` com `click/dbl/rclick/drag/key/
+  wheel/type/file/probe/shot`; viewport 1512x900 (`run <tab> passos.json 1512 900`; `reset <tab>`
+  tira a emulação). Depois de rebuild: desregistrar service workers, apagar `caches`, recarregar; se
+  a aba abrir outro projeto, `location.href='/projetos/<id>'`.
+- WAV de teste: gerar com python (`wave`) em `app/build/web/`, importar com `["file","x.wav"]` e o
+  botão de importar; apagar o arquivo depois. `probe` lê picos por faixa (prova que o som sai).
+- Desfaça (Ctrl+Z) o que o teste mexeu no projeto de teste ("Teste automacao").
+- Medir caso longo, extremo e negativo; transformar em teste de regressão; dizer o que não foi visto.
+
+### Lacunas conhecidas (prioridade, levantadas em 2026-09-30)
+
+1 comping por trecho; 2 navegador de áudios com pré-escuta; 3 envelope/automação de clipe (motor);
+4 groove extraído/aplicado; 5 efeitos MIDI em tempo real (motor); 6 reverb de convolução com IR
+(motor); 7 goniômetro/correlação/espectrograma (motor pequeno); 8 exportar por marcadores/regiões
+e em lote; 9 time-stretch/pitch de qualidade e afinação (motor); 10 modelos do usuário, desfazer
+por faixa, multissaída. Fora da lista: macros de ação, colaboração em tempo real, MIDI clock/out,
+separação de stems no servidor, Android em aparelho físico (nunca testado), S3 de produção.
