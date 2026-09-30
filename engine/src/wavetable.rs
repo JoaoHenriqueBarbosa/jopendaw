@@ -38,6 +38,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use crate::dsp::{Adsr, FilterMode, Rng, Smoothed, Stage, Svf, sin_turns, smoothing};
+use crate::expression::PitchExpr;
 use crate::instrument::{Instrument, pitch_hz, wavetable_param as P};
 use crate::pan_gains;
 use crate::synth::{Ramp, Spec, cont, disc, lfo_shape, unison_position, wrap};
@@ -117,6 +118,8 @@ const SPECS: [Spec; PARAMS] = [
     cont(0.0, 1.0, 0.7),         // VELOCITY
     cont(0.0, 1.5, 0.7),         // LEVEL
     cont(-1.0, 1.0, 0.0),        // ENV_POS
+    disc(0.0, 24.0, 2.0),        // BEND_RANGE
+    cont(0.0, 2.0, 1.0),         // VIBRATO_RANGE
 ];
 
 /// Semente diferente por instância.
@@ -307,6 +310,8 @@ struct Block {
     glide: f32,
     res_release: f32,
     fade_step: f32,
+    /// Desvio de afinação do bend e da roda de modulação, semitons.
+    expr: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -410,7 +415,7 @@ impl Voice {
         let d = self.target - self.cur;
         self.cur = if d.abs() < 1e-3 { self.target } else { self.cur + d * b.glide };
 
-        let dt = pitch_hz(self.cur + b.lfo * b.lfo_pitch) / b.rate;
+        let dt = (pitch_hz(self.cur + b.lfo * b.lfo_pitch + b.expr) / b.rate).min(MAX_DT);
         let dt_sub = (dt * 0.5).min(MAX_DT);
         let uni = b.unison;
 
@@ -542,6 +547,7 @@ pub struct Wavetable {
     spread: Smoothed,
     gain: f32,
     pans_dirty: bool,
+    expr: PitchExpr,
     block: Block,
 }
 
@@ -575,6 +581,7 @@ impl Wavetable {
             spread: Smoothed::new(0.0),
             gain: 0.0,
             pans_dirty: true,
+            expr: PitchExpr::new(r),
             block: Block {
                 rate: r,
                 series: [0; 2],
@@ -604,6 +611,7 @@ impl Wavetable {
                 glide: 1.0,
                 res_release: 0.0,
                 fade_step: 1.0 / (STEAL_SECS * r),
+                expr: 0.0,
             },
         };
         for id in 0..P::COUNT {
@@ -629,6 +637,8 @@ impl Wavetable {
         let v = self.params[id as usize];
         let p = &self.params;
         match id {
+            P::BEND_RANGE => self.expr.set_range(v),
+            P::VIBRATO_RANGE => self.expr.set_vibrato(v),
             P::OSC1_LEVEL => self.osc1.set(v),
             P::OSC2_LEVEL => self.osc2.set(v),
             P::OSC1_POS => self.pos1.set(v),
@@ -697,6 +707,7 @@ impl Wavetable {
         ] {
             s.snap();
         }
+        self.expr.snap();
         self.pans_dirty = true;
         self.gain = VOICE_GAIN * self.level.value * (1.0 - self.tremolo.value * (1.0 - self.lfo) * 0.5);
     }
@@ -755,6 +766,7 @@ impl Wavetable {
         b.gain = Ramp { from: self.gain, step: (gain - self.gain) / frames };
         self.gain = gain;
 
+        b.expr = self.expr.step(len);
         b.smooth = a;
         let glide = p[P::GLIDE as usize];
         b.glide = if glide > 0.0 { smoothing(glide / 4.6, len, rate) } else { 1.0 };
@@ -921,6 +933,14 @@ impl Instrument for Wavetable {
         for v in &mut self.voices {
             v.kill();
         }
+    }
+
+    fn set_pitch_bend(&mut self, bend: f32) {
+        self.expr.set_bend(bend);
+    }
+
+    fn set_mod_wheel(&mut self, value: f32) {
+        self.expr.set_wheel(value);
     }
 
     fn set_param(&mut self, id: u32, value: f32) {

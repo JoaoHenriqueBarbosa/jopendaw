@@ -68,6 +68,7 @@ pub mod api;
 pub mod drums;
 pub mod dsp;
 pub mod effect;
+pub mod expression;
 pub mod fm;
 pub mod fx;
 pub mod instrument;
@@ -123,6 +124,8 @@ const STOP_FADE_SECS: f64 = 0.01;
 /// Notas reservadas por faixa (cabem sem realocar; passar disso realoca no comando, nunca no
 /// `process`).
 const NOTES_RESERVED: usize = 1024;
+/// Eventos de controle (bend, modulação, pedal) reservados por faixa.
+const CC_RESERVED: usize = 512;
 
 /// Um áudio decodificado: um ou dois canais na taxa em que foi gravado.
 pub struct Sample {
@@ -264,6 +267,12 @@ struct Lane {
     /// Monitorando a entrada de áudio (só vale em faixa de áudio). Guardado mesmo em outro tipo:
     /// voltar a ser de áudio volta a monitorar.
     monitor: bool,
+    /// Eventos de controle do clipe (ver `expression`), ordenados por batida; o cursor aponta o
+    /// próximo a disparar e `cc_seq` numera a chegada para desempatar a ordenação.
+    cc: Vec<expression::CcEvent>,
+    cc_cursor: usize,
+    cc_seq: u32,
+    expr: expression::ExprState,
 }
 
 impl Lane {
@@ -277,40 +286,41 @@ impl Lane {
             held: Vec::with_capacity(128),
             statics: [f32::NAN; STATIC_PARAMS],
             monitor: false,
+            cc: Vec::with_capacity(CC_RESERVED),
+            cc_cursor: 0,
+            cc_seq: 0,
+            expr: expression::ExprState::new(instrument::kind::AUDIO),
         }
     }
 
     /// Aponta o cursor para a primeira nota que ainda não começou em `pos`.
-    fn cue(&mut self, pos: f64, frames_per_beat: f64) {
+    fn cue(&mut self, pos: f64, frames_per_beat: f64, playing: bool) {
         self.cursor = self.notes.partition_point(|n| event_offset(n.start * frames_per_beat, pos) < 0.0);
+        self.cue_cc(pos, frames_per_beat, playing);
     }
 
     /// Solta as notas do sequenciador (seek, volta do loop). As ao vivo continuam.
     fn release_held(&mut self) {
-        if let Some(inst) = self.instrument.as_mut() {
-            for h in &self.held {
-                inst.note_off(h.pitch);
-            }
-        }
-        self.held.clear();
+        self.release_held_pedal();
     }
 
     /// Soma o instrumento no bloco que começa em `pos`, disparando e soltando as notas do
     /// sequenciador nos quadros exatos quando o transporte anda. Devolve se renderizou algo.
     fn render(&mut self, l: &mut [f32], r: &mut [f32], playing: bool, pos: f64, frames_per_beat: f64) -> bool {
-        let Self { instrument, notes, cursor, held, .. } = self;
+        let Self { instrument, notes, cursor, held, cc, cc_cursor, expr, .. } = self;
         let Some(inst) = instrument.as_mut() else { return false };
         let n = l.len();
         let offset = |beat: f64| event_offset(beat * frames_per_beat, pos).clamp(0.0, n as f64) as usize;
         // próximo quadro com evento: o fim mais próximo das que soam ou o início da próxima nota
-        let next_event = |held: &[Held], cursor: usize| {
+        let next_event = |held: &[Held], cursor: usize, cc_cursor: usize| {
             let off = held.iter().map(|h| offset(h.end)).min().unwrap_or(n);
-            notes.get(cursor).map_or(off, |note| off.min(offset(note.start)))
+            let off = notes.get(cursor).map_or(off, |note| off.min(offset(note.start)));
+            cc.get(cc_cursor).map_or(off, |e| off.min(offset(e.beat)))
         };
         let mut at = 0;
         let mut sounded = false;
         // parado não há eventos do sequenciador: o instrumento só soa (notas ao vivo, caudas)
-        let mut next = if playing { next_event(held, *cursor) } else { n };
+        let mut next = if playing { next_event(held, *cursor, *cc_cursor) } else { n };
         while next < n {
             if next > at {
                 if inst.active() {
@@ -319,12 +329,21 @@ impl Lane {
                 }
                 at = next;
             }
+            // controles primeiro: o pedal que desce na batida de uma nota a segura, e o que sobe na
+            // batida de outra solta as anteriores antes dela
+            while let Some(&ev) = cc.get(*cc_cursor) {
+                if offset(ev.beat) > next {
+                    break;
+                }
+                *cc_cursor += 1;
+                expr.set(inst.as_mut(), ev.cc, ev.value);
+            }
             // no mesmo quadro, primeiro solta: uma nota que termina onde a mesma altura recomeça
             // não pode cortar a nova
             held.retain(|h| {
                 let due = offset(h.end) <= next;
                 if due {
-                    inst.note_off(h.pitch);
+                    expr.note_off(inst.as_mut(), h.pitch);
                 }
                 !due
             });
@@ -333,10 +352,10 @@ impl Lane {
                     break;
                 }
                 *cursor += 1;
-                inst.note_on(note.pitch, note.velocity);
+                expr.note_on(inst.as_mut(), note.pitch, note.velocity);
                 hold(held, note.pitch, note.end);
             }
-            next = next_event(held, *cursor);
+            next = next_event(held, *cursor, *cc_cursor);
         }
         if at < n && inst.active() {
             inst.render(&mut l[at..], &mut r[at..]);
@@ -708,6 +727,7 @@ impl Engine {
             if let Some(inst) = lane.instrument.as_mut() {
                 inst.release_all();
             }
+            lane.stop_cc();
         }
     }
 
@@ -843,6 +863,8 @@ impl Engine {
         lane.kind = kind;
         lane.held.clear();
         lane.statics = [f32::NAN; STATIC_PARAMS];
+        lane.expr = expression::ExprState::new(kind);
+        self.recue = true;
         lane.instrument = instrument::create(kind, self.rate);
         if let Some(inst) = lane.instrument.as_mut()
             && lane.sample != 0
@@ -942,9 +964,7 @@ impl Engine {
         if self.playing {
             self.recorder.note_on(track as u32, pitch as u8, velocity, self.transport_beat());
         }
-        if let Some(inst) = self.lanes[track].instrument.as_mut() {
-            inst.note_on(pitch as u8, velocity);
-        }
+        self.lanes[track].live_note_on(pitch as u8, velocity);
     }
 
     pub fn live_off(&mut self, track: usize, pitch: u32) {
@@ -954,9 +974,7 @@ impl Engine {
         if self.playing {
             self.recorder.note_off(track as u32, pitch as u8, self.transport_beat());
         }
-        if let Some(inst) = self.lanes[track].instrument.as_mut() {
-            inst.note_off(pitch as u8);
-        }
+        self.lanes[track].live_note_off(pitch as u8);
     }
 
     /// Pânico: corta na hora todo som de instrumento (notas presas, caudas), as caudas dos efeitos
@@ -968,6 +986,7 @@ impl Engine {
             if let Some(inst) = lane.instrument.as_mut() {
                 inst.silence();
             }
+            lane.panic_cc();
         }
         for s in &mut self.strips {
             s.chain.reset();
@@ -1581,6 +1600,7 @@ impl Engine {
             // comum de um reenvio)
             for lane in &mut self.lanes {
                 lane.notes.sort_unstable_by(|a, b| a.start.total_cmp(&b.start));
+                lane.sort_cc();
             }
             self.notes_dirty = false;
             self.recue = true;
@@ -1588,7 +1608,7 @@ impl Engine {
         if self.recue {
             let fpb = self.beats_to_frames(1.0);
             for lane in &mut self.lanes {
-                lane.cue(self.pos, fpb);
+                lane.cue(self.pos, fpb, self.playing);
             }
             self.recue = false;
         }
@@ -1600,7 +1620,7 @@ impl Engine {
         let fpb = self.beats_to_frames(1.0);
         for lane in &mut self.lanes {
             lane.release_held();
-            lane.cue(self.pos, fpb);
+            lane.cue(self.pos, fpb, true);
         }
     }
 

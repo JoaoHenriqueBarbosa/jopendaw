@@ -15,6 +15,16 @@ use crate::mixer::Stereo;
 /// thread de áudio, e 16 mil notas são horas de execução contínua.
 pub const MAX_REC_NOTES: usize = 16_384;
 
+/// Eventos de controle (bend, modulação, pedal) que o registro guarda além das notas. Contam à
+/// parte: uma roda de pitch bend mexida a fundo manda centenas de eventos por segundo e não pode
+/// tomar o lugar das notas.
+pub const MAX_REC_CCS: usize = 32_768;
+
+/// Somado ao número do controle no campo "altura" da leitura: valores de 0 a 127 são notas, e
+/// `CC_PITCH_BASE + cc` (257 modulação, 320 pedal, 384 pitch bend) é um evento de controle, com o
+/// mesmo grupo de floats (faixa, código, batida, batida, valor).
+pub const CC_PITCH_BASE: f32 = 256.0;
+
 /// Floats por nota na leitura do registro: faixa, altura, início, fim (batidas) e velocidade.
 pub const REC_NOTE_FLOATS: usize = 5;
 
@@ -30,12 +40,16 @@ pub struct RecNote {
     pub start: f64,
     /// NaN enquanto a tecla está segurada.
     pub end: f64,
+    /// Nas notas, a velocidade; nos eventos de controle, o valor (bend −1..1, os outros 0..1).
     pub velocity: f32,
+    /// 0 numa nota; senão o controle (1 modulação, 64 pedal, 128 pitch bend) e a nota é só um ponto
+    /// (`start == end`, `pitch` sem uso).
+    pub cc: u8,
 }
 
 impl RecNote {
     fn held(&self) -> bool {
-        self.end.is_nan()
+        self.cc == 0 && self.end.is_nan()
     }
 }
 
@@ -44,6 +58,8 @@ impl RecNote {
 pub struct NoteRecorder {
     on: bool,
     notes: Vec<RecNote>,
+    /// Quantos dos registros são eventos de controle.
+    ccs: usize,
     /// Notas descartadas por falta de espaço desde o último início.
     dropped: usize,
 }
@@ -56,7 +72,7 @@ impl Default for NoteRecorder {
 
 impl NoteRecorder {
     pub fn new() -> Self {
-        Self { on: false, notes: Vec::with_capacity(MAX_REC_NOTES), dropped: 0 }
+        Self { on: false, notes: Vec::with_capacity(MAX_REC_NOTES + MAX_REC_CCS), ccs: 0, dropped: 0 }
     }
 
     pub fn recording(&self) -> bool {
@@ -66,6 +82,7 @@ impl NoteRecorder {
     /// Começa uma gravação do zero: o que sobrou de uma anterior não lida não se mistura com ela.
     pub fn start(&mut self) {
         self.notes.clear();
+        self.ccs = 0;
         self.dropped = 0;
         self.on = true;
     }
@@ -98,7 +115,7 @@ impl NoteRecorder {
             return;
         }
         self.note_off(track, pitch, beat);
-        self.push(RecNote { track, pitch, start: beat, end: f64::NAN, velocity });
+        self.push(RecNote { track, pitch, start: beat, end: f64::NAN, velocity, cc: 0 });
     }
 
     /// Tecla solta em `beat`. Sem nota aberta daquela tecla (apertada antes de gravar, ou com o
@@ -110,6 +127,13 @@ impl NoteRecorder {
         // de trás para a frente: a aberta é sempre das últimas
         if let Some(n) = self.notes.iter_mut().rev().find(|n| n.held() && n.track == track && n.pitch == pitch) {
             n.end = beat.max(n.start);
+        }
+    }
+
+    /// Evento de controle em `beat` (`cc` 1, 64 ou 128 com o valor já normalizado).
+    pub fn cc(&mut self, track: u32, cc: u8, value: f32, beat: f64) {
+        if self.on {
+            self.push(RecNote { track, pitch: 0, start: beat, end: beat, velocity: value, cc });
         }
     }
 
@@ -138,8 +162,11 @@ impl NoteRecorder {
     }
 
     fn push(&mut self, n: RecNote) {
-        if self.notes.len() < MAX_REC_NOTES {
+        let is_cc = n.cc != 0;
+        let (used, cap) = if is_cc { (self.ccs, MAX_REC_CCS) } else { (self.notes.len() - self.ccs, MAX_REC_NOTES) };
+        if used < cap {
             self.notes.push(n);
+            self.ccs += usize::from(is_cc);
         } else {
             self.dropped += 1;
         }
@@ -153,8 +180,10 @@ impl NoteRecorder {
         let fit = (out.len() / REC_NOTE_FLOATS).min(self.notes.len());
         for (n, o) in self.notes[..fit].iter().zip(out.as_chunks_mut::<REC_NOTE_FLOATS>().0) {
             let end = if n.held() { beat.max(n.start) } else { n.end };
-            *o = [n.track as f32, n.pitch as f32, n.start as f32, end as f32, n.velocity];
+            let code = if n.cc == 0 { f32::from(n.pitch) } else { CC_PITCH_BASE + f32::from(n.cc) };
+            *o = [n.track as f32, code, n.start as f32, end as f32, n.velocity];
         }
+        self.ccs -= self.notes[..fit].iter().filter(|n| n.cc != 0).count();
         // sem alocar: desloca o resto para o começo
         self.notes.drain(..fit);
         fit * REC_NOTE_FLOATS

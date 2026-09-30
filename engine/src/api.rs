@@ -106,6 +106,10 @@ pub enum Call {
     Loudness { kind: u32 },
     ZonesClear { track: usize },
     ZoneAdd { track: usize, sample: u32, zone: ZoneDef },
+    LiveBend { track: usize, value: f32 },
+    LiveCc { track: usize, cc: u32, value: f32 },
+    CcAdd { track: usize, cc: u32, beat: f64, value: f32 },
+    CcClear,
 }
 
 /// Tipo de um parâmetro, como na assinatura do export do wasm (booleano é `u32` lá).
@@ -204,6 +208,10 @@ const CALLS: &[Signature] = &[
         ],
         None,
     ),
+    sig("live_bend", &[("faixa", Usize), ("valor", F32)], None),
+    sig("live_cc", &[("faixa", Usize), ("controle", U32), ("valor", F32)], None),
+    sig("cc_add", &[("faixa", Usize), ("controle", U32), ("batida", F64), ("valor", F32)], None),
+    sig("cc_clear", &[], None),
 ];
 
 /// Exports do wasm que não passam por aqui: `init` recria o motor com a taxa do hospedeiro (quem
@@ -395,6 +403,10 @@ impl Call {
                     },
                 }
             }
+            "live_bend" => Call::LiveBend { track: a.usize(0), value: a.f32(1) },
+            "live_cc" => Call::LiveCc { track: a.usize(0), cc: a.u32(1), value: a.f32(2) },
+            "cc_add" => Call::CcAdd { track: a.usize(0), cc: a.u32(1), beat: a.f64(2), value: a.f32(3) },
+            "cc_clear" => Call::CcClear,
             // os testes passam por toda a tabela: chegar aqui é chamada nova sem conversão
             other => return Err(UnknownCall(format!("{other}: está na tabela de chamadas mas sem conversão (erro no motor)"))),
         })
@@ -478,6 +490,10 @@ impl Call {
             Call::Loudness { kind } => return Some(e.loudness(kind)),
             Call::ZonesClear { track } => e.clear_zones(track),
             Call::ZoneAdd { track, sample, zone } => e.add_zone(track, sample, zone),
+            Call::LiveBend { track, value } => e.live_bend(track, value),
+            Call::LiveCc { track, cc, value } => e.live_cc(track, cc, value),
+            Call::CcAdd { track, cc, beat, value } => e.add_cc(track, cc, beat, value),
+            Call::CcClear => e.clear_cc(),
         }
         None
     }
@@ -599,6 +615,13 @@ mod tests {
         e.rec_notes_start();
         e.live_on(1, 64, 0.8);
         run(e, 4);
+    }
+
+    /// Tocando com um bend de clipe já valendo (sintetizador da faixa 1).
+    fn bent(e: &mut Engine) {
+        playing(e);
+        e.add_cc(1, 128, 0.0, 1.0);
+        run(e, 8);
     }
 
     fn capturing(e: &mut Engine) {
@@ -842,6 +865,13 @@ mod tests {
             valued(playing, "playing", &[], |e| f64::from(u32::from(e.playing())), Query),
             case(measured, "loudness_reset", &[], |e| e.loudness_reset(), Changes),
             valued(measured, "loudness", &[3.0], |e| e.loudness(3), Query),
+            case(sounding, "live_bend", &[1.0, 1.0], |e| e.live_bend(1, 1.0), Changes),
+            case(sounding, "live_cc", &[1.0, 1.0, 1.0], |e| e.live_cc(1, 1, 1.0), Changes),
+            // controle que o motor não conhece e faixa que não existe: inócuos
+            case(sounding, "live_cc", &[1.0, 7.0, 1.0], |_| {}, Same),
+            case(sounding, "live_cc", &[-1.0, 128.0, 1.0], |_| {}, Same),
+            case(playing, "cc_add", &[1.0, 128.0, 0.0, 1.0], |e| e.add_cc(1, 128, 0.0, 1.0), Changes),
+            case(bent, "cc_clear", &[], |e| e.clear_cc(), Changes),
         ]
     }
 
@@ -1008,6 +1038,8 @@ mod tests {
         assert_eq!(p("loop_set", &[-1.0, 1.0, 2.0]), Call::LoopSet { on: true, start: 1.0, end: 2.0 });
         assert_eq!(p("live_on", &[1.0, 60.0, 0.1]), Call::LiveOn { track: 1, pitch: 60, velocity: 0.1f32 });
         assert_eq!(p("playing", &[]), Call::Playing);
+        assert_eq!(p("cc_add", &[1.0, 64.0, 2.5, 1.0]), Call::CcAdd { track: 1, cc: 64, beat: 2.5, value: 1.0 });
+        assert_eq!(p("live_bend", &[1.0, -0.5]), Call::LiveBend { track: 1, value: -0.5 });
     }
 
     #[test]

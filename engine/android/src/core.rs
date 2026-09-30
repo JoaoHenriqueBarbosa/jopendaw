@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use jopendaw_engine::api::UnknownCall;
-use jopendaw_engine::record::{MAX_REC_NOTES, REC_NOTE_FLOATS};
+use jopendaw_engine::record::{MAX_REC_CCS, MAX_REC_NOTES, REC_NOTE_FLOATS};
 use jopendaw_engine::{Engine, MAX_BLOCK, Sample};
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -33,9 +33,9 @@ const _: () = assert!(BLOCK <= MAX_BLOCK);
 /// Comandos na fila (cada `jd_calls` é um só, a lista inteira aplicada entre dois blocos).
 const COMMANDS: usize = 1024;
 
-/// Notas registradas numa captura, como o worklet reserva (o registro do motor guarda até
-/// [`MAX_REC_NOTES`]).
-pub const REC_NOTES_MAX: usize = REC_NOTE_FLOATS * MAX_REC_NOTES;
+/// Notas e eventos de controle (bend, modulação, pedal) registrados numa captura, como o worklet
+/// reserva (o registro do motor guarda até [`MAX_REC_NOTES`] e [`MAX_REC_CCS`]).
+pub const REC_NOTES_MAX: usize = REC_NOTE_FLOATS * (MAX_REC_NOTES + MAX_REC_CCS);
 
 /// Espectros publicados por segundo com o analisador ligado (o worklet manda ~20).
 const SPECTRUM_PER_SEC: f64 = 30.0;

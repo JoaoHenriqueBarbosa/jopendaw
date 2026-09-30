@@ -430,6 +430,30 @@ pub extern "C" fn playing() -> u32 {
     engine().playing() as u32
 }
 
+/// Pitch bend ao vivo numa faixa, −1..1.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_bend(track: usize, value: f32) {
+    engine().live_bend(track, value);
+}
+
+/// Controle ao vivo: 1 modulação (0..1), 64 pedal de sustain (0,5 ou mais = embaixo), 128 pitch bend.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_cc(track: usize, cc: u32, value: f32) {
+    engine().live_cc(track, cc, value);
+}
+
+/// Evento de controle do clipe, na batida absoluta da linha do tempo (mesmos controles do `live_cc`).
+#[unsafe(no_mangle)]
+pub extern "C" fn cc_add(track: usize, cc: u32, beat: f64, value: f32) {
+    engine().add_cc(track, cc, beat, value);
+}
+
+/// Apaga os eventos de controle de todas as faixas (junto do `notes_clear`).
+#[unsafe(no_mangle)]
+pub extern "C" fn cc_clear() {
+    engine().clear_cc();
+}
+
 /// Escreve em `out` os picos desde a última leitura: (esq, dir) de cada faixa e por último o
 /// master. Devolve quantos floats escreveu (no máximo `max`).
 #[unsafe(no_mangle)]

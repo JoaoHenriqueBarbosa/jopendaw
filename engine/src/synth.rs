@@ -15,6 +15,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::dsp::{Adsr, FilterMode, Rng, Smoothed, Stage, Svf, fast_tanh, poly_blamp, poly_blep, sin_turns, smoothing};
+use crate::expression::PitchExpr;
 use crate::instrument::{Instrument, pitch_hz, synth_param as P};
 use crate::pan_gains;
 
@@ -98,6 +99,8 @@ const SPECS: [Spec; PARAMS] = [
     cont(0.0, 1.0, 0.7),         // VELOCITY
     cont(0.0, 1.5, 0.7),         // LEVEL
     cont(0.0, 1.0, 0.0),         // DRIVE
+    disc(0.0, 24.0, 2.0),        // BEND_RANGE
+    cont(0.0, 2.0, 1.0),         // VIBRATO_RANGE
 ];
 
 /// Semente diferente por instância: duas faixas tocando a mesma nota não saem com as mesmas fases.
@@ -241,6 +244,8 @@ struct Block {
     glide: f32,
     res_release: f32,
     fade_step: f32,
+    /// Desvio de afinação do bend e da roda de modulação, semitons.
+    expr: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -360,7 +365,7 @@ impl Voice {
         let d = self.target - self.cur;
         self.cur = if d.abs() < 1e-3 { self.target } else { self.cur + d * b.glide };
 
-        let dt = (pitch_hz(self.cur + b.lfo * b.lfo_pitch) / b.rate).min(MAX_DT);
+        let dt = (pitch_hz(self.cur + b.lfo * b.lfo_pitch + b.expr) / b.rate).min(MAX_DT);
         let dt2 = dt * b.osc2_ratio;
         let dt_sub = dt * 0.5;
         let uni = b.unison;
@@ -478,6 +483,7 @@ pub struct Synth {
     spread: Smoothed,
     gain: f32,
     pans_dirty: bool,
+    expr: PitchExpr,
     block: Block,
 }
 
@@ -510,6 +516,7 @@ impl Synth {
             spread: Smoothed::new(0.0),
             gain: 0.0,
             pans_dirty: true,
+            expr: PitchExpr::new(r),
             block: Block {
                 rate: r,
                 wave1: Wave::Saw,
@@ -541,6 +548,7 @@ impl Synth {
                 glide: 1.0,
                 res_release: 0.0,
                 fade_step: 1.0 / (STEAL_SECS * r),
+                expr: 0.0,
             },
         };
         for id in 0..P::COUNT {
@@ -577,6 +585,8 @@ impl Synth {
             P::DRIVE => self.drive.set(v),
             P::LEVEL => self.level.set(v),
             P::LFO_AMP => self.tremolo.set(v),
+            P::BEND_RANGE => self.expr.set_range(v),
+            P::VIBRATO_RANGE => self.expr.set_vibrato(v),
             P::UNISON_SPREAD => self.spread.set(v),
             P::OSC2_SEMI | P::OSC2_DETUNE => {
                 self.block.osc2_ratio = ((p[P::OSC2_SEMI as usize] + p[P::OSC2_DETUNE as usize] / 100.0) / 12.0).exp2();
@@ -637,6 +647,7 @@ impl Synth {
         ] {
             s.snap();
         }
+        self.expr.snap();
         self.pans_dirty = true;
         self.gain = VOICE_GAIN * self.level.value * (1.0 - self.tremolo.value * (1.0 - self.lfo) * 0.5);
     }
@@ -703,6 +714,7 @@ impl Synth {
         b.gain = Ramp { from: self.gain, step: (gain - self.gain) / frames };
         self.gain = gain;
 
+        b.expr = self.expr.step(len);
         b.smooth = a;
         let glide = p[P::GLIDE as usize];
         // 99% do caminho no tempo do botão
@@ -885,6 +897,14 @@ impl Instrument for Synth {
         for v in &mut self.voices {
             v.kill();
         }
+    }
+
+    fn set_pitch_bend(&mut self, bend: f32) {
+        self.expr.set_bend(bend);
+    }
+
+    fn set_mod_wheel(&mut self, value: f32) {
+        self.expr.set_wheel(value);
     }
 
     fn set_param(&mut self, id: u32, value: f32) {

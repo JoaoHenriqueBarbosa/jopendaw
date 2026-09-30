@@ -711,6 +711,27 @@ mod tests {
         assert_eq!(notes[1], 62.0);
         assert_eq!(calls(r#"[["stop"]]"#), 0);
     }
+    /// Bend, modulação e pedal ao vivo passam pelo despachante e voltam na captura como eventos de
+    /// controle: altura 256 + controle (384 bend, 257 modulação, 320 pedal) e o valor no lugar da
+    /// velocidade.
+    #[test]
+    #[ignore = "depende do engine::api::apply completo"]
+    fn live_controls_are_recorded_with_the_real_apply() {
+        let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(jd_start(), 48_000.0);
+        assert_eq!(calls(r#"[["tracks", 1], ["track_kind", 0, 1], ["cc_clear"], ["cc_add", 0, 128, 1, 0.5], ["seek", 0], ["play"]]"#), 0);
+        assert_eq!(jd_capture(1), 0);
+        assert_eq!(calls(r#"[["live_on", 0, 62, 0.9], ["live_bend", 0, -0.5], ["live_cc", 0, 1, 0.25], ["live_cc", 0, 64, 1], ["live_off", 0, 62]]"#), 0);
+        assert_eq!(jd_capture(0), 0);
+        let mut notes = [0.0f32; 5 * 8];
+        let n = unsafe { jd_rec_notes(notes.as_mut_ptr(), notes.len()) };
+        assert_eq!(n, 20, "uma nota e três eventos de controle");
+        let codes: Vec<f32> = notes.chunks(5).take(4).map(|g| g[1]).collect();
+        assert_eq!(codes, [62.0, 384.0, 257.0, 320.0]);
+        assert_eq!((notes[9], notes[14], notes[19]), (-0.5, 0.25, 1.0));
+        assert_eq!(calls(r#"[["stop"]]"#), 0);
+    }
+
     #[test]
     fn stretch_and_detect_through_ffi() {
         let rate = 48_000.0;

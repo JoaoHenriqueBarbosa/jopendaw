@@ -18,6 +18,7 @@
 use std::sync::Arc;
 
 use crate::dsp::{Adsr, Stage};
+use crate::expression::PitchExpr;
 use crate::instrument::{Instrument, sampler_param as param};
 use crate::{Sample, hermite};
 
@@ -333,6 +334,9 @@ pub struct Sampler {
     /// Zonas (vazio = instrumento de sample único) e o contador do round-robin de cada grupo.
     zones: Vec<Zone>,
     rr: [u32; MAX_GROUPS],
+    /// Pitch bend e vibrato da roda de modulação, e o desvio (semitons) já aplicado às vozes.
+    expr: PitchExpr,
+    bend_semis: f32,
 }
 
 impl Sampler {
@@ -355,6 +359,8 @@ impl Sampler {
             fade_step: (1.0 / (STEAL_FADE_SECS * rate)) as f32,
             zones: Vec::with_capacity(MAX_ZONES),
             rr: [0; MAX_GROUPS],
+            expr: PitchExpr::new(rate as f32),
+            bend_semis: 0.0,
         }
     }
 
@@ -366,7 +372,7 @@ impl Sampler {
 
     /// Como [`Sampler::step_for`] com a nota base e a afinação (cents) dadas: as da zona.
     fn step_at(&self, pitch: u8, sample: &Sample, root: f32, cents: f32) -> Option<f64> {
-        let semis = pitch as f64 - root as f64 + cents as f64 / 100.0;
+        let semis = pitch as f64 - root as f64 + cents as f64 / 100.0 + self.bend_semis as f64;
         let step = (semis / 12.0).exp2() * sample.rate() / self.rate;
         (step.is_finite() && step > 0.0 && sample.frames() > 0).then(|| step.min(MAX_STEP))
     }
@@ -395,6 +401,11 @@ impl Sampler {
 
 impl Instrument for Sampler {
     fn note_on(&mut self, pitch: u8, velocity: f32) {
+        if !self.voices.iter().any(|w| w.on) {
+            // sem voz soando o bend não andou: a nota nasce já no valor pedido
+            self.expr.snap();
+            self.bend_semis = self.expr.step(0);
+        }
         if !self.zones.is_empty() {
             self.note_on_zones(pitch, velocity);
             return;
@@ -452,11 +463,20 @@ impl Instrument for Sampler {
         }
     }
 
+    fn set_pitch_bend(&mut self, bend: f32) {
+        self.expr.set_bend(bend);
+    }
+
+    fn set_mod_wheel(&mut self, value: f32) {
+        self.expr.set_wheel(value);
+    }
+
     fn set_param(&mut self, id: u32, value: f32) {
         if !value.is_finite() {
             return;
         }
         match id {
+            param::BEND_RANGE => self.expr.set_range(value),
             param::ROOT => {
                 self.root = value.round().clamp(0.0, 127.0);
                 self.retune();
@@ -536,6 +556,12 @@ impl Instrument for Sampler {
         let n = left.len().min(right.len());
         if n == 0 {
             return;
+        }
+        // afinação: o bend e o vibrato andam por bloco; só reafina quando mudou de verdade
+        let semis = self.expr.step(n);
+        if (semis - self.bend_semis).abs() > 1e-4 {
+            self.bend_semis = semis;
+            self.retune();
         }
         // volume: rampa linear no bloco até onde o polo de suavização chegaria
         let l0 = self.level_now;

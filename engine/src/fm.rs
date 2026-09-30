@@ -42,6 +42,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::dsp::{Adsr, Rng, Smoothed, Stage, sin_turns, smoothing};
+use crate::expression::PitchExpr;
 use crate::instrument::{Instrument, fm_param as P, pitch_hz};
 use crate::synth::{Ramp, Spec, cont, disc, lfo_shape, wrap};
 
@@ -121,6 +122,8 @@ const SPECS: [Spec; PARAMS] = [
     disc(1.0, 16.0, 8.0),  // VOICES
     cont(0.0, 2.0, 0.0),   // GLIDE
     cont(0.0, 1.5, 0.7),   // LEVEL_OUT
+    disc(0.0, 24.0, 2.0),  // BEND_RANGE
+    cont(0.0, 2.0, 1.0),   // VIBRATO_RANGE
 ];
 
 /// Roteamento de um algoritmo. `mods[i]` tem o bit `j` ligado quando o operador `j` modula o
@@ -185,6 +188,8 @@ struct Block {
     smooth: f32,
     glide: f32,
     fade_step: f32,
+    /// Desvio de afinação do bend e da roda de modulação, semitons.
+    expr: f32,
 }
 
 struct Voice {
@@ -287,7 +292,7 @@ impl Voice {
     fn render(&mut self, b: &Block, carriers: u8, out: &mut [f32]) {
         let d = self.target - self.cur;
         self.cur = if d.abs() < 1e-3 { self.target } else { self.cur + d * b.glide };
-        let f0 = pitch_hz(self.cur + b.lfo * b.lfo_pitch);
+        let f0 = pitch_hz(self.cur + b.lfo * b.lfo_pitch + b.expr);
 
         // velocidade: o ganho de cada operador é 1 − s + s·v² (como no subtrativo)
         let dv = self.vel_target - self.vel;
@@ -393,6 +398,7 @@ pub struct Fm {
     tremolo: Smoothed,
     index_lfo: Smoothed,
     gain: f32,
+    expr: PitchExpr,
     block: Block,
 }
 
@@ -421,6 +427,7 @@ impl Fm {
             tremolo: Smoothed::new(0.0),
             index_lfo: Smoothed::new(0.0),
             gain: 0.0,
+            expr: PitchExpr::new(r),
             block: Block {
                 rate: r,
                 algo: ALGORITHMS[4],
@@ -435,6 +442,7 @@ impl Fm {
                 smooth: 1.0,
                 glide: 1.0,
                 fade_step: 1.0 / (STEAL_SECS * r),
+                expr: 0.0,
             },
         };
         for id in 0..P::COUNT {
@@ -460,6 +468,8 @@ impl Fm {
     fn apply(&mut self, id: u32) {
         let v = self.params[id as usize];
         match id {
+            P::BEND_RANGE => self.expr.set_range(v),
+            P::VIBRATO_RANGE => self.expr.set_vibrato(v),
             P::ALGORITHM => {
                 if self.active() {
                     // com som: sai num fade curto, troca o roteamento no silêncio do fade e volta
@@ -515,6 +525,7 @@ impl Fm {
         for s in self.level.iter_mut().chain([&mut self.feedback, &mut self.out_level, &mut self.tremolo, &mut self.index_lfo]) {
             s.snap();
         }
+        self.expr.snap();
         self.gain = VOICE_GAIN * self.out_level.value * self.algo_gain * (1.0 - self.tremolo.value * (1.0 - self.lfo) * 0.5);
     }
 
@@ -540,6 +551,7 @@ impl Fm {
         self.lfo = if dl.abs() < 1e-6 { raw } else { self.lfo + dl * smoothing(LFO_TAU, len, rate) };
         self.block.lfo = self.lfo;
         self.block.lfo_pitch = p[P::LFO_PITCH as usize];
+        self.block.expr = self.expr.step(len);
         // com o LFO em −1..1, o índice varia em 1 ± profundidade (nunca abaixo de 0)
         self.block.index_lfo = (1.0 + self.index_lfo.step(a) * self.lfo).max(0.0);
 
@@ -720,6 +732,14 @@ impl Instrument for Fm {
         for v in &mut self.voices {
             v.kill();
         }
+    }
+
+    fn set_pitch_bend(&mut self, bend: f32) {
+        self.expr.set_bend(bend);
+    }
+
+    fn set_mod_wheel(&mut self, value: f32) {
+        self.expr.set_wheel(value);
     }
 
     fn set_param(&mut self, id: u32, value: f32) {

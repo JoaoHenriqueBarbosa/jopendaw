@@ -24,6 +24,11 @@ pub trait Instrument: Send {
     fn silence(&mut self);
     /// Muda um parâmetro. Id desconhecido é ignorado; valor fora da faixa é limitado.
     fn set_param(&mut self, id: u32, value: f32);
+    /// Pitch bend, −1..1 (a roda inteira para baixo/cima). A afinação vai até o alcance de bend do
+    /// instrumento, suavizada. Padrão: ignora (bateria).
+    fn set_pitch_bend(&mut self, _bend: f32) {}
+    /// Roda de modulação, 0..1: profundidade do vibrato. Padrão: ignora.
+    fn set_mod_wheel(&mut self, _value: f32) {}
     /// O áudio que o instrumento toca (só o sampler usa).
     fn set_sample(&mut self, _sample: Option<Arc<Sample>>) {}
     /// Apaga as zonas do instrumento (só o sampler tem zonas).
@@ -132,7 +137,11 @@ pub mod synth_param {
     pub const LEVEL: u32 = 33;
     /// Saturação antes do filtro, 0..1.
     pub const DRIVE: u32 = 34;
-    pub const COUNT: u32 = 35;
+    /// Alcance do pitch bend, semitons (0..24, padrão 2).
+    pub const BEND_RANGE: u32 = 35;
+    /// Vibrato da roda de modulação com a roda toda, semitons (0..2, padrão 1).
+    pub const VIBRATO_RANGE: u32 = 36;
+    pub const COUNT: u32 = 37;
 }
 
 /// Bateria sintetizada (tipo 2): 12 peças, cada uma com 4 parâmetros em `peça * 4 + k`.
@@ -201,6 +210,8 @@ pub mod sampler_param {
     pub const TUNE: u32 = 7;
     /// Sensibilidade à velocidade, 0..1.
     pub const VELOCITY: u32 = 8;
+    /// Alcance do pitch bend, semitons (0..24, padrão 2).
+    pub const BEND_RANGE: u32 = 9;
 }
 
 /// Sintetizador FM (tipo 5): 4 operadores senoidais, 8 algoritmos, realimentação no operador 1.
@@ -247,7 +258,11 @@ pub mod fm_param {
     pub const GLIDE: u32 = 40;
     /// Volume de saída, 0..1,5.
     pub const LEVEL_OUT: u32 = 41;
-    pub const COUNT: u32 = 42;
+    /// Alcance do pitch bend, semitons (0..24, padrão 2).
+    pub const BEND_RANGE: u32 = 42;
+    /// Vibrato da roda de modulação com a roda toda, semitons (0..2, padrão 1).
+    pub const VIBRATO_RANGE: u32 = 43;
+    pub const COUNT: u32 = 44;
 }
 
 /// Sintetizador de wavetable (tipo 6): 2 osciladores de tabela, sub, ruído, uníssono, filtro SVF.
@@ -317,7 +332,11 @@ pub mod wavetable_param {
     pub const LEVEL: u32 = 37;
     /// Quanto o envelope do filtro move a posição da tabela, −1..1 (fração do percurso).
     pub const ENV_POS: u32 = 38;
-    pub const COUNT: u32 = 39;
+    /// Alcance do pitch bend, semitons (0..24, padrão 2).
+    pub const BEND_RANGE: u32 = 39;
+    /// Vibrato da roda de modulação com a roda toda, semitons (0..2, padrão 1).
+    pub const VIBRATO_RANGE: u32 = 40;
+    pub const COUNT: u32 = 41;
 }
 
 /// Conferência das tabelas de parâmetros do motor contra as do app (`instruments.dart`).
