@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Só no build debug (sobrepõe o de main): além do localhost (`adb reverse tcp:8080 tcp:8080`),
      libera o 10.0.2.2, o endereço do computador visto de dentro do emulador
-     (`--dart-define=API_BASE=http://10.0.2.2:8080`). O release fica só com HTTPS e o localhost. -->
+     (dart-define API_BASE=http://10.0.2.2:8080). O release fica só com HTTPS e o localhost. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
