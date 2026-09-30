@@ -10,13 +10,25 @@ Precisa de **conta** (entrar no app) e de conexão com o servidor: a análise ro
 
 ## Controles
 
-O diálogo **não tem opções para ajustar**: ele começa a converter assim que abre. Os controles são só de acompanhamento.
+O diálogo tem **duas etapas**. Primeiro os ajustes (nada é enviado ainda); só ao tocar em `Converter` ele envia o áudio e passa ao acompanhamento.
+
+**Etapa 1: ajustes** (o diálogo abre assim)
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Título `Converter em notas (MIDI)` | Identifica o diálogo. Ele não fecha ao clicar fora | | |
-| Texto de etapa | Diz em que passo está: `Enviando o áudio…` (o arquivo sobe ao servidor), `Na fila do servidor…` (esperando vez), `Analisando o áudio…` (a análise em si) | | |
-| Barra de progresso | Vazia e "correndo" (indeterminada) enquanto envia, espera na fila ou o servidor ainda não informou; depois mostra a fração da análise | Atualiza a cada 1 s | Depois de ler o arquivo o servidor marca 10%; a análise leva o valor até 100%. O servidor grava o progresso a cada 0,5 s e o app consulta a cada 1 s, então a barra anda em saltos |
+| Texto `Funciona melhor com uma voz ou instrumento por vez (monofônico).` | Lembrete do limite do detector | | Ver "Limites e pegadinhas" |
+| `Nota mínima: N ms` (controle deslizante) | Notas mais curtas que isto são descartadas. A legenda embaixo diz `Notas mais curtas que isto são descartadas.` | 20 a 500 ms, em passos de 1 ms, padrão **60 ms** | Suba para limpar notinhas de ruído e de vibrato; baixe para não perder notas rápidas (staccato, fusas) |
+| `Nível de silêncio: N dB` (controle deslizante) | Trechos abaixo deste nível de energia (RMS) não viram nota. A legenda diz `Trechos abaixo deste nível não viram nota. Suba para ignorar ruído de fundo.` | −80 a −20 dB, em passos de 1 dB, padrão **−45 dB** | Sussurro ou gravação baixa: desça (−60). Ruído de fundo virando nota: suba (−35) |
+| `Cancelar` | Fecha o diálogo sem enviar nada e sem criar tarefa | | |
+| `Converter` | Envia o áudio e começa a conversão com os dois valores mostrados | | Os ajustes não são lembrados: cada vez que o diálogo abre, voltam a 60 ms e −45 dB |
+
+**Etapa 2: acompanhamento**
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Texto de etapa | Diz em que passo está: `Enviando o áudio…` (o arquivo sobe ao servidor), `Na fila do servidor…` (esperando vez), `Analisando o áudio…` (a decodificação e a análise em si) | | |
+| Barra de progresso | Vazia e "correndo" (indeterminada) enquanto envia, espera na fila ou o servidor ainda não informou; depois mostra a fração da análise | Atualiza a cada 1 s | Depois de decodificar o arquivo o servidor marca 10%; a análise leva o valor até 100%. O servidor grava o progresso a cada 0,5 s e o app consulta a cada 1 s, então a barra anda em saltos |
 | `Cancelar` | Fecha o diálogo e para de acompanhar | | **Não cancela o trabalho no servidor**: a tarefa termina lá, mas o resultado é descartado e nenhuma faixa é criada. Se o envio já estava em curso, ele conclui mesmo assim |
 | Mensagem de erro (no lugar da barra) + `Fechar` | Mostra por que não deu e o botão `Fechar` | Ver "Mensagens" abaixo | |
 
@@ -28,7 +40,7 @@ Quando dá certo o diálogo **fecha sozinho** e nasce uma faixa nova. Não apare
 |---|---|
 | Faixa nova | Tipo `Sintetizador`, no **fim** da lista, com o nome `Sintetizador N` (o próximo N livre) e a cor seguinte da paleta. Fica selecionada. O clipe de áudio original continua intacto |
 | Clipe de notas | Mesmo nome da faixa, começa **no mesmo ponto** do clipe de áudio e cobre **a mesma duração** dele |
-| Notas | Só as que caem dentro do trecho que o clipe de áudio mostra (respeita o corte à esquerda e à direita: o que foi aparado fica de fora, e notas que atravessam a borda são cortadas nela). Início e duração em **batidas** no andamento do projeto. Altura de 0 a 127 |
+| Notas | Só as que caem dentro do trecho que o clipe de áudio mostra (respeita o corte à esquerda e à direita: o que foi aparado fica de fora, e notas que atravessam a borda são cortadas nela). Início e duração em **batidas** no mesmo andamento com que o clipe de áudio toca: o do projeto num clipe sem warp, o do próprio áudio (`BPM do áudio`) num clipe com warp. A **transposição** do clipe soma à altura e o **reverso** espelha as notas (ver "Coerência com o clipe"). Altura de 0 a 127 |
 | Velocidade de cada nota | Vem do volume do trecho: de −45 dBFS (piso, o mínimo, 5%) a −6 dBFS (100%) |
 | Desfazer | Tudo (a faixa e o clipe) é **um** passo do desfazer |
 
@@ -37,21 +49,21 @@ A faixa usa o sintetizador padrão. Troque o som pelo painel do instrumento (`I`
 ## Passo a passo
 
 **Transformar uma melodia cantada em notas**
-1. Grave (ou importe) a melodia como **WAV**, sem base nenhuma por baixo, e com o microfone bem perto.
+1. Grave (ou importe) a melodia, sem base nenhuma por baixo e com o microfone bem perto. Serve WAV, MP3, FLAC, OGG, M4A/AAC (até 10 minutos).
 2. Ajuste o clipe: apare o começo e o fim para pegar só a linha.
-3. Botão direito no clipe, `Converter em notas (MIDI)`. Espere: `Enviando o áudio…`, `Analisando o áudio…`.
+3. Botão direito no clipe, `Converter em notas (MIDI)`. Ajuste `Nota mínima` e `Nível de silêncio` se precisar e toque em `Converter`. Espere: `Enviando o áudio…`, `Analisando o áudio…`.
 4. Ao terminar, abra o clipe de notas no editor (`E` com ele selecionado) e limpe: as notas têm tempos **soltos**, sem grade.
 5. Quantize (`Q` no editor) e apague ou una notas que sobraram.
 
 **Se aparece "Não encontrei notas neste áudio."**
 1. Confira se o trecho não é só ruído, percussão ou silêncio.
-2. Se o volume é baixo (abaixo de −45 dBFS de RMS), o servidor trata como silêncio. Aumente o ganho na fonte e grave de novo (o clipe não tem controle de ganho).
+2. Se o volume é baixo (abaixo de −45 dBFS de RMS), o servidor trata como silêncio. Aumente o ganho na fonte e grave de novo. O `Ganho do clipe…` ([capítulo 03](03-audio-e-clipes.md#ganho-do-clipe)) não ajuda aqui: a análise lê o arquivo original, sem o ganho do clipe.
 
 ## Combina com
 
-- [Gravação](03c-gravacao.md): a gravação do microfone sai como WAV, o formato que o servidor lê.
+- [Gravação](03c-gravacao.md): a gravação do microfone sai como WAV, o caminho mais rápido do servidor.
 - [Áudio e clipes](03-audio-e-clipes.md): apare o clipe antes de converter para levar só o que interessa.
-- [Warp e altura](03b-warp-e-altura.md): a conversão ignora warp, transposição e reverso do clipe (ver abaixo).
+- [Warp e altura](03b-warp-e-altura.md): a conversão respeita o warp, a transposição e o reverso do clipe (ver "Coerência com o clipe").
 - [Editor de notas (piano roll)](05-piano-roll.md): onde limpar e quantizar as notas que a conversão cria.
 
 ## Limites e pegadinhas
@@ -60,19 +72,22 @@ A faixa usa o sintetizador padrão. Troque o som pelo painel do instrumento (`I`
 - Usa o **YIN**, um detector de altura para **uma nota de cada vez** (monofônico). Ele analisa quadros de 2048 amostras a cada 512, acha o período fundamental e converte para nota MIDI.
 - Faixa de alturas: **50 Hz a 2000 Hz** (de cerca de sol 1, nota 31, até cerca de si 6, nota 95). Abaixo ou acima disso a altura não é reconhecida.
 - **Não faz polifonia.** Acordes, violão tocando várias cordas, piano com mão esquerda, mixagem inteira ou vozes sobrepostas dão resultado errado ou nenhum. Ruído, percussão e sons sem altura clara são ignorados (ficam sem nota).
-- Os quadros com energia **abaixo de −45 dBFS (RMS)** contam como silêncio e cortam a nota.
+- Os quadros com energia **abaixo do `Nível de silêncio`** (RMS; −45 dB por padrão) contam como silêncio e cortam a nota.
 - As alturas passam por uma mediana de 5 quadros (tira saltos de oitava de um quadro só). Uma nota nova nasce quando a altura se afasta **0,7 semitom ou mais** da altura média da nota atual por **3 quadros seguidos** (uns 35 ms a 44,1 kHz). Vibrato pequeno (até ±0,3 semitom, nos testes) **não** divide a nota; glissando e bends acabam em degraus de nota.
-- Notas com **menos de 60 ms** são descartadas.
+- Notas mais curtas que a `Nota mínima` (60 ms por padrão) são descartadas.
 - Altura arredondada para o semitom mais próximo (mediana da nota). Sem bend nem microafinação: uma voz desafinada pode cair na nota vizinha.
 - Os tempos vêm em segundos com resolução de um quadro (cerca de 11 ms a 44,1 kHz): **não são quantizados**.
-- O servidor sabe usar outros limites (duração mínima de 0 a 5000 ms e piso de ruído de −120 a 0 dB), mas o app **não os envia**: o diálogo usa sempre 60 ms e −45 dB.
+- O diálogo oferece 20 a 500 ms de nota mínima e −80 a −20 dB de nível de silêncio. O servidor aceita mais (duração mínima de 0 a 5000 ms e piso de −120 a 0 dB) e recusa com `400` o que passar disso, mas o app não passa da faixa dos controles.
 - Áudio com taxa alta é reduzido antes da análise (faixas de 60 kHz para cima, por média de blocos, chegando a uns 30 kHz).
 
-**Formato do arquivo: só WAV**
-- O servidor lê **WAV** (PCM inteiro de 16, 24 ou 32 bits, ou float de 32 bits; mono ou estéreo). Estéreo é misturado em mono para a análise.
-- Clipe importado de **MP3, FLAC, OGG, M4A, AAC, AIFF, Opus, WebM** vai ao servidor no formato de origem e a conversão **falha** com `Formato não suportado.` (também falha WAV de 8 bits ou 64 bits, e mais de 2 canais). Para converter, exporte/converta o áudio para WAV antes de importar.
+**Formato do arquivo**
+- O servidor decodifica: **WAV** (caminho rápido próprio: PCM inteiro de 16, 24 ou 32 bits, ou float de 32 bits, inclusive o formato `EXTENSIBLE`), **FLAC**, **MP3**, **OGG Vorbis**, **AAC/M4A** e **ALAC** (esses cinco pela biblioteca symphonia). Mono ou estéreo: estéreo é misturado em mono para a análise. Taxa de amostragem até 655 350 Hz.
+- **Não entram:** **OGG/Opus** (a symphonia não decodifica Opus), AIFF, WebM/MKV (nenhum desses decodificadores está ligado no servidor: `server/Cargo.toml` lista só `flac`, `mp3`, `ogg`, `vorbis`, `aac`, `isomp4` e `alac`), WAV de 8 ou 64 bits, e qualquer arquivo com mais de 2 canais ou cuja taxa/canais mudem no meio. Nesses casos a conversão falha com uma mensagem clara (ver "Mensagens"). Um arquivo OGG/Opus, pelo código do servidor, mostra a mensagem de formato não suportado (e não a de "codec não suportado, como Opus", que só sai se o formato é reconhecido mas nada decodifica) `(não executado com um arquivo Opus real)`.
+- O app manda o arquivo no formato **original** em que foi importado; não precisa converter antes. Um MP3 importado como clipe foi convertido em notas pelo menu do clipe no Chrome (visto rodando); FLAC, OGG Vorbis e M4A foram exercitados só por testes automáticos `(testado só por testes automáticos)`.
+- **Limite de 10 minutos** de áudio (a memória e o tempo de análise crescem com a duração). Um WAV acima disso é recusado antes de virar amostras; nos outros formatos a recusa vem durante a decodificação. Exatamente 10 minutos passa. Vale também para a tarefa de FLAC do servidor, que o app hoje não pede.
+- Arquivo **cortado no meio** (download interrompido, por exemplo) ainda converte o que deu para ler; pacote corrompido no meio é pulado. Cortado antes do primeiro quadro, falha.
 - Gravações feitas no próprio jopendaw saem como WAV de 32 bits float e funcionam.
-- Dá para converter um clipe **aparado**: o servidor analisa o arquivo inteiro e o app usa só as notas dentro da janela do clipe.
+- Dá para converter um clipe **aparado**: o servidor analisa o arquivo inteiro (até os 10 minutos) e o app usa só as notas dentro da janela do clipe. Um clipe curto cortado de um arquivo de mais de 10 minutos, portanto, **falha** mesmo assim.
 
 **Mensagens que podem aparecer no diálogo** (texto lido do código)
 
@@ -80,14 +95,17 @@ A faixa usa o sintetizador padrão. Troque o som pelo painel do instrumento (`I`
 |---|---|
 | `O clipe não existe mais.` | O clipe foi apagado antes de começar |
 | `Entre na sua conta para converter áudio em notas.` | Sem sessão |
-| `Formato não suportado.` | O arquivo não é WAV nos formatos acima |
-| `Áudio vazio.` | WAV sem amostras |
+| `Formato de áudio não suportado (aceitos: WAV, FLAC, MP3, OGG Vorbis e AAC/M4A, mono ou estéreo).` | O arquivo não é de um dos formatos acima, está com lixo no lugar do áudio, tem mais de 2 canais ou mudou de taxa/canais no meio |
+| `Áudio longo demais: o máximo é 10 minutos.` | O arquivo tem mais de 10 minutos |
+| `Não consegui decodificar o áudio (arquivo corrompido ou codec não suportado, como Opus).` | O formato foi reconhecido, mas nenhum pacote de áudio pôde ser decodificado |
+| `Áudio vazio.` | O arquivo não tem amostras |
+| `Áudio não encontrado no armazenamento.` | O servidor não achou o arquivo enviado (falha rara de armazenamento) |
 | `Não encontrei notas neste áudio.` | A análise voltou sem nenhuma nota |
 | `O clipe foi apagado durante a conversão.` | Você apagou o clipe enquanto esperava |
 | `Você já tem 10 tarefas em andamento; aguarde alguma terminar.` | Já há 10 tarefas suas na fila ou rodando (limite por conta) |
 | `O servidor terminou sem devolver as notas.` | Resposta sem resultado |
 | `A conversão falhou no servidor.` | Falha sem mensagem específica |
-| `Cota de armazenamento de 4 GB excedida; apague áudios que não usa mais.` / erro de tamanho | O áudio não coube no envio (limite de 512 MB por arquivo) |
+| `Cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta.` / `Arquivo grande demais (máximo de 512 MB).` | O áudio não coube no envio (cota de 4 GB da conta, ver [01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites); ou 512 MB por arquivo) |
 | `Sem conexão com o servidor. Tente de novo.` / `A sessão acabou. Entre de novo.` | Rede caiu ou sessão venceu |
 
 **Espera**
@@ -96,8 +114,12 @@ A faixa usa o sintetizador padrão. Troque o som pelo painel do instrumento (`I`
 - Se você cancela ou fecha o app, a tarefa não é interrompida no servidor.
 
 **Coerência com o clipe**
-- **Com warp ligado** (o clipe esticado ao andamento do projeto), as notas são convertidas de segundos para batidas pelo andamento do **projeto**, mas o clipe de notas e o clipe de áudio têm a duração em batidas calculada pelo andamento do **áudio**; se os dois andamentos diferem, as notas ficam **fora de sincronia** com o clipe. Para converter, desligue o warp antes (`Desligar o warp`), converta e religue. (Comportamento lido do código; não testado.)
-- Transposição (`+3 st`) e reverso do clipe de áudio **não** entram: as notas saem da altura do arquivo original, para frente.
+- **Warp:** as notas ficam alinhadas ao clipe qualquer que seja o andamento do projeto. Com o warp ligado (o clipe esticado ao andamento do projeto) os segundos do áudio viram batidas pelo andamento do **próprio áudio**, o mesmo com que o clipe toca; sem warp, pelo do projeto. Não precisa mais desligar o warp antes de converter.
+- **Transposição:** o valor do clipe (`+3 st`) é somado à altura das notas (arredondado ao semitom, limitado a 0..127). O clipe de notas soa na altura que o clipe de áudio soa.
+- **Reverso:** com o clipe invertido, as notas são espelhadas dentro da janela (o que era o fim vira o começo).
+- **Só vale na hora da conversão:** as notas ficam gravadas no clipe de notas, em batidas. Se depois você mudar o warp, a transposição, o reverso ou o andamento do projeto, o clipe de notas **não** acompanha; para refazer, converta de novo. `(deduzido do código; o clipe de notas não guarda vínculo com o de áudio)`
+- Ganho do clipe e volume da faixa não mexem na análise nem na velocidade das notas: ela vem do volume do arquivo original.
+- Essas regras vêm do código e dos testes automáticos do app `(testado só por testes automáticos)`.
 
 ## Atalhos
 

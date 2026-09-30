@@ -2,7 +2,17 @@
 
 Do mais novo para o mais antigo. Cada linha diz o que muda para quem usa e onde está documentado. Detalhes técnicos por fase: [processo e histórico](dev/20-processo-e-historico.md).
 
-## 30/09/2026 (fase 8, em andamento)
+## 30/09/2026 (fase 9)
+
+- **Áudio→MIDI com MP3, FLAC, OGG, AAC/M4A e ALAC**, opções `Nota mínima` e `Nível de silêncio`, e respeito ao warp do clipe. Manual: [áudio para MIDI](manual/03d-audio-para-midi.md).
+- **Cota e limpeza de áudios**: a tela Conta mostra o uso, lista os áudios e limpa os sem uso; apagar projeto não apaga os áudios do servidor. Manual: [projetos e conta](manual/01-projetos-modelos-conta.md), [nuvem](manual/01b-nuvem-e-sincronizacao.md). Técnico: [servidor](dev/11-servidor.md).
+- **Sincronização e andamento**: andamento e compasso vêm do documento (o servidor guarda um espelho reenviado ao salvar e quando a rede volta), o conflito contra o próprio documento se resolve em silêncio, e há pull a cada 30 s e ao voltar o foco. Apagar projeto limpa os dados locais. Manual: [nuvem](manual/01b-nuvem-e-sincronizacao.md), [transporte](manual/02-transporte.md). Técnico: [sincronização](dev/12-sincronizacao.md). Guia: [trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md).
+- **Ganho do clipe**: `Ganho do clipe…` no menu do clipe de áudio (−40 a +12 dB, −∞ no piso, `Zerar`). Manual: [áudio e clipes](manual/03-audio-e-clipes.md).
+- **Motor e Android**: falha do motor avisa o app (`Reiniciar o áudio`), retornos de 32 bits do FFI lidos corretamente, limite de 16 efeitos e 16 envios explicado no app, tela acesa enquanto toca ou grava e pausa quando o fone sai. Manual: [visão geral](manual/00-visao-geral.md), [configurações e Android](manual/09-configuracoes-atalhos-android.md). Técnico: [pontes](dev/02-pontes-web-e-android.md).
+- **Edição MIDI**: `Escalar o tempo` estica o clipe; `Prender seleção na escala` e `Manter o encaixe ao mudar a altura`; teclado do computador com oitava por tipo de faixa (bateria em C2) e atalhos suspensos listados; diálogo ao mover faixa que desfaria rotas de barramento; `Ganho` do compressor coerente com o motor e `Dither` na distorção. Manual: [piano roll](manual/05-piano-roll.md), [ferramentas MIDI](manual/05b-ferramentas-midi.md), [mixer](manual/06-mixer.md), [efeitos](manual/06d-efeitos-referencia.md).
+- **Rótulos renomeados**: `Faixas pequenas/médias/grandes`, `1 faixa`, `Dividir colcheias em 3 notas`, `Taxa` (LFO), `Sens. vel.`, `Desafino` e `Espalhar` (sintetizador e wavetable), `Inicial` (kits e sampler); ícones novos de FM e Wavetable.
+
+## 30/09/2026 (fase 8)
 
 - **Zonas do sampler e fatiar loops** (`b6b7abb`, `6f3d245`, `6e5fa7b`): o sampler deixa de tocar um áudio só e passa a ter mapa de teclado com zonas (faixa de notas e de velocidade, round-robin, loop) e o fatiamento de um loop em zonas. Manual: [sampler](manual/04c-sampler.md). Guia: [sampler multi-zona e fatiar loops](guias/sampler-multi-zona-e-fatiar-loops.md).
 - **Expressão MIDI** (`b7e802e`, `01c0c44`): pitch bend, roda de modulação e pedal de sustain ao vivo (Web MIDI e Android), gravados no clipe e editáveis numa faixa de controle sob a grade do piano roll (Velocidade, Pitch bend, Modulação, Sustain); rodas de bend e de modulação ao lado do teclado da tela; knobs `Alcance do bend` e `Vibrato da roda`. Manual: [piano roll](manual/05-piano-roll.md), [ferramentas MIDI](manual/05b-ferramentas-midi.md), [gravação](manual/03c-gravacao.md), [painel de instrumento](manual/04-painel-de-instrumento.md). Técnico: [expressão MIDI](dev/04-expressao-midi.md). Guia: [expressão MIDI na prática](guias/expressao-midi-na-pratica.md).

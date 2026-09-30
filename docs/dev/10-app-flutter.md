@@ -40,7 +40,7 @@ Duas regras de desenho atravessam tudo:
 | `app/lib/api/client.dart` | `ApiClient` (singleton) implementa `SyncApi`; toda chamada leva `Authorization: Bearer` |
 | `app/lib/api/sync_api.dart` | a interface `SyncApi` (documento, samples, jobs), `ServerDoc`, `DocConflict`, `SyncJob`; existe para os testes trocarem o servidor (`app/test/fake_sync_api.dart`) |
 | `app/lib/models/` | `Project` (espelha `server/src/routes/projects.rs`), `User`, `Tokens`, `Me` |
-| `app/lib/screens/` | `login_screen` (magic link, Google, Discord, código de acesso), `link_screen` (`/entrar?token=`), `projects_screen` (lista, criar com modelo, renomear, apagar), `account_screen`, `project_screen` (`DawStudio`) |
+| `app/lib/screens/` | `login_screen` (magic link, Google, Discord, código de acesso), `link_screen` (`/entrar?token=`), `projects_screen` (lista, criar com modelo, renomear, apagar; apagar também limpa o aparelho com `purgeLocalProject`), `account_screen`, `project_screen` (`DawStudio`; `projectSubtitle` lê o andamento e o compasso do documento vivo) |
 
 Rotas (`app/lib/main.dart:27`):
 
@@ -59,7 +59,7 @@ O `redirect` (`main.dart:30`) manda quem não tem sessão para `/login` (guardan
 
 ### `ApiClient` (`app/lib/api/client.dart`)
 
-- **URL base** (`client.dart:37`): `--dart-define=API_BASE=` se definido; senão, na web, a origem da própria página quando a porta é 8080 ou o host não é `localhost`; em qualquer outro caso (inclusive web em `localhost:8081` do docker-compose e `flutter run`) a produção `https://jopendaw.johnenrique.tech`. O app Android usa a produção salvo `API_BASE` (o emulador usa `--dart-define=API_BASE=http://10.0.2.2:8080`).
+- **URL base** (`ApiClient.baseFor`, `client.dart:46`): `--dart-define=API_BASE=` se definido; senão, na web, **a origem da própria página, em qualquer porta e host** (o servidor Rust em `:8080`, o nginx do compose em `:8081`, a produção, sempre com `/api` no mesmo host); fora da web (Android) a produção `https://jopendaw.johnenrique.tech`. Consequência: num `flutter run -d chrome`, que serve o app numa porta própria sem API, é **obrigatório** passar `--dart-define=API_BASE=http://localhost:8080` (senão as chamadas `/api` vão para a porta do `flutter run`). O emulador Android usa `--dart-define=API_BASE=http://10.0.2.2:8080`. Antes da fase 9 a origem só valia com porta 8080 ou host diferente de `localhost` (o resto caía na produção).
 - **Renovação no 401** (`_send`, `_refresh`): um 401 com sessão ativa dispara uma única renovação, dividida entre as chamadas simultâneas (`_refreshing`). Antes de chamar `/api/auth/refresh` o cliente relê o armazenamento seguro: se outra aba já renovou, adota o token dela. Um 409 do servidor (janela de 60 s de rotação, ver [11 Servidor](11-servidor.md)) faz até 3 tentativas, esperando 300 ms × n e relendo o armazenamento. Se a renovação falha, `signOut(notifyServer: false)` e `Unauthenticated`.
 - **Tempos**: 120 s para qualquer pedido (`_raw`), 20 s para o refresh. Um upload de sample grande em conexão lenta pode estourar os 120 s (ver Armadilhas).
 - **Erros**: `ApiException(status, message)` com a mensagem `{"error": ...}` do servidor; `Unauthenticated` para 401 pós-renovação; falha de rede sobe como exceção do `http`. `describeError` (`widgets/feedback.dart:12`) traduz tudo em frase para o usuário; erro é sempre inline (`InlineNotice`), nunca toast.
@@ -102,7 +102,7 @@ O documento é a única fonte de verdade da música. Tudo o que está nele vai p
 | Posição e duração na linha do tempo | **batidas** (`double`) | `AudioClip.start`, `MidiClip.start/length`, `AutoPoint.beat`, `Marker.beat`, `loop_start/loop_end` |
 | Trecho do áudio de origem | **segundos do arquivo** | `AudioClip.offset/length/fade_in/fade_out` |
 | Notas dentro de um clipe MIDI | batidas **desde o início do clipe** | `MidiNote.start/length` |
-| Ganho | linear (1 = 0 dB; teto do fader 2 = +6 dB, `maxGain`) | `gain`, `master_gain`, `Send.level`, automação de volume e envio |
+| Ganho | linear (1 = 0 dB; teto do fader 2 = +6 dB, `maxGain`; teto do ganho de clipe +12 dB, `maxClipGain`) | `gain`, `master_gain`, `Send.level`, automação de volume e envio; `AudioClip.gain` |
 | Pan | −1 (esq.) .. 1 (dir.) | `pan`, `master_pan` |
 | Parâmetros de instrumento e efeito | a unidade da tabela do parâmetro (Hz, s, dB, semitons, 0..1); **nunca normalizados** | `params` |
 | Latência de gravação | milissegundos | `rec_latency_ms` |
@@ -123,8 +123,8 @@ Regras gerais de leitura e escrita:
 | Campo | Tipo | Obrigatório? | Padrão (construtor / leitura) | Significado |
 |---|---|---|---|---|
 | `version` | int | escrito, não lido | `1` | versão do esquema |
-| `bpm` | número | sim | (do projeto) | andamento. **Cópia**: a fonte de verdade é `projects.bpm` no servidor; `open()` e `_applyRemote` sobrescrevem com o do projeto |
-| `beats_per_bar` | int | sim | (do projeto) | tempos por compasso. Mesma regra do `bpm` (`projects.beats_per_bar`). A figura do compasso (`beat_unit`) e a taxa de amostragem não estão no documento |
+| `bpm` | número | sim | (do projeto, só num documento novo) | andamento. **É a fonte de verdade** (desde a fase 9); `projects.bpm` no servidor é um espelho inteiro (20..400) enviado em segundo plano por `_mirrorTempo`. `open()` só parte do projeto quando não há documento local; `_applyRemote` traz o do documento remoto |
+| `beats_per_bar` | int | sim | (do projeto, só num documento novo) | tempos por compasso. Mesma regra do `bpm` (espelho em `projects.beats_per_bar`). A figura do compasso (`beat_unit`) e a taxa de amostragem não estão no documento |
 | `tracks` | lista de faixa | sim | `[]` no construtor | faixas, na ordem do sinal (ordem = índice no motor) |
 | `samples` | mapa `sha256 → {name, duration}` | sim | `{}` no construtor | catálogo dos áudios do projeto |
 | `loop_on` | bool | sim | `false` | loop ligado |
@@ -182,7 +182,7 @@ O barramento (`kind: bus`) não tem clipes (`TrackKind.hasClips`), só recebe á
 | `start` | número (batidas) | sim | | onde o clipe começa na linha do tempo |
 | `offset` | número (s) | sim | `0` | onde começa o trecho, em segundos do arquivo (corte à esquerda) |
 | `length` | número (s) | sim | | duração do trecho, em segundos do arquivo |
-| `gain` | número | não | `1` | ganho do clipe (linear) |
+| `gain` | número | não | `1` | ganho do clipe (linear). A interface (`Ganho do clipe…`, `clip_gain_dialog.dart`) vai de −40 a +12 dB: 0 no piso (−∞) e `10^(dB/20)` acima; `setClipGain` limita a 0..`maxClipGain` (+12 dB, ≈ 3,98). Cada arraste do slider é um `checkpoint` (`onChangeStart`) seguido de `mutate`s sem histórico, ou seja, um passo do desfazer; o `Zerar (0 dB)` é um passo próprio. Vai ao motor em `clip_add` |
 | `fade_in`, `fade_out` | número (s) | não | `0` | fades, em segundos do arquivo |
 | `warp` | bool | **(omitido se falso)** | `false` | esticar para seguir o andamento do projeto |
 | `source_bpm` | número ou ausente | **(omitido se nulo)** | `null` | andamento original do áudio (20..999); sem ele o warp não estica |
@@ -300,7 +300,7 @@ Vivem só no controlador: seleção (`selectedClip`, `selectedTrack`, `selectedM
 
 ## Fluxo de dados / ciclo de vida do `DawController`
 
-O controlador (`daw/controller.dart`, ~4 400 linhas) é criado por `ProjectScreen.reload` (`DawController(project)..open()`) e descartado no `dispose` da tela. Construtor: `DawController(project, {engine, store, api, canSync, syncTimeScale})`; os quatro últimos existem para os testes (`FakeEngine`, servidor falso).
+O controlador (`daw/controller.dart`, ~4 400 linhas) é criado por `ProjectScreen.reload` (`DawController(project)..open()`) e descartado no `dispose` da tela. Construtor: `DawController(project, {engine, store, api, canSync, syncTimeScale, patchProject})`; os cinco últimos existem para os testes (`FakeEngine`, servidor falso; `patchProject` troca o `PATCH` do espelho do andamento).
 
 ### Grupos de métodos (seções do arquivo)
 
@@ -327,7 +327,7 @@ O controlador (`daw/controller.dart`, ~4 400 linhas) é criado por `ProjectScree
 
 1. Confere `_engine.supported`; `_engine.start()` devolve a taxa do motor (`engineRate`).
 2. Lê `doc:<id>` do `LocalStore`. Se existe, `DawDoc.fromJson`. Senão `_fromTemplate()`: se há `template:<id>` (modelo escolhido ao criar; apagado na hora), `ProjectTemplate.build`; senão `_fresh()` (uma faixa `Áudio 1`, `loop_end = beats_per_bar * 4`). O modelo `Vazio` da tela de projetos **não** grava `template:<id>`, então cai em `_fresh()`.
-3. Sobrescreve `doc.bpm` e `doc.beatsPerBar` com os do projeto (servidor).
+3. (Não sobrescreve mais `doc.bpm` e `doc.beatsPerBar` com os do projeto: o documento local vale; só um documento novo, de `_fromTemplate`/`_fresh`, parte dos do projeto.)
 4. Carrega cada áudio de `doc.samples` (`sample:<hash>` → `_engine.decode` → `_register`, que atribui um id inteiro ao hash em `_sampleIds`, manda ao motor e desenha a forma de onda). Áudio ausente do aparelho entra em `missing`.
 5. Sincronização: `sync.start(localExisted: ...)`. **Espera de até 25 s** (o `started.timeout(const Duration(seconds: 25))` em `DawController.open`) quando `saved is! String && !_templated && _canSync()`, isto é, projeto sem documento local, sem modelo e com sessão: nesse caso o projeto pode existir só no servidor (criado em outro aparelho) e o spinner só termina depois da primeira conversa (documento + áudios). Ver [12 Sincronização](12-sincronizacao.md). Nos demais casos a sincronização segue em segundo plano.
 6. `ready = true`, primeiro `_sync()` (manda o documento inteiro ao motor), `_lastSaved` = documento atual. Faixa de áudio que estava armada ou monitorando reabre a entrada (`_restoreInput`).
@@ -348,7 +348,7 @@ edit(fn, undoable: true)
 - **O histórico guarda documentos inteiros como texto JSON**, não comandos. `undo`/`redo` (`_travel`) reconstroem o `DawDoc` do JSON e depois **restauram do estado atual** o que é preferência do aparelho e não deve ser desfeito: `metronome`, `count_in`, `rec_latency_ms`, `armed`, `monitor` de cada faixa; `loop_on` também fica, a não ser que o passo desfeito tenha mudado a região do loop.
 - **Arraste**: `checkpoint()` no início e `mutate` a cada passo (um passo só no histórico). `edit(..., undoable: false)` para preferências (metrônomo, contagem, latência, armar).
 - **Caminhos rápidos** (`setParam` `:2185`, `setEffectParam` `:2487`): mudam o valor, mandam **uma** chamada (`param` ou `fx_param`) e atualizam o cache `_sent`, sem `_sync()` do documento inteiro. Se o motor ainda não tem aquele efeito naquele slot, caem no `_sync()` completo (um `fx_param` solto atingiria outro efeito).
-- `setTempo` edita o documento **e** faz `PATCH /api/projects/{id}` com `bpm` e `beats_per_bar` (`:1326`). O desfazer restaura o `bpm` antigo só no documento local; o servidor continua com o novo até o próximo `setTempo` (ver Armadilhas).
+- `setTempo` (`controller.dart:1565`) edita o documento (entra no desfazer) e chama `_mirrorTempo()`, o `PATCH /api/projects/{id}` de `{bpm, beats_per_bar}` **best-effort**: não lança offline e o valor pendente sai de novo em `_save` (desfazer e refazer incluídos), no fim de `open()` e de `_applyRemote` e quando `sync.phase` vira `synced` (`_onSyncPhase`). Detalhes em [12 Sincronização](12-sincronizacao.md#andamento-e-compasso-documento-é-a-fonte-o-servidor-espelha).
 
 ### Como cada mudança vira chamadas ao motor (`_sync`, `_docCalls`)
 
@@ -433,8 +433,10 @@ A escala vem de `DawController._warpOf`: `gainToFader`/`faderToGain` (curva cúb
 | `export.dart`, `export_options.dart`, `wav.dart` | exportar (janela e opções) e codificação/leitura de WAV |
 | `settings_dialog.dart`, `shortcuts_dialog.dart` | configurações de gravação e janela de atalhos |
 | `warp.dart`, `warp_dialog.dart` | sons derivados do warp e o diálogo |
-| `audio_to_midi.dart`, `midi_convert_dialog.dart` | áudio → MIDI pelo servidor (job `audio_to_midi`) e o diálogo |
-| `sync.dart`, `sync_ui.dart` | sincronização e seu indicador |
+| `audio_to_midi.dart`, `midi_convert_dialog.dart` | áudio → MIDI pelo servidor (job `audio_to_midi`) e o diálogo; `notesForClip` segue o warp (`AudioClip.tempoFor`), soma a transposição e espelha no reverso |
+| `clip_gain_dialog.dart` | diálogo `Ganho do clipe` (item `Ganho do clipe…` do menu do clipe de áudio em `timeline.dart`): slider −40 a +12 dB, `clipGainFromDb`/`clipGainToDb`, `setClipGain` |
+| `sync.dart`, `sync_ui.dart` | sincronização (com pull periódico) e seu indicador |
+| `local_purge.dart` | `purgeLocalProject`: limpeza local de um projeto apagado |
 | `templates.dart` | modelos de projeto (`Vazio`, `Batida eletrônica`, `Gravação de banda`) |
 | `project_file.dart`, `project_file_ui.dart` | o arquivo `.jopendaw`: montar, ler e validar o zip, refazer ids, importar (lógica pura) e a janela `Exportar projeto` com o seletor de arquivo (seção [Arquivo de projeto `.jopendaw`](#arquivo-de-projeto-jopendaw)) |
 
@@ -650,18 +652,18 @@ Para conferir a saída: `flutter test 2>&1 | tr '\r' '\n' | grep -E "All tests p
 ## Armadilhas conhecidas
 
 - **Preferências contam como mudança para sincronizar.** `_save` compara o JSON inteiro com o último gravado (`DawController._save` em `controller.dart`); `metronome`, `count_in`, `rec_latency_ms`, `armed` e `monitor` estão no JSON, então ligar o metrônomo marca o projeto como pendente e gera versão nova no servidor (mesmo que outro aparelho as ignore ao aplicar). Lido no código; efeito sobre conflitos falsos `(não confirmado no uso)`.
-- **`setTempo` e o desfazer.** O andamento mora no servidor; desfazer a mudança de andamento restaura só o documento local (`bpm` antigo no motor), enquanto `projects.bpm` mantém o novo. Ao reabrir, `open()` sobrescreve `doc.bpm` com o do projeto. `(não testado no app; deduzido de _travel e setTempo)`
-- **Sem limpeza local ao apagar projeto.** `projects_screen` chama só `deleteProject` na API; `doc:<id>`, `sync:<id>` e os `sample:<hash>` ficam no aparelho. O cache `warp:<chave>` também não tem limpeza (registrado nas notas do projeto).
-- **`docker-compose up` e a URL da API.** O app web servido em `localhost:8081` (container `web`) **não** usa o `api` do compose: `ApiClient.base` só adota a origem da página quando a porta é 8080 ou o host não é `localhost`; em `localhost:8081` cai na URL de produção (a menos de `--dart-define=API_BASE`, definido só no build). `(deduzido de client.dart:37; não testado)`
+- **`setTempo` e o desfazer (corrigido na fase 9).** O andamento mora no documento; desfazer restaura o `bpm` antigo no documento e o `_save` seguinte reenvia o espelho (`PATCH`) se ele difere do último confirmado. Reabrir usa o `doc.bpm` local. Resta que `projects.bpm` (lista de projetos) pode ficar defasado enquanto o `PATCH` está pendente (offline). `(lido do código e coberto por `phase9c_test`; não visto no Chrome)`
+- **Limpeza local ao apagar projeto (fase 9).** `projects_screen._delete` chama `deleteProject` na API e depois `purgeLocalProject(LocalStore.instance, id, idsDaLista)` (`local_purge.dart`): apaga `doc:<id>`, `sync:<id>`, `template:<id>` e os `sample:<hash>` que só o documento local desse projeto cita (os de qualquer outro projeto da lista ficam). Nunca lança, devolve quantos áudios apagou. O cache `warp:<chave>` continua sem limpeza (o guardado não lista chaves). Só limpa o aparelho que apagou.
+- **URL da API e `flutter run`.** Na web a base é a origem da página em qualquer porta (`baseFor`), então o app do compose em `localhost:8081` usa o `/api` do nginx dele. Já um `flutter run -d chrome` (porta própria, sem API) exige `--dart-define=API_BASE=...`; sem isso as chamadas caem na porta do `flutter run`. `(lido do código e coberto por `phase9c_test`; não rodado com `flutter run`)`
 - **Cache do navegador.** Depois de `flutter build web`, `host.js`, `engine.wasm` e `main.dart.js` podem ficar velhos no navegador (service worker). O servidor de desenvolvimento manda `Cache-Control: no-cache`; ao testar, limpar o service worker e os caches evita `... is not a function`.
 - **Estado de estúdio em teste.** `DawStudio` é público para os testes montarem a tela sem a API; o controlador aceita motor, guardado e API por injeção.
 - **`ProjectScreen` recria o controlador** ao trocar de projeto (`ValueKey`), e o `dispose` do controlador salva (`_save`) e para o motor (`stop`, `panic`, `watch_*`): um projeto nunca deixa nota soando para o próximo.
-- **Áudio → MIDI só com WAV.** `convertToMidi` envia o sample **original** (`sample:<hash>`) ao servidor, e o servidor só decodifica WAV PCM 16/24/32 ou float 32, mono/estéreo (`server/src/audio.rs:33`). Clipes importados de mp3, ogg, flac etc. falham com "formato não suportado" no job. `(não testado no app com mp3; deduzido do código)`
+- **Áudio → MIDI e formatos (resolvido na fase 9, `e2bc4ea`).** `convertToMidi` envia o sample **original** (`sample:<hash>`) ao servidor. Até a fase 8 o servidor só decodificava WAV; agora decodifica também MP3, FLAC, OGG Vorbis e AAC/M4A/ALAC (symphonia), com limite de 10 minutos por arquivo; OGG/Opus, AIFF e WebM seguem sem suporte. Ver [11 Servidor](11-servidor.md) e [03d](../manual/03d-audio-para-midi.md). Visto no Chrome só com MP3.
 - **`flac` nunca é pedido pelo app.** O job `flac` existe no servidor, mas nada em `app/lib/` chama `createJob('flac', ...)`.
 - **dart2js: operadores de bit em 32 bits.** Na web, `<<`, `>>`, `&`, `|`, `^` e `~` trabalham em 32 bits (o inteiro do dart2js é um número de JavaScript), enquanto na VM do Dart (testes, Android) o inteiro tem 64 bits. Então `1 << 62` dá 0 no navegador e `2 << 30` dá um número negativo, e a VM não mostra nada. Caso real, corrigido em `606664f`: `slicePoints` (`sampler_zones.dart`) começava a busca do menor comprimento de canal em `1 << 62`, que no navegador virava 0; `n == 0` devolvia lista vazia e o `Fatiar sample…` nunca achava corte (nem por transientes, nem em N fatias iguais). No mesmo commit, `ProjectFileLimits` (`project_file.dart`) tinha `maxTotalBytes = 2 << 30`, negativo no navegador, e o limite de tamanho do `.jopendaw` ficava errado. A regra: para inteiros grandes que rodam na web, use aritmética normal (`1024 * 1024 * 1024`, `reduce(math.min)` em vez de um valor inicial enorme; um `int` da web é exato só até 2^53) ou `BigInt`, nunca `<<` que passe de 31 bits, e nunca máscara ou deslocamento em valor que possa passar de 32 bits. O teste `app/test/web_int_safety_test.dart` varre `app/lib/` atrás de constantes `N << K` que passem de 31 bits, mas só enxerga literais (não vê `1 << n` com `n` variável, `>>` nem máscaras) e roda na VM, lendo os arquivos com `dart:io`. Levantamento de `<<` e `>>` em `app/lib/` (feito depois de `606664f`), todos hoje dentro de 32 bits, listados como riscos a vigiar:
   - `daw/project_file.dart:51-52`: `512 << 20` (2^29) e `64 << 20` (2^26); passam, mas não aceitam mais um bit; prefira a multiplicação, como os outros dois limites.
   - `daw/export.dart:126`: `1 << 30` como teto do `clamp` (2^30, no limite: `1 << 31` já seria negativo).
-  - `daw/controller.dart:3271`: `_countZoneBars = 1 << 16`; `audio/engine_ffi.dart:883`: `1 << 20` (só Android); `daw/sync.dart:227`: `1 << math.min(_failures, 10)` (o `min` segura em 2^10; sem ele, a partir de 31 falhas o valor viraria negativo ou voltaria a 1 no navegador).
+  - `daw/controller.dart:3271`: `_countZoneBars = 1 << 16`; `audio/engine_ffi.dart:883`: `1 << 20` (só Android); `daw/sync.dart:292`: `1 << math.min(_failures, 10)` (o `min` segura em 2^10; sem ele, a partir de 31 falhas o valor viraria negativo ou voltaria a 1 no navegador).
   - `daw/wav.dart:104-106` e `:185-186`: WAV de 24 bits, `q & 0xFF`, `q >> 8`, `q >> 16` e `bytes[p+2] << 16`; valores de no máximo 24 bits com sinal, seguros.
   - `daw/controller.dart:2453`: pitch bend `(data2 & 0x7F) << 7 | (data1 & 0x7F)`, 14 bits, seguro.
   - `daw/instrument_panel.dart:564-573` e `:2049-2071`: máscaras de portadores e moduladores do FM (`carriers >> n & 1`, `mods[to] >> from & 1`), de poucos bits (4 operadores), seguras.

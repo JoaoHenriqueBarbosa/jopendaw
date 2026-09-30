@@ -79,7 +79,8 @@ jopendaw/
 ├── CLAUDE.md            regras do projeto (fonte de verdade dos comandos e das regras)
 ├── Cargo.toml           workspace Rust: server, engine, engine/wasm, engine/android; perfis
 │                        dev, test, release, server, wasm, android (ver 03-build-teste-e-depuracao.md)
-├── rust-toolchain.toml  toolchain "stable" + rustfmt, clippy, rust-analyzer
+├── rust-toolchain.toml  toolchain "stable" + rustfmt, clippy, rust-analyzer e os 4 alvos
+│                        (wasm32-unknown-unknown e os três *-linux-android)
 ├── rustfmt.toml         max_width 160, use_small_heuristics = "Max"
 ├── docker-compose.yml   db (Postgres 17), minio + minio-init, api, web (nginx)
 ├── hot.sh               a API com hot-patch (dx serve --hot-patch --features hot)
@@ -115,7 +116,8 @@ jopendaw/
 │   │   └── src/           lib.rs (superfície jd_*), core.rs, host.rs, call.rs, state.rs, alloc.rs,
 │   │                      decode.rs (symphonia), capture.rs, offline.rs, platform/ (AAudio, JNI)
 │   ├── build-web.sh     compila o wasm e copia para app/web/engine/engine.wasm
-│   └── build-android.sh compila os três ABIs para app/android/app/src/main/jniLibs/
+│   └── build-android.sh compila os três ABIs para app/android/app/src/main/jniLibs/ e confere os
+│                        símbolos exportados (lista `want`: 28 jd_* e JNI_OnLoad) e a falta de libaaudio
 │
 ├── app/                 O APP (Flutter: web e Android do mesmo código)
 │   ├── lib/
@@ -135,7 +137,8 @@ jopendaw/
 │   │   │                  midi_cc.dart, expression_wheels.dart, piano_roll_cc.dart (expressão MIDI),
 │   │   │                  sampler_zones*.dart e slice_dialog.dart (zonas do sampler), ...
 │   │   ├── models/        account.dart, project.dart (espelham o servidor)
-│   │   ├── platform/      o que é só web ou só Android (única parte que importa package:web)
+│   │   ├── platform/      o que é só web ou só Android (única parte que importa package:web); no Android:
+│   │   │                  tela acesa, avisos de fone e de sair da tela, permissão do microfone
 │   │   ├── screens/       login, link (magic link), projetos, projeto, conta
 │   │   └── widgets/       base visual: PageScaffold, ApiState, diálogos, tema, ResponsiveScaffold
 │   ├── web/
@@ -143,7 +146,8 @@ jopendaw/
 │   │   ├── sw.js          service worker do PWA
 │   │   ├── index.html, flutter_bootstrap.js, manifest.json, icons/, privacidade.html, termos.html
 │   ├── android/         projeto Gradle; jniLibs/<abi>/libjopendaw_engine.so (commitados)
-│   ├── test/            testes de unidade e de widget (com motor falso)
+│   ├── test/            testes de unidade e de widget (com motor falso); test/js/: scripts do node
+│   │                    (falha do motor no host.js, render da web em passadas)
 │   ├── integration_test/ testes no emulador/aparelho: engine_test.dart, platform_test.dart
 │   ├── tool/icones.py   regenera os ícones a partir de web/favicon.svg
 │   ├── Dockerfile, nginx.conf.template   build web + nginx com proxy de /api/
@@ -207,6 +211,14 @@ Em produção o frontend tem container próprio (nginx, `app/Dockerfile` + `ngin
 ### Do gesto ao som (Android)
 
 Igual, trocando os passos 3–5: `engine_io.dart` → `FfiEngine` (`engine_ffi.dart`) serializa as chamadas em JSON → `jd_calls` → fila `rtrb` → callback do AAudio aplica antes de cada bloco → estado publicado sem trava, lido por polling.
+
+### Falha do motor e "Reiniciar o áudio"
+
+Se o motor para (web: erro do processador de áudio, trap do wasm ou 4 s sem sinal de vida; Android: `ERR_PANIC` de `jd_state`), a ponte chama `AudioEngine.onEngineFailed`, o `DawController` põe um texto em `audioFailure` e o `DawStudio` (`project_screen.dart`) mostra um `InlineNotice` com o botão `Reiniciar o áudio`. O botão chama `restartAudio`: `AudioEngine.restart()` recria o motor vazio (web: contexto, nó e wasm; Android: `jd_start` descarta o host quebrado), o controlador reenvia os áudios decodificados e o documento inteiro e reabre a entrada. Nada se perde porque o projeto vive no Dart e no guardado local, não no motor. Detalhe por ponte em [02-pontes-web-e-android.md](02-pontes-web-e-android.md) (item 1b da web e 5a do Android). `(testado só por testes automáticos)`.
+
+### O aparelho no Android (tela, segundo plano, fone)
+
+Só no Android o controlador pede ao sistema (canal `jopendaw/apps`, `platform_native.dart` e `MainActivity.kt`) para manter a tela acesa enquanto toca ou grava e escuta dois avisos (fone que sai, aparelho de áudio que entra ou sai) mais o ciclo de vida do app: sair da tela e o fone param o transporte e, se gravando, encerram a gravação. Na web as funções equivalentes de `platform_web.dart` são vazias. Detalhes em 02 (item 10 do Android); o comportamento visto pelo usuário está no manual, capítulo 09. `(testado só por testes automáticos)`.
 
 ### Sincronização
 
@@ -285,6 +297,7 @@ Chave `blobs/<2 primeiros hex do sha-256>/<sha-256>` em disco (`DATA_DIR`) ou no
 - **Áudios endereçados por SHA-256**: deduplicação entre contas e entre projetos, upload idempotente, e o documento só carrega o hash. O SHA-256 é calculado no aparelho (`AudioEngine.sha256Hex`: `host.js` na web, nativo no Android, `crypto` do Dart nos demais sistemas).
 - **Hot-patch do backend** (Subsecond via `dx serve --hot-patch`): `main.rs` separa `setup` (frio: env, banco, storage, worker) de `serve` (quente: roteador e HTTP). Por isso nada de `std::env::var` na parte quente, e por isso mudar struct/enum/assinatura exige rebuild completo (`r` no dx). O `Cargo.toml` deliberadamente não tem `[profile.dev.package."*"] opt-level = 3` (o processo cai com "no reactor running").
 - **Perfis de compilação por alvo** (`Cargo.toml`): `wasm` com `panic = "abort"` (no worklet não há quem pegue), `android` com `panic = "unwind"` (cada função exportada e a thread de áudio pegam o pânico e viram código de erro ou silêncio), `server` com `unwind` (um pânico num handler derruba só o pedido).
+- **O motor pode cair, o projeto não.** Como `wasm` usa `panic = "abort"` e a thread de áudio do Android pode panicar, o app trata a queda como um estado normal: as pontes avisam, o controlador mostra `Reiniciar o áudio` e recria o motor vazio a partir do documento e dos áudios que o Dart já tem. Limites do motor (16 efeitos por cadeia, 16 envios por faixa, 1024 faixas, 64 capturas por render) são explicados na interface ou tratados (passadas no render) em vez de descartados em silêncio.
 - **Binários compilados ficam no git** (`engine.wasm`, os três `.so`) para que `flutter build` e o build Docker do app não precisem de Rust. O custo é a regra de recompilar e commitar tudo junto (ver [02-pontes-web-e-android.md](02-pontes-web-e-android.md)).
 
 ## Como testar
@@ -294,17 +307,19 @@ O mapa completo está em [03-build-teste-e-depuracao.md](03-build-teste-e-depura
 - Motor: `cargo test -p jopendaw-engine`.
 - Ponte Android (crate): `cargo test -p jopendaw-engine-android`.
 - App: `cd app && flutter analyze && flutter test`.
+- Scripts do node (host.js e render em passadas): `cd app && node test/js/host_failure_check.mjs && node test/js/render_passes_check.mjs` (cada um imprime `ok`; o `flutter test` também os roda quando há `node`).
 - Servidor: `TEST_DATABASE_URL=... cargo test -p jopendaw-server` (sem a variável os testes se pulam e passam).
 - Uso real (obrigatório antes de dar uma fase por pronta): app no Chrome via `tool/cdp.mjs` e no emulador Android.
 
 ## Armadilhas conhecidas
 
-- **Motor velho no Android.** Mudou algo em `engine/`: recompile e commite `engine.wasm` e os três `.so` juntos, ou o Android fica com o motor antigo (e mudo, se o `apply` for novo). **Caso real da fase 8, resolvido em `357b6fc`:** de `dca27bc` a `b7e802e` (loudness, zonas do sampler, expressão MIDI) os commits mexeram em `engine/` sem recompilar os binários (o corpo do `dca27bc` avisa; nos outros o `git show --stat` não lista `engine.wasm` nem `.so`), e o `engine.wasm` e os três `.so` ficaram em `f1cfbaa` (fase 7) por umas horas, sem conhecer `loudness_reset`, `loudness`, `zones_clear`, `zone_add`, `live_bend`, `live_cc`, `cc_add` e `cc_clear`; o commit de integração `357b6fc` recompilou tudo (e a lista `want` do `engine/build-android.sh` passou a conferir também `jd_loudness`, `jd_stretch` e `jd_detect_bpm`).
-- **Comentário desatualizado:** `engine/src/lib.rs` (cabeçalho) diz "o Oboe no Android"; o motor usa AAudio carregado por `dlopen` (`engine/android/src/platform/aaudio.rs`). Não confie nesse trecho.
+- **Motor velho no Android.** Mudou algo em `engine/`: recompile e commite `engine.wasm` e os três `.so` juntos, ou o Android fica com o motor antigo (e mudo, se o `apply` for novo). Na fase 9 não houve caso: só o `engine.wasm` precisou (teto de `tracks`), recompilado em `f25935f`. **Caso real da fase 8, resolvido em `357b6fc`:** de `dca27bc` a `b7e802e` (loudness, zonas do sampler, expressão MIDI) os commits mexeram em `engine/` sem recompilar os binários (o corpo do `dca27bc` avisa; nos outros o `git show --stat` não lista `engine.wasm` nem `.so`), e o `engine.wasm` e os três `.so` ficaram em `f1cfbaa` (fase 7) por umas horas, sem conhecer `loudness_reset`, `loudness`, `zones_clear`, `zone_add`, `live_bend`, `live_cc`, `cc_add` e `cc_clear`; o commit de integração `357b6fc` recompilou tudo (e a lista `want` do `engine/build-android.sh` passou a conferir também `jd_loudness`, `jd_stretch` e `jd_detect_bpm`).
+- **Comentário desatualizado sobre o Oboe** (histórico; **resolvido em `ae91ef4`**): `engine/src/lib.rs`, `engine_ffi.dart` e `MainActivity.kt` diziam "Oboe" ou "cpal/oboe"; o motor usa AAudio carregado por `dlopen` (`engine/android/src/platform/aaudio.rs`) e os comentários agora dizem isso. Sobra o comentário de `ERR_PANIC` em `engine/android/src/lib.rs`, que ainda diz "até reiniciar o app" embora o `Reiniciar o áudio` já recrie o motor (ver [02](02-pontes-web-e-android.md)).
 - **`README.md` da raiz desatualizado** (ver acima).
 - **CI:** não há `.github/` nem outro pipeline no repositório; nada roda os testes sozinho (não confirmado se existe CI fora do repositório).
 - **Cache de estáticos.** Os arquivos do build do Flutter não têm hash no nome (`main.dart.js`, `host.js`, `engine.wasm`); por isso o servidor de desenvolvimento manda `no-cache`, o nginx usa `expires -1` e `sw.js` vai sempre à rede primeiro. Depois de um rebuild, o navegador de teste ainda pode servir host/wasm velhos (ver o passo a passo de limpeza em [03-build-teste-e-depuracao.md](03-build-teste-e-depuracao.md)).
 - **Duas abas no mesmo projeto** geram conflito de sincronização legítimo ("mudou em outro aparelho").
-- **Motor só no navegador e no Android.** Em outros sistemas (`flutter test` no computador, desktop) `AudioEngine.supported` é falso e as chamadas ficam só em `AudioEngine.log` quando um teste pede (`engine_io.dart`).
+- **Motor só no navegador e no Android.** Em outros sistemas (`flutter test` no computador, desktop) `AudioEngine.supported` é falso e as chamadas ficam só em `AudioEngine.log` quando um teste pede (`engine_io.dart`); a tela do projeto avisa `O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.`
+- **Fase 9 sem teste de uso completo.** O aviso `Reiniciar o áudio`, o limite de 16 efeitos e 16 envios e a pausa por fone ou por sair do app (Android) só passaram por testes automáticos; ver "Pendente de teste de uso" em [03](03-build-teste-e-depuracao.md).
 - **Imagem Docker do servidor e o workspace.** O `server/Dockerfile` precisa dos manifestos de todos os membros do workspace (`engine`, `engine/wasm`, `engine/android`): resolvido em `0c0593e` com `COPY engine engine`. Se um membro novo entrar em `Cargo.toml`, o Dockerfile precisa copiá-lo também, senão o build da imagem quebra de novo com "failed to load manifest for workspace member". Detalhes em [11-servidor.md](11-servidor.md).
 - **Sem compensação de latência de efeitos** (PDC): efeitos com lookahead (limitador, sobreamostragem da distorção) atrasam a faixa sem compensação; está declarado no cabeçalho de `engine/src/lib.rs` ("Latência de efeito (lookahead) ainda não é compensada").

@@ -12,6 +12,8 @@ Os números abaixo são um exemplo: uma música de 100 BPM e 3:20 num projeto de
 | `Warp e altura…` (menu do clipe): `BPM do áudio`, `Detectar`, `÷2`, `×2`, `Ajustar ao andamento`, `ALTURA`, `Inverter o áudio` | Esticar ao andamento, transpor, reverso | [03b Warp e altura](../manual/03b-warp-e-altura.md) |
 | `120 BPM · 4/4` (`Andamento e compasso`), `Metrônomo (C)`, `Loop (L)`, `Shift+L`, grade de encaixe | Fixar o andamento alvo, conferir o alinhamento, ensaiar um trecho | [02 Transporte](../manual/02-transporte.md) |
 | `Cortar no cursor (S)`, `Duplicar`, `Duplicar a faixa`, mover com `Alt`, fades | Recortar a parte da música e montar o arranjo | [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md) |
+| `Ganho do clipe…` (menu do clipe de áudio) | Acertar o volume de um clipe sem mexer no fader da faixa | [03 Áudio e clipes](../manual/03-audio-e-clipes.md#ganho-do-clipe) |
+| `Converter em notas (MIDI)` (opcional) | Tirar uma melodia do trecho esticado e transposto | [03d Áudio para MIDI](../manual/03d-audio-para-midi.md) |
 | Faixa `Bateria` e piano roll | A batida que entra por cima | [04b Bateria](../manual/04b-bateria.md), [05 Piano roll](../manual/05-piano-roll.md) |
 | `Compressor` com `Sidechain`, `EQ` | Abrir espaço entre a música e a batida | [06d Referência dos efeitos](../manual/06d-efeitos-referencia.md), [06 Mixer](../manual/06-mixer.md) |
 | `Exportar` | Tirar o WAV (o warp já processado é o que sai) | [08 Exportação](../manual/08-exportacao.md) |
@@ -23,7 +25,7 @@ Receitas relacionadas: a batida em si em [Primeira batida do zero](primeira-bati
 ### 1. O projeto e o andamento alvo
 
 1. `Novo projeto`, `Nome` `Remix 128`, `Começar com` `Vazio`, `Criar`. O estúdio abre com uma faixa `Áudio 1`, que vai receber a música.
-2. Toque em `120 BPM · 4/4`, digite `128` em `BPM`, `Salvar`. O remix inteiro vai seguir esse número: a música é esticada para ele, e a batida que você escrever também.
+2. Toque em `120 BPM · 4/4`, digite `128` em `BPM`, `Salvar`. O remix inteiro vai seguir esse número: a música é esticada para ele, e a batida que você escrever também. O andamento é do projeto (do documento, como as faixas): vale na hora, com ou sem rede, e sobe com o projeto na sincronização; o `Ctrl+Z` desfaz a troca.
 
 ### 2. Importar
 
@@ -72,6 +74,7 @@ O reverso vira o áudio de trás para a frente. Uma cauda de prato que decai vir
 3. Botão direito no trecho, `Warp e altura…`, ligue `Inverter o áudio`. O reverso puro fica pronto quase na hora. O que era o fim vira o começo.
 4. Arraste o clipe (com a grade em `Compasso`) para que **termine** no compasso 33, ou seja, começando no 32. Você ouve o prato ao contrário, crescendo até o compasso 33, onde a música volta com o golpe original.
 5. Na alça de fade in do clipe (círculo branco no canto de cima à esquerda), puxe um fade curto para o começo entrar sem estalo; o fade in fica no começo do clipe, mesmo invertido, e o fade out no fim.
+6. Se a subida ficou alta demais ou baixa demais perto da música, botão direito no clipe, `Ganho do clipe…`, e arraste o controle (de −40 a +12 dB, passos de 0,5 dB; a leitura mostra, por exemplo, `−4,0 dB`). Vale só para esse clipe, sem mexer no fader da faixa; `Zerar (0 dB)` volta ao original e `Fechar` fecha. Cada arraste é um passo do desfazer.
 
 Duplicar a **faixa** (em vez de duplicar o clipe) evita que a cópia caia em cima do clipe seguinte e aparé-lo: `Duplicar` põe a cópia logo depois do clipe e o que ela cobre é aparado.
 
@@ -79,7 +82,7 @@ Duplicar a **faixa** (em vez de duplicar o clipe) evita que a cópia caia em cim
 
 1. `Faixa` > `Bateria`; no seletor `Kits de bateria`, `909`. Dois cliques no vazio da raia, no compasso 1, para criar um clipe; o bumbo em toda batida (`Bumbo`), a `Caixa` na 2 e na 4, o chimbal aberto no contratempo (é a receita de [Primeira batida do zero](primeira-batida-do-zero.md)), e `Ctrl+A` seguido de `Ctrl+D` para repetir o compasso.
 2. Como as notas são em batidas, a bateria já segue os 128 BPM do projeto, o mesmo alvo da música esticada. Ouça as duas juntas e mova o clipe da bateria (grade `Compasso`) até a batida nova cair junto com a música.
-3. Abaixe a faixa da música uns 3 dB (fader no mixer, `X`) para dar folga à batida. Se o grave da música e o do bumbo brigam, ponha um `EQ` na faixa da música com o preset `Corte de graves` e suba a `Frequência` da banda 1 para 100 a 120 Hz (isso tira o grave original: só faça se a batida nova vai fornecer o grave).
+3. Abaixe a faixa da música uns 3 dB (fader no mixer, `X`) para dar folga à batida. Se só um trecho da música precisa ceder (um clipe cortado no passo 5), use `Ganho do clipe…` (`−3,0 dB`) nesse clipe em vez de baixar a faixa inteira. Se o grave da música e o do bumbo brigam, ponha um `EQ` na faixa da música com o preset `Corte de graves` e suba a `Frequência` da banda 1 para 100 a 120 Hz (isso tira o grave original: só faça se a batida nova vai fornecer o grave).
 4. Para a música respirar no ritmo do bumbo, use o sidechain: passe o bumbo para uma faixa `Bateria` só dele (a bateria toda numa faixa só dispararia o compressor com todas as peças; as outras peças ficam em outra faixa `Bateria`). Na faixa da música, adicione um `Compressor` com `Sidechain` apontando para a faixa do bumbo: é a receita 3 de [Efeitos em combinação](efeitos-em-combinacao.md), com a música no lugar do pad.
 5. Como alternativa à bateria MIDI, importe um loop de bateria em WAV (`Ctrl+I`) e passe pelo mesmo `Warp e altura…` (`Detectar`, quase sempre com confiança alta em material rítmico limpo).
 
@@ -90,9 +93,10 @@ Duplicar a **faixa** (em vez de duplicar o clipe) evita que a cópia caia em cim
 
 ## Variações
 
-- **Só mudar o andamento do remix.** Troque o `128` de `120 BPM · 4/4` por outro número: o som dos clipes com warp se refaz sozinho e a bateria acompanha. Teste 124 e 128 sem mexer no resto.
+- **Só mudar o andamento do remix.** Troque o `128` de `120 BPM · 4/4` por outro número: o som dos clipes com warp se refaz sozinho e a bateria acompanha. Teste 124 e 128 sem mexer no resto. O `Ctrl+Z` volta o andamento anterior (o número da lista `Projetos` acompanha depois, em segundo plano).
 - **Sample transposto.** Um trecho de voz ou de instrumento em outra faixa de áudio, cortado (`S`), com `+5 st` (uma quarta acima), sob a batida: dá um segundo tom ao remix sem gravar nada.
 - **Só o reverso.** Em vez de duplicar a faixa, importe um prato (ou uma palma) como arquivo e ligue `Inverter o áudio` nele; arraste o clipe até terminar no ponto da virada.
+- **Tirar a melodia do trecho esticado.** Se o trecho de voz ou de um instrumento solo (uma linha, uma nota por vez) tem warp ligado e/ou `+N st`, `Converter em notas (MIDI)` (precisa de conta e de rede; ver [Áudio para MIDI](../manual/03d-audio-para-midi.md)) cria a faixa `Sintetizador N` com o clipe de notas já alinhado ao clipe como ele toca: as batidas seguem o `BPM do áudio` do warp, a transposição do clipe soma à altura das notas e, com `Inverter o áudio`, as notas saem espelhadas. As notas são gravadas na hora: se você mudar o warp ou o andamento depois, converta de novo. `(warp, transposição e reverso da conversão: testado só por testes automáticos)`
 - **Loop de 8 compassos para ensaiar.** Depois de cortar o trecho bom (passo 5), `Shift+L` liga o loop nele; com o loop rodando, teste cada valor de `+`/`−`.
 
 ## Por que funciona

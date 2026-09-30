@@ -4,7 +4,7 @@
 
 ## Onde fica
 
-1. Crie a faixa: na linha do tempo, botão `+` com tooltip `Nova faixa` → item `FM` (no mixer, o botão com tooltip `Nova faixa ou barramento` tem o mesmo item). A faixa nasce com o instrumento no padrão, e o seletor de presets mostra `Inicial`.
+1. Crie a faixa: na linha do tempo, botão `+` com tooltip `Nova faixa` → item `FM` (no mixer, o botão com tooltip `Nova faixa ou barramento` tem o mesmo item). A faixa nasce com o instrumento no padrão, e o seletor de presets mostra `Inicial`. Na lista de faixas, no mixer e na aba `Instrumento`, a faixa FM usa o ícone `hub` do Material (nós ligados).
 2. Abra o painel: aba `Instrumento` da barra do painel inferior (tooltip `Instrumento da faixa (I)`), com a faixa FM selecionada.
 3. No computador os cartões ficam numa fileira com rolagem horizontal (a roda do mouse rola a fileira quando o ponteiro não está sobre um knob). No celular os cartões quebram em linhas e o painel rola na vertical.
 
@@ -141,7 +141,7 @@ Cada cartão tem: título com o papel do operador neste algoritmo (`PORTADOR` ou
 | `Decaimento` | Tempo para cair de 100% até a `Sustentação`. Queda exponencial (o tempo vale para cerca de 99,9% do percurso). | 1 ms–10 s, log. Padrões: op. 1 = 600 ms, op. 2 = 1,20 s, op. 3 = 150 ms, op. 4 = 1,00 s | Decaimento curto no modulador = "toc" no ataque. |
 | `Sustentação` | Nível mantido enquanto a tecla está presa. | 0–100%. Padrões: op. 1 = 0%, op. 2 = 30%, op. 3 = 0%, op. 4 = 20% | Com 0% em todos os portadores a nota some mesmo com a tecla presa (som de pluck, tipo piano e marimba). |
 | `Soltura` | Tempo para o operador cair a zero depois de soltar a tecla. Queda exponencial. | 1 ms–10 s, log. Padrões: op. 1 = 300 ms, op. 2 = 300 ms, op. 3 = 150 ms, op. 4 = 300 ms | A nota só termina quando **todos os portadores** terminam a soltura. |
-| `Velocidade` | Quanto a velocidade (força) da nota mexe no nível deste operador. | 0–100%. Padrões: op. 1 = 50%, op. 2 = 30%, op. 3 = 50%, op. 4 = 30% | Em modulador, mexe no brilho (tocar forte fica mais brilhante); em portador, mexe no volume. Com 0% o operador ignora a velocidade (usado nos órgãos). A resposta é quadrática: meia velocidade com 100% dá um quarto do nível. |
+| `Sens. vel.` | Quanto a velocidade (força) da nota mexe no nível deste operador. | 0–100%. Padrões: op. 1 = 50%, op. 2 = 30%, op. 3 = 50%, op. 4 = 30% | Em modulador, mexe no brilho (tocar forte fica mais brilhante); em portador, mexe no volume. Com 0% o operador ignora a velocidade (usado nos órgãos). A resposta é quadrática: meia velocidade com 100% dá um quarto do nível. |
 
 Os desenhos de envelope de cada cartão **só mostram** o formato (subida linear, queda exponencial, tempos em escala logarítmica para caber 1 ms e 10 s no mesmo desenho, pontos brancos nos cantos). Eles **não são arrastáveis**: para mudar o envelope, use os knobs `Ataque`, `Decaimento`, `Sustentação` e `Soltura` do mesmo cartão. O desenho acompanha os knobs na hora.
 
@@ -149,12 +149,12 @@ Fileira de atalhos de razão (embaixo de cada operador): 7 botões de toque com 
 
 ### Cartão `LFO`
 
-O LFO é um oscilador lento que mexe em três coisas ao mesmo tempo, cada uma com sua profundidade. Há **um LFO só por faixa**, livre (em Hz, sem sincronia com o andamento) e compartilhado por todas as notas: ele não recomeça a cada nota. Com as três profundidades em 0 o cartão fica esmaecido com a legenda `sem efeito: vibrato, tremolo e brilho em 0`, e `Onda` e `Velocidade` ficam apagados.
+O LFO é um oscilador lento que mexe em três coisas ao mesmo tempo, cada uma com sua profundidade. Há **um LFO só por faixa**, livre (em Hz, sem sincronia com o andamento) e compartilhado por todas as notas: ele não recomeça a cada nota. Com as três profundidades em 0 o cartão fica esmaecido com a legenda `sem efeito: vibrato, tremolo e brilho em 0`, e `Onda` e `Taxa` ficam apagados.
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | `Onda` | Forma do LFO (menu). | `Senoide`, `Triângulo`, `Serra`, `Quadrada`, `Aleatório` (degraus aleatórios). Padrão `Senoide` | `Aleatório` sorteia um valor novo a cada ciclo. |
-| `Velocidade` | Frequência do LFO. | 0,05–30 Hz, log, padrão 5,00 Hz | Vibrato natural: 4 a 6 Hz. Respiração lenta de brilho: 0,2 a 0,4 Hz. |
+| `Taxa` | Frequência do LFO. | 0,05–30 Hz, log, padrão 5,00 Hz | Vibrato natural: 4 a 6 Hz. Respiração lenta de brilho: 0,2 a 0,4 Hz. |
 | `Vibrato` | Quanto o LFO balança a altura (todos os operadores juntos, então a razão entre eles se mantém). | 0–12 st, padrão 0 | Vibrato musical: 0,1 a 0,3 st. |
 | `Tremolo` | Quanto o LFO balança o volume final. | 0–100%, padrão 0% | Com 100% o volume oscila entre cheio e mudo. |
 | `Brilho` | Quanto o LFO balança o índice de modulação, ou seja, o brilho. Multiplica o índice de todos os moduladores por 1 ± profundidade. | 0–100%, padrão 0% | Pads que "respiram": `Cordas FM` usa 25% a 0,35 Hz. Não mexe na realimentação. |
@@ -181,7 +181,7 @@ Os números de algoritmo abaixo são os do painel (`Algoritmo 1` a `8`).
 
 | Preset | Algoritmo | Caráter |
 |---|---|---|
-| `Piano elétrico` | 5 | Corpo em 1:1 com decaimento de 1,6 a 3,2 s e um par de "batida" com razão 14 que morre em 90 ms. Velocidade forte deixa a batida mais presente. Todas as sustentações em 0%. |
+| `Piano elétrico` | 5 | Corpo em 1:1 com decaimento de 1,6 a 3,2 s e um par de "batida" com razão 14 que morre em 90 ms. Tocar forte deixa a batida mais presente. Todas as sustentações em 0%. |
 | `Clavinet` | 4 | Realimentação 20%, razões 3, 1, 2 e 1, soltura curta (80 ms). Ataque estalado e corpo seco. |
 
 **Percussivos**
@@ -204,14 +204,14 @@ Os números de algoritmo abaixo são os do painel (`Algoritmo 1` a `8`).
 
 | Preset | Algoritmo | Caráter |
 |---|---|---|
-| `Metais` | 2 | Ataques de 40 a 60 ms nos quatro operadores: o brilho abre junto com o volume, como um sopro. `Velocidade` de 80% nos operadores 1 e 2. |
+| `Metais` | 2 | Ataques de 40 a 60 ms nos quatro operadores: o brilho abre junto com o volume, como um sopro. `Sens. vel.` de 80% nos operadores 1 e 2. |
 | `Gongo` | 7 | Razões de gongo (1,41 / 1 / 2,76 / 5,4), realimentação 40%, decaimentos de 1,5 a 5 s, solturas de 2 a 3 s. Metal inarmônico que demora a morrer. |
 
 **Órgãos**
 
 | Preset | Algoritmo | Caráter |
 |---|---|---|
-| `Órgão drawbar` | 8 | Razões 0,5, 1, 2 e 4 (as barras 16', 8', 4' e 2'), sustentação 100%, `Velocidade` 0%, realimentação 10% e `Tremolo` 25% a 6,5 Hz (o rotary). |
+| `Órgão drawbar` | 8 | Razões 0,5, 1, 2 e 4 (as barras 16', 8', 4' e 2'), sustentação 100%, `Sens. vel.` 0%, realimentação 10% e `Tremolo` 25% a 6,5 Hz (o rotary). |
 | `Órgão rock` | 8 | Razões 1, 2, 3 e 4 com realimentação 35%, que suja o operador 1 e dá a mordida. |
 
 **Pads**
@@ -251,7 +251,7 @@ Os números de algoritmo abaixo são os do painel (`Algoritmo 1` a `8`).
 **4. Um pad que respira**
 1. Escolha o `Algoritmo 6: 1→(2 + 3 + 4)`.
 2. Nos operadores 2 e 3 use `Fino` de +6 ct e −6 ct, e `Ataque` de 0,5 s ou mais nos três portadores.
-3. No cartão `LFO`, `Velocidade` 0,3 Hz e `Brilho` 25%.
+3. No cartão `LFO`, `Taxa` 0,3 Hz e `Brilho` 25%.
 
 **5. Trocar de algoritmo mantendo o som**
 1. Anote os valores dos operadores. Os operadores mantêm seus parâmetros na troca; o que muda é o papel de cada um.
@@ -264,7 +264,7 @@ Os números de algoritmo abaixo são os do painel (`Algoritmo 1` a `8`).
 - [Wavetable](04e-wavetable.md): outro sintetizador de timbres "digitais", morfando entre formas de onda em vez de modular a frequência.
 - [Painel de efeitos](06c-painel-de-efeitos.md) e [Referência dos efeitos](06d-efeitos-referencia.md): como o FM sai em mono, `Chorus` (por exemplo o preset `Ensemble`) e `Reverb` dão largura e ambiente; `Delay` funciona bem em leads.
 - [Automação](07-automacao.md): todos os knobs do FM podem ser automatizados. `Nível` de um modulador automatizado abre e fecha o brilho no tempo; `Realimentação` também.
-- [Piano roll](05-piano-roll.md): a velocidade das notas mexe no timbre quando o `Velocidade` do operador é maior que 0%.
+- [Piano roll](05-piano-roll.md): a velocidade das notas mexe no timbre quando o `Sens. vel.` do operador é maior que 0%.
 - Guia: [FM e Wavetable na prática](../guias/fm-e-wavetable-na-pratica.md).
 
 ## Limites e pegadinhas

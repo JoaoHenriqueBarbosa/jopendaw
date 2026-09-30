@@ -24,7 +24,7 @@ O sampler tem dois modos, e quem escolhe é a lista de zonas da faixa:
 | Ganho e pan por nota | Não | Por zona |
 | Camadas por força do toque | Não | Sim (faixa de velocidade por zona) |
 
-O que **continua valendo nos dois modos**: o cartão `ENVELOPE` inteiro (`Ataque`, `Decaimento`, `Sustentação`, `Soltura`), `Velocidade` e `Volume` do cartão `GERAL`, e a `Afinação` do cartão `ÁUDIO`, que **soma** com a afinação de cada zona. O que **deixa de valer** quando existe ao menos uma zona: o áudio único, o knob `Nota base` e o knob `Modo` (cada zona tem os seus). Apagar todas as zonas devolve o sampler ao modo de áudio único, com o áudio e os knobs como estavam.
+O que **continua valendo nos dois modos**: o cartão `ENVELOPE` inteiro (`Ataque`, `Decaimento`, `Sustentação`, `Soltura`), `Sens. vel.` e `Volume` do cartão `GERAL`, e a `Afinação` do cartão `ÁUDIO`, que **soma** com a afinação de cada zona. O que **deixa de valer** quando existe ao menos uma zona: o áudio único, o knob `Nota base` e o knob `Modo` (cada zona tem os seus). Apagar todas as zonas devolve o sampler ao modo de áudio único, com o áudio e os knobs como estavam.
 
 Um projeto salvo antes das zonas abre igual: só a faixa que tem zonas guarda a lista delas no projeto.
 
@@ -80,7 +80,7 @@ O envelope vale para **todas as vozes**, inclusive as de zona, e tanto para zona
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Velocidade | Sensibilidade à força do toque (velocity), não uma velocidade de reprodução | 0 a 100%, padrão 70% | Em 0% todas as notas soam com o mesmo volume; em 100% o volume cresce com o quadrado da força (metade da força dá -12 dB). Vale por cima da escolha de zona por velocidade |
+| Sens. vel. | Sensibilidade à força do toque (velocity), não uma velocidade de reprodução | 0 a 100%, padrão 70% | Em 0% todas as notas soam com o mesmo volume; em 100% o volume cresce com o quadrado da força (metade da força dá -12 dB). Vale por cima da escolha de zona por velocidade |
 | Volume | Nível de saída do instrumento | 0 a 150%, padrão 80% | Muda sem degraus, mesmo com notas soando |
 
 ### Zonas: a barra do cartão
@@ -187,11 +187,11 @@ O seletor de presets (categoria `SAMPLER`) tem cinco ajustes de envelope. Nenhum
 
 | Preset | Ajustes | Caráter |
 |---|---|---|
-| Padrão | Tudo nos padrões | Ponto de partida: ataque de 2 ms, sustentação 100%, soltura de 200 ms |
-| Instrumento | Ataque 3 ms, decaimento 500 ms, sustentação 100%, soltura 350 ms, `Velocidade` 80% | Áudio de uma nota tocado como teclado: soltura um pouco mais longa e resposta à força |
-| Percussão (até o fim) | `Modo` `Até o fim`, ataque 0,5 ms, soltura 50 ms, `Velocidade` 80% | Golpes e vozes curtas: a nota sempre toca inteira, com ataque instantâneo. Com zonas, o `Modo` dele não vale, mas o envelope curto vale |
-| Pad lento | Ataque 0,8 s, decaimento 1 s, sustentação 90%, soltura 1,8 s, `Velocidade` 30% | Áudio longo que entra e sai devagar; pouca resposta à força |
-| Pluck | Ataque 1 ms, decaimento 350 ms, sustentação 0%, soltura 250 ms, `Velocidade` 80% | Nota curta e seca, mesmo com tecla apertada |
+| Inicial | Tudo nos padrões | Ponto de partida: ataque de 2 ms, sustentação 100%, soltura de 200 ms |
+| Instrumento | Ataque 3 ms, decaimento 500 ms, sustentação 100%, soltura 350 ms, `Sens. vel.` 80% | Áudio de uma nota tocado como teclado: soltura um pouco mais longa e resposta à força |
+| Percussão (até o fim) | `Modo` `Até o fim`, ataque 0,5 ms, soltura 50 ms, `Sens. vel.` 80% | Golpes e vozes curtas: a nota sempre toca inteira, com ataque instantâneo. Com zonas, o `Modo` dele não vale, mas o envelope curto vale |
+| Pad lento | Ataque 0,8 s, decaimento 1 s, sustentação 90%, soltura 1,8 s, `Sens. vel.` 30% | Áudio longo que entra e sai devagar; pouca resposta à força |
+| Pluck | Ataque 1 ms, decaimento 350 ms, sustentação 0%, soltura 250 ms, `Sens. vel.` 80% | Nota curta e seca, mesmo com tecla apertada |
 
 O rótulo do seletor compara só os parâmetros de timbre: como a `Nota base` e a `Afinação` são ignoradas, o preset continua marcado mesmo depois de você mudá-las.
 

@@ -48,7 +48,17 @@ Abre ao tocar no botão `120 BPM · 4/4`.
 | **BPM** (campo de número) | Andamento do projeto. Só aceita dígitos; vem com o valor atual selecionado, então digitar substitui. | 20 a 400, inteiro. Fora disso: `Entre 20 e 400.` | Enter confirma. |
 | **Tempos por compasso** (lista) | Numerador da fórmula de compasso. | `1/4` a `12/4`. O denominador é sempre 4. | Só existe compasso sobre semínima (`/4`); não há 6/8 nem 7/8. |
 | **Cancelar** | Fecha sem mudar nada. | | |
-| **Salvar** | Aplica o andamento e o compasso. Entra no desfazer e é gravado também no servidor. | | |
+| **Salvar** | Aplica o andamento e o compasso ao documento do projeto. Entra no desfazer. O servidor recebe uma cópia depois, sem travar nada (ver "O andamento e o servidor" abaixo). | | Fica valendo na hora, com ou sem rede |
+
+#### O andamento e o servidor
+
+O andamento e o compasso são **do documento do projeto**, como as faixas e os clipes: quem manda é o valor que está na barra. O servidor guarda só um espelho (para a lista de projetos), enviado em segundo plano, no melhor esforço:
+
+- Sem rede, com o servidor fora, ou sem sessão, **salvar não falha nem avisa erro**: o valor novo vale no aparelho e o envio do espelho fica pendente.
+- O espelho é reenviado quando o documento é salvo de novo (0,4 s depois de qualquer edição, e também depois de **desfazer** e **refazer** um andamento), ao abrir o projeto, depois de aplicar uma versão vinda do servidor e quando a sincronização volta a ficar `Sincronizado`.
+- Só é enviado o que difere do último valor que o servidor confirmou; o andamento vai arredondado ao inteiro, entre 20 e 400.
+- O andamento e o compasso também viajam dentro do documento sincronizado: um outro aparelho que baixa a versão nova do projeto traz o andamento e o compasso dela (não ficam mais os do cadastro do projeto). Ver [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md).
+- O subtítulo do projeto (`120 BPM · 4/4`, embaixo do nome, no cabeçalho da tela) lê o documento aberto e acompanha o botão da barra, inclusive ao desfazer. Antes de o estúdio abrir, mostra o valor do servidor. Se o andamento do documento não for inteiro, o subtítulo mostra uma casa decimal (`120.5 BPM`); o botão da barra sempre arredonda. O cartão do projeto na lista `Projetos` lê o espelho do servidor e pode ficar para trás enquanto o envio estiver pendente.
 
 O que muda ao trocar o andamento: os clipes ficam na mesma batida de início. Clipes de áudio sem warp mantêm a duração em segundos, então o fim deles anda em batidas; com warp ligado o clipe acompanha o andamento do projeto (ver [Warp e altura](03b-warp-e-altura.md)). Clipes de notas ficam iguais em batidas e passam a tocar mais rápido ou mais devagar. Não dá para mudar o andamento nem o compasso gravando (`Pare a gravação para mudar o andamento.`).
 
@@ -87,7 +97,7 @@ O encaixe vale para: clicar ou arrastar na régua, clicar numa raia para posicio
 |---|---|---|
 | **Enquadrar tudo (Z)** | Ajusta zoom e rolagem para caber o projeto inteiro (até o último clipe, marcador ou o fim do loop ligado), com 4% de folga; no mínimo um compasso de largura. | Z |
 | **Enquadrar a seleção (Shift+Z)** | Faz o mesmo com o clipe selecionado; sem clipe, enquadra tudo. | Shift+Z |
-| **Faixas pequena (P)**, **Faixas média (M)**, **Faixas grande (G)** | Altura das faixas: 70%, 100% (padrão) e 150% da altura normal. Um item fica marcado. | sem atalho (o P, M e G entre parênteses só identificam o tamanho) |
+| **Faixas pequenas**, **Faixas médias**, **Faixas grandes** | Altura das faixas: 70%, 100% (padrão) e 150% da altura normal. Um item fica marcado. | sem atalho |
 | **Seguir o cursor** (marcável) | O mesmo que o botão de alvo. | |
 | **Régua em minutos e segundos** (marcável) | Troca a régua entre compassos e minutos:segundos. O mesmo que clicar no canto esquerdo da régua. | |
 
@@ -203,6 +213,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 - **Web e Android:** os botões são os mesmos; no celular Importar e Exportar mostram só o ícone, a barra fica embaixo e o painel de baixo ocupa 60% da altura livre.
 - **Teclas com o teclado musical ligado:** as teclas dele (A W S E D F T G Y H U J K O L P para notas, Z e X para a oitava, C e V para a intensidade) passam na frente dos atalhos, com ou sem Shift. Ou seja, S (cortar), L e Shift+L (loop), E, F, Z (enquadrar), X (mixer) e C (metrônomo) deixam de funcionar como atalho. Continuam valendo Espaço, Enter, R, I, M, `[`, `]`, + e −, ?, Esc, Delete e tudo com Ctrl (o Ctrl+K desliga o teclado musical).
 - O andamento digitado é sempre inteiro (20 a 400); o botão da barra mostra o valor arredondado.
+- **Offline:** mudar o andamento ou o compasso funciona sem rede e o valor fica no projeto (reabrir o projeto não o desfaz). Só a cópia no servidor, usada pela lista de projetos, espera a rede voltar. `(lido do código e coberto por testes automáticos; não visto no Chrome)`
 
 ## Atalhos
 

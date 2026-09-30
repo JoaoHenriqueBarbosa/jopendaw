@@ -7,7 +7,7 @@ Tudo abaixo supõe compasso de 4 tempos. Nas notações, `C4@0(4)` é a nota C4 
 ## Ingredientes
 
 - [Editor de notas](../manual/05-piano-roll.md): Lápis, grade, `Nota:`, seleção, `Ctrl+A`, `Ctrl+D`, `Shift+↓`, fim do clipe na régua, painel de velocidade, `Quantizar`.
-- [Ferramentas MIDI](../manual/05b-ferramentas-midi.md): `Escala…`, `Prender na escala`, `Acorde no clique`, `Arpejador…`, `Humanizar…`, `Escalar o tempo`, `Fantasmas`.
+- [Ferramentas MIDI](../manual/05b-ferramentas-midi.md): `Escala…`, `Prender na escala`, `Manter o encaixe ao mudar a altura`, `Prender seleção na escala`, `Acorde no clique`, `Arpejador…`, `Humanizar…`, `Escalar o tempo`, `Fantasmas`.
 - Duas faixas de instrumento melódico (por exemplo, uma de teclas para os acordes e uma de baixo) mais uma terceira opcional para a melodia. Para criar cada clipe: dois cliques no vazio da faixa, que abre um clipe de 1 compasso já no editor.
 
 ## Passo a passo
@@ -68,7 +68,7 @@ Faça na faixa de teclas, com o arpejo pronto.
 3. Aperte `Ctrl+D`: a seleção (2 compassos) é copiada logo depois, e o clipe continua com 4 compassos, agora com a progressão tocada duas vezes.
 4. Repita o passo 2 na faixa de baixo para os dois acompanharem.
 
-Para a versão em **metade** da velocidade: `Escalar o tempo > ×2 (dobro)` faz a progressão ocupar 8 compassos. O clipe **não** cresce sozinho: puxe o fim do clipe para o fim do compasso 8, senão a segunda metade fica escurecida e muda.
+Para a versão em **metade** da velocidade: `Escalar o tempo > ×2 (dobro)` faz a progressão ocupar 8 compassos. O clipe cresce sozinho até o fim do compasso 8, porque as notas passariam do fim dele (um `Ctrl+Z` desfaz as notas e o comprimento juntos) (testado só por testes automáticos). Se depois você quiser o clipe menor de novo, puxe a bandeirinha do fim na régua.
 
 ### 6. Uma melodia que nunca erra nota
 
@@ -76,7 +76,7 @@ Para a versão em **metade** da velocidade: `Escalar o tempo > ×2 (dobro)` faz 
 2. `Escala`, `Tônica` `C`, `Escala` `Pentatônica maior`, `Aplicar` (`Prender na escala` ligado). A grade só realça C, D, E, G e A.
 3. Ligue `Ferramentas > Fantasmas > Outras faixas de instrumento` para ver os acordes e o baixo de fundo.
 4. Grade `1/8`, `Nota: grade`. Com o Lápis, clique onde quiser: qualquer clique numa linha escurecida vai para a nota mais próxima da escala (em empate, a de baixo; por exemplo `F4` vira `E4` e `B4` vira `C5`).
-5. Arraste as notas para cima e para baixo: cada linha nova também é encaixada.
+5. Arraste as notas para cima e para baixo: cada linha nova também é encaixada. As setas `↑`/`↓` só encaixam se você ligar `Ferramentas > Escala e acordes > Manter o encaixe ao mudar a altura` (vem desligado); com ele ligado, cada aperto pula para a nota seguinte da escala.
 6. Troque a escala para `Maior` (ou `Menor natural`, `Dórico`) em `Escala…` para ver a mesma melodia em outra cor; as notas já escritas não se movem sozinhas.
 
 ## Variações
@@ -89,6 +89,8 @@ Para a versão em **metade** da velocidade: `Escalar o tempo > ×2 (dobro)` faz 
 - **Baixo staccato:** depois do arpejo do baixo, `Ferramentas > Seleção > Staccato…` com `Duração` `50%` deixa as notas mais curtas e secas; para o contrário, `Legato` (`Shift+L`) liga cada nota à seguinte.
 - **Baixo copiando as fundamentais:** em vez dos fantasmas, no clipe de teclas selecione só as fundamentais com `Shift` + clique (a primeira sem `Shift`), `Ctrl+C`, abra o clipe do baixo, ponha o cursor no começo (clique na régua) e `Ctrl+V`; as notas coladas já ficam selecionadas para o `Shift+↓`.
 - **Progressão em outro tom:** mude a `Tônica` em `Escala…` (por exemplo para `G`), apague as notas e refaça o passo 1.6 nas linhas de `G`, `Em`, `C`, `D`.
+- **Encaixar uma melodia que já existe:** selecione as notas (ou nada, para todas) e use `Ferramentas > Escala e acordes > Prender seleção na escala`: cada nota fora da escala do clipe vai para a nota da escala mais próxima (em empate, a de baixo), num passo só do `Ctrl+Z`. Serve para consertar uma linha tocada ao vivo ou colada de outro tom (o item precisa de escala no clipe; não depende de `Prender na escala`) (testado só por testes automáticos).
+- **Transpor sem sair da escala:** ligue `Prender na escala` e `Manter o encaixe ao mudar a altura` e transponha com `↑`/`↓`; `Inverter na altura` e `Inserir acorde…` também passam a respeitar a escala (testado só por testes automáticos).
 - **Melodia com resposta:** com `Outros clipes da faixa` ligado (já vem ligado), um segundo clipe da mesma faixa mostra o primeiro em cinza, para escrever uma frase que responda à outra.
 
 ## Por que funciona
@@ -97,7 +99,7 @@ Para a versão em **metade** da velocidade: `Escalar o tempo > ×2 (dobro)` faz 
 - **Uma nota é um acorde de um som só.** O arpejador trata cada grupo de notas que começam juntas como um acorde; um grupo de uma nota vira repetição (e, com mais oitavas, oitavas alternadas), o que dá baixo rítmico sem escrever cada colcheia.
 - **Ferramentas em série.** Cada ferramenta lê a seleção que a anterior deixou (as notas resultantes ficam selecionadas): arpejar, humanizar e quantizar sem mexer no mouse entre elas.
 - **Humanizar e quantizar são opostos com dose regulável.** `Humanizar` espalha o início e a velocidade; `Quantizar` com força menor que 100% puxa parte do caminho de volta. Combinando as duas, você escolhe quanto de folga sobra.
-- **Escalar o tempo mantém a proporção.** Ele multiplica posições e durações a partir da primeira nota, então o desenho rítmico não muda, só a velocidade. Notas que passam do fim do clipe ficam escondidas, por isso o clipe é esticado à mão.
+- **Escalar o tempo mantém a proporção.** Ele multiplica posições e durações a partir da primeira nota, então o desenho rítmico não muda, só a velocidade. Se as notas passam do fim do clipe, o clipe cresce sozinho até o compasso que as contém (senão elas ficariam escondidas e mudas).
 - **Fantasmas ajudam a harmonia a ser visual.** Ver os acordes atrás do baixo evita ter que decorar as notas.
 
 ## Se der errado
@@ -110,4 +112,4 @@ Para a versão em **metade** da velocidade: `Escalar o tempo > ×2 (dobro)` faz 
 - **Os fantasmas não aparecem:** confira `Outras faixas de instrumento`, se a outra faixa é do mesmo tipo (melódica com melódica; bateria com bateria) e se o clipe dela tem notas no mesmo trecho do arranjo.
 - **O baixo ficou agudo demais:** selecione as notas e `Shift+↓` mais uma vez (uma oitava por aperto). O editor só mostra da C0 à C8, então o baixo mais grave possível é a C0 (12 no MIDI).
 - **Humanizei demais:** `Ctrl+Z` desfaz tudo o que a ferramenta fez (é um passo só). Reduza `Tempo`, mude a `Semente` e refaça. Os valores de 100% chegam a 0,125 tempo (1/32 de nota) de deslocamento para cada lado.
-- **Uma nota escorregou para fora da escala depois de `Inserir acorde` ou transposição por setas:** esses comandos não passam pelo encaixe. Se importa, mova a nota uma linha com o mouse (mover de linha aplica o encaixe).
+- **Uma nota escorregou para fora da escala depois de `Inserir acorde…`, `Inverter na altura` ou transposição por setas:** por padrão esses comandos não passam pelo encaixe. Ligue `Manter o encaixe ao mudar a altura` (com `Prender na escala` ligado) para as próximas vezes, e para consertar as que já saíram, selecione-as e use `Prender seleção na escala`.

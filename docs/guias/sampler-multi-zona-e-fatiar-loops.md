@@ -9,7 +9,7 @@
 | Faixa `Sampler`, cartão `ZONAS` (mapa de teclado e editor da zona) | Espalhar áudios pelo teclado, por força do toque, e ajustar cada um | [04c Sampler](../manual/04c-sampler.md) |
 | `Fatiar sample…` | Cortar um loop em partes e dar uma nota a cada uma | [04c Sampler](../manual/04c-sampler.md#fatiar-sample) |
 | `Duplicar a zona` e `Round-robin` | Camadas e variações sem refazer tudo | [04c Sampler](../manual/04c-sampler.md#o-editor-da-zona) |
-| Envelope e `Velocidade` do sampler | Soltura natural e quanto a força do toque muda o volume | [04c Sampler](../manual/04c-sampler.md), [04 Painel de instrumento](../manual/04-painel-de-instrumento.md) |
+| Envelope e `Sens. vel.` do sampler | Soltura natural e quanto a força do toque muda o volume | [04c Sampler](../manual/04c-sampler.md), [04 Painel de instrumento](../manual/04-painel-de-instrumento.md) |
 | Piano roll e painel `Vel.` | Escrever as notas e a força de cada uma | [05 Piano roll](../manual/05-piano-roll.md) |
 | Ferramentas MIDI (`Humanizar`, `Rampa de velocidade`) | Variar força e tempo; passear pelas camadas | [05b Ferramentas MIDI](../manual/05b-ferramentas-midi.md) |
 | Efeitos `Compressor`, `Reverb`, `EQ`, `Filtro` | Cola, espaço e acabamento sobre o sampler inteiro | [06c Painel de efeitos](../manual/06c-painel-de-efeitos.md), [06d Referência dos efeitos](../manual/06d-efeitos-referencia.md) |
@@ -30,8 +30,8 @@ Resultado: um piano com duas regiões do teclado, cada uma com uma gravação su
 **1. Faixa e envelope**
 
 1. `Nova faixa` > `Sampler`; abra `Instrumento` (`I`).
-2. Escolha o preset `Instrumento` (ataque 3 ms, soltura 350 ms, `Velocidade` 80%).
-3. No cartão `GERAL`, baixe `Velocidade` para 35%: as camadas já cuidam da dinâmica.
+2. Escolha o preset `Instrumento` (ataque 3 ms, soltura 350 ms, `Sens. vel.` 80%).
+3. No cartão `GERAL`, baixe `Sens. vel.` para 35%: as camadas já cuidam da dinâmica.
 
 **2. A região grave (C3): camada suave**
 

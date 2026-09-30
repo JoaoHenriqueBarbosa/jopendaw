@@ -60,8 +60,8 @@ Visor: quatro barras (`Osc 1`, `Osc 2`, `Sub`, `Ruído`) com o nível de cada fo
 | Sub | Nível do sub-oscilador: senoide uma oitava abaixo da nota | 0 a 100%, padrão 0% | Firma o grave; fica no centro do estéreo e fora do uníssono |
 | Ruído | Nível do ruído branco | 0 a 100%, padrão 0% | Serve para sopro, pancada e efeitos; passa pelo filtro como o resto |
 | Uníssono | Número de cópias de cada oscilador tocando juntas | 1 a 7, inteiro, padrão 1 | O volume é normalizado (as cópias não somam volume); mais cópias, som mais largo e mais denso |
-| Espalhar | Abertura de afinação entre a cópia mais grave e a mais aguda | 0 a 100 ct, padrão +20 ct | As cópias se distribuem de -metade a +metade do valor; 30 a 35 ct dão o supersaw. Apagado com `Uníssono` em 1 |
-| Estéreo | Quanto as cópias se espalham entre esquerda e direita | 0 a 100%, padrão 50% | 0% deixa o uníssono mono; 100% abre ao máximo. Apagado com `Uníssono` em 1 |
+| Desafino | Abertura de afinação entre a cópia mais grave e a mais aguda | 0 a 100 ct, padrão +20 ct | As cópias se distribuem de -metade a +metade do valor; 30 a 35 ct dão o supersaw. Apagado com `Uníssono` em 1 |
+| Espalhar | Quanto as cópias se espalham entre esquerda e direita | 0 a 100%, padrão 50% | 0% deixa o uníssono mono; 100% abre ao máximo. Apagado com `Uníssono` em 1 |
 
 Com `Uníssono` em 1, a nota parte sempre da mesma fase da onda (ataque igual toda vez); com mais cópias, cada uma parte de uma fase sorteada, para as cópias não soarem como uma só.
 
@@ -109,7 +109,7 @@ Visor: a onda do LFO, com mais ciclos quanto mais rápido (de 1 a 16 ciclos na t
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Onda | Forma do LFO | Lista: `Senoide`, `Triângulo`, `Serra`, `Quadrada`, `Aleatório`; padrão `Senoide` | `Aleatório` é sample and hold: um valor novo sorteado a cada ciclo (degraus) |
-| Velocidade | Frequência do LFO | 0,05 a 30 Hz, logarítmico, padrão 5.00 Hz | É em Hz, não sincroniza com o andamento. Apagado quando os destinos estão em zero |
+| Taxa | Frequência do LFO | 0,05 a 30 Hz, logarítmico, padrão 5.00 Hz | É em Hz, não sincroniza com o andamento. Apagado quando os destinos estão em zero |
 | Vibrato | Quanto o LFO oscila a afinação (para cima e para baixo) | 0 a 12 st, padrão +0 st | Vibrato natural: 0,05 a 0,1 st a 5 a 6 Hz |
 | Filtro | Quanto o LFO oscila o corte, em oitavas (para cima e para baixo) | 0 a 4 oit, padrão 0.0 oit | Wobble: 2 a 3 oit numa onda lenta |
 | Tremolo | Quanto o LFO baixa o volume | 0 a 100%, padrão 0% | 100% chega ao silêncio no fundo da onda |
@@ -122,7 +122,7 @@ Visor de texto: `Mono · legato` (com `Vozes` em 1) ou `Poli · N vozes`, e emba
 |---|---|---|---|
 | Glide | Tempo que a afinação leva para deslizar da nota anterior para a nova (portamento) | 0 a 2 s, linear, padrão 0 (sem glide) | O tempo é o de percorrer cerca de 99% do caminho. Vale também no modo polifônico, deslizando da última nota tocada |
 | Vozes | Polifonia máxima | 1 a 16, inteiro, padrão 8 | Em 1 o instrumento é monofônico com legato: com uma tecla apertada, uma nova só muda a altura (sem reatacar os envelopes); ao soltar, volta para a tecla anterior que ainda está apertada. Baixar `Vozes` com notas tocando faz as sobras saírem em fade |
-| Velocidade | Sensibilidade à velocidade do toque (velocity), não uma velocidade de reprodução | 0 a 100%, padrão 70% | Em 0% todas as notas soam com o mesmo volume; em 100% o volume cresce com o quadrado da força (metade da força dá -12 dB). Também reduz o efeito do envelope do filtro nas notas fracas |
+| Sens. vel. | Sensibilidade à velocidade do toque (velocity), não uma velocidade de reprodução | 0 a 100%, padrão 70% | Em 0% todas as notas soam com o mesmo volume; em 100% o volume cresce com o quadrado da força (metade da força dá -12 dB). Também reduz o efeito do envelope do filtro nas notas fracas |
 | Volume | Nível de saída do instrumento | 0 a 150%, padrão 70% | Vem antes do fader da faixa no mixer; o volume por voz já deixa uma nota perto de -10 dBFS |
 
 ## Presets
@@ -148,9 +148,9 @@ O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categ
 
 | Preset | Caráter |
 |---|---|
-| Lead serra | Duas serras em uníssono 5 (18 ct, estéreo 70%), corte em 3,6 kHz, vibrato leve (5,5 Hz, 0,08 st), mono com glide de 60 ms |
+| Lead serra | Duas serras em uníssono 5 (18 ct, `Espalhar` 70%), corte em 3,6 kHz, vibrato leve (5,5 Hz, 0,08 st), mono com glide de 60 ms |
 | Lead quadrado | Quadrada com pulso 42% mais outra uma oitava acima (35%), corte em 2,6 kHz, ressonância 35% e vibrato; mono com glide de 80 ms. Som mais "oco" e nasal |
-| Supersaw | Duas serras em uníssono 7 com 35 ct de espalhamento e estéreo 100%, corte em 6 kHz e soltura de 350 ms. Parede de serras típica de trance |
+| Supersaw | Duas serras em uníssono 7 com 35 ct de `Desafino` e `Espalhar` 100%, corte em 6 kHz e soltura de 350 ms. Parede de serras típica de trance |
 | Chiptune | Quadrada com pulso 25%, sem oscilador 2, filtro totalmente aberto (20 kHz) e sem envelope, 4 vozes. O pulso cru dos consoles de 8 bits |
 
 ### Pads
@@ -158,7 +158,7 @@ O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categ
 | Preset | Caráter |
 |---|---|
 | Pad quente | Duas serras em uníssono 3, corte em 900 Hz que abre devagar (ataque do filtro 1,2 s), ataque de 0,9 s, soltura de 1,8 s e LFO triangular lento no corte; 12 vozes. Colchão macio |
-| Pad estéreo | Serra mais quadrada uma oitava acima, uníssono 7 (28 ct, estéreo 100%), corte em 2,2 kHz, ataque de 1,4 s, soltura de 2,6 s e LFO de 0,18 Hz no corte; 10 vozes. Largo e brilhante |
+| Pad estéreo | Serra mais quadrada uma oitava acima, uníssono 7 (28 ct, `Espalhar` 100%), corte em 2,2 kHz, ataque de 1,4 s, soltura de 2,6 s e LFO de 0,18 Hz no corte; 10 vozes. Largo e brilhante |
 | Cordas | Duas serras (9 ct de diferença) em uníssono 4, corte em 3,2 kHz, ataque de 350 ms e vibrato leve de 5,5 Hz; 12 vozes |
 | Metais | Duas serras em uníssono 2, corte em 700 Hz que abre em 70 ms com envelope de 45% (o "sopro" do naipe), drive 15% e vibrato; sensibilidade à velocidade alta (80%); 8 vozes |
 
@@ -198,7 +198,7 @@ O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categ
 ### Um pad largo do zero
 
 1. No `OSCILADOR 1` deixe `Serra`; no `OSCILADOR 2` `Serra` com `Desafinação` em -9 ct.
-2. Na `MISTURA`, `Uníssono` 4, `Espalhar` 16 ct, `Estéreo` 80%.
+2. Na `MISTURA`, `Uníssono` 4, `Desafino` 16 ct, `Espalhar` 80%.
 3. No `FILTRO`, `Corte` 1,2 kHz, `Envelope` +25%; no `ENVELOPE DO FILTRO`, `Ataque` 1 s e `Decaimento` 2 s.
 4. Na `AMPLITUDE`, `Ataque` 0,8 s, `Sustentação` 85% e `Soltura` 1,8 s.
 5. No `GERAL`, `Vozes` 12.
@@ -207,8 +207,8 @@ O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categ
 
 1. Comece de `Inicial`. Em `OSCILADOR 2`, `Semitons` -12; na `MISTURA`, `Sub` 40%.
 2. No `FILTRO`, `Corte` 300 Hz, `Ressonância` 50%, `Envelope` 0%.
-3. No `LFO`, `Onda` `Senoide`, `Velocidade` 3 Hz, `Filtro` 3 oit.
-4. No `GERAL`, `Vozes` 1 para o baixo ser mono. Ajuste `Velocidade` (do LFO) para acelerar ou desacelerar o balanço.
+3. No `LFO`, `Onda` `Senoide`, `Taxa` 3 Hz, `Filtro` 3 oit.
+4. No `GERAL`, `Vozes` 1 para o baixo ser mono. Ajuste `Taxa` (do LFO) para acelerar ou desacelerar o balanço.
 
 ### Uma nota que abre sozinha
 
@@ -227,8 +227,8 @@ O seletor de presets do cabeçalho tem 22 presets do sintetizador, em sete categ
 ## Limites e pegadinhas
 
 - **`Pulso` é dos dois osciladores.** Ele fica no cartão `OSCILADOR 1`, mas a largura vale também para o oscilador 2 quando este é `Quadrada`.
-- **Rótulos repetidos.** `Velocidade` aparece no `LFO` (frequência em Hz) e no `GERAL` (sensibilidade à força do toque, em %); `Filtro` aparece como grupo (cartão `FILTRO`) e como destino do LFO (oitavas); `Envelope` é o quanto o filtro se move (cartão `FILTRO`), não o envelope em si (o cartão `ENVELOPE DO FILTRO`).
-- **`Espalhar` é afinação; `Estéreo` é panorama.** Apesar do nome, `Espalhar` não abre o estéreo: quem abre é `Estéreo`.
+- **Rótulos repetidos.** `Filtro` aparece como grupo (cartão `FILTRO`) e como destino do LFO (oitavas); `Envelope` é o quanto o filtro se move (cartão `FILTRO`), não o envelope em si (o cartão `ENVELOPE DO FILTRO`).
+- **`Desafino` é afinação; `Espalhar` é panorama.** `Desafino` (em cents) abre a diferença de afinação entre as cópias do uníssono; quem abre o estéreo é `Espalhar` (em %).
 - **Só um filtro, de 12 dB por oitava**, com três tipos; não há filtro em série ou em paralelo, nem modulação por matriz. O LFO tem três destinos fixos, e não sincroniza com o andamento.
 - **O LFO não recomeça a cada nota**: ele corre livre para todas as vozes, então duas notas iguais tocadas em momentos diferentes pegam fases diferentes do vibrato.
 - **Sub e ruído não entram no uníssono**: ficam mono, no centro.

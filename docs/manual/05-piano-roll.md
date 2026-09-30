@@ -38,7 +38,7 @@ O editor mostra um clipe por vez. A borda de cima da barra de ferramentas fica n
 | Gráfico de barras (tooltip `Ocultar a faixa de velocidade e controles` / `Mostrar a faixa de velocidade e controles`) | Liga e desliga a faixa embaixo da grade, que mostra a velocidade ou um controle (pitch bend, modulação, sustain; ver [Faixa de controle](#faixa-de-controle)) | Ligado por padrão | Desligando, a grade ganha a altura dela |
 | Alto-falante (tooltip `Não tocar as notas ao editar` / `Tocar as notas ao editar`) | Liga e desliga o som de prévia ao criar, mover, transpor e tocar as teclas | Ligado por padrão | O teclado lateral toca mesmo com a prévia desligada |
 | `Enquadrar as notas` (ícone de tela cheia) | Ajusta o zoom horizontal para caber o clipe e as notas que passam dele, e a altura das linhas para caber as notas | Zoom horizontal entre 24 e 320 px por tempo (64 a 320 no toque) | Bom depois de colar ou de escalar o tempo |
-| `?` (ícone de ajuda; toque para abrir) | Mostra um resumo dos gestos por 12 segundos | Texto fixo | O resumo é o mesmo destas tabelas |
+| `?` (ícone de ajuda; toque para abrir) | Mostra um resumo dos gestos por 12 segundos | Texto fixo; no Mac o texto diz `⌘` no lugar de `Ctrl`. Inclui a linha `Com o teclado do computador ligado, K, J e Shift+H/L viram notas (atalhos suspensos).` | O resumo é o mesmo destas tabelas |
 | Contador (`3 notas`, `1 nota`, `2 de 5 selecionadas`, `1 de 5 selecionada`) | Total de notas ou quantas estão selecionadas | Só leitura | Serve para conferir o que uma ferramenta vai afetar |
 
 As escolhas de grade, duração de nota, ferramenta, força da quantização, faixa de velocidade, qual faixa de controle está à mostra, `Linha reta`, prévia sonora, fantasmas, "prender na escala" e "acorde no clique" valem para a sessão toda (de um clipe para outro) e voltam ao padrão quando a página é recarregada. A escala do clipe e os pontos de pitch bend, modulação e sustain, ao contrário, são gravados dentro do clipe.
@@ -91,7 +91,7 @@ O nome das notas usa letras em inglês com sustenidos (`C4`, `D#4`); C4 (dó cen
 | Bandeirinha e linha colorida no fim do clipe | Marcam o fim do clipe. Arrastar muda a duração do clipe | Mínimo: um passo da grade (1/16 com `Livre`/`Alt`). Se você soltar no comprimento original, nada é gravado | Puxar a bandeirinha também vale na grade, na linha do fim |
 | Linha branca com triângulo | Cursor de reprodução | Com "Seguir o cursor na reprodução" ligado no transporte (padrão), a janela acompanha o cursor quando ele sai dela | |
 
-**Fim do clipe e "loop".** O clipe de notas não tem laço próprio: ele toca uma vez, do início ao fim que você definiu. Tudo o que fica depois do fim (ou antes do início) é escurecido no editor e não toca, mas continua guardado; puxe a bandeirinha para trazer as notas de volta. Duplicar e colar aumentam o clipe até o compasso que contém a última nota nova (se ela começa até 8 compassos depois do fim). O laço de reprodução do projeto é outro recurso, do transporte.
+**Fim do clipe e "loop".** O clipe de notas não tem laço próprio: ele toca uma vez, do início ao fim que você definiu. Tudo o que fica depois do fim (ou antes do início) é escurecido no editor e não toca, mas continua guardado; puxe a bandeirinha para trazer as notas de volta. Duplicar e colar aumentam o clipe até o compasso que contém a última nota nova (se ela começa até 8 compassos depois do fim). As ferramentas do menu `Ferramentas` fazem o mesmo quando empurram o fim das notas para além do que já passava do clipe (`Escalar o tempo` ×2, `Arpejador…`, `Legato`, `Inserir acorde…`...): o clipe cresce até o compasso inteiro que contém a última nota, junto com a transformação, num passo só do `Ctrl+Z`. O clipe nunca encolhe por esse caminho, e notas que já estavam além do fim antes da ferramenta continuam além. O laço de reprodução do projeto é outro recurso, do transporte.
 
 ### Painel de velocidade (`Vel.`)
 
@@ -176,7 +176,7 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 ### Fantasmas e escala na grade
 
 - **Fantasmas** (submenu de `Ferramentas`): notas de outros clipes desenhadas em cinza translúcido, só para referência; não são editáveis e não entram em seleção. `Outros clipes da faixa` vem ligado; `Outras faixas de instrumento` vem desligado. Alinham pelo tempo do arranjo. Faixa de bateria só mostra fantasmas de outras faixas de bateria, e melódica só de melódicas.
-- **Escala:** com escala escolhida, a grade realça as linhas da escala (mais forte na tônica) e escurece as de fora; o teclado ganha pontinhos. Com `Prender na escala`, notas criadas, movidas para outra linha e coladas encaixam na nota da escala mais próxima (em empate, a de baixo; ao arrastar para cima, a de cima). Detalhes no diálogo `Escala do clipe`, em [Ferramentas MIDI](05b-ferramentas-midi.md).
+- **Escala:** com escala escolhida, a grade realça as linhas da escala (mais forte na tônica) e escurece as de fora; o teclado ganha pontinhos. Com `Prender na escala`, notas criadas, movidas para outra linha e coladas encaixam na nota da escala mais próxima (em empate, a de baixo; ao arrastar para cima, a de cima). Ligando também `Manter o encaixe ao mudar a altura` (menu `Ferramentas > Escala e acordes`, desligado por padrão), as setas `↑`/`↓`, `Inverter na altura` e `Inserir acorde…` passam a respeitar a escala; e o item `Prender seleção na escala` leva de uma vez as notas da seleção (ou todas) para a escala. Detalhes no diálogo `Escala do clipe`, em [Ferramentas MIDI](05b-ferramentas-midi.md).
 
 ## Passo a passo
 
@@ -235,13 +235,13 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 
 ## Limites e pegadinhas
 
-- **Notas fora do clipe não tocam.** Depois de `Escalar o tempo` (×2), de mover notas ou de colar além do fim, elas ficam escurecidas: estique o clipe.
+- **Notas fora do clipe não tocam.** Notas movidas ou coladas além do fim ficam escurecidas: estique o clipe. `Escalar o tempo` e as outras ferramentas do menu `Ferramentas` esticam o clipe sozinhas quando o fim das notas passa do fim dele (até o compasso que as contém); se não quiser o clipe maior, use `Ctrl+Z` (volta notas e comprimento juntos) ou puxe a bandeirinha do fim de volta (testado só por testes automáticos).
 - **Não há loop do clipe** dentro do editor; o clipe toca uma vez do começo ao fim que você definiu.
 - As preferências do editor (grade, ferramenta etc.) não são salvas com o projeto; a escala do clipe e as notas são.
-- Com o **teclado musical do computador ligado** (`Ctrl+K`), as letras `A W S E D F T G Y H U J K O L P` tocam notas antes de virarem atalhos: `K`, `J`, `Shift+H` e `Shift+L` não dividem, unem, humanizam nem fazem legato. `Q` e as setas seguem funcionando.
+- Com o **teclado musical do computador ligado** (`Ctrl+K`; o botão da barra superior mostra `C4 · sem atalhos`), as letras `A W S E D F T G Y H U J K O L P` tocam notas antes de virarem atalhos: `K`, `J`, `Shift+H` e `Shift+L` não dividem, unem, humanizam nem fazem legato. `Q` e as setas seguem funcionando.
 - As teclas de edição valem assim que o editor abre (ele nasce ativo) e deixam de valer quando você clica fora dele; um clique de volta dentro do editor o reativa. Com o editor ativo, `Delete` nunca apaga o clipe, só notas (sem seleção não faz nada).
 - Segurar uma seta ou uma tecla repetida é uma edição só no histórico; o histórico guarda os últimos 200 passos.
-- Transpor com as setas, `Inverter na altura` e `Inserir acorde` não passam pela escala: mesmo com `Prender na escala` ligado podem gerar notas fora dela. O encaixe age em criar, mover de linha e colar.
+- Transpor com as setas, `Inverter na altura` e `Inserir acorde…` só respeitam a escala se `Prender na escala` **e** `Manter o encaixe ao mudar a altura` estiverem ligados (o segundo vem desligado). Sem ele, essas operações podem gerar notas fora da escala; o encaixe padrão age só em criar, mover de linha e colar. `Prender seleção na escala` funciona sozinho, sem depender dos dois. Em faixa de bateria, nada disso existe (testado só por testes automáticos).
 - **Controles são do clipe, não das notas.** Colar (`Ctrl+V`), duplicar (`Ctrl+D`), recortar e apagar notas, `Quantizar`, `Humanizar`, `Legato` e `Dividir no cursor` não movem, copiam nem cortam os pontos de bend, modulação e pedal. Só `Escalar o tempo` e `Inverter no tempo` (e, na linha do tempo, cortar, duplicar, mover e aparar o clipe) os levam junto; ver [Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas).
 - As ferramentas do menu `Ferramentas` ficam apagadas num clipe sem notas, mesmo que ele tenha pontos de controle.
 - A faixa de controle não olha a seleção de notas: `Limpar` apaga o controle do clipe todo.

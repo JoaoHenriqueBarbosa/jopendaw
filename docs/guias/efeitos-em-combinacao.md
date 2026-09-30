@@ -189,7 +189,7 @@ Duas convenções para todas as receitas:
 
 ### Ingredientes
 
-- Faixa de sintetizador com o som de pad: [04a Sintetizador](../manual/04a-sintetizador.md) (o `Uníssono` e o `Estéreo` do próprio instrumento já abrem o som)
+- Faixa de sintetizador com o som de pad: [04a Sintetizador](../manual/04a-sintetizador.md) (o `Uníssono` e o `Espalhar` do próprio instrumento já abrem o som)
 - `Chorus` (preset `Ensemble`): [Chorus](../manual/06d-efeitos-referencia.md#8-chorus-chorus-e-flanger)
 - `EQ` (preset `Corte de graves`): [EQ](../manual/06d-efeitos-referencia.md#1-eq-8-bandas)
 - `Reverb` (preset `Salão`): [Reverb](../manual/06d-efeitos-referencia.md#6-reverb-fdn)
@@ -197,7 +197,7 @@ Duas convenções para todas as receitas:
 
 ### Passo a passo
 
-1. Na faixa do pad, abra o rack e adicione `Chorus`. Aplique `Ensemble` (`Mistura` 50%, `Velocidade` 1,1 Hz, `Profundidade` 50%, `Atraso` 18 ms, `Vozes` 4, `Realimentação` 0%, `Largura` 100%) e baixe a `Mistura` para 40%.
+1. Na faixa do pad, abra o rack e adicione `Chorus`. Aplique `Ensemble` (`Mistura` 50%, `Taxa` 1,1 Hz, `Profundidade` 50%, `Atraso` 18 ms, `Vozes` 4, `Realimentação` 0%, `Largura` 100%) e baixe a `Mistura` para 40%.
 2. Adicione `EQ`, aplique `Corte de graves` e suba a `Frequência` da banda 1 para 150 Hz (24 dB/oit): o baixo e o bumbo têm a região abaixo dela.
 3. Adicione `Reverb` e aplique `Salão` (`Mistura` 28%, `Pré-atraso` 30 ms, `Tamanho` 80%, `Decaimento` 2,8 s, `Abafar` 6 kHz, `Cortar graves` 100 Hz). Suba `Cortar graves` para 200 Hz para o pad não afogar o baixo.
 4. Se preferir a reverb num retorno (mais limpo): tire `Mistura` do insert, faça o retorno com `Salão` em `Mistura` 100% e mande o pad pelo envio em −9 dB.

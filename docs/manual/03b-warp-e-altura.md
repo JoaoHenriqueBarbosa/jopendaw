@@ -69,7 +69,8 @@ O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao and
 ## Combina com
 
 - [Áudio e clipes](03-audio-e-clipes.md): aparar, cortar e fades; todos valem sobre o som já processado (os cortes e fades acompanham a escala do esticamento).
-- [Áudio para MIDI](03d-audio-para-midi.md): a conversão lê o arquivo **original**, sem warp, transposição ou reverso (ver os limites lá).
+- [Áudio para MIDI](03d-audio-para-midi.md): a análise lê o arquivo **original**, mas as notas criadas respeitam o warp (o andamento do próprio áudio vira a régua das batidas), somam a transposição e espelham no reverso, para caírem alinhadas com o clipe como ele toca. As notas são gravadas na hora da conversão: mudar o warp depois não as move (ver "Coerência com o clipe" lá).
+- [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe): `Ganho do clipe…`, outro item do mesmo menu, muda o volume do clipe; o warp não mexe nele.
 - [Mixer](06-mixer.md): o clipe esticado passa pela cadeia de efeitos da faixa como qualquer outro.
 
 ## Limites e pegadinhas

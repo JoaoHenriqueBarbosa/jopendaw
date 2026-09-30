@@ -2,7 +2,7 @@
 
 > O jeito de trabalhar de quem não quer soltar o teclado: as teclas do estúdio combinadas em sequências (ensaiar, marcar, cortar, gravar, escrever notas, ajustar o som), com as regras que decidem quando uma tecla pega; cerca de 15 minutos para treinar as sequências e passar a usá-las sem olhar.
 
-As tabelas de teclas estão em [02 Transporte](../manual/02-transporte.md), [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md), [05 Piano roll](../manual/05-piano-roll.md) e [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md); o que vem abaixo é a conferência delas com o código (`app/lib/screens/project_screen.dart`, `app/lib/daw/piano_roll_input.dart`, `app/lib/daw/controller.dart`) e a costura em sequências. A janela `Atalhos do teclado` (tecla `?`) lista as mesmas teclas em grupos.
+As tabelas de teclas estão em [02 Transporte](../manual/02-transporte.md), [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md), [05 Piano roll](../manual/05-piano-roll.md) e [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md); o que vem abaixo é a conferência delas com o código (`app/lib/screens/project_screen.dart`, `app/lib/daw/piano_roll_input.dart`, `app/lib/daw/controller.dart`) e a costura em sequências. A janela `Atalhos do teclado` (tecla `?`) lista as mesmas teclas em 8 grupos, inclusive o grupo `Suspensos enquanto o teclado do computador está ligado` (conferida com o código em `15670b7`).
 
 ## Ingredientes
 
@@ -11,7 +11,7 @@ As tabelas de teclas estão em [02 Transporte](../manual/02-transporte.md), [02b
 | Transporte: `Espaço`, `Enter`/`Home`, `R`, `L`, `C`, `Z`, `+`, `−` | Tocar, parar, gravar, loop, metrônomo, enquadrar, zoom | [02 Transporte](../manual/02-transporte.md) |
 | Marcadores e seções: `M`, `Shift+M`, `[`, `]`, `Shift+L` | Marcar a música e ensaiar uma parte | [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md) |
 | Clipes: `S`, `Ctrl+D`, `Delete`, `Ctrl+I` | Cortar, repetir, apagar e importar | [02b Timeline e clipes](../manual/02b-timeline-e-clipes.md), [03 Áudio e clipes](../manual/03-audio-e-clipes.md) |
-| Teclado do computador: `Ctrl+K`, `A W S E D F T G Y H U J K O L P`, `Z`/`X`, `C`/`V` | Tocar notas e gravá-las | [03c Gravação](../manual/03c-gravacao.md), [04 Painel de instrumento](../manual/04-painel-de-instrumento.md) |
+| Teclado do computador: `Ctrl+K`, `A W S E D F T G Y H U J K O L P`, `Z`/`X` (oitava por tipo de faixa; a bateria parte do `C2`), `C`/`V` | Tocar notas e gravá-las | [03c Gravação](../manual/03c-gravacao.md), [04 Painel de instrumento](../manual/04-painel-de-instrumento.md) |
 | Editor de notas: `Ctrl+A`, `Ctrl+C/X/V/D`, `Q`, `K`, `J`, `Shift+H`, `Shift+L`, setas | Editar notas sem o mouse | [05 Piano roll](../manual/05-piano-roll.md), [05b Ferramentas MIDI](../manual/05b-ferramentas-midi.md) |
 | Painéis: `X`, `E`, `I`, `F`, `Esc`, `?` | Abrir mixer, editor, instrumento, efeitos | [00 Visão geral](../manual/00-visao-geral.md) |
 | Automação: `Delete`, `Ctrl+A`, `Esc` na raia | Apagar pontos | [07 Automação](../manual/07-automacao.md) |
@@ -25,8 +25,8 @@ Receitas que usam essas teclas: [Primeira batida do zero](primeira-batida-do-zer
 O tratamento de teclas do estúdio tem camadas, nesta ordem: primeiro o teclado musical (se estiver ligado), depois o editor de notas, depois os atalhos gerais. Quase toda tecla que "não funciona" é uma das cinco regras abaixo.
 
 1. **Foco.** As teclas valem com o estúdio em foco e **não** valem enquanto você digita num campo de texto (nome, `BPM`, valor de knob). Os botões da tela não pegam foco: `Espaço` toca mesmo depois de você clicar num botão.
-2. **`Ctrl` ou `Cmd`.** No Windows e no Linux vale `Ctrl`; no Mac, `Cmd` (`⌘`). Os tooltips escrevem `Ctrl` em qualquer sistema; a janela `?` mostra `⌘` no Mac. Nas tabelas abaixo, leia `Ctrl` como `Cmd` no Mac.
-3. **Teclado do computador ligado (`Ctrl+K`).** As letras `A W S E D F T G Y H U J K O L P` viram notas e `Z`, `X`, `C`, `V` viram oitava e intensidade, passando à frente dos atalhos. Continuam valendo: `Espaço`, `Enter`, `Home`, `R`, `I`, `M`, `Shift+M`, `[`, `]`, `+`, `−`, `?`, `Esc`, `Delete`, `Backspace` e tudo com `Ctrl`/`Cmd`. Perdem o atalho: `S` (cortar), `E` (editor), `F` (efeitos), `L` (loop), `C` (metrônomo), `X` (mixer) e `Z` (enquadrar). Com `Ctrl`, `Cmd` ou `Alt` apertados a letra deixa de ser nota. As teclas de nota são as **posições** físicas (a fileira do meio são as brancas, a de cima as pretas), então valem em qualquer layout.
+2. **`Ctrl` ou `Cmd`.** No Windows e no Linux vale `Ctrl`; no Mac, `Cmd` (`⌘`). Os tooltips da barra (`Desfazer (⌘+Z)`), o menu do clipe e a janela `?` mostram `⌘` no Mac e no iOS e `Ctrl` nos outros sistemas. Nas tabelas abaixo, leia `Ctrl` como `Cmd` no Mac.
+3. **Teclado do computador ligado (`Ctrl+K`).** As letras `A W S E D F T G Y H U J K O L P` viram notas e `Z`, `X`, `C`, `V` viram oitava e intensidade, passando à frente dos atalhos. O botão da barra avisa: `C4 · sem atalhos` (a oitava e o lembrete). Continuam valendo: `Espaço`, `Enter`, `Home`, `R`, `I`, `M`, `Shift+M`, `[`, `]`, `=`, `+`, `−`, `?`, `Esc`, `Delete`, `Backspace` e tudo com `Ctrl`/`Cmd`. Perdem o atalho (é exatamente o grupo `Suspensos enquanto o teclado do computador está ligado` da janela `?`): `S` (cortar), `E` (editor), `F` (efeitos), `L` (loop), `C` (metrônomo), `X` (mixer), `Z` e `Shift+Z` (enquadrar) e, no editor de notas, `K` (dividir), `J` (unir), `Shift+H` (humanizar) e `Shift+L` (legato, e o loop do clipe fora do editor). Com `Ctrl`, `Cmd` ou `Alt` apertados a letra deixa de ser nota. As teclas de nota são as **posições** físicas (a fileira do meio são as brancas, a de cima as pretas), então valem em qualquer layout.
 4. **Editor ativo.** As teclas do editor (`Delete`, `Ctrl+D`, `Q`, setas...) só agem nas notas enquanto o editor foi o último lugar clicado. Pelo código ele já nasce ativo ao abrir, e um clique fora dele (no arranjo, na barra) devolve as teclas ao arranjo. Com o editor ativo, `Delete` nunca apaga o clipe: só notas. `(não confirmado em uso: o manual diz que só depois de um clique dentro do editor)`
 5. **Gravando.** `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z` e `Ctrl+I` são engolidos (não fazem nada); `Ctrl+R` fica para o navegador. Cursor, loop, andamento, importar e exportar também ficam travados.
 
@@ -62,13 +62,13 @@ Sequência para decorar: **clique, `]`, `S`, `]`, `S`, clique, `Ctrl+D`, `Ctrl+Z
 Teclas: `Ctrl+K`, `A W S E D F T G Y H U J K O L P`, `Z`, `X`, `C`, `V`, `R`, `Espaço`.
 
 1. Selecione (ou arme) uma faixa de instrumento (mouse). Arme com o ponto `Armar para gravar` se quiser gravar as notas.
-2. `Ctrl+K`: liga o teclado; o botão da barra passa a mostrar `C4` (a tecla `A` é o dó central, nota 60).
-3. Toque: `A` dó, `W` dó#, `S` ré, `E` ré#, `D` mi, `F` fá, `T` fá#, `G` sol, `Y` sol#, `H` lá, `U` lá#, `J` si, `K` dó de cima, `O` dó#, `L` ré, `P` ré#. `Z` e `X` descem e sobem a oitava (de 0 a 8; o botão mostra `C3`, `C5`...). `C` e `V` diminuem e aumentam a intensidade em passos de 10% (de 10% a 100%, padrão 80%; o tooltip do botão mostra o valor). Segurar a tecla não reataca a nota nem repete `Z`, `X`, `C` ou `V`.
+2. `Ctrl+K`: liga o teclado; o botão da barra passa a mostrar `C4 · sem atalhos` (a tecla `A` é o dó central, nota 60). O tooltip lista os atalhos suspensos e a intensidade atual.
+3. Toque: `A` dó, `W` dó#, `S` ré, `E` ré#, `D` mi, `F` fá, `T` fá#, `G` sol, `Y` sol#, `H` lá, `U` lá#, `J` si, `K` dó de cima, `O` dó#, `L` ré, `P` ré#. `Z` e `X` descem e sobem a oitava (de 0 a 8; o botão mostra `C3 · sem atalhos`, `C5 · sem atalhos`...). A oitava é **uma por tipo de faixa** (áudio, sintetizador, bateria, sampler, FM, wavetable): mexer nela na bateria não muda a do sintetizador, e ao trocar de faixa o botão mostra a do tipo novo. Vale a faixa que toca: a selecionada, ou a primeira faixa de instrumento armada. `C` e `V` diminuem e aumentam a intensidade em passos de 10% (de 10% a 100%, padrão 80%; o tooltip do botão mostra o valor). Segurar a tecla não reataca a nota nem repete `Z`, `X`, `C` ou `V`.
 4. `R` grava, mesmo com o teclado ligado (não é tecla de nota): com o transporte parado, um compasso de contagem e a gravação começa. `R`, `Espaço` ou `Enter` param.
-5. Para bateria: `Z` duas vezes leva a oitava ao `C2`, onde ficam as peças: `A` `Bumbo`, `W` `Aro`, `S` `Caixa`, `E` `Palmas`, `F` `Tom grave`, `T` `Chimbal fechado`, `H` `Tom médio`, `U` `Chimbal aberto`, `K` `Tom agudo`, `O` `Prato de ataque`, `P` `Prato de condução` ([04b Bateria](../manual/04b-bateria.md)).
+5. Para bateria: a oitava já parte do `C2` (o botão mostra `C2 · sem atalhos`), onde ficam as peças, sem apertar `Z`: `A` `Bumbo`, `W` `Aro`, `S` `Caixa`, `E` `Palmas`, `F` `Tom grave`, `T` `Chimbal fechado`, `H` `Tom médio`, `U` `Chimbal aberto`, `K` `Tom agudo`, `O` `Prato de ataque`, `P` `Prato de condução` ([04b Bateria](../manual/04b-bateria.md)). O `Cowbell` (nota 56) fica fora do alcance de uma oitava só: com `X` (oitava `C3`) ele cai na tecla `Y`.
 6. `Ctrl+K` de novo desliga o teclado e devolve `S`, `E`, `F`, `L`, `C`, `X` e `Z` aos atalhos. Depois de gravar, `E` abre o editor no clipe selecionado; se ele mostrar `Nenhum clipe aberto`, clique no clipe novo antes. `(não confirmado se o clipe recém-gravado já fica selecionado)`
 
-Sequência para decorar: **`Ctrl+K`, `Z`, `Z`, `R`, (toque), `R`, `Ctrl+K`, `E`**.
+Sequência para decorar: **`Ctrl+K`, `R`, (toque), `R`, `Ctrl+K`, `E`** (numa faixa de bateria; num sintetizador, o mesmo).
 
 Com um controlador MIDI (botão do cabo) as letras ficam livres: deixe o `Ctrl+K` desligado e `S`, `L`, `E`, `F`, `X` seguem valendo enquanto as mãos tocam no controlador.
 
@@ -122,7 +122,7 @@ O arranjo não tem tecla para: selecionar clipe ou faixa; armar (`Armar para gra
 ## Variações
 
 - **Só com o toque, no celular.** Os atalhos só existem com teclado físico conectado `(não confirmado)`. No toque, os mesmos verbos estão nos botões da barra (`Cortar no cursor (S)`, `Duplicar (Ctrl+D)`, `Apagar o clipe (Delete)`, `Desfazer (Ctrl+Z)`); os tooltips guardam a tecla.
-- **Teclado sempre ligado.** Quem toca muito nas teclas pode deixar o `Ctrl+K` ligado o tempo todo e usar só os atalhos que sobram (`Espaço`, `Enter`, `R`, `M`, `[`, `]`, `I`, `Esc`, `+`, `−` e `Ctrl+...`): é possível gravar, marcar, voltar e apagar sem desligar.
+- **Teclado sempre ligado.** Quem toca muito nas teclas pode deixar o `Ctrl+K` ligado o tempo todo e usar só os atalhos que sobram (`Espaço`, `Enter`, `Home`, `R`, `M`, `[`, `]`, `I`, `Esc`, `=`, `+`, `−`, `Delete`, `Backspace` e `Ctrl+...`): é possível gravar, marcar, voltar e apagar sem desligar.
 - **Controlador MIDI com pedal, bend e roda.** Pelo código atual, além das notas e da velocidade, o app lê o pedal de sustain (`CC 64`, ligado a partir de 64), a roda de modulação (`CC 1`) e o pitch bend, e grava os três no clipe (o teclado da tela também tem rodas de bend e modulação). O capítulo 03c ainda diz que eles não são lidos. `(não confirmado em uso)` Com o `Ctrl+K` desligado, as letras seguem livres para os atalhos.
 - **Aprender pela janela.** Com o estúdio em foco, `?` abre `Atalhos do teclado` (o botão `Fechar` sai). Funciona em qualquer layout que produza o caractere `?`.
 
@@ -138,7 +138,7 @@ O arranjo não tem tecla para: selecionar clipe ou faixa; armar (`Armar para gra
 | Sintoma | Causa provável | Como resolver |
 |---|---|---|
 | Nenhuma tecla responde | Você está digitando num campo (nome, `BPM`), ou o foco está em outra janela | Feche o campo (`Enter` ou clique no estúdio) e tente de novo |
-| `S`, `E`, `F`, `L`, `C`, `X` ou `Z` tocam nota em vez de agir | Teclado do computador ligado | `Ctrl+K` desliga (o botão volta a mostrar só o ícone) |
+| `S`, `E`, `F`, `L`, `C`, `X` ou `Z` tocam nota em vez de agir | Teclado do computador ligado (o botão mostra `C4 · sem atalhos`) | `Ctrl+K` desliga (o botão volta a mostrar só o ícone) |
 | `Z` não enquadra e muda a oitava | Idem: com o teclado ligado `Z` e `X` são oitava | `Ctrl+K` |
 | `Delete` apaga notas, não o clipe | O editor é o último lugar clicado | Clique num clipe no arranjo (ou fora do editor) e aperte `Delete` de novo |
 | `Ctrl+D` duplicou o clipe em vez das notas (ou o contrário) | Depende de onde foi o último clique | Clique dentro do editor para notas; no arranjo para clipes |
@@ -149,5 +149,6 @@ O arranjo não tem tecla para: selecionar clipe ou faixa; armar (`Armar para gra
 | `R` recarrega a página | Você apertou `Ctrl+R` ou `Cmd+R` | `R` sozinho grava; com `Ctrl` fica para o navegador |
 | As setas não movem nada | Não há nota selecionada (elas só agem com seleção) | `Ctrl+A` ou selecione com o retângulo |
 | `+` não aproxima | A tecla `=` e o `+` do teclado numérico funcionam; o `+` com `Shift` no teclado principal `(não confirmado)` | Use `=`, o `+` do teclado numérico ou o botão `Aproximar` |
-| No Mac, o tooltip diz `Ctrl` mas nada acontece | No Mac a tecla é `Cmd` | `Cmd+Z`, `Cmd+D`, `Cmd+K`... |
+| A bateria não soa quando toco as letras | A oitava está acima do que a bateria responde (só as notas 35 a 59; o padrão dela é `C2`), ou a faixa que toca não é a bateria (a oitava é por tipo de faixa; toca a selecionada, ou a primeira de instrumento armada) | Olhe o botão do teclado: numa bateria ele deve mostrar `C2 · sem atalhos`; volte com `Z` e confira qual faixa está selecionada ou armada |
+| No Mac o atalho não funciona | No Mac a tecla é `Cmd` (os tooltips agora escrevem `⌘`) | `Cmd+Z`, `Cmd+D`, `Cmd+K`... |
 | `Ctrl+D` adiciona o site aos favoritos | Pode acontecer em alguns navegadores se o app não consumir a tecla `(não confirmado)` | Use o botão `Duplicar (Ctrl+D)` da barra |

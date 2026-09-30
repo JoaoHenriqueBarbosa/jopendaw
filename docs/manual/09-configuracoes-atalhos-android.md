@@ -22,7 +22,7 @@ Abre com duas seções, `ENTRADA DE ÁUDIO` e `GRAVAÇÃO`, e um único botão `
 | Seletor de entrada | Escolhe de onde vem o áudio da gravação e do monitoramento | Primeiro item `Padrão do sistema` (ou `Padrão (<nome do aparelho>)` quando o navegador informa qual é a padrão); depois cada entrada pelo nome; sem permissão os nomes ficam escondidos e aparecem como `Entrada 1`, `Entrada 2`… | Trocar com uma faixa armada reabre a entrada na hora |
 | Item `Entrada desconectada` | Aparece quando a entrada escolhida antes sumiu (cabo puxado, interface desligada) | Em vermelho: `A entrada escolhida não está conectada. Conecte de novo ou escolha outra.` | Se a escolhida não abrir, o app usa a padrão e avisa: `A entrada de áudio escolhida não abriu (foi desconectada?): usando a entrada padrão.` |
 | Botão de atualizar (tooltip `Procurar as entradas de novo (depois de conectar um microfone ou interface)`) | Refaz a lista | Vira um círculo girando enquanto procura ou troca | Use depois de plugar um microfone ou interface |
-| Texto de apoio | Estado da lista | `O navegador pede permissão para o microfone na primeira vez.`; `Nenhuma entrada encontrada. Conecte um microfone ou interface e toque em procurar.`; `Pare a gravação para trocar de entrada.` | O seletor fica desligado durante a gravação e enquanto procura |
+| Texto de apoio | Estado da lista | Na web: `O navegador pede permissão para o microfone na primeira vez.` No Android: `O Android pede permissão para o microfone na primeira vez.` Nos dois: `Nenhuma entrada encontrada. Conecte um microfone ou interface e toque em procurar.`; `Pare a gravação para trocar de entrada.` | O seletor fica desligado durante a gravação e enquanto procura |
 | `Nível` | Barra horizontal com o nível de entrada | Texto: `Mexe enquanto a entrada está aberta: com uma faixa de áudio armada ou monitorando.` | Serve para acertar o ganho do microfone antes de gravar |
 | Aviso vermelho | Erro ao procurar ou trocar a entrada | Mensagens na seção "Permissões" | |
 
@@ -35,21 +35,21 @@ A escolha da entrada é do **aparelho**: fica guardada nele e não vai para a nu
 | Interruptor `Contagem de um compasso` | Liga a contagem: o metrônomo conta um compasso antes de a gravação começar. Legenda: `O metrônomo conta um compasso antes de a gravação começar` | Padrão: ligado, em qualquer projeto novo | Mesmo controle do item `Contagem de um compasso` do menu `Opções de gravação`. Não entra no desfazer |
 | Controle deslizante `Compensação de latência` | Ajusta o quanto o áudio gravado é deslocado para acertar a batida | De −200 a 500 ms, passos de 1 ms, padrão 0 ms | O número aparece sobre o controle enquanto se arrasta; só vale ao soltar |
 | Campo numérico com o sufixo `ms` | O mesmo valor, digitado | Aceita dígitos e o sinal de menos (`-` ou `−`); fora da faixa mostra `De -200 a 500 ms` | Vale ao apertar `Enter`, ao sair do campo ou ao tocar em `Fechar` |
-| Texto de apoio | Como usar | `Quanto o áudio gravado chega atrasado, além do que o navegador já informa: positivo adianta o que for gravado, negativo atrasa. Para medir, grave o metrônomo pelo microfone e ajuste até a batida gravada cair na grade.` | Um número inválido segura a janela aberta com o motivo à vista |
+| Texto de apoio | Como usar | `Quanto o áudio gravado chega atrasado, além do que o navegador já informa: positivo adianta o que for gravado, negativo atrasa. Para medir, grave o metrônomo pelo microfone e ajuste até a batida gravada cair na grade.` No Android, onde está "o navegador" o texto diz `o sistema` | Um número inválido segura a janela aberta com o motivo à vista |
 | `Fechar` | Fecha a janela | | Leva junto o número digitado e ainda não confirmado |
 
 A contagem e a latência valem para **este projeto** (ficam no documento do projeto, e por isso sobem à nuvem), mas ao receber uma versão nova da nuvem cada aparelho mantém a sua. Nenhuma das duas entra no desfazer (é calibragem, não edição da música). Detalhes de como gravar: [capítulo 03c](03c-gravacao.md).
 
 ### Janela `Atalhos do teclado`
 
-Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fechar`. Os títulos dos grupos aparecem em maiúsculas. Nesta tabela `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo.
+Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fechar`. Os títulos dos grupos aparecem em maiúsculas. Nesta tabela `Ctrl` vale para Windows, Linux e Chrome OS; no Mac (e no iOS) a mesma tecla é `⌘` (`Cmd`), e a janela já mostra o símbolo certo (`⌘+Z`). A tabela abaixo foi conferida contra `app/lib/daw/shortcuts_dialog.dart` e `app/lib/screens/project_screen.dart` na versão `15670b7`; a janela tem 8 grupos.
 
 **Transporte**
 
 | Tecla | Ação |
 |---|---|
 | `Espaço` | Tocar / pausar |
-| `Enter` | Parar e voltar ao começo (ou ao início do loop) |
+| `Enter` · `Home` | Parar e voltar ao começo (ou ao início do loop) |
 | `R` | Gravar (com faixas armadas) |
 | `L` | Loop liga/desliga (arraste na régua para marcar a região) |
 | `C` | Metrônomo |
@@ -71,7 +71,7 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 |---|---|
 | `Z` | Enquadrar o projeto inteiro |
 | `Shift+Z` | Enquadrar o clipe selecionado |
-| Menu `Visão` | Altura das faixas (P/M/G), seguir o cursor, régua em mm:ss |
+| Menu `Visão` | Altura das faixas (pequena, média, grande), seguir o cursor, régua em mm:ss |
 | Clique em `comp.` / `mm:ss` | Alterna a régua entre compassos e tempo |
 | `Visão geral` (embaixo) | Clique ou arraste para rolar o projeto |
 
@@ -83,9 +83,9 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 | `Ctrl+Shift+Z` ou `Ctrl+Y` | Refazer |
 | `Ctrl+D` | Duplicar o clipe |
 | `S` | Cortar no cursor |
-| `Delete` | Apagar o clipe |
+| `Delete` · `Backspace` | Apagar o clipe |
 | `Ctrl+I` | Importar áudio |
-| `+` / `−` | Aproximar / afastar |
+| `=` ou `+` / `−` | Aproximar / afastar |
 | `Ctrl` + roda | Zoom no ponto do mouse |
 | `Shift` + roda | Rolar na horizontal |
 
@@ -102,11 +102,30 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 
 **Teclado do computador (`Ctrl+K` liga)**
 
+O título do grupo escreve o modificador do sistema (`⌘+K liga` no Mac).
+
 | Tecla | Ação |
 |---|---|
 | `A W S E D F T G Y H U J K O L P` | Notas: do dó até o ré# da oitava de cima |
-| `Z` / `X` | Oitava abaixo / acima (com o teclado ligado, o `Z` não enquadra) |
+| `Z` / `X` | Oitava abaixo / acima (só da faixa que está tocando: a bateria começa no C2) |
 | `C` / `V` | Velocidade menor / maior |
+
+**Suspensos enquanto o teclado do computador está ligado**
+
+Grupo novo: lista os atalhos de letra que deixam de agir (a letra vira nota, oitava ou velocidade) até o teclado ser desligado. Vem do valor `suspendedShortcuts` do código, e um teste confere que cada letra listada é mesmo uma tecla do teclado musical.
+
+| Tecla | Ação suspensa (e no que a tecla se transforma) |
+|---|---|
+| `C` | Metrônomo (vira velocidade menor) |
+| `L` | Loop liga/desliga (vira nota) |
+| `S` | Cortar no cursor (vira nota) |
+| `X` | Mixer (vira oitava acima) |
+| `Z` · `Shift+Z` | Enquadrar projeto / clipe (vira oitava abaixo) |
+| `E` | Editor de notas (vira nota) |
+| `F` | Efeitos da faixa (vira nota) |
+| `K` · `J` | Dividir / unir notas no piano roll (viram nota) |
+| `Shift+H` · `Shift+L` | Humanizar e legato no piano roll; `Shift+L` também faz o loop no clipe (viram nota) |
+| Com `Ctrl` (`⌘`) | Os atalhos com `Ctrl` continuam valendo (desfazer, duplicar, importar; `Ctrl+K` desliga o teclado) |
 
 **Piano roll**
 
@@ -124,29 +143,29 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 | `Shift+L` | Legato: cada nota vai até a próxima |
 | Menu `Ferramentas` | Escala, acordes, arpejador, rampa de velocidade, inverter, escalar o tempo, fantasmas |
 
-**O que a janela não lista, mas o código aceita**
+**O que a janela ainda não lista, mas o código aceita**
 
 | Tecla | Ação |
 |---|---|
-| `Home` | Igual a `Enter`: parar e voltar |
-| `Backspace` | Igual a `Delete`: apagar o clipe selecionado |
-| `=` (a tecla do sinal de igual, onde fica o `+` no teclado) e `+` do teclado numérico | Aproximar |
-| `-` (a tecla do menos) e `-` do teclado numérico | Afastar |
-| `Ctrl+K` | Liga/desliga o teclado do computador (só aparece no título do grupo) |
+| `+` e `−` do teclado numérico | Aproximar / afastar (o `=` e o `-` do teclado principal estão na janela) |
+| `+` do teclado principal (`Shift` + `=`) | A janela escreve `=` ou `+`, mas o código só compara com a tecla `=` e com o `+` do teclado numérico; se `Shift` + `=` vale como `=` no navegador, funciona `(não confirmado)` |
+| `Ctrl+K` | Liga/desliga o teclado do computador (aparece só no título do grupo e nos tooltips) |
 
 **Regras de prioridade (quando duas coisas usam a mesma tecla)**
 
 - As teclas só valem com o foco no estúdio e **não** valem enquanto você digita num campo de texto.
-- Com o **teclado do computador ligado**, as letras dele (`A W S E D F T G Y H U J K O L P`, mais `Z`, `X`, `C`, `V`) viram nota, oitava e velocidade e passam à frente dos outros atalhos: `S` (cortar), `E` (editor), `F` (efeitos), `L` (loop), `X` (mixer), `C` (metrônomo), `Z` (enquadrar), e no piano roll também `J`, `K` e `Shift+H`. `R`, `I`, `M`, `Espaço`, `Enter`, `Esc` e todos os atalhos com `Ctrl`/`⌘` continuam funcionando. Com `Ctrl`, `⌘` ou `Alt` apertados a letra deixa de ser nota.
+- Com o **teclado do computador ligado**, as letras dele (`A W S E D F T G Y H U J K O L P`, mais `Z`, `X`, `C`, `V`) viram nota, oitava e velocidade e passam à frente dos outros atalhos; a lista exata do que fica suspenso é o grupo acima (`C`, `L`, `S`, `X`, `Z`, `E`, `F`, e no piano roll `K`, `J` e `Shift+H`/`Shift+L`). `R`, `I`, `M`, `Espaço`, `Enter`, `Home`, `Esc` e todos os atalhos com `Ctrl`/`⌘` continuam funcionando. Com `Ctrl`, `⌘` ou `Alt` apertados a letra deixa de ser nota. Na barra, o botão do teclado avisa o estado: fica com o rótulo `C4 · sem atalhos` (a oitava e o aviso) e o tooltip lista os atalhos suspensos.
+- **A oitava do teclado é uma por tipo de faixa.** O botão mostra a oitava da faixa que ele toca (a selecionada, ou a primeira faixa de instrumento armada). Cada tipo (áudio, sintetizador, bateria, sampler, FM, wavetable) guarda a sua; todas partem de `C4` (a tecla `A` é o dó central, nota 60), menos a bateria, que parte de `C2` (a tecla `A` toca a nota 36, o `Bumbo`, porque a bateria só responde às notas 35 a 59). Mudar a oitava numa bateria não muda a do sintetizador, e vice-versa; ao trocar de faixa o botão passa a mostrar a oitava do tipo novo. A oitava vai de 0 a 8 e não é gravada no projeto (volta ao padrão ao reabrir o projeto).
 - Os atalhos do **piano roll** só respondem depois que você clica dentro do editor (ele precisa ser o último lugar clicado); senão `Delete` e `Ctrl+D` continuam sendo do arranjo. `Shift+L` fora do editor faz o loop do clipe/seção; dentro dele, `Legato`.
 - **Gravando**, `Ctrl+Z`, `Ctrl+Y` e `Ctrl+I` são engolidos (não fazem nada) para não apagar ou deslocar a faixa que está recebendo o áudio. `Ctrl+R` fica para o navegador.
+- **Tooltips e menus usam o símbolo do sistema.** Os textos `Desfazer (Ctrl+Z)`, `Refazer (Ctrl+Shift+Z)`, `Duplicar (Ctrl+D)`, `Importar áudio (Ctrl+I)`, o tooltip do teclado (`Ctrl+K`), o atalho do item `Duplicar` do menu do clipe e a ajuda do piano roll passam por `withMod` (`app/lib/widgets/format.dart`): no Mac e no iOS o `Ctrl` vira `⌘` (`⌘+Z`), nos outros continua `Ctrl`.
 
 ### Permissões
 
 | Permissão | Quando o app pede | Se você negar | Como liberar de novo |
 |---|---|---|---|
 | Microfone (web) | Ao abrir `Configurações`, ao armar uma faixa de áudio, ao ligar `Monitorar a entrada` ou ao gravar pela primeira vez | Mensagem: `O navegador negou o acesso ao microfone. Libere o microfone nas permissões do site e tente de novo.` A faixa que pediu volta a ficar desarmada | Cadeado ao lado do endereço, permissões do site, microfone |
-| Microfone (Android) | Na mesma hora do uso (não ao abrir o app) | Negado uma vez: `O Android negou o acesso ao microfone. Para gravar, tente de novo e permita o acesso.` Bloqueado: `O acesso ao microfone está bloqueado para o jopendaw. Libere o microfone em Configurações > Apps > jopendaw > Permissões e tente de novo.` | Ajustes do Android, Apps, jopendaw, Permissões |
+| Microfone (Android) | Na mesma hora do uso (não ao abrir o app) | Negado uma vez: `O Android negou o acesso ao microfone. Permita o microfone para o jopendaw e tente de novo.` Negado de vez ou restrito: `O Android negou o acesso ao microfone de vez: libere o microfone nas permissões do jopendaw (Configurações › Apps › jopendaw › Permissões) e tente de novo.` | Ajustes do Android, Apps, jopendaw, Permissões |
 | MIDI (web) | Ao clicar no botão de cabo (tooltip `Entrada MIDI: ligar teclado ou controlador`) | `O navegador negou o acesso ao MIDI. Libere o MIDI nas permissões do site e tente de novo.` Sem suporte: `Este navegador não dá acesso a MIDI. Use o Chrome ou o Edge, com o jopendaw aberto em https.` | Permissões do site |
 | MIDI (Android) | Ao clicar no mesmo botão | Sem MIDI no aparelho: `Este aparelho não dá acesso a MIDI.` Outra falha: `Não deu para abrir o MIDI: <motivo>.` | |
 
@@ -169,7 +188,7 @@ O app é o mesmo; o motor de áudio e o acesso ao aparelho é que mudam.
 
 | Aspecto | Web (navegador) | Android (app) |
 |---|---|---|
-| Motor de áudio | Rust compilado para WebAssembly, dentro de um AudioWorklet | O mesmo Rust como biblioteca nativa (`libjopendaw_engine.so`), tocando pela saída do Android (AAudio/Oboe) |
+| Motor de áudio | Rust compilado para WebAssembly, dentro de um AudioWorklet | O mesmo Rust como biblioteca nativa (`libjopendaw_engine.so`), tocando pela saída do Android (AAudio) |
 | Onde ficam o documento e os áudios | IndexedDB do navegador (banco `jopendaw`, repositório `kv`), por site e perfil | Arquivos na pasta de documentos privada do app, subpasta `jopendaw/` (documento, estado de sincronização, áudios) |
 | Onde ficam os tokens de sessão | Armazenamento local cifrado do navegador | Armazenamento seguro do Android (Keystore) |
 | Entrar com Google/Discord | A página vai ao provedor e volta ao jopendaw | Uma aba do Chrome sobre o app; o Discord, com o app dele instalado, autoriza dentro dele |
@@ -183,14 +202,34 @@ O app é o mesmo; o motor de áudio e o acesso ao aparelho é que mudam.
 | Instalar como app | Navegadores que oferecem instalar sites (o site tem manifesto `standalone` e abre a casca sem rede) | App do Android |
 | Exigências | Navegador atual, `https` para gravar | Android 8.0 (API 26) ou mais novo; ABIs `arm64-v8a`, `armeabi-v7a` e `x86_64` |
 | Ajustar áudio ao andamento (warp) | Progresso durante o processamento | Só avisa o fim (sem barra de progresso) |
+| Tela enquanto toca ou grava | A aba do navegador cuida sozinha (o app não faz nada) | O app mantém a tela acesa enquanto o transporte toca ou grava e solta ao parar (ver "O aparelho no Android") |
+| O app sai da tela | A aba segue tocando em segundo plano, como qualquer player do navegador | Para o transporte (gravando, encerra a gravação, que fica salva), solta as notas ao vivo e fecha a entrada de áudio |
+| O fone sai | O app não faz nada (o navegador decide) | Para o transporte, sem voltar o cursor |
+| Falha do motor | Aviso na tela do projeto com o botão `Reiniciar o áudio` | O mesmo aviso e o mesmo botão |
+| Palavras das mensagens | `este navegador`, `O navegador negou...` | `este aparelho`, `O Android negou...` |
 
 **O que só existe num dos lados**
 
 - Só no Android: a permissão `RECORD_AUDIO` em tempo de execução, a folha de compartilhar como plano B ao exportar e a autorização pelo app do Discord.
 - Só na web: a instalação como app pelo navegador e a casca do app offline (`sw.js`).
-- Em qualquer outro sistema (um build de computador nativo, testes) não há motor: a tela do projeto avisa `O motor de áudio ainda não roda neste aparelho: use o jopendaw no navegador por enquanto.`; a gravação, a exportação e o MIDI também respondem com "não funciona neste sistema: use o jopendaw no navegador ou no Android".
+- Em qualquer outro sistema (um build de computador nativo, testes) não há motor: a tela do projeto avisa `O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.` (o mesmo texto de "não roda neste sistema" vale para a gravação, a exportação, o warp e o MIDI, cada um com o seu verbo).
 
-Existe código de plataforma para manter a tela acesa durante a reprodução, parar o transporte ao sair do app e ao desplugar o fone, mas ele **não está ligado ao estúdio** nesta versão (lido no código; não confirmado em uso): não conte com a tela permanecendo acesa nem com o transporte parando sozinho.
+### O aparelho no Android
+
+Só no app do Android o estúdio conversa com o aparelho por um canal próprio (`app/lib/platform/platform_native.dart` e `MainActivity.kt`). Tudo abaixo vale só enquanto a tela do projeto está aberta e foi coberto por testes automáticos com o canal simulado (`app/test/android_session_test.dart`); **não foi visto num aparelho nem no emulador** `(testado só por testes automáticos)`.
+
+| Situação | O que o app faz |
+|---|---|
+| O transporte começa a tocar ou a gravação começa | Liga o sinal de manter a tela acesa (`FLAG_KEEP_SCREEN_ON`). Repetir o mesmo estado não repete o pedido ao Android. |
+| O transporte para, ou você fecha a tela do projeto | Solta a tela: ela volta a apagar pelo tempo normal do aparelho. |
+| O app sai da tela (outro app na frente, botão de início, tela desligada) | Para o transporte sem voltar o cursor; se estava gravando, encerra a gravação e ela fica salva (como no `stop`); solta as notas tocadas ao vivo; fecha a entrada de áudio (o aviso de privacidade do microfone apaga). Um diálogo por cima, a cortina de notificações ou a tela dividida **não** contam como sair. |
+| O app volta à tela | Pede ao motor que garanta a saída tocando e reabre a entrada de áudio se alguma faixa de áudio ficou armada ou monitorando. |
+| O fone (com fio ou Bluetooth) sai | Para o transporte, como todo app de mídia, sem voltar o cursor, e solta as notas ao vivo; gravando, encerra a gravação. Sem nada tocando, não faz nada. |
+| Um aparelho de áudio entra ou sai (fone plugado, interface USB) | Não pausa; pede ao motor que garanta a saída. |
+
+Os dois avisos (fone que sai; aparelho que entra ou sai) só são escutados enquanto o app está à mostra. O de aparelho compara a lista de aparelhos de áudio com a da última vez e só avisa quando ela mudou, inclusive de algo plugado enquanto o app estava fora.
+
+No Android o pedido "garanta a saída" (`AudioEngine.resume()`) hoje não faz nada dentro do motor nativo: quem reabre a saída de áudio que o sistema derrubou ou que trocou de rota é o supervisor do motor (`jopendaw-sup`, verifica a cada 250 ms). O comportamento visível é o mesmo, mas a explicação dos comentários do código não bate com isso.
 
 ## Instalação do app Android
 
@@ -248,13 +287,14 @@ Existe código de plataforma para manter a tela acesa durante a reprodução, pa
 
 ## Limites e pegadinhas
 
-- **A janela `Configurações` fala em "navegador" também no Android.** O texto `O navegador pede permissão para o microfone na primeira vez.` e a explicação da latência ("além do que o navegador já informa") aparecem iguais no app; no Android leia "sistema" onde estiver "navegador".
+- **As mensagens falam do lugar onde você está.** No Android os textos dizem `este aparelho` e `O Android negou o acesso ao microfone` onde a web diz `este navegador` e `O navegador negou o acesso ao microfone` (a janela `Configurações` e os erros de importar áudio, ligar o MIDI e abrir a entrada).
 - **A entrada de áudio é do aparelho; a latência e a contagem são do projeto.** Se você calibrar a latência num aparelho e abrir o projeto em outro, a versão da nuvem não troca o valor de cada aparelho, então calibre em cada um.
 - **A latência está limitada a −200 a 500 ms.** O valor é guardado no projeto e entra na sincronização, mas não no desfazer.
 - **Trocar a entrada no meio da gravação não é permitido:** o seletor fica desligado e o texto pede `Pare a gravação para trocar de entrada.`
-- **Os tooltips da barra escrevem `Ctrl` em qualquer sistema**, mesmo no Mac, onde a tecla é `Cmd`. A janela de atalhos mostra o símbolo certo.
-- **Um atalho que "não pega"** costuma ser: campo de texto com foco, teclado do computador ligado (as letras viram notas), ou o piano roll sem ter sido o último lugar clicado.
-- **Tela apagando ou transporte que continua ao sair do app no Android:** não há tratamento de sessão de áudio ligado ao estúdio (ver acima); não confirmado em uso.
+- **Um atalho que "não pega"** costuma ser: campo de texto com foco, teclado do computador ligado (as letras viram notas; o botão da barra mostra `C4 · sem atalhos` e a janela de atalhos tem um grupo que lista o que ficou suspenso), ou o piano roll sem ter sido o último lugar clicado.
+- **Ao sair do app no Android o transporte para sozinho, e ao desplugar o fone também.** Isto é intencional (ver "O aparelho no Android"); a tela fica acesa só enquanto toca ou grava. `(testado só por testes automáticos)`
+- **Sair do app no meio de uma gravação a encerra.** O que já foi gravado fica salvo, mas a gravação não continua em segundo plano (sem serviço em primeiro plano o Android poderia matar o processo).
+- **Se o som some e aparece o aviso `O motor de áudio parou de responder e o som ficou mudo...`,** o projeto está intacto: use o botão `Reiniciar o áudio` do aviso (ver o [capítulo 00](00-visao-geral.md)).
 - **`Esc` fecha o painel de baixo**, mas se o editor tiver notas selecionadas o primeiro `Esc` só limpa a seleção.
 
 ## Atalhos
@@ -264,8 +304,12 @@ Os atalhos deste assunto:
 | Tecla | Ação |
 |---|---|
 | `?` | Abrir a janela `Atalhos do teclado` |
-| `Ctrl+K` (`⌘K` no Mac) | Ligar/desligar o teclado do computador |
+| `Ctrl+K` (`⌘+K` no Mac) | Ligar/desligar o teclado do computador |
 | `R` | Gravar |
-| `C` | Metrônomo (com o teclado do computador ligado, vira "velocidade menor") |
+| `C` | Metrônomo (com o teclado do computador ligado, vira "velocidade menor" e fica listado em `Suspensos enquanto o teclado do computador está ligado`) |
+| `Z` / `X` | Com o teclado ligado: oitava abaixo / acima da faixa que toca (a bateria começa no `C2`) |
+| `Enter` · `Home` | Parar e voltar ao começo |
+| `Delete` · `Backspace` | Apagar o clipe |
+| `=` ou `+` / `−` | Aproximar / afastar |
 | `Esc` | Fechar o painel de baixo |
 | `Enter` no campo de latência | Confirmar o número digitado |

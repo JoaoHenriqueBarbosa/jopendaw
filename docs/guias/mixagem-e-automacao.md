@@ -142,6 +142,6 @@ Um fade de volume no `Master` funciona depois dos efeitos do master (o compresso
 - **Usar o limitador de segurança como ferramenta de volume.** Ele é uma rede de proteção: sempre ligado, sem controles, sem medidor de redução. Volume de masterização se faz com o efeito `Limitador` no master.
 - **Confundir mudo com fade.** `M` desce o volume em cerca de 5 ms.
 - **Empilhar pré-fader por engano.** Um reverb pré-fader continua soando com a faixa em fade e em mudo: pode ser o que se quer, mas quase nunca é o que se espera.
-- **Mover barramentos sem olhar os envios.** O app desfaz sozinho o que ficar contra a ordem, sem perguntar (dá para desfazer com `Ctrl+Z`).
+- **Mover barramentos sem olhar os envios.** Se a nova ordem deixa um envio ou uma saída entre barramentos contra a ordem, o app abre o diálogo `Mover a faixa?` listando o que seria desfeito (`Cancelar` ou `Mover mesmo assim`; `Ctrl+Z` traz tudo de volta) `(testado só por testes automáticos)`.
 - **Ajustar o fader esperando ouvir enquanto a raia de volume toca.** Ele muda o valor fixo, não a curva.
-- **Mais de 16 efeitos numa cadeia ou 16 envios numa faixa.** O motor não processa além disso `(não confirmado no app)`.
+- **Mais de 16 efeitos numa cadeia ou 16 envios numa faixa.** O motor não processa além disso, e desde a fase 9 o app avisa: a linha `Efeito` e o botão de envio ficam desabilitados com a dica `Limite de 16 efeitos por faixa` / `Limite de 16 envios por faixa` `(testado só por testes automáticos)`.

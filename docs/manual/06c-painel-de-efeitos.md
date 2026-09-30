@@ -31,7 +31,7 @@ O sinal passa pelos efeitos na ordem da cadeia, do primeiro ao último, **depois
 |---|---|---|---|
 | Seletor de faixa (tooltip `De qual faixa são os efeitos`) | Escolhe de quem é o rack: `Master` ou qualquer faixa. Cada item mostra um selo com o número de efeitos da faixa (só aparece quando é maior que zero) e um visto na que está aberta. Escolher uma faixa também a seleciona. | Segue a faixa selecionada ao abrir | Faixa apagada: o painel volta sozinho para o `Master`. |
 | Resumo (só no computador) | Texto cinza ao lado do seletor: `nenhum efeito`, `3 efeitos`, `1 efeito`, `3 efeitos · 1 desligado`. | Só leitura | Conte aqui quantos efeitos estão em bypass. |
-| `Adicionar efeito` (computador) / `Efeito` (celular) | Abre o menu de tipos de efeito, logo abaixo do botão. O efeito novo entra **no fim da cadeia**, nos valores padrão, e a lista rola até ele. | Menu abaixo | Adicionar é desfazível. |
+| `Adicionar efeito` (computador) / `Efeito` (celular) | Abre o menu de tipos de efeito, logo abaixo do botão. O efeito novo entra **no fim da cadeia**, nos valores padrão, e a lista rola até ele. | Menu abaixo. Desabilitado com 16 efeitos na cadeia (tooltip `Limite de 16 efeitos por faixa`) | Adicionar é desfazível. |
 
 Uma barra colorida na esquerda do cabeçalho usa a cor da faixa (o master usa a cor de destaque do app).
 
@@ -68,7 +68,7 @@ Rack sem nenhum efeito mostra um texto de orientação e atalhos.
 
 ### Cartão de efeito
 
-Cada efeito é um cartão com cabeçalho e o editor dele. No computador os cartões formam uma fileira horizontal, cada um com a altura toda do painel e uma seta (`>`) entre eles marcando o sentido do sinal; no fim da fileira há o bloco `Adicionar efeito`. No celular os cartões vão um embaixo do outro e o último item da lista é o botão `Adicionar efeito`.
+Cada efeito é um cartão com cabeçalho e o editor dele. No computador os cartões formam uma fileira horizontal, cada um com a altura toda do painel e uma seta (`>`) entre eles marcando o sentido do sinal; no fim da fileira há o bloco `Adicionar efeito` (apagado e com o cursor de proibido quando a cadeia está cheia). No celular os cartões vão um embaixo do outro e o último item da lista é o botão `Adicionar efeito`.
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
@@ -109,7 +109,7 @@ Três tipos de editor cobrem os 12 efeitos:
 | Campo de valor digitado | Título com o nome do parâmetro, dica `De <mín> a <máx>`, botões `Cancelar` e `Aplicar`. Aceita número com ou sem unidade: `800 Hz`, `2,5 kHz`, `-3 dB`, `150 ms`, `70%`, `1.5 oit`; vírgula vale como ponto. Sem unidade, um valor acima do máximo de um parâmetro em segundos é lido como milissegundos. Erro: `Não entendi. Use um número, com a unidade se quiser.` Fora da faixa, o valor é limitado. | Números inteiros (vozes, bits) são arredondados. |
 | Pílula liga/desliga (`Não`/`Sim` em cima, nome embaixo) | Toque ou clique alterna. | Vale para todo parâmetro de duas opções `Não`/`Sim` (`Ping-pong`, `Congelar`, `Mono`...). |
 | Seletor de opções (caixa com seta) | Abre um menu com as opções. | Tipos, ondas, notas, `Tempo` (`Livre`/`Andamento`) e `Sidechain`. |
-| Controle **apagado** (texto mais escuro) | O parâmetro não tem efeito com os ajustes de agora, mas continua mexível. Ex.: `Decaimento` do reverb com `Congelar` ligado; `Bits` e `Reduzir taxa` fora do tipo `Bitcrusher`. A lista completa está em cada efeito na referência. | |
+| Controle **apagado** (texto mais escuro) | O parâmetro não tem efeito com os ajustes de agora, mas continua mexível. Ex.: `Decaimento` do reverb com `Congelar` ligado; `Bits`, `Reduzir taxa` e `Dither` fora do tipo `Bitcrusher` (e `Sobreamostragem` **dentro** dele). O `Ganho` do compressor **não** fica apagado com o `Ganho automático` ligado (os dois somam). A lista completa está em cada efeito na referência. | |
 | Knob laranja | O parâmetro tem automação e o projeto está tocando: o knob segue a curva. Ver [07 Automação](07-automacao.md). | Todo parâmetro de efeito é automatizável, menos a faixa-chave do `Sidechain`. |
 
 Os controles de **tempo** mostram ou a figura ou o tempo, conforme a chave: no `Delay` e no `Filtro`/`Tremolo`, com `Tempo` em `Livre` aparece o valor em segundos ou Hz; em `Andamento` aparece `Nota`.
@@ -148,7 +148,7 @@ Clicar em qualquer parte da linha seleciona a banda (realça o nó e desenha a c
 
 | O que | Como se mexe | Resultado |
 |---|---|---|
-| Curva de transferência (eixo horizontal = entrada, vertical = saída, ambos em dB) | Arrastar na **horizontal** em qualquer ponto do gráfico. `Shift` = fino. | Compressor e gate: muda o `Limiar` (a bolinha branca sobre a curva marca o joelho, com uma linha tracejada vertical). Limitador: muda o `Ganho` de entrada (arrastar para a esquerda empurra mais ganho). |
+| Curva de transferência (eixo horizontal = entrada, vertical = saída, ambos em dB) | Arrastar na **horizontal** em qualquer ponto do gráfico. `Shift` = fino. No compressor a curva já soma o ganho de saída como o motor (o `Ganho` manual mais, com `Ganho automático`, o automático). | Compressor e gate: muda o `Limiar` (a bolinha branca sobre a curva marca o joelho, com uma linha tracejada vertical). Limitador: muda o `Ganho` de entrada (arrastar para a esquerda empurra mais ganho). |
 | Diagonal tracejada | Referência 1:1 (sem processamento). | |
 | Faixa sombreada (compressor) | Largura do `Joelho` em volta do limiar. | |
 | Ponto de operação (círculo colorido) | Aparece na curva enquanto há redução de ganho: onde o sinal está agora. | Só no compressor e no limitador. |
@@ -206,7 +206,7 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 
 ## Limites e pegadinhas
 
-- **Máximo de 16 efeitos por cadeia** (faixa ou master). O app **não impede** adicionar o 17º e o cartão aparece, mas o motor descarta o excedente: ele não soa. Se um efeito parece não fazer nada, conte a cadeia.
+- **Máximo de 16 efeitos por cadeia** (faixa ou master), o que o motor comporta. Com 16 efeitos, o botão `Adicionar efeito` (computador), o botão `Efeito` (celular), o bloco `Adicionar efeito` no fim da fileira e a linha `Efeito` do mixer ficam desabilitados, e o tooltip diz `Limite de 16 efeitos por faixa`. Remova um efeito para liberar lugar (testado só por testes automáticos).
 - **Latência dos efeitos não é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo. O motor sabe quanto é, mas não alinha essa faixa com as outras. Detalhes em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito).
 - **Trocar a ordem, ligar, desligar, adicionar e remover** fazem crossfade de 10 ms: sem estalo. Mudar a ordem recria, no motor, os efeitos dos lugares que trocaram de tipo (pelo que o código de sincronização faz): o estado interno deles, como a cauda de um reverb ou os ecos de um delay, recomeça do zero. Trocar o **tipo** de efeito num slot não existe no painel: remova e adicione.
 - **Sidechain** só existe no `Compressor` e no `Gate`; não é automatizável; presets não o alteram; a faixa apagada aparece como `Faixa N (removida)` e o efeito volta a usar a própria entrada.

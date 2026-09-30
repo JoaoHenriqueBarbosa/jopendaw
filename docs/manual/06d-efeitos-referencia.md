@@ -97,7 +97,7 @@ O preset zera as bandas que ele não cita para o padrão (bandas 2 a 7 ligadas e
 
 ### Editor
 
-Curva de transferência (entrada × saída, ambos −60 a 0 dB) com o medidor de redução de ganho ao lado e os knobs à direita. Arrastar o gráfico na horizontal muda o `Limiar` (bolinha branca no joelho; `Shift` = fino). Mais em [06c, Gráfico dos efeitos de dinâmica](06c-painel-de-efeitos.md#gráfico-dos-efeitos-de-dinâmica). A legenda do canto mostra limiar, razão e ` · auto`. A faixa sombreada é a largura do `Joelho`.
+Curva de transferência (entrada × saída, ambos −60 a 0 dB) com o medidor de redução de ganho ao lado e os knobs à direita. Arrastar o gráfico na horizontal muda o `Limiar` (bolinha branca no joelho; `Shift` = fino). Mais em [06c, Gráfico dos efeitos de dinâmica](06c-painel-de-efeitos.md#gráfico-dos-efeitos-de-dinâmica). A legenda do canto mostra limiar, razão e ` · auto`. A faixa sombreada é a largura do `Joelho`. A curva já inclui o ganho de saída como o motor o aplica: o `Ganho` manual mais, com `Ganho automático` ligado, o ganho automático (os dois somam; o desenho sobe junto quando você mexe em qualquer um).
 
 ### Parâmetros
 
@@ -108,8 +108,8 @@ Curva de transferência (entrada × saída, ambos −60 a 0 dB) com o medidor de
 | `Ataque` (`COMPRESSOR`) | Tempo para o ganho descer quando o sinal passa do limiar. Lento deixa o transiente passar. | 0,1 ms a 250 ms, log. Padrão 10 ms. |
 | `Soltura` (`COMPRESSOR`) | Tempo para o ganho voltar. A volta é exponencial em dB, com jeito analógico. | 5 ms a 3 s, log. Padrão 150 ms. |
 | `Joelho` (`COMPRESSOR`) | Largura da transição suave em volta do limiar. 0 = joelho duro. | 0 a 24 dB, linear. Padrão 6 dB. |
-| `Ganho` (`SAÍDA`) | Ganho de compensação manual depois da compressão. | 0 a 36 dB, linear. Padrão 0 dB. Fica apagado com `Ganho automático` ligado. |
-| `Ganho automático` (`SAÍDA`) | Compensa sozinho: soma `−Limiar × (1 − 1/Razão) × 0,5` dB (com −18 dB e 4:1, +6,75 dB). | `Não`/`Sim`. Padrão `Não`. |
+| `Ganho` (`SAÍDA`) | Ganho de compensação manual depois da compressão. | 0 a 36 dB, linear. Padrão 0 dB. Continua valendo (e sem apagar) com `Ganho automático` ligado: os dois se somam. |
+| `Ganho automático` (`SAÍDA`) | Compensa sozinho: soma ao `Ganho` manual `−Limiar × (1 − 1/Razão) × 0,5` dB (com −18 dB e 4:1, +6,75 dB). | `Não`/`Sim`. Padrão `Não`. |
 | `Mistura` (`SAÍDA`) | Mistura do sinal comprimido com o original (compressão paralela dentro do próprio efeito). | 0 a 100%. Padrão 100%. |
 | `Detector` (`CHAVE`) | Como o nível é medido. `Pico`: instantâneo, reage a cada transiente. `RMS`: média dos últimos 10 ms, mais parecido com o que o ouvido percebe. | `Pico`, `RMS`. Padrão `RMS`. |
 | `Passa-alta` (`CHAVE`) | Filtro passa-alta aplicado **só no sinal que o detector escuta**, não no áudio. Impede que o grave dispare a compressão. | 20 Hz a 500 Hz, log. Padrão 20 Hz. |
@@ -136,7 +136,7 @@ Aplicar um preset **não muda** o `Sidechain`.
 
 ### Cuidados
 
-- O `Ganho` manual e o `Ganho automático` **se somam** no motor, mesmo com o `Ganho` apagado (ver "Inconsistências" no fim do capítulo). Com o automático ligado, deixe o `Ganho` em 0.
+- O `Ganho` manual e o `Ganho automático` **se somam** no motor, e o editor mostra isso: o knob `Ganho` não fica apagado com o automático ligado e a curva do gráfico usa a soma. Se quiser só o automático, deixe o `Ganho` em 0 (testado só por testes automáticos).
 - Sem lookahead: um ataque lento deixa passar o começo do transiente (é o efeito desejado em bateria; em picos de voz, use ataque mais curto).
 - O medidor do compressor vai a 24 dB; se estiver batendo lá, o `Limiar` está baixo demais.
 
@@ -389,7 +389,7 @@ Só controles, um grupo `CHORUS`.
 | Controle (grupo) | O que faz | Valores / padrão |
 |---|---|---|
 | `Mistura` (`CHORUS`) | Seco/molhado de potência constante. | 0 a 100%. Padrão 50%. |
-| `Velocidade` (`CHORUS`) | Velocidade do LFO senoidal que balança o atraso. | 0,02 Hz a 10 Hz, log. Padrão 0,8 Hz. |
+| `Taxa` (`CHORUS`) | Frequência do LFO senoidal que balança o atraso. | 0,02 Hz a 10 Hz, log. Padrão 0,8 Hz. |
 | `Profundidade` (`CHORUS`) | Quanto o atraso oscila: até ±4 ms com 100% (nunca mais que 90% do atraso base). | 0 a 100%. Padrão 50%. |
 | `Atraso` (`CHORUS`) | Atraso base. Longo (10 a 30 ms) = chorus; curto (1 a 5 ms) com realimentação = flanger. | 1 ms a 30 ms, linear. Padrão 12 ms. |
 | `Vozes` (`CHORUS`) | Quantas cópias defasadas somam. Trocar o número faz fade das vozes, sem estalo. | 1 a 4, inteiro. Padrão 2. |
@@ -398,7 +398,7 @@ Só controles, um grupo `CHORUS`.
 
 ### Presets
 
-| Preset | Mistura | Velocidade | Prof. | Atraso | Vozes | Realim. | Largura | Caráter |
+| Preset | Mistura | Taxa | Prof. | Atraso | Vozes | Realim. | Largura | Caráter |
 |---|---|---|---|---|---|---|---|---|
 | `Chorus leve` | 35% | 0,6 Hz | 35% | 14 ms | 2 | 0% | 100% | Duplicação sutil, abre e engrossa sem chamar atenção. |
 | `Flanger jato` | 50% | 0,12 Hz | 80% | 2 ms | 1 | 75% | 80% | Atraso curtíssimo com realimentação alta: o pente varrendo devagar, som de avião. |
@@ -430,7 +430,7 @@ Só controles, um grupo `PHASER`.
 | Controle (grupo) | O que faz | Valores / padrão |
 |---|---|---|
 | `Mistura` (`PHASER`) | Quanto do sinal filtrado soma ao original (mistura linear). Em 50% os vales são mais profundos. | 0 a 100%. Padrão 50%. |
-| `Velocidade` (`PHASER`) | Velocidade do LFO. | 0,02 Hz a 10 Hz, log. Padrão 0,5 Hz. |
+| `Taxa` (`PHASER`) | Frequência do LFO. | 0,02 Hz a 10 Hz, log. Padrão 0,5 Hz. |
 | `Profundidade` (`PHASER`) | Amplitude da varredura em oitavas em torno do `Centro`: 100% = ±3 oitavas. | 0 a 100%. Padrão 70%. |
 | `Centro` (`PHASER`) | Frequência em torno da qual a varredura acontece. | 100 Hz a 8 kHz, log. Padrão 1 kHz. |
 | `Realimentação` (`PHASER`) | Afia os vales e cria picos (som mais vocálico). Negativa muda o timbre dos picos. | −95% a +95%. Padrão 50%. |
@@ -439,7 +439,7 @@ Só controles, um grupo `PHASER`.
 
 ### Presets
 
-| Preset | Mistura | Velocidade | Prof. | Centro | Realim. | Estágios | Estéreo | Caráter |
+| Preset | Mistura | Taxa | Prof. | Centro | Realim. | Estágios | Estéreo | Caráter |
 |---|---|---|---|---|---|---|---|---|
 | `Lento` | 50% | 0,15 Hz | 80% | 800 Hz | 50% | 6 | 50% | Varredura longa e macia, para teclas e guitarra. |
 | `Rápido` | 50% | 3,5 Hz | 60% | 1,2 kHz | 35% | 4 | 25% | Efeito de Leslie/vibração rápida. |
@@ -453,7 +453,7 @@ Só controles, um grupo `PHASER`.
 ### Cuidados
 
 - Sem latência. O motor compensa o volume da realimentação alta.
-- O `Phaser` não tem modo sincronizado ao andamento (só `Velocidade` em Hz).
+- O `Phaser` não tem modo sincronizado ao andamento (só `Taxa` em Hz).
 
 ---
 
@@ -463,13 +463,13 @@ Só controles, um grupo `PHASER`.
 
 ### Editor
 
-Só controles, um grupo `TREMOLO`. `Velocidade` só aparece com `Tempo` `Livre`; `Nota` só com `Andamento`.
+Só controles, um grupo `TREMOLO`. `Taxa` só aparece com `Tempo` `Livre`; `Nota` só com `Andamento`.
 
 ### Parâmetros
 
 | Controle (grupo) | O que faz | Valores / padrão |
 |---|---|---|
-| `Velocidade` (`TREMOLO`) | Velocidade do LFO (só com `Tempo` `Livre`). | 0,05 Hz a 20 Hz, log. Padrão 4 Hz. |
+| `Taxa` (`TREMOLO`) | Frequência do LFO (só com `Tempo` `Livre`). | 0,05 Hz a 20 Hz, log. Padrão 4 Hz. |
 | `Profundidade` (`TREMOLO`) | Quanto o volume cai no vale. 100% = silêncio total no vale. | 0 a 100%. Padrão 50%. |
 | `Onda` (`TREMOLO`) | Forma do LFO. `Quadrada` corta o som (efeito *chopper*) com bordas suaves de 3 ms, sem clique. | `Senoide`, `Triângulo`, `Quadrada`. Padrão `Senoide`. |
 | `Estéreo` (`TREMOLO`) | Defasagem do LFO entre os canais. 50% = os canais em oposição: o som passeia de um lado a outro (autopan). | 0 a 100%. Padrão 0%. |
@@ -480,7 +480,7 @@ A frequência sincronizada é `andamento ÷ 60 ÷ batidas da figura`: `1/4` = um
 
 ### Presets
 
-| Preset | Velocidade | Prof. | Onda | Estéreo | Tempo | Nota | Caráter |
+| Preset | Taxa | Prof. | Onda | Estéreo | Tempo | Nota | Caráter |
 |---|---|---|---|---|---|---|---|
 | `Tremolo clássico` | 5 Hz | 50% | `Senoide` | 0% | `Livre` | · | Tremolo de amplificador de guitarra. |
 | `Autopan 1/4` | · | 80% | `Senoide` | 50% | `Andamento` | `1/4` | O som passeia entre os lados em um ciclo por batida. |
@@ -504,7 +504,7 @@ A frequência sincronizada é `andamento ÷ 60 ÷ batidas da figura`: `1/4` = um
 
 ### Editor
 
-Só controles, em três grupos: `DISTORÇÃO` (`Drive`, `Tipo`, `Tom`), `SAÍDA` (`Mistura`, `Saída`, `Sobreamostragem`) e `BITCRUSHER` (`Bits`, `Reduzir taxa`). `Bits` e `Reduzir taxa` ficam apagados quando `Tipo` não é `Bitcrusher`.
+Só controles, em três grupos: `DISTORÇÃO` (`Drive`, `Tipo`, `Tom`), `SAÍDA` (`Mistura`, `Saída`, `Sobreamostragem`) e `BITCRUSHER` (`Bits`, `Reduzir taxa`, `Dither`). `Bits`, `Reduzir taxa` e `Dither` ficam apagados quando `Tipo` não é `Bitcrusher`; `Sobreamostragem` fica apagada quando `Tipo` **é** `Bitcrusher` (o motor a ignora nesse tipo). Apagado continua mexível.
 
 ### Parâmetros
 
@@ -515,9 +515,10 @@ Só controles, em três grupos: `DISTORÇÃO` (`Drive`, `Tipo`, `Tom`), `SAÍDA`
 | `Tom` (`DISTORÇÃO`) | Passa-baixa **depois** da saturação (tira o chiado agudo). Em 20 kHz sai da cadeia. | 500 Hz a 20 kHz, log. Padrão 8 kHz. |
 | `Mistura` (`SAÍDA`) | Mistura do distorcido com o original (distorção paralela). O original é atrasado igual ao molhado, então a soma não vira filtro-pente. | 0 a 100%. Padrão 100%. |
 | `Saída` (`SAÍDA`) | Ganho de saída. | −24 a +12 dB, linear. Padrão 0 dB. |
-| `Sobreamostragem` (`SAÍDA`) | Processa a curva em taxa dobrada ou quadruplicada e filtra: sem isso, harmônicos acima de Nyquist rebatem para o grave (aliasing). 4× é o mais limpo e o mais pesado. Ignorada pelo `Bitcrusher` (o aliasing é o efeito). | `1×`, `2×`, `4×`. Padrão `2×`. |
+| `Sobreamostragem` (`SAÍDA`) | Processa a curva em taxa dobrada ou quadruplicada e filtra: sem isso, harmônicos acima de Nyquist rebatem para o grave (aliasing). 4× é o mais limpo e o mais pesado. Não vale no tipo `Bitcrusher` (o aliasing é o efeito): nele o controle fica apagado. | `1×`, `2×`, `4×`. Padrão `2×`. |
 | `Bits` (`BITCRUSHER`) | Resolução da quantização. 1 bit = só dois níveis. | 1 a 16, inteiro. Padrão 8. |
 | `Reduzir taxa` (`BITCRUSHER`) | Segura cada amostra por N quadros (queda da taxa de amostragem). | 1× a 32×, inteiro. Padrão 1×. |
+| `Dither` (`BITCRUSHER`) | Liga um ruído triangular (TPDF, de ±1 degrau) somado antes de cada quantização: o erro de quantização vira um chiado suave em vez de distorção granulosa. Só age no tipo `Bitcrusher`. | `Não`/`Sim` (pílula). Padrão `Não`. Os presets voltam esse controle a `Não`. |
 
 Os tipos:
 
@@ -549,7 +550,7 @@ Os tipos:
 
 - **Latência fixa de 32 quadros** (0,67 ms a 48 kHz; cerca de 0,73 ms a 44,1 kHz), igual em todos os tipos e modos de sobreamostragem: a latência vem dos filtros de fase linear da sobreamostragem e trocar de modo não desloca o som. Não é compensada em relação a outras faixas.
 - `Sobreamostragem` em `1×` aliasa audivelmente com drive alto em material agudo.
-- O motor tem um parâmetro de *dither* do bitcrusher (id 8) que **não** tem controle na interface (ver "Inconsistências").
+- `Bits`, `Reduzir taxa` e `Dither` só valem no tipo `Bitcrusher`; `Sobreamostragem` só vale nos outros cinco tipos (testado só por testes automáticos).
 
 ---
 
@@ -559,7 +560,7 @@ Os tipos:
 
 ### Editor
 
-Só controles, em três grupos: `FILTRO` (`Tipo`, `Corte`, `Ressonância`, `Drive`, `Mistura`), `LFO` (`Tempo`, `Velocidade`/`Nota`, `Profundidade`, `Onda`) e `ENVELOPE` (`Envelope`). Os controles do LFO (`Tempo`, `Velocidade`, `Nota`, `Onda`) ficam apagados enquanto `Profundidade` é 0. `Velocidade` só aparece com `Tempo` `Livre`; `Nota`, com `Andamento`.
+Só controles, em três grupos: `FILTRO` (`Tipo`, `Corte`, `Ressonância`, `Drive`, `Mistura`), `LFO` (`Tempo`, `Taxa`/`Nota`, `Profundidade`, `Onda`) e `ENVELOPE` (`Envelope`). Os controles do LFO (`Tempo`, `Taxa`, `Nota`, `Onda`) ficam apagados enquanto `Profundidade` é 0. `Taxa` só aparece com `Tempo` `Livre`; `Nota`, com `Andamento`.
 
 ### Parâmetros
 
@@ -571,7 +572,7 @@ Só controles, em três grupos: `FILTRO` (`Tipo`, `Corte`, `Ressonância`, `Driv
 | `Drive` (`FILTRO`) | Saturação (tanh) **antes** do filtro, até +24 dB de entrada. Os primeiros 12% do botão fazem a passagem do limpo para o saturado; o volume é compensado. | 0 a 100%. Padrão 0%. |
 | `Mistura` (`FILTRO`) | Seco/molhado (linear). | 0 a 100%. Padrão 100%. |
 | `Tempo` (`LFO`) | LFO livre em Hz ou preso ao andamento. | `Livre`, `Andamento`. Padrão `Livre`. |
-| `Velocidade` (`LFO`) | Velocidade do LFO (só `Livre`). | 0,02 Hz a 20 Hz, log. Padrão 1 Hz. |
+| `Taxa` (`LFO`) | Frequência do LFO (só `Livre`). | 0,02 Hz a 20 Hz, log. Padrão 1 Hz. |
 | `Nota` (`LFO`) | Duração de um ciclo do LFO (só `Andamento`). | 12 figuras de `1/32` a `1/1`. Padrão `1/4`. |
 | `Profundidade` (`LFO`) | Quantas oitavas o LFO move o corte (para cima e para baixo). 0 = LFO desligado. | 0 a 6 oitavas (mostrado como `oit`), linear. Padrão 0. |
 | `Onda` (`LFO`) | Forma do LFO. `Aleatório` sorteia um valor novo a cada ciclo (com transição de 2 ms). | `Senoide`, `Triângulo`, `Serra`, `Quadrada`, `Aleatório`. Padrão `Senoide`. |
@@ -581,7 +582,7 @@ O corte efetivo é `Corte` + LFO × `Profundidade` + √(nível da entrada) × `
 
 ### Presets
 
-| Preset | Tipo | Corte | Ress. | Drive | Mistura | Tempo | Velocidade / Nota | Prof. | Onda | Envelope | Caráter |
+| Preset | Tipo | Corte | Ress. | Drive | Mistura | Tempo | Taxa / Nota | Prof. | Onda | Envelope | Caráter |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `Varredura lenta` | `Passa-baixa 24` | 700 Hz | 35% | 10% | 100% | `Livre` | 0,1 Hz | 3 oit | `Senoide` | 0 | Abre e fecha o brilho em 10 s por ciclo. |
 | `Wobble 1/8` | `Passa-baixa 24` | 400 Hz | 55% | 30% | 100% | `Andamento` | `1/8` | 3,5 oit | `Senoide` | 0 | O wobble de baixo de dubstep, uma balançada por colcheia. |
@@ -637,10 +638,7 @@ O que o sidechain exige e como se comporta:
 
 Estas não impedem o uso, mas você pode esbarrar nelas:
 
-- **`Ganho` manual e `Ganho automático` do compressor** somam no motor, embora o editor apague o `Ganho` e a curva do gráfico o ignore quando o automático está ligado. Deixe `Ganho` em 0 com o automático ligado.
-- **`Distorção`**: o motor aceita um parâmetro extra (id 8, *dither* do bitcrusher, 0/1) que não tem controle na interface.
-- **`Distorção`**: `Sobreamostragem` não é apagada quando `Tipo` é `Bitcrusher`, embora o motor a ignore nesse tipo.
-- **Limite de 16 efeitos por cadeia** não é imposto pelo app (ver [06c](06c-painel-de-efeitos.md#limites-e-pegadinhas)).
+- **Limite de 16 efeitos por cadeia**: o app desabilita o botão de adicionar quando a cadeia chega a 16 (ver [06c](06c-painel-de-efeitos.md#limites-e-pegadinhas)).
 
 ## Combina com
 

@@ -29,7 +29,7 @@ Receitas para consultar no meio do caminho: a cadeia vocal completa em [Efeitos 
 |---|---|---|
 | `Voz` | `Áudio` | 0,3 (cerca de −10,5 dB) |
 | `Violão` | `Áudio` | 0,2 (cerca de −14,0 dB) |
-| `Baixo` | `Áudio` | criado em nível 0 (não manda som até você subir) |
+| `Baixo` | `Áudio` | sem envio (o baixo vai só para o master, seco) |
 | `Bateria` | `Bateria`, kit `Acústico eletrônico`, sem nenhuma nota | 0,1 (−20 dB) |
 | `Reverb` | `Barramento`, efeito `Reverb`, preset `Placa`, `Mistura` 100% | |
 
@@ -99,7 +99,7 @@ Siga a ordem de [Mixagem e automação](mixagem-e-automacao.md): níveis, pan, e
 
 1. **Loop e nível.** Marque um loop de 8 compassos no trecho mais cheio (arrastando na régua, o que já liga o loop). Abra o mixer (`X`). Duplo clique em cada fader para voltar a 0 dB. Leve `Bateria` e `Baixo` a um pico de −12 a −10 dB, some o `Violão` e por último a `Voz`, que fica um pouco acima do resto. Os faders costumam acabar entre −6 e −20 dB.
 2. **Pan.** `Voz`, `Baixo` e `Bateria` em `C` (a bateria já espalha as peças no estéreo). `Violão` em `E35` (knob de pan, arrastando na vertical); se você gravar uma segunda camada de violão em outra faixa, ponha-a em `D35`.
-3. **Reverb em barramento.** O `Reverb` já está pronto (`Placa`, `Mistura` 100%). Abra o rack dele (`F` com o `Reverb` selecionado) e ponha `Pré-atraso` em 20 ms (deixa a voz na frente). Os envios do modelo servem de partida (`Voz` −10,5 dB, `Violão` −14 dB, `Bateria` −20 dB); ajuste arrastando o knob de envio do `Reverb` em cada canal (`Shift` deixa fino). Deixe o `Baixo` sem envio. `M` no barramento liga e desliga o reverb inteiro, para comparar.
+3. **Reverb em barramento.** O `Reverb` já está pronto (`Placa`, `Mistura` 100%). Abra o rack dele (`F` com o `Reverb` selecionado) e ponha `Pré-atraso` em 20 ms (deixa a voz na frente). Os envios do modelo servem de partida (`Voz` −10,5 dB, `Violão` −14 dB, `Bateria` −20 dB); ajuste arrastando o knob de envio do `Reverb` em cada canal (`Shift` deixa fino). O `Baixo` já vem sem envio: deixe assim, para o reverb não empastar os graves. `M` no barramento liga e desliga o reverb inteiro, para comparar.
 4. **Compressor no vocal.** Selecione a `Voz`, aperte `F` e adicione, nesta ordem, `EQ` (preset `Voz presente`) e `Compressor` (preset `Voz`: `Limiar` −20 dB, `Razão` 3,5:1, `Ataque` 5 ms, `Soltura` 80 ms, `Joelho` 6 dB, `Ganho` +4 dB, `Detector` `RMS`, `Passa-alta` 80 Hz). Arraste o `Limiar` no gráfico até o medidor de redução marcar de −3 a −6 dB nas frases mais fortes. Se a sala tinha ruído, ponha o `Gate` (preset `Ruído de fundo`) antes de todos.
 5. **Baixo e violão.** No `Baixo`, um `Compressor` com o preset `Baixo` (`Limiar` −22 dB, `Razão` 5:1, `Ataque` 3 ms, `Soltura` 120 ms, `Ganho` +5 dB). No `Violão`, um `EQ` com o preset `Corte de graves` e a `Frequência` da banda 1 subida a 100 Hz, para abrir espaço para o baixo.
 6. **Master.** Deixe o fader do `Master` em 0 dB. O pico do canal deve ficar entre −12 e −6 dB; se passar, baixe as faixas mais altas, não suba o master. Se o medidor vive grudado no topo, o limitador de segurança (−0,3 dBFS, sempre ligado) está segurando o som e achatando a mistura.

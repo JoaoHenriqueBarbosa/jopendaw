@@ -38,7 +38,7 @@ Regra prática:
 
 ### 1. Backup periódico
 
-O jopendaw não faz backup automático do arquivo: é um hábito seu. A nuvem **não** é backup de verdade, porque guarda só a versão atual (sem histórico), e apagar um projeto o apaga de vez.
+O jopendaw não faz backup automático do arquivo: é um hábito seu. A nuvem **não** é backup de verdade, porque guarda só a versão atual (sem histórico), e apagar um projeto o apaga de vez (os áudios dele, porém, ficam na conta como `sem uso` até você limpá-los na tela `Conta`; isso ocupa cota, mas não guarda o projeto).
 
 1. Combine um ritmo: no fim de cada sessão de trabalho, ou toda vez que o projeto chega a um marco (mixagem fechada, arranjo aprovado).
 2. Tenha uma pasta de backups fora do aparelho de trabalho (disco externo, Drive, o serviço que você já usa). Uma pasta por música ajuda.
@@ -81,7 +81,7 @@ Se a outra pessoa só precisa **ouvir**, mande o WAV (`Exportar`) em vez do proj
 
 - **Backup antes de decidir um conflito.** Com o diálogo `O projeto mudou em outro aparelho` aberto (ou depois de `Decidir depois`), exporte o `.jopendaw` neste aparelho: ele leva a versão daqui. Depois escolha `Usar a versão do servidor` sem medo de perder o que só existia neste aparelho: importe o arquivo e você tem as duas versões, cada uma num projeto.
 - **Duplicar um projeto para experimentar.** Exporte e importe na mesma conta: nasce `<nome> (importado)`, com os mesmos áudios (sem gastar mais cota, porque áudio repetido conta uma vez). Teste o arranjo radical nele.
-- **Restaurar um projeto apagado.** Apagar remove o projeto do servidor e da lista; se você tem o `.jopendaw`, `Importar projeto` o traz de volta como projeto novo (o histórico de desfazer não volta).
+- **Restaurar um projeto apagado.** Apagar remove o projeto do servidor e da lista (e, no aparelho, o documento local e os áudios que só ele usava); se você tem o `.jopendaw`, `Importar projeto` o traz de volta como projeto novo (o histórico de desfazer não volta). Os áudios **continuam na conta** como `sem uso` até você apagá-los na tela `Conta` ([armazenamento de áudios](../manual/01-projetos-modelos-conta.md#armazenamento-de-áudios-na-tela-conta)): se ainda estiverem lá, a importação os reaproveita sem gastar cota; se você já limpou, eles sobem de novo a partir do arquivo.
 - **Mudar de conta.** Exporte na conta antiga, saia (`Sair`), entre na nova e importe.
 - **Arquivar uma música terminada.** Exporte o `.jopendaw` e o WAV e guarde os dois juntos: o primeiro para reeditar, o segundo para ouvir.
 
@@ -103,7 +103,7 @@ Se a outra pessoa só precisa **ouvir**, mande o WAV (`Exportar`) em vez do proj
 | `Isto não parece um arquivo de projeto do jopendaw (ou ele está truncado ou corrompido).` | Download cortado, arquivo alterado ou de outro programa | Baixe ou copie de novo; confira o tamanho do arquivo |
 | `O arquivo está truncado ou incompleto: falta o áudio 1a2b3c4d….` | O envio ou a cópia do arquivo foi interrompido | Refaça a cópia; se persistir, exporte de novo na origem |
 | `Este arquivo foi criado por uma versão mais nova do jopendaw ...` | Quem exportou usa um app mais novo | Atualize o app (no celular, o APK; na web, recarregue a página) |
-| Importou e o ícone fica em `Offline` ou `Erro` | Sem rede para enviar, ou cota de 4 GB, ou documento acima de 8 MB | O projeto está no aparelho e abre; veja as mensagens da tabela `Mensagens do estado Erro` em [01b](../manual/01b-nuvem-e-sincronizacao.md) |
+| Importou e o ícone fica em `Offline` ou `Erro` | Sem rede para enviar, ou cota de 4 GB (libere espaço em `Conta`, `Limpar áudios sem uso`), ou documento acima de 8 MB | O projeto está no aparelho e abre; veja as mensagens da tabela `Mensagens do estado Erro` em [01b](../manual/01b-nuvem-e-sincronizacao.md) |
 | `Não deu para importar o projeto: …` | Sem rede ou sem sessão ao cadastrar o projeto | Confira a rede e a conta, e tente de novo |
 | Sobrou um projeto vazio na lista depois de uma importação que falhou | O app não conseguiu apagar o projeto criado no meio da falha | Apague o projeto vazio pelo menu `Mais` do card |
 | No projeto importado, um clipe está em silêncio e diz `áudio fora deste aparelho` | O áudio faltava no arquivo (ver o primeiro sintoma) | Importe o som de novo naquele clipe |

@@ -80,7 +80,7 @@ O título é `Projetos`; embaixo, o total (`1 projeto`, `3 projetos`). Os cards 
 | Card do projeto | Clicar abre o projeto (estúdio) | Mostra o nome, `120 BPM · 4/4 · 48.0 kHz` e `Mexido agora` / `Mexido há N min` / `Mexido há N h` / `Mexido dd/mm` | O `kHz` é o cadastrado no servidor (48.0 nos projetos criados pelo app) |
 | Menu `Mais` (três pontos do card) | `Renomear`, `Exportar projeto…` e `Apagar` | | `Exportar projeto…` gera o arquivo `.jopendaw` ([seção abaixo](#projeto-em-arquivo-jopendaw)) |
 | `Renomear` | Abre `Renomear projeto` (campo `Nome`, botão `Salvar`) | Até 120 caracteres | Só salva se o nome mudou e não ficou vazio |
-| `Apagar` | Pede confirmação: `Apagar "<nome>"?` / `O projeto some para sempre, com tudo o que estiver nele.` | Botões `Cancelar` e `Apagar` (vermelho) | Depois: `Projeto apagado.` |
+| `Apagar` | Pede confirmação: `Apagar "<nome>"?` / `O projeto some para sempre, com tudo o que estiver nele.` | Botões `Cancelar` e `Apagar` (vermelho) | Depois: `Projeto apagado.`. Os **áudios do projeto não são apagados do servidor**: passam a constar como "sem uso" na tela `Conta` (ver [Armazenamento de áudios](#armazenamento-de-áudios-na-tela-conta)) |
 | `Tentar de novo` | Recarrega a lista quando deu erro | Erro na tela: `Não deu para carregar` | Sem rede: `Sem conexão com o servidor. Tente de novo.` |
 
 Diálogo `Novo projeto`:
@@ -142,7 +142,7 @@ Metrônomo **ligado**, contagem ligada, loop desligado (região de 0 a 4 compass
 |---|---|---|
 | `Voz` | `Áudio`, ciano | 0,3 (cerca de −10,5 dB) |
 | `Violão` | `Áudio`, amarelo | 0,2 (cerca de −14,0 dB) |
-| `Baixo` | `Áudio`, verde | Envio criado com nível 0: não manda som ao reverb até você subir |
+| `Baixo` | `Áudio`, verde | Sem envio: o baixo vai só para o master, seco (o reverb empastaria os graves); para reverb nele, crie o envio no mixer |
 | `Bateria` | `Bateria`, lilás, kit `Acústico eletrônico` | 0,1 (−20 dB) |
 | `Reverb` | `Barramento`, azul, efeito `Reverb` com preset `Placa` | |
 
@@ -162,6 +162,33 @@ O título é `Conta` e o subtítulo, o seu email.
 | `Política de privacidade` · `Termos de uso` | Abrem as páginas fora do app | | |
 
 A sessão dura até 30 dias sem uso e, no máximo, 90 dias de qualquer forma; o acesso é renovado sozinho a cada 15 minutos, sem você ver.
+
+#### Armazenamento de áudios (na tela `Conta`)
+
+Um cartão entre o cartão de nome e email e o cartão com `Sair`. Ele mostra o que os seus áudios ocupam **no servidor** (a cota de 4 GB por conta, [capítulo 01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)) e deixa apagar o que nenhum projeto usa mais. Os números são carregados ao abrir a tela e depois de cada ação. Se o servidor não responder, o cartão simplesmente **não aparece** (sem mensagem de erro; o resto da tela segue valendo).
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Título `Armazenamento de áudios` | Identifica o cartão | | |
+| Barra de uso | Fração da cota gasta | 0 a 100% de 4 GB; fica **vermelha a partir de 90%** | |
+| Texto `X de Y usados` | Bytes usados e cota | Tamanhos em B, KB, MB, GB (base 1024, vírgula decimal): por exemplo `4,7 MB de 4,0 GB usados` | O uso soma os áudios diferentes da conta; o mesmo arquivo em vários projetos conta uma vez |
+| Texto `N áudios sem uso em nenhum projeto (X).` | Quantos áudios e quantos bytes nenhum projeto seu cita | Só aparece se N for maior que zero | "Em uso" é qualquer áudio que apareça em algum documento de projeto da conta (clipes, sampler, zonas do sampler) |
+| `Limpar áudios sem uso` (ícone de vassoura) | Apaga do servidor todos os áudios sem uso | Só aparece com N maior que zero; fica desligado enquanto uma ação roda | Pede confirmação (abaixo) |
+| Confirmação `Apagar áudios sem uso?` | `N áudios (X) que nenhum projeto usa serão apagados do servidor. Os arquivos guardados neste aparelho não mudam. Não tem volta.` | Botões `Cancelar` e `Apagar` (vermelho) | Depois aparece o aviso `Liberei X (N áudios apagados).`, ou `Nada para apagar.` se nada saiu |
+| Aviso extra `N áudio enviado na última hora ficou de fora.` | Acrescentado ao aviso quando a limpeza poupou áudios recentes | | Áudio enviado há **menos de 1 hora** nunca sai na limpeza em massa: o app sobe o áudio antes do documento que o cita, e nesse intervalo ele pareceria sem uso. Tente de novo depois |
+| `Ver N áudios` (item expansível) | Abre a lista dos áudios da conta, do maior para o menor | Só aparece se há ao menos um áudio | |
+| Linha de cada áudio | Título: o nome do arquivo (`Áudio sem nome` se nenhum documento o guarda). Legenda: `X · sem uso` ou `X · em <projeto>, <projeto>` | | Os nomes vêm do mapa de áudios do documento do projeto |
+| `Apagar` (ícone de lixeira, tooltip) | Apaga aquele áudio | **Só aparece nos áudios sem uso**; desligado enquanto uma ação roda | Áudio em uso não tem botão: tire-o do projeto antes |
+| Confirmação `Apagar este áudio?` | `<nome> (X) some do servidor. Não tem volta.` | Botões `Cancelar` e `Apagar` (vermelho) | Depois: `Liberei X.` |
+
+O que apagar um áudio faz e não faz:
+- Tira o áudio da **cota** e do servidor. A cópia guardada no **aparelho** não é tocada (ela some ao apagar o projeto pelo app, ver abaixo).
+- O servidor recusa se, no instante do pedido, algum projeto seu passou a citar o áudio (por exemplo, editado em outro aparelho): o app mostra o erro `Este áudio ainda é usado em projetos; tire-o de lá antes de apagar.` (ou, se há uma conversão em andamento com ele, `Há uma tarefa em andamento com este áudio; tente de novo quando ela terminar.`) `(testado só por testes automáticos)`.
+- Se outra conta tiver enviado exatamente o mesmo arquivo, o arquivo em si fica no servidor para ela; para você a cota volta do mesmo jeito.
+- **Apagar um projeto não apaga os áudios dele no servidor.** Eles continuam na cota e passam a aparecer como `sem uso`; a decisão de apagar fica com você, aqui. Isso vale também para clipes e faixas apagados dentro de um projeto: o áudio só fica `sem uso` depois que o documento **sincronizado** deixa de citá-lo.
+- Um áudio que só existia em um documento **ainda não sincronizado** parece `sem uso` para o servidor. Por isso, espere o `Sincronizado` ([capítulo 01b](01b-nuvem-e-sincronizacao.md)) antes de limpar, e prefira a limpeza em massa só depois do projeto sincronizado.
+
+Visto rodando no Chrome: o cartão com `4,7 MB de 4,0 GB usados` e o item `Ver 3 áudios` com nome, tamanho e `em <projetos>`. Limpar e apagar por item, as confirmações e os avisos foram conferidos só pelos testes automáticos do app `(testado só por testes automáticos)`.
 
 ## Passo a passo
 
@@ -308,7 +335,7 @@ Aparecem em vermelho na tela `Projetos` e nada é criado.
 
 - **Criar, renomear e apagar precisam de rede**: a lista de projetos vem do servidor. Sem rede a tela `Projetos` mostra o erro com `Tentar de novo`. Já dentro de um projeto aberto, a edição segue funcionando ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
 - **O modelo é aplicado só uma vez, no aparelho que criou o projeto.** A escolha fica guardada no aparelho até a primeira abertura. Se você abrir o projeto recém-criado antes em outro aparelho, ele começa como o `Vazio` (uma faixa `Áudio 1`); o modelo só vira documento quando o aparelho que criou abrir o projeto. Evite editar no outro aparelho antes disso, senão os dois lados terão mudado e aparecerá o diálogo de conflito ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
-- **Apagar o projeto apaga só o cadastro e o documento no servidor.** O código do app não remove a cópia local do documento nem dos áudios no aparelho, e os áudios enviados continuam contando na cota da conta ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
+- **Apagar o projeto apaga o cadastro e o documento no servidor, e limpa o aparelho, mas não os áudios do servidor.** No aparelho o app apaga o documento local, o estado de sincronização, o modelo pendente e os áudios guardados que só aquele projeto citava (um áudio que outro projeto do aparelho ainda cita fica). No servidor os áudios continuam contando na cota da conta e aparecem como `sem uso` na tela `Conta`, de onde você os apaga ([capítulo 01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)). Os sons derivados do warp guardados no aparelho não entram nessa limpeza.
 - **`Mexido ...` no card** acompanha o servidor: só muda quando o documento é enviado (ou o nome, alterado). Uma edição que ainda não sincronizou não atualiza o card.
 - O `Email` da conta não pode ser trocado na tela `Conta`.
 - `Sair` encerra a sessão, mas não apaga do aparelho os projetos e áudios já guardados: eles continuam lá e voltam a valer quando a conta entrar de novo.

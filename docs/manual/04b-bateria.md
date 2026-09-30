@@ -97,7 +97,7 @@ O seletor `Kits de bateria` (categoria `KITS`) tem 7 kits. Cada kit fixa os quat
 
 | Kit | Caráter |
 |---|---|
-| Padrão | Todos os knobs nos padrões (volumes 100%, afinação 0, decaimento ×1, timbre 50%) e `Volume` geral em 80% |
+| Inicial | Todos os knobs nos padrões (volumes 100%, afinação 0, decaimento ×1, timbre 50%) e `Volume` geral em 80% |
 | 808 | Bumbo grave e comprido com pouco clique (volume 110%, -3 st, ×2.60, timbre 25%), caixa mais escura, toms longos e graves (×1.80, timbre 20%), chimbais e pratos suaves. O "boom" da 808 |
 | 909 | Bumbo curto com clique na frente (110%, +1 st, ×0.80, timbre 75%), caixa com muita esteira (timbre 75%), chimbais e pratos brilhantes (timbre 85% no chimbal, ×1.40 no prato de ataque, ×1.50 na condução) |
 | Acústico eletrônico | Bumbo curto (×0.55), caixa mais longa (×1.25, timbre 60%), palmas baixas (55%), toms mais abertos entre si (-4, -1 e +2 st, ×1.35), pratos longos (×2.00 no de ataque); `Volume` geral 85% |
@@ -142,7 +142,7 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 ### Tocar a bateria no computador
 
 1. Ligue o teclado do computador (`Ctrl+K`).
-2. Aperte `Z` duas vezes para descer da oitava 4 para a 2 (o botão da barra mostra `C2`).
+2. Numa faixa de bateria o teclado já começa na oitava 2: o botão da barra mostra `C2 · sem atalhos`. Se você mexeu com `Z`/`X`, volte até `C2`.
 3. Toque: `A` = Bumbo, `S` = Caixa, `E` = Palmas, `T` = Chimbal fechado, `U` = Chimbal aberto, `F`, `H` e `K` = Toms grave, médio e agudo, `O` = Prato de ataque, `P` = Prato de condução, `W` = Aro. As teclas `D`, `G`, `Y`, `J` e `L` caem em notas vizinhas do General MIDI e tocam a peça ao lado (`D` a Caixa, `G` o Tom grave, `Y` o Chimbal fechado, `J` o Tom médio, `L` o Tom agudo). O Cowbell (nota 56) fica fora dessas 16 teclas: com a oitava em C3, é a tecla `Y`.
 
 ## Combina com
@@ -161,7 +161,7 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 - **Soltar a nota não corta a peça.** Nem o `note off` do teclado, nem o fim da nota no piano roll, nem parar o transporte cortam pratos ou chimbal aberto: as caudas terminam sozinhas.
 - **Chimbais se cortam.** O chimbal fechado abafa o aberto em cerca de 6 ms, e o aberto abafa o fechado.
 - **Retoque da mesma peça.** Um golpe novo na mesma peça esvanece o anterior em 1,5 ms; só nos pratos (ataque e condução) a cauda anterior continua por baixo, até 3 golpes sobrepostos.
-- **Teclado do computador em C4 não toca bateria.** Ele parte da oitava 4 (nota 60), fora do mapa; desça a oitava com `Z` até `C2`. A oitava do teclado do computador é única para o projeto; a do teclado da tela é por tipo de instrumento (na bateria, C2 por padrão).
+- **A oitava do teclado do computador é por tipo de faixa.** Na bateria ela começa em C2 (nota 36) e as 16 teclas `A` a `P` tocam direto; nos outros instrumentos ela começa em C4. Se você subir a oitava da bateria com `X` (por exemplo para C4, nota 60), o teclado cai fora do mapa e não toca nada: volte com `Z` até `C2`. Mudar a oitava numa bateria não muda a oitava dos outros instrumentos, e o inverso também vale.
 - **Nota fora do mapa é silêncio.** Se você cola ou grava notas graves demais ou agudas demais, elas aparecem como `sem peça` e não tocam.
 - **Sem MIDI de velocidade zero.** Uma nota com velocidade 0 é tratada como "soltar" e não dispara nada.
 - **Tudo é sintetizado**: não há como carregar samples nas peças (para isso, use o [sampler](04c-sampler.md)).
@@ -173,6 +173,6 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 |---|---|
 | `I` | Abre e fecha o painel `Instrumento` |
 | `Ctrl+K` | Liga o teclado do computador |
-| `Z` / `X` (teclado ligado) | Desce ou sobe a oitava do teclado do computador (para a bateria, deixe em C2) |
+| `Z` / `X` (teclado ligado) | Desce ou sobe a oitava do teclado do computador, só para faixas de bateria (começa em C2; deixe em C2) |
 | `A` `W` `S` `E` `F` `T` `H` `U` `K` `O` `P` (oitava C2) | Bumbo, Aro, Caixa, Palmas, Tom grave, Chimbal fechado, Tom médio, Chimbal aberto, Tom agudo, Prato de ataque, Prato de condução |
 | `C` / `V` (teclado ligado) | Intensidade das notas do teclado (10% a 100%) |

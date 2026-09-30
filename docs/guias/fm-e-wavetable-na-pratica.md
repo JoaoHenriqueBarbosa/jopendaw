@@ -24,7 +24,7 @@ Preset equivalente: `Sino elétrico` (categoria `Percussivos`).
 1. Crie uma faixa `FM`. No cartão `Algoritmo` deixe o `Algoritmo 5: (1→2) + (3→4)` (o padrão): dois pares, cada modulador com o seu portador.
 2. Preencha os operadores:
 
-| | Razão | Nível | Ataque | Decaimento | Sustentação | Soltura | Velocidade |
+| | Razão | Nível | Ataque | Decaimento | Sustentação | Soltura | Sens. vel. |
 |---|---|---|---|---|---|---|---|
 | Operador 1 (modulador) | ×3.5 | 50% | 1,0 ms | 2,50 s | 0% | 1,00 s | 50% |
 | Operador 2 (portador) | ×1.00 | 75% | 1,0 ms | 4,00 s | 0% | 1,50 s | 30% |
@@ -45,14 +45,14 @@ Preset equivalente: `Baixo DX` (categoria `Baixos`).
 3. Cartão `Algoritmo`: `Realimentação` 15%.
 4. Operadores:
 
-| | Razão | Nível | Ataque | Decaimento | Sustentação | Soltura | Velocidade |
+| | Razão | Nível | Ataque | Decaimento | Sustentação | Soltura | Sens. vel. |
 |---|---|---|---|---|---|---|---|
 | Operador 1 (modulador) | ×1.00 | 45% | 1,0 ms | 350 ms | 10% | 100 ms | 60% |
 | Operador 2 (modulador) | ×1.00 | 50% | 1,0 ms | 400 ms | 20% | 100 ms | 50% |
 | Operador 3 (modulador) | ×2.00 | 30% | 1,0 ms | 150 ms | 0% | 100 ms | 50% |
 | Operador 4 (portador) | ×1.00 | 85% | 1,0 ms | 400 ms | 60% | 120 ms | 30% |
 
-5. Teste tocando notas graves (uma ou duas oitavas abaixo do Dó central) e variando a força da nota: com `Velocidade` maior nos moduladores, notas fortes ficam mais brilhantes.
+5. Teste tocando notas graves (uma ou duas oitavas abaixo do Dó central) e variando a força da nota: com `Sens. vel.` maior nos moduladores, notas fortes ficam mais brilhantes.
 
 Por quê: os moduladores caem em 150 a 400 ms e levam o brilho junto; o portador (operador 4) segura o corpo. É o "estalo" de baixo de DX.
 
@@ -63,11 +63,11 @@ Preset equivalente: `Pad morfante` (categoria `Pads`).
 1. Crie uma faixa `Wavetable`.
 2. `Oscilador 1`: `Série` `Clássica`, `Posição` 15%, `Nível` 80%.
 3. `Oscilador 2`: `Série` `Vozes`, `Posição` 20%, `Nível` 40%, `Desafinação` +9 ct.
-4. `Mistura`: `Uníssono` 4, `Espalhar` 25 ct, `Estéreo` 80%.
+4. `Mistura`: `Uníssono` 4, `Desafino` 25 ct, `Espalhar` 80%.
 5. `Filtro`: `Corte` 4,20 kHz (o resto no padrão).
 6. `Amplitude`: `Ataque` 900 ms, `Decaimento` 1,00 s, `Sustentação` 80%, `Soltura` 1,80 s.
-7. `LFO`: `Onda` `Senoide`, `Velocidade` 0,12 Hz, `Posição` 35%.
-8. `Geral`: `Velocidade` 30% (notas fracas e fortes soam parecidas, o que ajuda em pad).
+7. `LFO`: `Onda` `Senoide`, `Taxa` 0,12 Hz, `Posição` 35%.
+8. `Geral`: `Sens. vel.` 30% (notas fracas e fortes soam parecidas, o que ajuda em pad).
 9. Segure um acorde longo: o timbre percorre de "redondo" para "vocal" e volta, em ciclos de uns 8 segundos.
 
 ### Receita 4: lead com PWM (Wavetable)
@@ -77,9 +77,9 @@ Preset equivalente: `Lead PWM` (categoria `Leads`).
 1. Crie uma faixa `Wavetable`.
 2. `Oscilador 1`: `Série` `Clássica`, `Posição` 71% (`Pulso 22%`).
 3. `Oscilador 2`: `Série` `Clássica`, `Posição` 75%, `Nível` 60%, `Desafinação` +9 ct.
-4. `Mistura`: `Uníssono` 3, `Espalhar` 18 ct.
+4. `Mistura`: `Uníssono` 3, `Desafino` 18 ct.
 5. `Filtro`: `Corte` 5,50 kHz, `Envelope` +20%. No `Envelope do filtro`, os padrões servem.
-6. `LFO`: `Onda` `Triângulo`, `Velocidade` 2,20 Hz, `Posição` 18%.
+6. `LFO`: `Onda` `Triângulo`, `Taxa` 2,20 Hz, `Posição` 18%.
 7. `Amplitude`: `Sustentação` 85%, `Soltura` 200 ms. `Geral`: `Vozes` 1, `Glide` 50 ms.
 8. Toque uma nota longa: o pulso abre e fecha continuamente entre uns 40% e uns 10% de largura.
 
@@ -91,10 +91,10 @@ Preset equivalente: `Coro AEIOU` (categoria `Vocais`).
 
 1. Crie uma faixa `Wavetable`.
 2. `Oscilador 1`: `Série` `Vozes`, `Posição` 25%. `Oscilador 2`: `Série` `Vozes`, `Posição` 25%, `Nível` 50%, `Desafinação` +14 ct.
-3. `Mistura`: `Uníssono` 2, `Espalhar` 16 ct.
+3. `Mistura`: `Uníssono` 2, `Desafino` 16 ct.
 4. `Filtro`: `Corte` 6,50 kHz.
 5. `Amplitude`: `Ataque` 250 ms, `Soltura` 700 ms.
-6. `LFO`: `Onda` `Triângulo`, `Velocidade` 0,35 Hz, `Posição` 45%.
+6. `LFO`: `Onda` `Triângulo`, `Taxa` 0,35 Hz, `Posição` 45%.
 7. Toque acordes em região média (a partir do Dó 3): a vogal passeia de A até U e volta.
 
 Por quê: as tabelas da série `Vozes` são A, E, I, O, U nessa ordem, então o LFO em triângulo percorre as vogais. As vogais foram calculadas para uma nota fundamental perto de 150 Hz; em notas muito agudas a vogal muda.
@@ -107,7 +107,7 @@ Preset equivalente: `Gongo` (categoria `Metais`).
 2. `Realimentação` 40%.
 3. Operadores:
 
-| | Razão | Nível | Ataque | Decaimento | Sustentação | Soltura | Velocidade |
+| | Razão | Nível | Ataque | Decaimento | Sustentação | Soltura | Sens. vel. |
 |---|---|---|---|---|---|---|---|
 | Operador 1 (modulador) | ×1.41 | 70% | 1,0 ms | 4,00 s | 0% | 3,00 s | 40% |
 | Operador 2 (portador) | ×1.00 | 60% | 1,0 ms | 5,00 s | 0% | 3,00 s | 30% |
@@ -135,7 +135,7 @@ Todos os efeitos se adicionam na aba `Efeitos` (botão `Adicionar efeito`): `Cho
 
 Regras práticas:
 
-- **FM sai em mono**: o primeiro efeito de estéreo (Chorus, Reverb, Delay em `Ping-pong`) é quem abre a imagem. Wavetable com `Uníssono` maior que 1 e `Estéreo` acima de 0% já sai aberta.
+- **FM sai em mono**: o primeiro efeito de estéreo (Chorus, Reverb, Delay em `Ping-pong`) é quem abre a imagem. Wavetable com `Uníssono` maior que 1 e `Espalhar` acima de 0% já sai aberta.
 - **Chorus antes do Reverb**: a cauda do reverb sai limpa, sem modulação em cima dela.
 - **Delay em `Andamento`** (não em `Livre`) mantém os ecos no tempo da música; a `Nota` escolhe a divisão.
 - **Sub e graves**: `Sub` e sons abaixo do Dó 2 não gostam de reverb; se necessário use `Cortar graves` no `Reverb` (padrão 120 Hz) ou envie só uma parte do sinal por um envio de barramento (veja [Mixer](../manual/06-mixer.md)).
@@ -172,8 +172,8 @@ Como a automação, o LFO e o envelope **somam** na mesma posição (e o resulta
 - **O sino do FM não soa como sino**: verifique se as razões do modulador são quebradas (3,5 ou 7), não 1 ou 2, e se a `Sustentação` dos portadores está em 0%.
 - **A nota do FM some antes de eu soltar a tecla**: é a `Sustentação` em 0% de todos os portadores; suba a de pelo menos um deles.
 - **Trocar de algoritmo mudou o brilho de repente**: o `Nível` de um operador é volume quando ele é portador e brilho quando é modulador. Reajuste-o.
-- **Wavetable: `Espalhar` e `Estéreo` esmaecidos**: o `Uníssono` está em 1. Com uma cópia só, não há o que espalhar; suba o `Uníssono` para 2 ou mais.
+- **Wavetable: `Desafino` e `Espalhar` esmaecidos**: o `Uníssono` está em 1. Com uma cópia só, não há o que espalhar; suba o `Uníssono` para 2 ou mais.
 - **A `Posição` não muda o som**: confira o `Nível` do oscilador (0% deixa o cartão esmaecido) e a `Série`; se a nota é muito aguda e o filtro está fechado, o `Corte` pode estar escondendo a diferença. Lembre que `Posição` mais o movimento do LFO é preso entre 0% e 100%.
 - **As vogais do coro soam todas iguais ou trocadas**: os formantes foram feitos para uma nota perto de 150 Hz (Ré 3). Toque em região média; em notas muito agudas transponha o oscilador para baixo com `Semitons` −12.
-- **O LFO do pad fica em movimento demais ou de menos**: `Velocidade` abaixo de 0,3 Hz para morfar; acima de 2 Hz vira vibrato de timbre.
+- **O LFO do pad fica em movimento demais ou de menos**: `Taxa` abaixo de 0,3 Hz para morfar; acima de 2 Hz vira vibrato de timbre.
 - **Aplicar um preset apagou o meu ajuste**: o preset sobrescreve todos os parâmetros; use desfazer (`Ctrl+Z`, `Cmd+Z` no Mac) e ajuste os valores depois de escolher o preset.

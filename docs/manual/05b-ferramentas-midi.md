@@ -28,7 +28,7 @@ Os pontos de `Pitch bend`, `Modulação` e `Sustain` do clipe (ver [Faixa de con
 | `Inverter no tempo` | **Espelhados** no trecho ocupado pelas notas alvo (do menor início ao maior fim): a curva de bend e de modulação toca de trás para frente | O `Sustain` **não** é espelhado (cada "desce" viraria "sobe" e o que era segurado passaria a soltar). Pontos fora do trecho ficam onde estão |
 | `Dividir no cursor` (`K`) | **Nada**: só corta notas. Os pontos continuam no mesmo clipe, onde estavam | Para cortar também os pontos, divida o clipe na linha do tempo (`Cortar no cursor`, tecla `S`; ver abaixo) |
 | `Unir notas iguais adjacentes`, `Remover duplicadas`, `Aparar sobrepostas` | Nada | `Aparar sobrepostas` encurta **notas** da mesma altura; não tem relação com aparar o clipe |
-| `Humanizar…`, `Rampa de velocidade`, `Legato`, `Staccato…`, `Inverter na altura`, `Reverter a ordem das notas`, `Colcheias em tercinas`, arpejo e acordes | Nada | Os pontos não acompanham notas que mudam de lugar por essas ferramentas |
+| `Humanizar…`, `Rampa de velocidade`, `Legato`, `Staccato…`, `Inverter na altura`, `Reverter a ordem das notas`, `Dividir colcheias em 3 notas`, arpejo, acordes e `Prender seleção na escala` | Nada | Os pontos não acompanham notas que mudam de lugar por essas ferramentas |
 | `Quantizar` (`Q`), setas, arrastar notas | Nada | Um bend desenhado numa nota não anda com ela |
 | Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) | Nada: a área de transferência guarda só notas | Para repetir um bend junto do trecho, duplique o clipe inteiro na linha do tempo ou redesenhe |
 
@@ -53,6 +53,8 @@ Ao aparar a borda esquerda e ao sobrepor, o **estado** que um controle tinha ant
 |---|---|---|---|---|
 | `Escala…` | Abre o diálogo `Escala do clipe` (o mesmo do botão `Escala`) | O clipe (a escala é gravada nele) | Ver tabela do diálogo abaixo | Só em faixa melódica |
 | `Prender na escala` (caixa de marcar) | Faz notas criadas, movidas de linha e coladas encaixarem na nota da escala mais próxima | Ações de desenhar, mover e colar (não mexe nas notas existentes) | Desligado por padrão; apagado enquanto o clipe não tem escala | Só em faixa melódica; vale para a sessão |
+| `Manter o encaixe ao mudar a altura` (caixa de marcar) | Faz três operações que mudam a altura também respeitarem a escala: as setas `↑`/`↓` do editor (inclusive com `Shift`), `Inverter na altura` e `Inserir acorde…` | Seleção ou tudo, conforme a operação | **Desligado por padrão**; apagado enquanto o clipe não tem escala. Só vale com `Prender na escala` também ligado | Só em faixa melódica; vale para a sessão. Ver "Como o encaixe escolhe a nota" abaixo |
+| `Prender seleção na escala` | Leva agora as notas que já estão no clipe para a nota da escala mais próxima | Seleção ou tudo | Apagado sem escala no clipe ou sem notas. Não depende das duas caixas acima. Empate vai para a nota de baixo; nota cuja linha de destino não existe no editor fica onde está | Só em faixa melódica; é uma edição só no histórico e não grava nada se nenhuma nota mudou (testado só por testes automáticos) |
 | `Inserir acorde…` | Abre o diálogo `Acorde` | Ver diálogo abaixo | Último tipo e inversão usados ficam de ponto de partida (começa em `Maior`, `Fundamental`) | Só em faixa melódica |
 | `Acorde no clique` (vira `Acorde no clique: Maior`, com `, 1ª inversão` etc., quando ligado) | Liga o "carimbo": cada nota criada por clique vira um acorde inteiro | Notas novas (Lápis, ou dois cliques na Seleção) | Desligado por padrão. Desligado: abre o diálogo `Acorde`. Ligado: um clique no item desliga | Só em faixa melódica; o arraste na criação dá a duração a todas as notas do acorde |
 | `Desdobrar acorde em arpejo` | Transforma cada acorde em notas em sequência | Só seleção | | Funciona também na bateria |
@@ -64,7 +66,7 @@ Ao aparar a borda esquerda e ao sobrepor, o **estado** que um controle tinha ant
 |---|---|---|---|
 | `Tônica` (12 fichas) | Nota de partida da escala | `C`, `C#`, `D`, `D#`, `E`, `F`, `F#`, `G`, `G#`, `A`, `A#`, `B`; padrão `C` (ou a tônica atual do clipe) | |
 | `Escala` (15 fichas) | Tipo de escala | `Maior` (padrão), `Menor natural`, `Menor harmônica`, `Menor melódica`, `Dórico`, `Frígio`, `Lídio`, `Mixolídio`, `Lócrio`, `Pentatônica maior`, `Pentatônica menor`, `Blues`, `Tons inteiros`, `Diminuta (tom e semitom)`, `Cromática` | A cromática usa as 12 notas: realça tudo e não prende em nada |
-| `Prender na escala` (chave) com o texto "Notas desenhadas, movidas e coladas encaixam na nota mais próxima da escala" | Liga/desliga o encaixe | Começa no valor atual | É a mesma opção do item do menu |
+| `Prender na escala` (chave) com o texto "Notas desenhadas, movidas e coladas encaixam na nota mais próxima da escala (transpor, inverter e acordes: opção no menu)" | Liga/desliga o encaixe | Começa no valor atual | É a mesma opção do item do menu. A opção `Manter o encaixe ao mudar a altura` não está no diálogo: fica só no menu |
 | `Cancelar` | Fecha sem mudar nada | | |
 | `Sem escala` | Tira a escala do clipe | Só aparece se o clipe já tem escala | |
 | `Aplicar` | Grava a escala no clipe e o estado da chave | | |
@@ -95,6 +97,14 @@ Arrastando C4 uma linha para cima com o encaixe ligado: C#4 -> D4 (empate sobe)
 ```
 
 Mover uma nota só na horizontal nunca a tira do lugar: o encaixe só age quando a altura muda.
+
+**Encaixe ao transpor, inverter e inserir acordes.** Com `Prender na escala` **e** `Manter o encaixe ao mudar a altura` ligados (o segundo vem desligado):
+
+- as setas `↑` e `↓` (e `Shift+↑`/`Shift+↓`, uma oitava) andam de nota da escala em nota da escala, no sentido da seta: a seta primeiro sobe ou desce a altura e depois a nota cai na nota da escala mais próxima, com o empate a favor do sentido em que você vai. Se nenhuma nota muda, nada é gravado;
+- `Inverter na altura` espelha as alturas e depois encaixa o resultado na escala (empate para baixo);
+- `Inserir acorde…` (botão `Inserir nas notas`) encaixa as notas do acorde na escala. Um acorde que tem notas fora da escala (por exemplo `Maior` numa escala menor) tem essas notas puxadas para a escala; os acordes `Diatônico: …` já saem dentro dela.
+
+Com uma das duas caixas desligada, essas três operações continuam podendo gerar notas fora da escala. Nada disso vale na bateria (testado só por testes automáticos).
 
 #### Diálogo `Acorde`
 
@@ -213,18 +223,18 @@ Nota sozinha C2@0(4), Taxa 1/8, Subir, 2 oitavas
 | `Legato` (`Shift+L`) | Cada nota vai até o começo da próxima | Seleção ou tudo | Sem parâmetros | |
 | `Staccato…` | Encurta as notas | Seleção ou tudo | Diálogo `Staccato` (abaixo) | |
 | `Inverter no tempo` | Toca de trás para frente (espelha no tempo) | Seleção ou tudo | Sem parâmetros | |
-| `Inverter na altura` | Vira de cabeça para baixo (espelha na altura) | Seleção ou tudo | Sem parâmetros; apagado na bateria | |
+| `Inverter na altura` | Vira de cabeça para baixo (espelha na altura) | Seleção ou tudo | Sem parâmetros; apagado na bateria | Com `Prender na escala` e `Manter o encaixe ao mudar a altura` ligados, o resultado é encaixado na escala |
 | `Reverter a ordem das notas` | Toca as alturas de trás para frente mantendo o ritmo | Seleção ou tudo | Sem parâmetros | |
-| `Colcheias em tercinas` | Cada colcheia vira três notas iguais | Seleção ou tudo | Sem parâmetros | Só age em notas de exatamente 1/2 tempo |
+| `Dividir colcheias em 3 notas` | Cada colcheia vira três notas iguais | Seleção ou tudo | Sem parâmetros | Só age em notas de exatamente 1/2 tempo. O nome não é ritmo de tercina do compasso: ele só divide a colcheia em três notas iguais |
 
 #### Diálogo `Humanizar`
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | `Tempo` | Quanto o início de cada nota pode se deslocar (para mais ou para menos) | 0% a 100%, de 5 em 5, padrão 50%. 100% = até 1/8 de tempo (0,125 tempo, 1/32 de nota) para cada lado | Nota nunca passa para antes do início do clipe |
-| `Velocidade` | Quanto a velocidade pode variar (para mais ou para menos) | 0% a 100%, de 5 em 5, padrão 50%. 100% = até 0,3 da escala 0 a 1, ou seja cerca de 38 de 127 para cada lado (a legenda do diálogo diz "até 30 de 127"; ver pegadinhas) | O resultado é sempre entre 1 e 127 |
+| `Velocidade` | Quanto a velocidade pode variar (para mais ou para menos) | 0% a 100%, de 5 em 5, padrão 50%. 100% = até 0,3 da escala 0 a 1, ou seja cerca de 38 de 127 para cada lado (a legenda do diálogo diz "até 38 de 127", o mesmo valor) | O resultado é sempre entre 1 e 127 |
 | `Semente` | Escolhe qual "sorteio" será usado | 1 a 99; começa em 1 e cada uso avança um | A mesma semente com os mesmos ajustes dá sempre o mesmo resultado; mude para outro |
-| Legenda | "Tempo 100% desloca até 1/32 de nota; velocidade 100%, até 30 de 127. A mesma semente dá sempre o mesmo resultado." | | |
+| Legenda | "Tempo 100% desloca até 1/32 de nota; velocidade 100%, até 38 de 127. A mesma semente dá sempre o mesmo resultado." | | |
 | `Cancelar` / `Humanizar` | Fecha / aplica | | |
 
 `Shift+H` (e o item, pelo atalho) aplica **direto** com os últimos valores de `Tempo` e `Velocidade` do diálogo e uma semente nova a cada vez, sem abrir o diálogo. Repetir `Shift+H` empilha desvios diferentes.
@@ -289,10 +299,10 @@ Inverter na altura              G4@0(2)  D#4@2(1) C4@3(1)
 Detalhes:
 
 - `Inverter no tempo` espelha em torno do trecho ocupado pelas notas (do menor início ao maior fim). As alturas não mudam.
-- `Inverter na altura` espelha em torno da faixa entre a nota mais grave e a mais aguda da seleção. Não passa pela escala: `E4` virou `D#4` no exemplo (60 + 67 - 64 = 63). Está apagado na bateria. Resultado limitado a 0..127.
+- `Inverter na altura` espelha em torno da faixa entre a nota mais grave e a mais aguda da seleção. Sem as duas opções de encaixe ligadas, não passa pela escala: `E4` virou `D#4` no exemplo (60 + 67 - 64 = 63). Com `Prender na escala` e `Manter o encaixe ao mudar a altura` ligados e uma escala no clipe, o resultado é encaixado nela. Está apagado na bateria. Resultado limitado a 0..127.
 - `Reverter a ordem das notas` mantém os inícios e as durações onde estão e troca as alturas e velocidades de trás para frente. Notas simultâneas seguem a ordem da altura.
 
-#### `Colcheias em tercinas`
+#### `Dividir colcheias em 3 notas`
 
 Cada nota que dura **exatamente 1/2 tempo** (uma colcheia) vira três notas iguais que dividem essa duração em três partes. Notas de outras durações não mudam.
 
@@ -301,7 +311,7 @@ Antes:   C4@0(0,5)  E4@1(1)
 Depois:  C4@0(0,1667) C4@0,1667(0,1667) C4@0,3333(0,1667)  E4@1(1)
 ```
 
-O efeito é um "rolo" de três notas repetidas dentro de cada colcheia; ele não converte pares de colcheias em ritmo de tercina. Para um ritmo ternário de verdade, escreva na grade `1/8T` ou `1/16T`.
+O efeito é um "rolo" de três notas repetidas dentro de cada colcheia (o som de uma tercina de semicolcheia sobre a colcheia); ele não converte pares de colcheias em ritmo de tercina do compasso. Para um ritmo ternário de verdade, escreva na grade `1/8T` ou `1/16T`.
 
 ### Escalar o tempo
 
@@ -310,7 +320,7 @@ Multiplica as posições das notas (contadas a partir da **primeira nota** da se
 | Item (rótulo exato) | O que faz | Atua sobre | Valores / padrão | Dica |
 |---|---|---|---|---|
 | `×0,5 (metade)` | Encolhe o tempo: o trecho passa a ocupar metade (toca o dobro da velocidade) | Seleção ou tudo | Fator 0,5, durações também | |
-| `×2 (dobro)` | Estica: o trecho passa a ocupar o dobro (meio andamento) | Seleção ou tudo | Fator 2, durações também | O clipe **não** cresce: estique o fim dele na régua |
+| `×2 (dobro)` | Estica: o trecho passa a ocupar o dobro (meio andamento) | Seleção ou tudo | Fator 2, durações também | Se as notas passam do fim do clipe, o clipe cresce até o compasso que as contém, no mesmo passo do `Ctrl+Z` (testado só por testes automáticos) |
 | `Personalizado…` | Abre o diálogo `Escalar o tempo` | Seleção ou tudo | Abaixo | |
 
 Diálogo `Escalar o tempo`:
@@ -330,7 +340,7 @@ Antes:      C4@0(1)  E4@1(1)  G4@2(2)
 Primeira nota parada:  C4@2(1) E4@3(1)  ×2 -> C4@2(2) E4@4(2)
 ```
 
-A duração de cada nota nunca fica abaixo de 1/128 de tempo. Depois de `×2`, notas podem passar do fim do clipe: elas ficam escurecidas e não tocam até você esticar o clipe.
+A duração de cada nota nunca fica abaixo de 1/128 de tempo. Depois de `×2` (ou de qualquer fator maior que 1, ou de `Personalizado…`), se o fim das notas passa do fim do clipe, o clipe **cresce sozinho** até o fim do compasso que contém a última nota (compassos do projeto; por exemplo, um clipe de 4 tempos com a última nota acabando no tempo 6 vira um clipe de 8 tempos em 4/4). O clipe cresce na mesma edição da escala: um `Ctrl+Z` devolve notas, pontos de controle e comprimento. Ele só cresce, nunca encolhe, e não cresce se as notas já passavam do fim antes da ferramenta e não foram mais longe. O mesmo vale para as outras ferramentas que mexem no tempo ou na duração (`Legato`, `Arpejador…`, `Inserir acorde…` e as demais).
 
 ### Cortar e limpar
 
@@ -412,12 +422,12 @@ Os fantasmas se alinham pelo tempo do arranjo, não pelo início do clipe; só c
 ## Limites e pegadinhas
 
 - **Sem seleção, tudo é afetado.** Para as transformações de `Seleção`, `Escalar o tempo` e `Cortar e limpar`, esquecer de selecionar significa mexer no clipe inteiro. `Inserir nas notas`, `Desdobrar` e `Arpejador…` exigem seleção.
-- **Legenda do `Humanizar` diz 30 de 127, o cálculo dá cerca de 38.** O código multiplica o fator por 0,3 na escala 0 a 1 (0,3 × 127 ≈ 38). O texto do diálogo está impreciso.
-- **Não existe "encaixar as notas que já estão no clipe na escala".** `Prender na escala` só age ao criar, mover de linha e colar; `Inserir acorde`, `Inverter na altura` e a transposição por setas podem gerar notas fora da escala. Mover uma nota de linha com o encaixe ligado a prende na escala; não há um comando que faça isso em todas as notas de uma vez (não confirmado se arrastar uma linha e voltar serve para todos os casos).
-- `Escalar o tempo` e `Legato` podem empurrar ou alongar notas para além do fim do clipe; elas não tocam até o clipe ser esticado.
-- `Colcheias em tercinas` só reconhece 1/2 tempo exato (tolerância de 0,0001).
+- **Teto do `Humanizar`.** Velocidade 100% varia até 0,3 na escala 0 a 1, ou seja 38 de 127 para cada lado; a legenda do diálogo calcula esse número a partir do mesmo valor, então bate com o resultado.
+- **Encaixe é opcional e vem desligado nas operações de altura.** `Prender na escala` sozinho só age ao criar, mover de linha e colar. Para transpor com as setas, `Inverter na altura` e `Inserir acorde…` respeitarem a escala é preciso ligar também `Manter o encaixe ao mudar a altura`. Para encaixar de uma vez as notas que já estão no clipe, use `Prender seleção na escala`.
+- `Escalar o tempo`, `Legato` e as demais ferramentas esticam o clipe sozinhas até o compasso que contém o fim das notas quando elas passam do fim dele; o clipe não encolhe de volta (`Ctrl+Z` desfaz as duas coisas juntas). Notas que já estavam além do fim antes de você aplicar a ferramenta continuam mudas, e o clipe só cresce se a ferramenta as levar ainda mais longe.
+- `Dividir colcheias em 3 notas` só reconhece 1/2 tempo exato (tolerância de 0,0001).
 - No arpejador, "Ordem tocada" segue a ordem das notas na lista do clipe (a ordem em que foram criadas ou coladas), não a ordem em que você as tocaria.
-- Na bateria: `Escala…`, `Prender na escala`, `Inserir acorde…`, `Acorde no clique` e `Inverter na altura` não estão disponíveis; o botão `Escala` some. `Arpejador…` e `Desdobrar acorde em arpejo` funcionam, mas arpejar peças de bateria raramente faz sentido musical.
+- Na bateria: `Escala…`, `Prender na escala`, `Manter o encaixe ao mudar a altura`, `Prender seleção na escala`, `Inserir acorde…`, `Acorde no clique` e `Inverter na altura` não estão disponíveis; o botão `Escala` some. `Arpejador…` e `Desdobrar acorde em arpejo` funcionam, mas arpejar peças de bateria raramente faz sentido musical.
 - **Bend, modulação e pedal não acompanham as ferramentas de notas.** Só `Escalar o tempo` e `Inverter no tempo` levam os pontos junto; depois de `Humanizar`, `Quantizar`, arpejo ou mover notas, um bend desenhado sob uma nota continua onde estava. `Dividir no cursor` (`K`) corta notas, não pontos.
 - A semente do `Humanizar` e do arpejo `Aleatório` avança a cada uso, então repetir a mesma ferramenta dá um resultado diferente.
 - Os ajustes dos diálogos (padrão, taxa, oitavas, gate, tempo, velocidade, staccato) e o `Acorde no clique` valem para a sessão; o `Escalar o tempo` sempre reabre em ×1,50. A escala do clipe fica gravada no clipe.

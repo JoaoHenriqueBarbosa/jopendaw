@@ -61,7 +61,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | `Grade de encaixe (Alt ao arrastar: livre)` | Menu da grade (snap) | `Livre`, `Compasso`, `1/4`, `1/8`, `1/16`; padrão `1/4` | Mostra o valor atual ao lado do ícone |
 | `Afastar` / `Aproximar` | Zoom horizontal | Passo de 1,5x | Também `−` e `+` |
 | `Seguir o cursor na reprodução` | A janela rola atrás do cursor tocando | Ligado por padrão | Também no menu `Visão` |
-| Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequena (P)`, `Faixas média (M)`, `Faixas grande (G)`, `Seguir o cursor`, `Régua em minutos e segundos` | Altura padrão: média | |
+| Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequenas`, `Faixas médias`, `Faixas grandes`, `Seguir o cursor`, `Régua em minutos e segundos` | Altura padrão: média | |
 | Menu de bandeira (`Seções e marcadores (M cria um no cursor)`) | Lista de marcadores (clicar leva o cursor), `Marcador no cursor (M)`, `Loop entre marcadores`, `Loop desta seção`, `Loop no clipe selecionado (Shift+L)` | `Nenhum marcador ainda` quando vazio | A bandeira fica ciano com marcadores |
 | Duração (texto cinza) | Duração do projeto em minutos e segundos; tooltip `Duração do projeto: ... (N compassos)` | | Conta até o fim do último clipe |
 
@@ -78,7 +78,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Teclado (`Tocar com o teclado do computador (Ctrl+K)`) | Transforma as letras em teclas de piano na faixa selecionada | Ligado, mostra a oitava (`C4`); tooltip com a velocidade | Veja a tabela de atalhos |
+| Teclado (`Tocar com o teclado do computador (Ctrl+K)`) | Transforma as letras em teclas de piano na faixa selecionada | Ligado, mostra a oitava e o aviso: `C4 · sem atalhos` (`C2 · sem atalhos` numa bateria); o tooltip vira `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga` | As letras deixam de ser atalhos enquanto estiver ligado; a lista está na janela de atalhos ([capítulo 09](09-configuracoes-atalhos-android.md)) |
 | Cabo (`Entrada MIDI: ligar teclado ou controlador`) | Liga o MIDI e mostra quantos aparelhos estão conectados | `0` quando ligado sem aparelho | Pede permissão no navegador |
 
 **Grupo 5: arquivos, ajustes e nuvem**
@@ -93,6 +93,8 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | Texto com roda girando | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
 
 O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones.
+
+Nesta tabela os tooltips aparecem com `Ctrl`; no Mac e no iOS o app troca `Ctrl` por `⌘` nos tooltips de `Desfazer`, `Refazer`, `Duplicar`, `Importar áudio` e do teclado do computador (por exemplo `Desfazer (⌘+Z)`), e no atalho do item `Duplicar` do menu do clipe.
 
 ### Linha do tempo (o arranjo)
 
@@ -110,7 +112,7 @@ Ocupa o meio da tela. À esquerda, uma coluna de cabeçalhos de faixa; à direit
 | `FX` (`Efeitos`) | Abre o rack de efeitos da faixa; contornado quando há efeitos, tooltip `Efeitos (N)` | Só no layout de computador | No celular os efeitos ficam no menu e no ícone do barramento |
 | Mini-fader | Volume da faixa direto no cabeçalho | Só no layout de computador | |
 | Medidor fino | Nível da faixa | | |
-| Ícone do tipo (à esquerda, ou junto de `M` e `S` no celular) | Abre o instrumento da faixa (ou os efeitos, no barramento) | | |
+| Ícone do tipo (à esquerda, ou junto de `M` e `S` no celular) | Abre o instrumento da faixa (ou os efeitos, no barramento) | Um ícone por tipo: `Áudio` (forma de onda), `Sintetizador` (piano), `Bateria` (grade), `Sampler` (nota musical), `Barramento` (bifurcação), `FM` (rede de nós, `hub`) e `Wavetable` (gráfico de linha, `ssid_chart`) | Os ícones de `FM` e `Wavetable` foram vistos no Chrome, na lista de faixas |
 | `Faixa` com seta (tooltip `Nova faixa`) | Menu para criar faixa: `Áudio`, `Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable` e, depois de um traço, `Barramento` | | Fica no fim da lista de faixas |
 | Linha `Master` | Volume, medidor, automação e efeitos do master | Fixa no fim da lista | |
 | `Visão geral` (rodapé) | Faixa fina com o projeto inteiro: clipes, loop, marcadores, janela visível, cursor. Clicar ou arrastar leva a janela | | |
@@ -133,6 +135,24 @@ Um painel só, com quatro abas; mostra um conteúdo por vez.
 | Alça (fio fino de 6 px acima das abas; também a área vazia da barra de abas) | Arrastar muda a altura | Só no computador; mínimo 230 px; o arranjo nunca fica com menos de 150 px | A altura escolhida vale até fechar o app |
 
 No computador o painel abre com a metade do espaço (mínimo 320 px). No celular ocupa 60% do espaço, sem alça e sem botão de maximizar; abaixo de 560 px de largura as abas mostram só o ícone.
+
+### Aviso de falha do áudio (`Reiniciar o áudio`)
+
+Se o motor de áudio para de funcionar com o projeto aberto, o som some e aparece, logo abaixo da barra de transporte no computador (no celular, no topo da tela do projeto, acima da barra de baixo), um aviso vermelho (ícone de erro, o texto e um botão à direita). O aviso fica até você reiniciar o áudio; ele não fecha sozinho e não tem botão de dispensar.
+
+| Elemento (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Texto do aviso | Diz o que houve | `O motor de áudio parou de responder e o som ficou mudo. O projeto não foi perdido: reinicie o áudio para continuar.` | O projeto está no aparelho (e na nuvem, se sincronizado): nada é apagado |
+| Botão `Reiniciar o áudio` | Recria o motor de áudio, manda de novo os áudios e o documento e reabre a entrada de áudio se houver faixa de áudio armada ou monitorando | Vira `Reiniciando…` (desligado) enquanto trabalha | Na web o clique é o gesto que o navegador exige para liberar o áudio de novo |
+| Texto depois de uma tentativa que falhou | Explica por que o reinício falhou | `Não deu para reiniciar o áudio: <motivo>` | O botão volta; tente de novo |
+
+O que dispara o aviso:
+
+- **Na web:** o navegador avisa que o processador de áudio caiu; ou o motor (WebAssembly) tropeça num erro fatal; ou o motor deixa de mandar sinal de vida por 4 segundos com o áudio rodando. Aba em segundo plano ou sem o gesto que libera o áudio, e a página travada por um instante, **não** contam como falha.
+- **No Android:** o motor nativo informa que a thread de áudio caiu (o mesmo erro `ERR_PANIC` do motor).
+
+Ao aparecer o aviso o transporte fica parado. O motor novo nasce parado no começo (o cursor da tela vem do estado do motor, então deve voltar ao início `(não confirmado em uso)`); o projeto, os clipes e a mixagem voltam inteiros. Aperte `Espaço` para tocar. `(testado só por testes automáticos)`: o aviso, o botão e o reinício foram cobertos por testes com motor simulado, e não foram vistos falhando no Chrome nem num aparelho.
+
 
 ## Computador e celular
 
@@ -232,10 +252,12 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 - O andamento e o compasso moram no servidor: mudar o `120 BPM · 4/4` da barra chama a API. Sem rede o app mostra o novo andamento nesta sessão, mas o servidor guarda o antigo, e ao reabrir o projeto vale o do servidor (lido do código; o aviso de erro na tela ao falhar não foi confirmado).
 - O botão da barra sempre escreve `/4` (`120 BPM · 4/4`), mesmo que o cadastro do projeto no servidor tenha outra figura de tempo; o card da lista mostra a fórmula do cadastro.
-- Os tooltips dos botões da barra escrevem `Ctrl` em qualquer sistema (`Desfazer (Ctrl+Z)`), mas a janela `Atalhos do teclado` mostra `⌘` no Mac e no iOS. No Mac a tecla é `Cmd`; nos outros, `Ctrl`.
-- No menu `Visão`, as letras `(P)`, `(M)` e `(G)` ao lado de `Faixas pequena`, `Faixas média` e `Faixas grande` são só as siglas do tamanho: não existem teclas `P` e `G` para isso, e `M` cria marcador.
-- Só há motor de áudio no navegador e no Android. Em outro sistema (um build de computador nativo) a tela do projeto avisa e não toca.
-- Ao sair do projeto o estúdio é fechado: notas soando e gravação em andamento são interrompidas.
+- Os tooltips, o item `Duplicar` do menu do clipe e a janela `Atalhos do teclado` mostram `⌘` no Mac e no iOS e `Ctrl` nos outros sistemas (`Desfazer (⌘+Z)` no Mac). Nesta tabela do capítulo eles aparecem como `Ctrl`.
+- No menu `Visão`, `Faixas pequenas`, `Faixas médias` e `Faixas grandes` não têm atalho de teclado (antes da fase 9 o menu mostrava siglas `(P)`, `(M)` e `(G)` que pareciam atalhos; `M` cria marcador).
+- Só há motor de áudio no navegador e no Android. Em outro sistema (um build de computador nativo) a tela do projeto avisa (`O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.`) e não toca.
+- Se o som some de repente e aparece o aviso vermelho com o botão `Reiniciar o áudio`, o motor caiu; veja "Aviso de falha do áudio" acima. O projeto não é perdido.
+- Ligado o teclado do computador, letras como `S`, `L`, `C`, `X`, `Z`, `E`, `F` viram notas e deixam de ser atalho; o botão do teclado mostra `· sem atalhos` para lembrar.
+- Ao sair do projeto o estúdio é fechado: notas soando e gravação em andamento são interrompidas. No Android, sair do app (outro app na frente, tela desligada) e desplugar o fone também param o transporte, e a tela fica acesa enquanto toca ou grava ([capítulo 09](09-configuracoes-atalhos-android.md)).
 - Sem sessão, o app não abre projetos: qualquer rota fora de `/login`, `/entrar` e `/authorize/callback` manda para o login.
 
 ## Atalhos

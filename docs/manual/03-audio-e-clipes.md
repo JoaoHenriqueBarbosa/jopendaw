@@ -60,8 +60,24 @@ Depois de qualquer arrasto que mexeu no clipe, ele passa a ficar **por cima** do
 | `Duplicar` | Cria uma cópia logo depois do clipe (no fim dele) e seleciona a cópia | `Ctrl+D` (`⌘+D`) | A cópia leva warp, fades e ganho |
 | `Cortar no cursor` | Parte o clipe em dois no cursor. O fade out fica só no pedaço da esquerda e o fade in só no da direita | `S` | Com clipe selecionado corta ele; sem seleção, corta tudo o que o cursor cruza na faixa atual (áudio e notas). Só corta se o cursor está dentro do clipe |
 | `Warp e altura…` | Abre o diálogo de warp, transposição e reverso | | [Warp e altura](03b-warp-e-altura.md) |
+| `Ganho do clipe…` | Abre o diálogo `Ganho do clipe` (ver a seção abaixo) | | Só no clipe de áudio; o volume da faixa continua no mixer |
 | `Converter em notas (MIDI)` | Manda o áudio ao servidor e cria uma faixa de sintetizador com as notas | | [Áudio para MIDI](03d-audio-para-midi.md) |
 | `Apagar` | Remove o clipe (o arquivo continua guardado no projeto) | `Delete` | Desfazer traz o clipe de volta |
+
+#### Ganho do clipe
+
+`Ganho do clipe…` (menu do clipe de áudio) abre um diálogo pequeno que muda o volume só daquele clipe, antes do fader da faixa. Serve para nivelar clipes da mesma faixa (uma tomada mais baixa que a outra) sem mexer no volume da faixa inteira.
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| Título `Ganho do clipe` | Nome do diálogo | | |
+| Leitura em dB (texto acima do controle) | Mostra o valor atual, por exemplo `+3,5 dB`, `−6,0 dB` ou `0,0 dB`; no piso, `−∞ dB (mudo)` | Vírgula decimal, uma casa | |
+| Controle deslizante | Ajusta o ganho do clipe. O som e o desenho da onda acompanham enquanto se arrasta | −40 a +12 dB, passos de 0,5 dB (104 divisões), padrão 0 dB. No piso (−40) o clipe fica mudo (ganho 0); acima disso o valor é `10^(dB/20)`, então +12 dB multiplica a amplitude por cerca de 3,98 | Um arraste inteiro é um passo só no desfazer |
+| Nota `Só este clipe; o volume da faixa continua à parte.` | Lembra que o fader e a automação de volume da faixa seguem valendo por cima | | |
+| `Zerar (0 dB)` | Volta o ganho a 0 dB (ganho 1). Fica desligado quando já está em 0 dB | | Entra no desfazer como um passo |
+| `Fechar` | Fecha o diálogo. Não há botão de cancelar: o que foi mexido já vale, e o desfazer (`Ctrl+Z`) volta | | |
+
+Como funciona: o ganho fica no documento do projeto (campo `gain` do clipe), é enviado ao motor (multiplica o clipe junto com os fades) e vai junto com o projeto na sincronização; a exportação e o congelamento usam o mesmo documento `(não testado ouvindo o arquivo exportado)`. A onda desenhada no clipe cresce ou diminui na mesma proporção (o desenho é escalado pelo ganho; se a onda passa da altura do clipe e é cortada na borda, `(não confirmado)`). A cópia (`Duplicar`) leva o ganho.
 
 ### Botões da barra que agem no clipe
 
@@ -123,7 +139,7 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 - Na web o navegador decodifica e entrega o áudio na taxa do motor; no Android o arquivo mantém a taxa dele e o motor converte ao tocar (não confirmado o detalhe da conversão na web: é comportamento do navegador).
 
 **Sobre o clipe**
-- **O ganho do clipe (`gain`) existe no documento e no motor, mas não há controle na interface** para mudá-lo: o padrão é 1 (0 dB). O volume da faixa é no fader do mixer. A forma de onda respeitaria um ganho diferente de 1, mas hoje só um projeto editado à mão o teria.
+- **O ganho do clipe** se ajusta em `Ganho do clipe…` (−40 a +12 dB, padrão 0 dB). Ele soma ao volume da faixa (fader do mixer), não o substitui. O ganho máximo é +12 dB: um valor maior vindo de um arquivo de projeto é limitado a esse teto ao ser editado no diálogo. Só clipes de áudio têm esse controle; o clipe de notas não.
 - O clipe nunca passa do fim do arquivo: aparar/estender à direita para nesse ponto.
 - Aparar não apaga nada do arquivo: o `offset` e a duração só escolhem o trecho que toca.
 - Não há arrastar-e-soltar de arquivos do sistema sobre a tela: só o botão `Importar` e `Ctrl+I`.

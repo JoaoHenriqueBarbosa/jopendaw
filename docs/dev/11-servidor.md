@@ -2,7 +2,7 @@
 
 > Para quem mexe no backend (`server/`, Rust com axum + SeaORM sobre Postgres): como o processo sobe (e por que dá para editá-lo sem reiniciar), cada rota com corpo, respostas e erros, o schema, o armazenamento dos áudios (disco ou S3/MinIO), a cota, a fila de tarefas e como testar e implantar.
 
-Citações `arquivo:linha` valem para o estado de 30/09/2026 (commit `9a790a2`). De lá até `677f064` nenhum arquivo de `server/src` mudou; as únicas mudanças de servidor e de implantação foram `server/Dockerfile`, `.dockerignore` e `app/nginx.conf.template` (commit `0c0593e`, descrito em "Docker, compose e deploy").
+Citações `arquivo:linha` valem para o estado de 30/09/2026 (commit `9a790a2`); as rotas de cota (`GET /api/samples`, `DELETE /api/samples/{hash}`, `POST /api/samples/cleanup`) e a decodificação em vários formatos (fase 9) foram descritas a partir de `f0d9879` (integradas em `f25935f`; a última correção do app é `15670b7`), sem números de linha. De lá até `677f064` nenhum arquivo de `server/src` mudou; as únicas mudanças de servidor e de implantação foram `server/Dockerfile`, `.dockerignore` e `app/nginx.conf.template` (commit `0c0593e`, descrito em "Docker, compose e deploy").
 
 ## Visão geral
 
@@ -35,10 +35,10 @@ Em produção o app web fica num container nginx próprio (`app/nginx.conf.templ
 | `server/src/routes/mod.rs` | `ApiError`, mapeamento de erros e o `Router` com todas as rotas |
 | `server/src/routes/projects.rs` | CRUD de projetos (SeaORM) |
 | `server/src/routes/docs.rs` | documento versionado do projeto |
-| `server/src/routes/samples.rs` | upload e download de áudios por SHA-256, `missing` |
+| `server/src/routes/samples.rs` | upload e download de áudios por SHA-256, `missing`; listar (`GET /api/samples`), apagar (`DELETE /api/samples/{hash}`) e limpar (`POST /api/samples/cleanup`), com o cálculo de "em uso" (`references`, `collect_hashes`) |
 | `server/src/routes/jobs.rs` | criar e consultar tarefas; o worker |
-| `server/src/audio.rs` | leitura de WAV, codificação FLAC, áudio → MIDI (YIN) |
-| `server/src/storage.rs` | `Store` (disco ou S3), registro e cota, faxina dos blobs |
+| `server/src/audio.rs` | decodificação (`decode_audio`: WAV próprio + symphonia para FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC), codificação FLAC, áudio → MIDI (YIN) |
+| `server/src/storage.rs` | `Store` (disco ou S3), registro e cota, trava por hash (`lock_hash`), faxina dos blobs |
 | `server/src/entities/` | entidades SeaORM: `project`, `project_doc`, `sample`, `job` |
 | `server/schema.sql`, `db/migrations/` | schema completo e scripts idempotentes de mudança |
 | `server/Dockerfile`, `docker-compose.yml`, `hot.sh` | imagem, ambiente local, hot-patch |
@@ -187,10 +187,52 @@ Endereçados pelo SHA-256 do conteúdo (hexadecimal minúsculo, 64 caracteres). 
 | `POST /api/samples/missing` | `{"hashes": [..]}` (até 2000) | `200` `{"missing": [..]}` os que a conta **não** tem, na ordem do pedido, sem repetir | `400` mais de 2000 ou hash inválido; `401` |
 | `PUT /api/samples/{hash}` | bytes (`application/octet-stream`) | `204` (idempotente: se a conta já tem, não lê o corpo) | `400` hash inválido, corpo vazio, envio interrompido, ou o SHA-256 do corpo não confere com o da URL; `413` acima de 512 MB ou cota de 4 GB excedida; `401` |
 | `GET /api/samples/{hash}` | | `200` bytes (`application/octet-stream`, `Content-Length`, `Cache-Control: private, max-age=31536000, immutable`) | `404` hash malformado, áudio que a conta não registrou, ou registro sem arquivo; `401` |
+| `GET /api/samples` | | `200` a conta de áudios (formato abaixo) | `401` |
+| `DELETE /api/samples/{hash}` | | `200` `{"freed_bytes": n}` (bytes que voltam à cota da conta) | `404` hash malformado ou áudio que a conta não registrou; `409` em uso (corpo com `projects`) ou com tarefa ativa; `401` |
+| `POST /api/samples/cleanup` | (o app manda `{}`; o corpo é ignorado) | `200` `{"removed": n, "freed_bytes": n, "skipped_recent": n}` | `401` |
+
+**`GET /api/samples`** devolve:
+
+```json
+{"quota_bytes": 4294967296, "used_bytes": 123, "unused_bytes": 45, "unused_count": 2,
+ "samples": [{"hash": "…", "name": "voz.wav" | null, "size": 123, "created_at": "…",
+              "unused": false, "project_count": 1, "projects": [{"id": "<uuid>", "name": "Meu projeto"}]}]}
+```
+
+`samples` vem ordenada por `size` decrescente e depois por `hash`. `used_bytes` é a soma dos `size` listados; `unused_*` só conta os que nenhum documento cita. `name` é o nome de arquivo do mapa `samples` do documento (o primeiro que aparecer; `null` se nenhum documento o guarda, como um FLAC gerado por job). `projects` só traz projetos que têm linha em `project_docs` (projeto que nunca enviou documento não cita nada).
+
+**`DELETE /api/samples/{hash}`** na ordem: hash inválido → `404`; não registrado na conta → `404`; citado por algum documento da conta → `409` com o corpo `{"error": "este áudio ainda é usado em projetos; tire-o de lá antes de apagar", "projects": [{"id", "name"}]}`; tarefa `queued`/`running` da conta com esse `sample_hash` → `409 {"error": "há uma tarefa em andamento com este áudio; tente de novo quando ela terminar"}`; senão apaga (`remove`, abaixo) e responde `freed_bytes` = `size` do registro. **Não** há folga de 1 hora aqui (só na limpeza em massa).
+
+**`POST /api/samples/cleanup`** apaga, um a um, todo áudio da conta que (a) nenhum documento cita, (b) não tem tarefa ativa e (c) foi registrado há mais de `CLEANUP_GRACE_SECS` (3600 s). O que passa em (a) e (b) mas falha em (c) conta em `skipped_recent` e fica. Áudio em uso ou com tarefa ativa é pulado **sem contar** em nada. `freed_bytes` soma os `size` registrados (bytes que voltam à cota), mesmo se o arquivo em si ficou por ser de outra conta. Idempotente: uma segunda chamada devolve `removed: 0`.
 
 Detalhes do upload: em **streaming** para um temporário local (`DATA_DIR/tmp/<uuid>`), calculando o hash e o tamanho conforme os pedaços chegam; os tetos valem pelo que **realmente chega**, não pelo `Content-Length`, que o cliente pode mentir (o `Content-Length` declarado só antecipa a recusa). O corpo é sempre conferido contra o hash, mesmo que o objeto já exista (de outra conta): senão bastaria conhecer um hash para "ter" o áudio de alguém. Depois `Store::commit_tmp` (no S3: `HEAD`, e `PUT` só se não existir; em disco: `rename`) e `storage::register` (cota, ver abaixo). `TmpGuard` apaga o temporário se o envio falha ou o cliente desiste. O limite padrão do axum é desligado só nas rotas de upload.
 
-Não existe rota para **apagar** um sample: só sai quando a conta é apagada (cascata). A mensagem de cota ("apague áudios que não usa mais") não tem, portanto, ação correspondente na API.
+A mensagem de cota do upload é `cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta` (`413`): agora há ação correspondente (as rotas acima). Apagar um **projeto** (`DELETE /api/projects/{id}`) apaga o documento em cascata, **mas não mexe em `samples`**: os áudios dele ficam registrados e passam a `unused`.
+
+#### O modelo de "em uso"
+
+`references(pool, owner)` percorre, **um documento por vez** (eles chegam a 8 MB), todos os `project_docs` dos projetos da conta e junta os hashes com `collect_hashes`: **qualquer string JSON com cara de SHA-256** (64 caracteres hexadecimais minúsculos, `storage::valid_hash`) em qualquer profundidade, e também qualquer **chave** de objeto com essa forma. Isso cobre o mapa `samples` do documento, o `sample` dos clipes, as zonas do sampler e qualquer campo futuro que guarde um hash, sem o servidor conhecer o esquema do documento: é conservador de propósito (um hash citado em lugar inesperado só segura o áudio, nunca o libera por engano). Só a **própria conta** conta: o projeto de outra conta não segura o áudio, e o áudio de outra conta nunca aparece. `names` sai só de `doc.samples[hash].name`.
+
+O estado "em uso" é o do **documento no servidor**, isto é, o último `PUT /doc` aceito. Um áudio recém-subido cujo documento ainda não chegou (o app sobe os áudios **antes** do documento) parece `unused`: por isso a limpeza em massa tem a folga de 1 hora e o app manda os áudios primeiro.
+
+#### Apagar de verdade (`remove`) e a trava por hash
+
+```
+remove(owner, hash):
+  tx = lock_hash(hash)             -- pg_advisory_xact_lock(hashtextextended(hash, 1))
+  DELETE FROM samples WHERE owner_id=$1 AND hash=$2 RETURNING size   -- nada: devolve None (404 no DELETE)
+  shared = EXISTS (SELECT 1 FROM samples WHERE hash=$1)              -- outra conta o registra?
+  if !shared: store.delete(hash)   -- disco: remove_file (NotFound é ok); S3: DELETE do objeto
+  tx.commit()
+```
+
+- **O blob só sai do disco/S3 quando nenhuma conta o registra.** Se `store.delete` falha, a transação **volta** e o registro fica, coerente com o arquivo que ainda existe (`500` sem detalhe).
+- **A trava por hash** (`storage::lock_hash`, chave `hashtextextended(hash, 1)`; o `register` usa a chave `0` com o id do dono, então são travas distintas) serializa **gravar e apagar o mesmo conteúdo**. Sem ela, apagar o blob da conta A enquanto a conta B acaba de "reaproveitá-lo" no upload (o `HEAD` do S3 viu que existia e pulou o `PUT`) deixaria um registro sem arquivo. Quem grava (`PUT /api/samples/{hash}` e `jobs::save_flac`) toma a trava **antes** de `commit_tmp`/`store_bytes` e só a solta (`commit`) depois de `register` ter dado certo; se `register` falha (cota), a transação é descartada (`rollback`) e o blob fica órfão para a faxina de 1 hora.
+- O `PUT` que encontra o áudio **já registrado** na conta responde `204` antes de tomar a trava (nada a gravar).
+
+#### Limite conhecido: corrida com o documento
+
+O `DELETE` confere o uso (`references`) **antes** de `remove` e a gravação de documento (`PUT /doc`) **não** toma a trava do hash: se um `PUT` passar a citar o áudio exatamente entre a conferência e o `DELETE`, o áudio é apagado e o documento novo fica citando um hash que não existe mais (o app o baixa como faltando). A janela é curta no `DELETE` individual e **maior na limpeza em massa**, que calcula `references` uma vez no início e depois apaga vários em sequência. O mesmo vale para uma tarefa criada entre `has_active_job` e `remove` (a tarefa falha com `áudio não encontrado no armazenamento`). Fechar isso exigiria travar `PUT /doc` pelos hashes que ele cita. `(lido do código; a corrida não foi reproduzida)`
 
 ### Tarefas (`routes/jobs.rs`)
 
@@ -203,6 +245,8 @@ Não existe rota para **apagar** um sample: só sai quando a conta é apagada (c
 | `GET /api/jobs` | | `200` lista das 50 mais recentes da conta | `401` |
 
 `params` de `audio_to_midi` (normalizados na criação; para `flac` são descartados): `min_note_ms` (0..5000, padrão 60) e `rms_floor_db` (−120..0, padrão −45); fora da faixa: `400`.
+
+Erros de decodificação vão para o `error` do job (texto em português, minúsculo; o app capitaliza e põe o ponto): `formato de áudio não suportado (aceitos: WAV, FLAC, MP3, OGG Vorbis e AAC/M4A, mono ou estéreo)` (constante `audio::UNSUPPORTED`), `áudio longo demais: o máximo é 10 minutos`, `não consegui decodificar o áudio (arquivo corrompido ou codec não suportado, como Opus)`, `áudio vazio`, `áudio não encontrado no armazenamento`, `erro interno`.
 
 `result`: `flac` → `{"sample": "<sha256 do FLAC>", "bytes": n}` (o FLAC entra no armazenamento da conta como qualquer áudio e **conta na cota**); `audio_to_midi` → `{"notes": [{"pitch", "start", "length", "velocity"}], "duration"}` com tempos em **segundos** do áudio inteiro, `pitch` 0..127, `velocity` 0,05..1.
 
@@ -267,18 +311,28 @@ Nunca existe blob pela metade: em disco a escrita é temporário + `rename`; no 
 - Teto de **512 MB por arquivo** (`MAX_SAMPLE_BYTES`) e **4 GB por conta** (`QUOTA_BYTES`), somando o `size` de `samples` da conta. Somam os áudios enviados e os FLACs gerados por job.
 - `storage::register` serializa por conta com um **advisory lock** transacional (`pg_advisory_xact_lock(hashtextextended(owner, 0))`): sem ele, dois uploads de 3 GB conferem "cabe" ao mesmo tempo e passam de 4 GB. Áudio já registrado não conta duas vezes. Se passar da cota, `413`.
 - O upload confere a cota antes (com o `Content-Length` declarado) e durante (com o que chega); a conferência final é a do `register`.
+- **Saída da cota:** `DELETE /api/samples/{hash}` e `POST /api/samples/cleanup` (ver "Áudios"). O uso da cota é `sum(size)` de `samples` da conta; apagar o registro devolve a cota **imediatamente**, mesmo que o arquivo continue no armazenamento por ser de outra conta.
+- **Apagar projeto não devolve cota**: o registro é da conta, não do projeto. `DELETE /api/me` apaga tudo em cascata (e a faxina de 1 hora leva os blobs que ficarem sem registro).
 
 ### Faxina dos blobs
 
-`storage::cleanup` (a cada hora): apaga blobs **sem registro** em `samples` de nenhuma conta (conta apagada, cota estourada no meio de um upload) e temporários esquecidos, só os **modificados há mais de 1 hora** (`ORPHAN_GRACE`): dá tempo de um upload ou job terminar de registrar o que acabou de gravar. Como cada conta só registra o que enviou, um blob compartilhado só é apagado quando **nenhuma** conta o registra.
+`storage::cleanup` (a cada hora): apaga blobs **sem registro** em `samples` de nenhuma conta (conta apagada, cota estourada no meio de um upload) e temporários esquecidos, só os **modificados há mais de 1 hora** (`ORPHAN_GRACE`): dá tempo de um upload ou job terminar de registrar o que acabou de gravar. Como cada conta só registra o que enviou, um blob compartilhado só é apagado quando **nenhuma** conta o registra (a mesma regra vale no `DELETE /api/samples/{hash}`, que apaga na hora em vez de esperar a faxina). A faxina não toma a trava por hash.
 
 ## Fila de tarefas e `audio.rs`
 
 **Fila:** a tabela `jobs`. Um worker tokio criado no `setup` (frio, então sobrevive aos patches) faz o laço: espera uma vaga (`Semaphore`, no máximo **2 tarefas ao mesmo tempo**), pega a mais antiga `queued` com `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1)` (vira `running`), roda o trabalho em `tokio::task::spawn_blocking` e grava o resultado. Acorda na hora com `POST /api/jobs` (`job_wake`) e, por garantia, a cada 2 s. Enquanto a thread trabalha, o progresso vai para o banco duas vezes por segundo. Falha vira `failed` com a mensagem (o pânico da thread vira "erro interno"). No boot, `requeue_orphans` devolve à fila o que estava `running` quando o processo caiu.
 
-Áudio de entrada: lido do armazenamento inteiro para a memória antes da thread (a decodificação é síncrona). **Só WAV** (`audio::decode_wav`): PCM inteiro de 16, 24 ou 32 bits ou float de 32 bits (inclusive `WAVE_FORMAT_EXTENSIBLE`), mono ou estéreo, taxa até 655 350 Hz. O resto (8 bits, 64 bits, 3+ canais, MP3, OGG...) falha com **"formato não suportado"**; `data` vazio, "áudio vazio". Internamente vira inteiros de 24 bits.
+Áudio de entrada: lido do armazenamento inteiro para a memória antes da thread (a decodificação é síncrona). `audio::decode_audio` é o ponto de entrada (`compute` em `jobs.rs` o chama para os dois tipos de tarefa):
 
-- **`flac`** (`audio::encode_flac`): FLAC de 24 bits em Rust puro (`flacenc`, sem libFLAC), com o cabeçalho corrigido no fim (mínimo do bloco = máximo, para decodificadores estritos como o symphonia do Android aceitarem). Progresso 0,1 depois de decodificar. O resultado entra no armazenamento pelo hash e conta na cota. **Nada no app pede esta tarefa hoje.**
+1. **WAV pelo caminho próprio** (`decode_wav`, o mais rápido): PCM inteiro de 16, 24 ou 32 bits ou float de 32 bits (inclusive `WAVE_FORMAT_EXTENSIBLE`), mono ou estéreo, taxa de 1 a 655 350 Hz. O tamanho do `data` pode mentir (0xFFFFFFFF, gravação interrompida): vale o que há no arquivo.
+2. Se `decode_wav` devolve `UNSUPPORTED` (não é RIFF/WAVE, ou é um WAV de 8 ou 64 bits, ou 3+ canais), tenta `decode_symphonia`: a symphonia sonda o formato (sem `Hint`), pega a primeira faixa com codec conhecido e decodifica pacote a pacote. Formatos e codecs ligados em `server/Cargo.toml` (`default-features = false`): `flac`, `mp3`, `ogg`, `vorbis`, `aac`, `isomp4`, `alac`. Ou seja: **FLAC, MP3, OGG Vorbis, AAC/M4A e ALAC**. **Sem** Opus (a symphonia 0.5 não o decodifica), AIFF, WAV pelo lado da symphonia (`wav`/`pcm` não estão ligados; WAV só pelo caminho 1) nem WebM/MKV. Mono ou estéreo; a taxa e o número de canais são fixados no primeiro pacote decodificado e **mudar no meio** é `UNSUPPORTED`. Pacote corrompido (`DecodeError`) é pulado; outro erro encerra o laço e vale o que já saiu; arquivo cortado ao meio converte o que deu, cortado antes do primeiro quadro dá erro (teste `lixo_e_arquivo_cortado_dao_erro_claro`).
+3. Tudo vira `Pcm` de inteiros de 24 bits intercalados (float da symphonia × 2^23, arredondado e saturado; NaN vira 0).
+
+**Limite de duração:** `MAX_SECONDS = 600` (10 minutos), medido em quadros por taxa. O WAV é recusado **antes** de virar amostras (pelo tamanho do `data`); na symphonia a checagem é a cada pacote, então a memória chega a ~10 minutos de `i32` antes do erro. `áudio longo demais: o máximo é 10 minutos`. Exatamente 600 s passa. Vale para `flac` e `audio_to_midi`, e vale para o **arquivo inteiro**, não para o trecho que o clipe usa.
+
+**Qual mensagem o Opus dá:** o leitor Ogg da symphonia 0.5.5 reconhece o fluxo Opus (`CODEC_TYPE_OPUS`, `mappings/opus.rs`), mas nenhum decodificador Opus está registrado e `get_codecs().make` falha e a função devolve `UNSUPPORTED`; a mensagem "…como Opus" só sai quando o arquivo é reconhecido e **nenhum** pacote decodifica (`spec` nunca é fixado). Pelo código (do servidor e da symphonia), o OGG/Opus dá `UNSUPPORTED` `(não executado com um arquivo Opus real; não há fixture nem teste)`.
+
+- **`flac`** (`audio::encode_flac`): FLAC de 24 bits em Rust puro (`flacenc`, sem libFLAC), com o cabeçalho corrigido no fim (mínimo do bloco = máximo, para decodificadores estritos como o symphonia do Android aceitarem). Progresso 0,1 depois de decodificar. O resultado entra no armazenamento pelo hash (sob a trava do hash, ver "Áudios") e conta na cota. **Nada no app pede esta tarefa hoje.**
 - **`audio_to_midi`** (`audio::audio_to_midi`): transcrição de áudio **monofônico** em notas, pelo detector de altura **YIN**:
   1. mistura em mono; taxas acima de 30 kHz são reduzidas por média de blocos (a janela de 2048 quadros continua cobrindo 50 Hz);
   2. quadros de 2048 amostras com passo de 512; quadro abaixo do piso de energia (`rms_floor_db`) é silêncio e nem gasta o YIN;
@@ -289,7 +343,7 @@ Nunca existe blob pela metade: em disco a escrita é temporário + `rename`; no 
 
 ## Testes
 
-- **Unitários** (sem banco): `audio.rs` (YIN em senoides, ruído e silêncio, segmentação, vibrato que não divide, parâmetros, taxa alta, WAV de 16/24/32 e float, formato não suportado, FLAC ida e volta sem perda), `storage.rs` (hash válido e SHA-256 conhecido), `oauth.rs` (PKCE do RFC 7636, só email verificado).
+- **Unitários** (sem banco): `audio.rs` (YIN em senoides, ruído e silêncio, segmentação, vibrato que não divide, parâmetros, taxa alta, WAV de 16/24/32 e float, formato não suportado, FLAC ida e volta sem perda; e, da fase 9, decodificação de MP3/OGG estéreo/M4A a partir de `server/testdata/seno440.{mp3,ogg,m4a}` achando o lá 440 (nota 69), FLAC e WAV pelo mesmo `decode_audio`, lixo/arquivo cortado, limite de 10 minutos: 660 s recusado, 599 s passa), `storage.rs` (hash válido e SHA-256 conhecido), `oauth.rs` (PKCE do RFC 7636, só email verificado).
 - **De rota** (`server/src/routes/tests.rs`), contra um Postgres de verdade. Precisam de `TEST_DATABASE_URL` apontando para um banco **à parte** com o `schema.sql` (nunca o de desenvolvimento: os testes criam contas e tarefas). Sem a variável cada teste se declara pulado e passa.
 
 ```bash
@@ -302,7 +356,7 @@ S3_ENDPOINT=http://localhost:9000 S3_BUCKET=jopendaw S3_ACCESS_KEY=jopendaw S3_S
   TEST_DATABASE_URL=... cargo test -p jopendaw-server
 ```
 
-Cobertura das rotas: documento versionado (409 com o documento, entradas inválidas, alheio 404, gravações simultâneas: só uma vence, 8 MB, ~3 MB passa), samples (idas e voltas, hash que não confere, idempotência, `missing`, isolamento entre contas, limites de tamanho e cota), faxina (só o que não tem registro), operações básicas do armazenamento, temporário não fica para trás, migração disco → S3, tarefas (FLAC, áudio → MIDI, formato não suportado, validações, dono, limite de 10, órfão volta para a fila). O teste cria os usuários e sessões direto no banco e emite o JWT com `auth::issue_access`; todos os testes do processo dividem o mesmo `DATA_DIR` temporário (cada um sobe o próprio worker). **Não há teste de rota para a parte de contas** (`auth.rs`, `oauth.rs`): só as funções puras acima. **Também não há teste automático do nginx nem da imagem**: `docker-compose up --build` sobe a `api` pelo `server/Dockerfile` e a `web` (porta 8081) com o `app/nginx.conf.template`, e um `PUT` de mais de 1 MB em `http://localhost:8081/api/projects/{id}/doc` ou `/api/samples/{hash}` (com um token válido) é a conferência de que o proxy não devolve `413`; não rodei isso nesta atualização. Rodar o servidor de verdade é o teste de uso: `./hot.sh`, login pelo código de acesso da conta de revisão (`REVIEW_EMAIL`/`REVIEW_CODE` do `server/.env`).
+Cobertura das rotas: documento versionado (409 com o documento, entradas inválidas, alheio 404, gravações simultâneas: só uma vence, 8 MB, ~3 MB passa), samples (idas e voltas, hash que não confere, idempotência, `missing`, isolamento entre contas, limites de tamanho e cota; e, da fase 9, `samples_listar_e_apagar` (lista sem documento = tudo sem uso; uso pelo mapa `samples`, pelo clipe e só pela zona de um sampler; 409 com os projetos; apagar sem uso; hash inválido e sem login; apagar projeto deixa o áudio sem uso), `samples_apagar_devolve_a_cota`, `samples_isolamento_entre_contas_e_hash_igual` (o projeto de uma conta não segura o áudio de outra; o blob só sai quando nenhuma conta o registra) e `samples_limpar_sem_uso` (poupa citado, recente e com tarefa ativa; resposta `{removed: 1, freed_bytes: 16, skipped_recent: 1}`; segunda chamada `removed: 0`)), faxina (só o que não tem registro), operações básicas do armazenamento, temporário não fica para trás, migração disco → S3, tarefas (FLAC, áudio → MIDI, formato não suportado, validações, dono, limite de 10, órfão volta para a fila; e `job_audio_para_midi_mp3_e_parametros_extremos`: MP3 com `min_note_ms`/`rms_floor_db` explícitos, `400` fora da faixa e os limites 0/5000 e −120/0 rodando até `done`). O teste cria os usuários e sessões direto no banco e emite o JWT com `auth::issue_access`; todos os testes do processo dividem o mesmo `DATA_DIR` temporário (cada um sobe o próprio worker). **Não há teste de rota para a parte de contas** (`auth.rs`, `oauth.rs`): só as funções puras acima. **Também não há teste automático do nginx nem da imagem**: `docker-compose up --build` sobe a `api` pelo `server/Dockerfile` e a `web` (porta 8081) com o `app/nginx.conf.template`, e um `PUT` de mais de 1 MB em `http://localhost:8081/api/projects/{id}/doc` ou `/api/samples/{hash}` (com um token válido) é a conferência de que o proxy não devolve `413`; não rodei isso nesta atualização. Rodar o servidor de verdade é o teste de uso: `./hot.sh`, login pelo código de acesso da conta de revisão (`REVIEW_EMAIL`/`REVIEW_CODE` do `server/.env`).
 
 Verificações do repositório: `cargo fmt --all --check` e `cargo clippy -p jopendaw-server --all-targets -- -D warnings` (rustfmt com `max_width` 160).
 
@@ -322,6 +376,9 @@ Verificações do repositório: `cargo fmt --all --check` e `cargo clippy -p jop
 - **Concorrência otimista, não bloqueio.** Vários aparelhos editam offline; ninguém segura trava. O 409 devolve o documento vencedor para o app decidir.
 - **Endereçamento por conteúdo.** O SHA-256 dá deduplicação, idempotência do upload, cache imutável no navegador e conferência de integridade; a prova do conteúdo no `PUT` impede "ter" o áudio alheio só sabendo o hash.
 - **Erros sem detalhe do banco** no 5xx; detalhe só no log.
+- **"Em uso" por varredura de qualquer string com cara de hash (`collect_hashes`), não por campos conhecidos.** O documento é um JSON aberto que evolui com o app; listar os campos que guardam hash faria um campo novo liberar áudio em uso. O custo é ler todos os documentos; o ganho é nunca apagar por esquecimento.
+- **Limpeza em massa com folga de 1 hora e apagar por item sem folga.** O app sobe áudio antes do documento; a limpeza é ação em lote (o erro custa mais), o item é ação explícita sobre uma linha que a pessoa está vendo.
+- **Trava por hash separada da trava por dono.** A cota é por conta (`hashtextextended(owner, 0)`), a integridade do blob é por conteúdo (`hashtextextended(hash, 1)`): contas diferentes com o mesmo arquivo precisam se serializar entre si na gravação/apagamento do blob, mas não na cota uma da outra.
 - **Perfil `server` com `unwind`.** Um handler que entra em pânico não derruba o processo.
 - **`setup` frio, `serve` quente.** O hot-patch precisa de um lugar estável para o estado (pool, worker, faxina) e de um lugar recriável para o que se edita.
 - **Cache-Control `no-cache` nos estáticos** no servidor de desenvolvimento para não rodar o app novo com o `host.js` ou o wasm velhos.
@@ -332,9 +389,15 @@ Verificações do repositório: `cargo fmt --all --check` e `cargo clippy -p jop
 
 - **Resolvido em `0c0593e`: `server/Dockerfile` não carregava o workspace.** Antes ele copiava só `Cargo.toml`, `Cargo.lock` e `server/Cargo.toml`, e o cargo falharia com "failed to load manifest for workspace member" porque o workspace lista também `engine`, `engine/wasm` e `engine/android` (desde as fases 1 e 5). O commit acrescentou `COPY engine engine` antes da camada de dependências e ampliou o `.dockerignore` (`.claude/`, `docs/`, `engine/target/`, `node_modules/`). Não rodei o build da imagem nesta atualização; o que está escrito vem do diff e dos arquivos atuais. Efeito colateral deduzido da leitura: como `COPY engine engine` vem antes do `cargo build` das dependências, qualquer mudança em `engine/` invalida a camada de dependências do servidor, que não usa o motor; o cache que sobrevive a mudanças é o de `server/src`, não o de `engine/`. `(deduzido do Dockerfile; não medido)`
 - **Resolvido em `0c0593e`: nginx sem `client_max_body_size`.** O padrão do nginx é 1 MB, e o documento pode ter até 8 MB e os áudios até 512 MB; um `PUT` maior que 1 MB pelo nginx do `app` receberia `413` do próprio nginx antes de chegar à API. O `location /api/` agora tem `client_max_body_size 600m` (cobre os 512 MB do áudio com folga) e `proxy_request_buffering off`. O limite vale só para `/api/`: os demais `location` (estáticos) e `/api/ws` seguem no padrão de 1 MB. Continua `(não confirmado em produção)`: se houver outro proxy na frente do nginx (como o Traefik do Dokploy), a regra dele também vale, e o `proxy_read_timeout 300s` limita um upload lento; o cliente do app corta o `PUT` em 120 s (`app/lib/api/client.dart:60`).
-- **Sem rota para apagar áudio.** A cota de 4 GB só se libera apagando a conta; a mensagem do erro sugere o contrário.
+- **Apagar projeto não libera cota.** O áudio fica registrado e aparece como `unused` em `GET /api/samples`; quem libera é a tela `Conta` (ou as rotas `DELETE`/`cleanup`). Ninguém apaga áudio sozinho.
+- **"Em uso" é o documento sincronizado.** Um áudio cujo documento ainda não subiu parece `unused`; o `DELETE` por item não tem folga de 1 hora (só o `cleanup`), então um cliente que apague "tudo o que está unused" de imediato pode apagar o que acabou de subir. A UI só oferece apagar item `sem uso` e o `cleanup` poupa a última hora.
+- **Corrida residual `PUT /doc` × `DELETE`/`cleanup`** (ver "Limite conhecido: corrida com o documento" em "Áudios"): a conferência de uso e o apagar não são atômicos em relação à gravação do documento.
+- **`references` lê todos os documentos da conta** (até 8 MB cada) a cada `GET /api/samples`, `DELETE` e `cleanup`; contas com muitos projetos grandes pagam isso em cada chamada da tela `Conta`. `(não medido)`
+- **Job de FLAC e cota:** o FLAC gerado entra em `samples` sem projeto que o cite, então nasce `unused` (e é poupado pela limpeza só na primeira hora). O app não pede FLAC hoje.
+- **`audio_to_midi` com `rms_floor_db` ≥ −6:** o servidor aceita até 0 dB, mas a velocidade da nota é `(db − piso) / (−6 − piso)` e com o piso em −6 dB ou acima o divisor é zero ou negativo (o `clamp(0.05, 1.0)` esconde o resultado; em −6 exato dá divisão por zero, que em `f32` vira infinito/NaN). Na prática sem nota acima desse piso; a UI só vai a −20 dB. `(lido do código; não testado)`
 - **Uma instância só.** `requeue_orphans` no boot devolve **todas** as tarefas `running` à fila, inclusive as que outra instância estaria rodando; o limite de 2 tarefas simultâneas é por processo. O desenho pressupõe um único processo.
-- **Áudio → MIDI só aceita WAV** e o app manda o arquivo original importado: um clipe de MP3 falha com "formato não suportado".
+- **Decodificação no servidor cobre o que o navegador importa, menos Opus.** MP3, FLAC, OGG Vorbis, AAC/M4A e ALAC decodificam; OGG/Opus, AIFF e WebM falham com `formato de áudio não suportado (…)`. Acima de 10 minutos falha com `áudio longo demais` mesmo que o clipe use só um trecho curto.
+- **A decodificação (symphonia) é trabalho de CPU síncrono** dentro de `spawn_blocking`, sem teto de tempo: 10 minutos de MP3 ocupam uma das 2 vagas do worker enquanto decodificam e analisam. `(não medido)`
 - **Leitura do áudio inteiro na memória** (`Store::read`) nos jobs: até 512 MB por tarefa, 2 tarefas ao mesmo tempo.
 - **`requeue` e testes.** Os testes de rota dividem banco e `DATA_DIR`; `requeue(pool, Some(owner))` existe para não mexer nas tarefas alheias.
 - **`/README.md` da raiz é uma cópia antiga do `CLAUDE.md`** (diz que `entities/` "hoje só tem `project`"); vale o `CLAUDE.md`.

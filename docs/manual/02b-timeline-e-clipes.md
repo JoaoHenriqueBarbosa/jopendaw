@@ -7,7 +7,7 @@
 É a área central da tela do projeto (abra um projeto na lista). De cima para baixo:
 
 1. A **barra do transporte** (ver [Transporte](02-transporte.md)); no celular ela fica embaixo.
-2. A **régua** (30 px de altura), com o canto esquerdo mostrando `N faixas` e `comp.` ou `mm:ss`.
+2. A **régua** (30 px de altura), com o canto esquerdo mostrando a contagem de faixas (`1 faixa`, `2 faixas`...) e `comp.` ou `mm:ss`.
 3. A **lista de faixas**: à esquerda os cabeçalhos (232 px no computador, 132 px no celular), à direita as raias com os clipes. As duas metades rolam juntas na vertical.
 4. No fim da lista, a linha **Nova faixa** (44 px) e a linha do **Master**.
 5. O **minimapa** `Visão geral` (28 px), fixo embaixo da lista.
@@ -24,7 +24,7 @@ Um traço branco vertical com uma ponta triangular no alto marca o cursor de rep
 | Clique na régua | Posiciona o cursor naquele ponto, com encaixe na grade. | Encaixe da grade do transporte. | Alt não desliga o encaixe do clique; use a grade `Livre`. |
 | Arrastar na régua | Desenha a região do loop (do ponto onde começou ao ponto onde soltou, com encaixe) e liga o loop. | Precisa de mais de 0,01 batida de largura; menor que isso não liga. Entra no desfazer como um passo. | Redesenhe para trocar a região; não há alças nas pontas dela. |
 | Passar o mouse | Mostra um fio vertical e uma etiqueta com `compasso.tempo.dezesseis-avos · m:ss.d` do ponto sob o mouse. | | Só no computador. |
-| Canto esquerdo (`N faixas` + `comp.` / `mm:ss`) | Clicar alterna a régua entre compassos e minutos:segundos. O tooltip é `Régua em compassos: clique para alternar` (ou `... minutos e segundos ...`). O texto em cor da marca é o modo atual. | Padrão: compassos. | O mesmo que **Régua em minutos e segundos** do menu Visão. |
+| Canto esquerdo (contagem de faixas, `1 faixa` ou `N faixas`, + `comp.` / `mm:ss`) | Clicar alterna a régua entre compassos e minutos:segundos. O tooltip é `Régua em compassos: clique para alternar` (ou `... minutos e segundos ...`). O texto em cor da marca é o modo atual. | Padrão: compassos. | O mesmo que **Régua em minutos e segundos** do menu Visão. |
 | Números da régua | Em compassos: número do compasso (começa em 1); a régua pula números (a cada 2, 4, 8… compassos) quando o zoom diminui. Marcas de tempo aparecem a partir de 12 px por batida. Em mm:ss: rótulos a cada 0,5, 1, 2, 5, 10, 15, 30 s, 1, 2, 5, 10, 30 min ou 1 h, o menor passo que deixa 64 px entre rótulos. | | Em mm:ss, traços curtos embaixo continuam marcando os compassos. |
 | Bandeirinhas de marcador | Ver a seção Marcadores e seções. | | |
 | Selo **Contando…** | Aparece na régua, ao lado do cursor, durante a contagem antes de gravar. | | |
@@ -116,6 +116,7 @@ A linha **Nova faixa** (botão `+ Faixa` com uma seta) fica logo depois da últi
 | **Duplicar** (Ctrl+D) | Copia para logo depois. |
 | **Cortar no cursor** (S) | Divide no cursor. |
 | **Warp e altura…** | Abre a janela de warp. Ver [Warp e altura](03b-warp-e-altura.md). |
+| **Ganho do clipe…** | Abre o diálogo `Ganho do clipe`: um controle deslizante em dB só para este clipe (−40 a +12 dB, `−∞ dB (mudo)` no piso), o botão `Zerar (0 dB)` e o botão `Fechar`. O som e o desenho da onda mudam na hora; cada arraste do controle é um passo do desfazer. Ver [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe). |
 | **Converter em notas (MIDI)** | Cria uma faixa de sintetizador com as notas detectadas no áudio. Ver [Áudio para MIDI](03d-audio-para-midi.md). |
 | **Apagar** (Delete) | Apaga o clipe. |
 
@@ -154,7 +155,7 @@ Não há zoom de pinça com dois dedos: no celular use os botões **Afastar** e 
 
 ### Altura das faixas
 
-O menu **Visão** da barra escolhe **Faixas pequena (P)**, **Faixas média (M)** ou **Faixas grande (G)**. A altura da faixa é 76 px (computador) ou 64 px (celular) vezes 0,7, 1 ou 1,5. As sub-raias de automação têm altura própria e não mudam. Não há atalho de teclado para isso.
+O menu **Visão** da barra (tooltip `Visão: enquadrar, altura das faixas, seguir o cursor`) escolhe **Faixas pequenas**, **Faixas médias** ou **Faixas grandes** (itens marcáveis; um fica marcado, o padrão é `Faixas médias`). Os itens não trazem sigla nem atalho de teclado. A altura da faixa é 76 px (computador) ou 64 px (celular) vezes 0,7, 1 ou 1,5. As sub-raias de automação têm altura própria e não mudam (testado só por testes automáticos; a contagem de faixas no plural também).
 
 ### Master
 
@@ -244,7 +245,7 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 
 - [Transporte](02-transporte.md): grade, zoom, loop e enquadramento, que valem para tudo aqui.
 - [Áudio e clipes](03-audio-e-clipes.md): importar, fades e as propriedades do clipe de áudio.
-- [Warp e altura](03b-warp-e-altura.md) e [Áudio para MIDI](03d-audio-para-midi.md): itens do menu do clipe de áudio.
+- [Warp e altura](03b-warp-e-altura.md), [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe) (`Ganho do clipe…`) e [Áudio para MIDI](03d-audio-para-midi.md): itens do menu do clipe de áudio.
 - [Piano roll](05-piano-roll.md): editar o clipe de notas.
 - [Mixer](06-mixer.md), [Automação](07-automacao.md) e [Exportação](08-exportacao.md) (**Congelar em áudio**): botões do cabeçalho e do menu da faixa.
 - Receitas: pasta [`../guias/`](../guias/).
@@ -252,7 +253,7 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 ## Limites e pegadinhas
 
 - **Um clipe selecionado por vez.** Não há seleção múltipla, laço de seleção nem mover vários clipes juntos.
-- **Sem copiar e colar clipes** na timeline; sem ganho por clipe na interface (o campo de ganho existe no arquivo do projeto e o desenho da onda o reflete, mas nenhum controle o altera). Volume se ajusta na faixa (mini fader ou mixer).
+- **Sem copiar e colar clipes** na timeline. O ganho de cada clipe de áudio se ajusta em `Ganho do clipe…` (menu do clipe); o volume da faixa continua à parte, no mini fader ou no mixer. O clipe de notas não tem esse item.
 - **O único modificador de arraste é o Alt** (encaixe livre), nos clipes, marcadores e ao aparar. Shift e Ctrl não mudam o arraste; valem só na roda do mouse (Shift: horizontal, Ctrl: zoom) e nos atalhos.
 - **Só o clipe que você mexeu é preservado numa sobreposição:** o cortado dos outros é apagado do arranjo (o desfazer traz de volta). Se quiser guardar as duas partes, mova o clipe para outra faixa.
 - **Áudio só muda para faixa de áudio; notas só para faixa de instrumento.** Soltar sobre outro tipo deixa o clipe na faixa de origem.

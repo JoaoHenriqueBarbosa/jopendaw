@@ -4,7 +4,7 @@
 
 ## Onde fica
 
-1. Crie a faixa: na linha do tempo, botão `+` com tooltip `Nova faixa` → item `Wavetable` (no mixer, o botão com tooltip `Nova faixa ou barramento` tem o mesmo item). A faixa nasce no padrão e o seletor de presets mostra `Inicial`.
+1. Crie a faixa: na linha do tempo, botão `+` com tooltip `Nova faixa` → item `Wavetable` (no mixer, o botão com tooltip `Nova faixa ou barramento` tem o mesmo item). A faixa nasce no padrão e o seletor de presets mostra `Inicial`. Na lista de faixas, no mixer e na aba `Instrumento`, a faixa Wavetable usa o ícone `ssid_chart` do Material (uma linha de gráfico com pontos).
 2. Abra o painel: aba `Instrumento` da barra do painel inferior (tooltip `Instrumento da faixa (I)`), com a faixa selecionada.
 3. No computador os cartões ficam numa fileira com rolagem horizontal; no celular, em linhas com rolagem vertical.
 
@@ -96,10 +96,10 @@ O visor mostra 4 barras (`Osc 1`, `Osc 2`, `Sub`, `Ruído`) com os níveis, e `�
 | `Sub` | Senoide uma oitava **abaixo** da nota tocada, no centro do estéreo. Não é afetada por `Semitons`, `Desafinação` nem pelo uníssono. | 0–100%, padrão 0% | Engorda baixos; segura o grave mesmo com uníssono largo. |
 | `Ruído` | Ruído branco no centro do estéreo, também fora do uníssono. | 0–100%, padrão 0% | Um pouco de ruído com filtro passa-banda faz sopro (`Sopro vocal`). |
 | `Uníssono` | Número de cópias de cada oscilador tocando juntas, levemente desafinadas e espalhadas no estéreo. | 1–7, padrão 1 | Cada nota usa N cópias dos dois osciladores: o custo de CPU cresce com N. Com 1 cópia a fase de partida é sempre a mesma; com 2 ou mais as fases partem aleatórias. |
-| `Espalhar` | Largura da desafinação entre as cópias do uníssono: as cópias das pontas ficam a metade desse valor acima e abaixo da nota. | 0–100 ct, padrão 20 ct | 10 a 25 ct para supersaw suave; mais que 40 fica "desafinado". Esmaecido quando `Uníssono` é 1. |
-| `Estéreo` | Quanto as cópias se abrem entre esquerda e direita. | 0–100%, padrão 50% | 0% = todas no centro; 100% = as extremas totalmente nos lados. Esmaecido quando `Uníssono` é 1. |
+| `Desafino` | Largura da desafinação entre as cópias do uníssono: as cópias das pontas ficam a metade desse valor acima e abaixo da nota. | 0–100 ct, padrão 20 ct | 10 a 25 ct para supersaw suave; mais que 40 fica "desafinado". Esmaecido quando `Uníssono` é 1. |
+| `Espalhar` | Quanto as cópias se abrem entre esquerda e direita. | 0–100%, padrão 50% | 0% = todas no centro; 100% = as extremas totalmente nos lados. Esmaecido quando `Uníssono` é 1. |
 
-**Por que `Espalhar` e `Estéreo` aparecem esmaecidos com `Uníssono` em 1.** Os dois só distribuem as cópias do uníssono: `Espalhar` afasta as afinações delas e `Estéreo` abre a posição delas no panorama. Com uma cópia só, não há com quem afastar: essa cópia fica no centro e na afinação exata, então mexer nos dois knobs não muda nada no som. O painel os apaga como aviso de "sem efeito agora". Continuam mexíveis, e o valor fica guardado: ao subir `Uníssono` para 2 ou mais, eles voltam a valer e ganham cor.
+**Por que `Desafino` e `Espalhar` aparecem esmaecidos com `Uníssono` em 1.** Os dois só distribuem as cópias do uníssono: `Desafino` afasta as afinações delas e `Espalhar` abre a posição delas no panorama. Com uma cópia só, não há com quem afastar: essa cópia fica no centro e na afinação exata, então mexer nos dois knobs não muda nada no som. O painel os apaga como aviso de "sem efeito agora". Continuam mexíveis, e o valor fica guardado: ao subir `Uníssono` para 2 ou mais, eles voltam a valer e ganham cor.
 
 ### Cartão `Filtro`
 
@@ -110,7 +110,7 @@ Filtro de 12 dB por oitava (2 polos). O visor mostra a curva do filtro com corte
 | `Tipo` | Tipo do filtro (menu). | `Passa-baixa`, `Passa-alta`, `Passa-banda`. Padrão `Passa-baixa` | Passa-baixa tira brilho; passa-alta tira graves; passa-banda deixa uma faixa, ótimo para sopro e som de rádio. |
 | `Corte` | Frequência de corte. | 20 Hz–20 kHz, escala logarítmica, padrão 8,00 kHz | O motor não deixa o corte passar de 45% da taxa de amostragem. |
 | `Ressonância` | Realce de volume ao redor do corte. | 0–100%, padrão 10% | Vai de Q 0,5 a Q 16. O motor limita picos exagerados de ressonância para não estourar. |
-| `Envelope` | Quanto o envelope do filtro mexe no corte. Positivo abre, negativo fecha. | −100% a +100%, padrão 0%. 100% = 6 oitavas | 50% = 3 oitavas. Em notas fracas (`Velocidade` do cartão `Geral` alta) o efeito é menor. |
+| `Envelope` | Quanto o envelope do filtro mexe no corte. Positivo abre, negativo fecha. | −100% a +100%, padrão 0%. 100% = 6 oitavas | 50% = 3 oitavas. Em notas fracas (`Sens. vel.` do cartão `Geral` alta) o efeito é menor. |
 | `Teclado` | Quanto o corte acompanha a altura da nota, a partir do Dó 4. | 0–100%, padrão 50% | 100% mantém o brilho constante do grave ao agudo; 0% deixa o corte fixo. |
 
 ### Cartão `Amplitude`
@@ -140,12 +140,12 @@ O envelope do filtro e a `Posição (env. do filtro)` compartilham os mesmos tem
 
 ### Cartão `LFO`
 
-Um oscilador lento que mexe em quatro coisas, cada uma com sua profundidade. Há **um LFO por faixa**, livre (em Hz, sem sincronia com o andamento) e compartilhado por todas as notas: ele não recomeça a cada nota. Com as quatro profundidades em 0 o cartão esmaece com a legenda `sem efeito: vibrato, filtro, tremolo e posição em 0`, e `Onda` e `Velocidade` ficam apagados.
+Um oscilador lento que mexe em quatro coisas, cada uma com sua profundidade. Há **um LFO por faixa**, livre (em Hz, sem sincronia com o andamento) e compartilhado por todas as notas: ele não recomeça a cada nota. Com as quatro profundidades em 0 o cartão esmaece com a legenda `sem efeito: vibrato, filtro, tremolo e posição em 0`, e `Onda` e `Taxa` ficam apagados.
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | `Onda` | Forma do LFO (menu). | `Senoide`, `Triângulo`, `Serra`, `Quadrada`, `Aleatório`. Padrão `Senoide` | `Triângulo` varre a posição para cima e para baixo igualmente; `Aleatório` salta de valor em valor (textura granular); `Quadrada` alterna entre duas posições. |
-| `Velocidade` | Frequência do LFO. | 0,05–30 Hz, log, padrão 4,00 Hz | Morfar pad: 0,1 a 0,3 Hz. PWM: cerca de 2 Hz. |
+| `Taxa` | Frequência do LFO. | 0,05–30 Hz, log, padrão 4,00 Hz | Morfar pad: 0,1 a 0,3 Hz. PWM: cerca de 2 Hz. |
 | `Vibrato` | Quanto o LFO balança a altura. | 0–12 st, padrão +0 st | 0,1 a 0,3 st para vibrato musical. |
 | `Filtro` | Quanto o LFO balança o corte do filtro. | 0–4 oitavas (`0.0 oit`), padrão 0 | Efeito de "wah" lento com valores de 1 a 2 oitavas. |
 | `Tremolo` | Quanto o LFO balança o volume. | 0–100%, padrão 0% | |
@@ -161,7 +161,7 @@ O visor diz `Mono · legato` ou `Poli · N vozes` e `Glide` com o tempo ou `Sem 
 |---|---|---|---|
 | `Glide` | Tempo de deslizar de uma nota para a próxima. | 0–2 s, padrão 0 (sem glide) | Leads mono: 50 a 80 ms. |
 | `Vozes` | Máximo de notas ao mesmo tempo. Com 1 vira mono com legato. | 1–16, padrão 8 | Passando do limite, sai num fade de 5 ms a mais baixa entre as notas já soltas ou, se todas estão presas, a mais antiga. |
-| `Velocidade` | Sensibilidade à velocidade (força) da nota. Não confundir com a `Velocidade` do LFO. | 0–100%, padrão 70% | Também reduz a profundidade do envelope do filtro e da `Posição (env. do filtro)` em notas fracas (até a metade). |
+| `Sens. vel.` | Sensibilidade à velocidade (força) da nota. Não confundir com a `Taxa` do LFO. | 0–100%, padrão 70% | Também reduz a profundidade do envelope do filtro e da `Posição (env. do filtro)` em notas fracas (até a metade). |
 | `Volume` | Volume de saída do instrumento. | 0–150%, padrão 70% | |
 
 ### Presets do wavetable
@@ -180,7 +180,7 @@ O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Pr�
 
 | Preset | Caráter |
 |---|---|
-| `Lead PWM` | Dois osciladores nos pulsos (71% e 75%, desafinados +9 ct), `Uníssono` 3 com `Espalhar` 18 ct, `LFO` triângulo a 2,2 Hz com `Posição` 18%: o pulso abre e fecha devagar. `Glide` 50 ms. |
+| `Lead PWM` | Dois osciladores nos pulsos (71% e 75%, desafinados +9 ct), `Uníssono` 3 com `Desafino` 18 ct, `LFO` triângulo a 2,2 Hz com `Posição` 18%: o pulso abre e fecha devagar. `Glide` 50 ms. |
 | `Lead vocal` | Série `Vozes` em `E`, com um segundo oscilador uma oitava acima (35%), `Vibrato` 0,2 st a 5,2 Hz e `Posição` do LFO 8%, ataque de 30 ms e `Glide` 70 ms: voz que canta a melodia. |
 | `Lead ácido` | Série `Digital` (`Ressonante` mais `Primos` desafinado +12 ct), corte 1,8 kHz, ressonância 50%, `Envelope` +60% e `Posição (env. do filtro)` +30%: lead ácido com `Glide` de 80 ms. |
 
@@ -188,9 +188,9 @@ O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Pr�
 
 | Preset | Caráter |
 |---|---|
-| `Pad morfante` | Osc. 1 `Clássica` a 15% e osc. 2 `Vozes` a 20% (40%, +9 ct), `Uníssono` 4 com `Espalhar` 25 ct e `Estéreo` 80%. O LFO senoide a 0,12 Hz com `Posição` 35% varre a série devagar: o timbre nunca fica parado. Ataque de 0,9 s, soltura de 1,8 s. |
+| `Pad morfante` | Osc. 1 `Clássica` a 15% e osc. 2 `Vozes` a 20% (40%, +9 ct), `Uníssono` 4 com `Desafino` 25 ct e `Espalhar` 80%. O LFO senoide a 0,12 Hz com `Posição` 35% varre a série devagar: o timbre nunca fica parado. Ataque de 0,9 s, soltura de 1,8 s. |
 | `Pad de vozes` | `Vozes` em `A` mais `U` uma oitava acima (25%), `Uníssono` 3, `LFO` a 0,09 Hz com `Posição` 50%: coro que percorre as vogais. Ataque de 0,8 s, soltura de 2 s. |
-| `Pad de vidro` | Série `Digital`: `Vidro` e `Granulada` (35%, +12 st, +6 ct), `Uníssono` 3 com `Estéreo` 90%, corte 9 kHz, LFO triângulo a 0,2 Hz. Ataque de 1,2 s, soltura de 2,2 s. |
+| `Pad de vidro` | Série `Digital`: `Vidro` e `Granulada` (35%, +12 st, +6 ct), `Uníssono` 3 com `Espalhar` 90%, corte 9 kHz, LFO triângulo a 0,2 Hz. Ataque de 1,2 s, soltura de 2,2 s. |
 
 **Vocais**
 
@@ -228,12 +228,12 @@ O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Pr�
 
 **2. Fazer PWM**
 1. No `Oscilador 1`, série `Clássica`, `Posição` 71%.
-2. No cartão `LFO`, `Onda` `Triângulo`, `Velocidade` 2,2 Hz, `Posição` 18%.
+2. No cartão `LFO`, `Onda` `Triângulo`, `Taxa` 2,2 Hz, `Posição` 18%.
 3. Se quiser mais corpo, ponha `Nível` do `Oscilador 2` em 60%, com a mesma série e `Posição` 75%, e `Uníssono` 3.
 
 **3. Engrossar com uníssono**
 1. No cartão `Mistura`, `Uníssono` 3 a 5.
-2. Ajuste `Espalhar` (largura de afinação) e `Estéreo` (abertura). Enquanto o `Uníssono` estiver em 1, os dois estão esmaecidos e não fazem nada.
+2. Ajuste `Desafino` (largura de afinação) e `Espalhar` (abertura no estéreo). Enquanto o `Uníssono` estiver em 1, os dois estão esmaecidos e não fazem nada.
 3. Se o grave ficou fino, suba `Sub`: ele não entra no uníssono e fica no centro.
 
 **4. Timbre que muda ao longo da nota (pluck)**

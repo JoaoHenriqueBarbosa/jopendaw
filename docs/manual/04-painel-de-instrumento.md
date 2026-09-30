@@ -32,7 +32,7 @@ Os instrumentos também nascem pelo botão `Nova faixa` da coluna de faixas do a
 | Seta esquerda, tooltip `Anterior (preset)` (na bateria, `Anterior (kit)`) | Aplica o preset anterior da lista, dando a volta do primeiro para o último | Sem preset atual, parte do fim da lista | Percorra timbres com o teclado da tela tocando |
 | Seletor de presets, tooltip `Presets` (na bateria, `Kits de bateria`) | Abre o menu de presets agrupado por categoria, com um visto no preset que bate com os valores atuais | Largura fixa de 200 px; ver [Presets](#presets) | O rótulo mostra o nome do preset ou `Inicial`, `Personalizado`, `Nome (editado)` |
 | Seta direita, tooltip `Próximo (preset)` (na bateria, `Próximo (kit)`) | Aplica o próximo preset, dando a volta do último para o primeiro | Sem preset atual, parte do começo | A largura do seletor é fixa para o botão não andar a cada nome |
-| Ícone de teclado, tooltip `Tocar com o teclado do computador` (ligado: `Teclado do computador tocando (A a L; Z/X muda a oitava)`) | Liga e desliga o teclado do computador | Desligado ao abrir | É o mesmo interruptor do botão da barra superior e de `Ctrl+K` |
+| Ícone de teclado, tooltip `Tocar com o teclado do computador (Ctrl+K)` (ligado: `Teclado tocando: atalhos suspensos (A a P tocam; Z/X mudam a oitava; C/V a intensidade)`) | Liga e desliga o teclado do computador | Desligado ao abrir | É o mesmo interruptor do botão da barra superior e de `Ctrl+K`; no Mac o tooltip mostra `⌘+K` no lugar de `Ctrl+K`. Ligado, os atalhos de letra do estúdio ficam suspensos (ver [Limites e pegadinhas](#limites-e-pegadinhas)) |
 | Ícone USB, tooltip `Tocar com um teclado MIDI` (conectado: `MIDI: nome do aparelho`) | Pede acesso ao MIDI do aparelho e liga a entrada | Fica colorido quando há aparelho conectado | O navegador pede permissão na primeira vez |
 | Duas rodas verticais, à esquerda de `Oitava abaixo` (tooltips `Pitch bend (solta e volta ao centro)` e `Modulação (vibrato)`) | Rodas de expressão do teclado da tela; ver [Rodas de pitch bend e de modulação](#rodas-de-pitch-bend-e-de-modulação) | 38 px de altura no cabeçalho | Não aparecem na bateria |
 | Setas `Oitava abaixo` e `Oitava acima`, com o teclado entre elas | Teclado da tela; só cabe no cabeçalho com o painel a partir de 1000 px de largura | 25 teclas | Abaixo de 1000 px o teclado desce para uma faixa própria, no pé do painel (as rodas descem junto) |
@@ -79,7 +79,7 @@ Ao lado esquerdo do teclado da tela, tanto no cabeçalho (painel com 1000 px ou 
 
 #### Alcance do bend e vibrato da roda, por instrumento
 
-Os knobs ficam no cartão `GERAL`, junto dos outros controles gerais do instrumento (`Vozes`, `Velocidade`, `Volume`...). Como são knobs comuns, aparecem também no menu de alvos da automação (não confirmado).
+Os knobs ficam no cartão `GERAL`, junto dos outros controles gerais do instrumento (`Vozes`, `Sens. vel.`, `Volume`...). Como são knobs comuns, aparecem também no menu de alvos da automação (não confirmado).
 
 | Instrumento | `Alcance do bend` | `Vibrato da roda` | Resposta às rodas |
 |---|---|---|---|
@@ -139,7 +139,7 @@ O rótulo mostra em que pé o timbre está:
 |---|---|
 | Nome do preset (ex.: `Pad quente`) | Todos os parâmetros batem com os de um preset da lista (com tolerância ínfima de arredondamento). O menu marca esse preset com um visto |
 | `Nome (editado)` (ex.: `Pad quente (editado)`) | Você aplicou um preset nesta sessão do painel e depois mexeu em algum parâmetro |
-| `Inicial` | Faixa recém-criada, com todos os parâmetros ainda no padrão do tipo e sem nenhum preset da lista igual a esse estado: é o caso de FM e wavetable. No sintetizador o mesmo estado bate com o preset chamado `Inicial` (categoria `BÁSICO`); na bateria e no sampler bate com o preset `Padrão` |
+| `Inicial` | Faixa recém-criada, com todos os parâmetros ainda no padrão do tipo e sem nenhum preset da lista igual a esse estado: é o caso de FM e wavetable. No sintetizador o mesmo estado bate com o preset chamado `Inicial` (categoria `BÁSICO`); na bateria (categoria `KITS`) e no sampler (categoria `SAMPLER`) também existe um preset `Inicial`, sem valores, que bate com o estado de fábrica |
 | `Personalizado` | Os valores não batem com nenhum preset e nenhum foi aplicado nesta sessão do painel (por exemplo, ao reabrir o projeto com um timbre ajustado à mão) |
 
 O nome `(editado)` é lembrado só enquanto o painel está aberto: fechar o painel ou trocar de aba parece descartar essa lembrança, e o rótulo passa a `Personalizado` (`(não confirmado)` em uso; vem da leitura do código, em que o painel é recriado a cada troca de aba). O que é salvo com o projeto são os valores dos parâmetros, não o nome do preset.
@@ -204,7 +204,8 @@ Não existe, no painel, botão para salvar um timbre próprio como preset: a lis
 - **Uma faixa por vez.** O painel só mostra a faixa selecionada; para comparar dois timbres, troque a seleção.
 - **Preset apaga o que não é dele.** Aplicar um preset devolve ao padrão todo parâmetro que ele não cita. Se você ajustou um knob e quer guardá-lo, não troque de preset sem antes anotar (ou use `Ctrl+Z`).
 - **Teclado do computador e MIDI tocam a faixa armada.** Eles tocam a faixa selecionada, a não ser que exista uma faixa de instrumento armada para gravar e a selecionada não seja uma delas; aí tocam a primeira armada. O teclado da tela sempre toca a faixa selecionada na hora do toque.
-- **A oitava do teclado do computador é uma só para o projeto** (padrão C4, mostrada no botão da barra superior), diferente da oitava do teclado da tela, que é por tipo de instrumento. Numa bateria, o teclado do computador em C4 cai em notas sem peça: desça a oitava com `Z` até C2 (ver [04b](04b-bateria.md)).
+- **A oitava do teclado do computador é uma por tipo de faixa**, como a do teclado da tela: sintetizador, sampler, FM e wavetable abrem em C4; a bateria abre em C2 (nota 36), onde ficam as peças, então `A` a `P` já tocam a bateria sem mexer na oitava (ver [04b](04b-bateria.md)). A oitava vale para o tipo da faixa que está tocando (a selecionada ou a armada) e é lembrada só na memória do controlador do projeto aberto, não vai para o arquivo do projeto (não confirmado em uso); o botão do teclado na barra superior mostra a oitava atual (por exemplo `C4 · sem atalhos`, ou `C2 · sem atalhos` numa bateria).
+- **Teclado do computador ligado suspende atalhos de letra.** O botão da barra superior mostra `C4 · sem atalhos` para avisar: `C`, `L`, `S`, `X`, `Z`, `E`, `F`, `K`, `J` e `Shift+H`/`Shift+L` viram nota, oitava ou intensidade até você desligar com `Ctrl+K`. Os atalhos com `Ctrl`/`Cmd` continuam valendo.
 - **Duas leituras de força.** No teclado de piano da tela, quanto mais perto da frente da tecla (mais embaixo), mais forte; nos pads da bateria, é o contrário: quanto mais perto do topo, mais forte.
 - **Estado do painel não é salvo.** A oitava do teclado da tela, o teclado escondido no celular e o `(editado)` do preset valem só enquanto o painel está aberto. Os valores dos parâmetros, sim, vão com o projeto e sincronizam.
 - **Sem teclado físico nos knobs.** Só mouse, toque ou leitor de tela.
@@ -221,7 +222,7 @@ Não existe, no painel, botão para salvar um timbre próprio como preset: a lis
 | `Esc` | Fecha o painel de baixo |
 | `Ctrl+K` (`Cmd+K` no Mac) | Liga e desliga o teclado do computador |
 | `A W S E D F T G Y H U J K O L P` (teclado do computador ligado) | Notas: `A` = dó, `W` = dó#, `S` = ré, `E` = ré#, `D` = mi, `F` = fá, `T` = fá#, `G` = sol, `Y` = sol#, `H` = lá, `U` = lá#, `J` = si, `K` = dó de cima, `O` = dó#, `L` = ré, `P` = ré# |
-| `Z` / `X` (teclado ligado) | Oitava do teclado do computador abaixo / acima (faixa 0 a 8, padrão 4) |
+| `Z` / `X` (teclado ligado) | Oitava do teclado do computador abaixo / acima, só para o tipo da faixa que está tocando (faixa 0 a 8; padrão 4, e 2 na bateria) |
 | `C` / `V` (teclado ligado) | Intensidade das notas menor / maior, em passos de 10% (10% a 100%, padrão 80%) |
 | `Shift` ao arrastar ou rolar sobre um knob | Ajuste fino (5 vezes mais fino) |
 | Duplo clique num knob | Valor padrão |

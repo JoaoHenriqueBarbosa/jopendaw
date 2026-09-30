@@ -2,7 +2,7 @@
 
 > Referência do crate `jopendaw-engine` para quem mexe no motor: módulos, ciclo de render por bloco, transporte, notas, clipes, automação, ids de parâmetro, regras de tempo real e a tabela completa de `engine::api::apply`. As pontes para web e Android ficam em [02-pontes-web-e-android.md](02-pontes-web-e-android.md).
 
-Citações no formato `arquivo:linha` valem para o estado do repositório em 2026-09-30 (commit `924bac4`); linhas andam, os nomes de função não.
+Citações no formato `arquivo:linha` valem para o estado do repositório em 2026-09-30 (commit `924bac4`); linhas andam, os nomes de função não. As linhas de `api.rs`, `instrument.rs`, `record.rs`, `effect.rs` (a partir de `distortion_param`) e de `engine/wasm/src/lib.rs` foram conferidas de novo em `15670b7` (fase 9); as demais podem ter andado alguns pontos.
 
 ## Visão geral
 
@@ -42,9 +42,9 @@ O tempo é contado em quadros (amostras por canal) na taxa do motor; o documento
 | Arquivo | Papel | Estruturas e funções principais |
 |---|---|---|
 | `engine/src/lib.rs` | O `Engine`: transporte, clipes, notas, automação, roteamento, ciclo de render, gravação e capturas. Também tem 57 testes. | `Engine` (`lib.rs:474`), `Sample` (`:127`), `Clip` (`:208`), `Lane` (`:250`, instrumento + notas de uma faixa), `Strip` (`:424`, inserts + envios + saída), `AutoLane` (`:392`), `Target` (`:369`) |
-| `engine/src/api.rs` | As chamadas por nome (`[nome, ...args]` em f64), o mesmo protocolo dos exports do wasm. Usado pelo Android e pelo render offline nativo. | `apply` (`:55`), `Call::parse` (`:275`, valida e converte), `Call::apply` (`:348`, aplica), tabela `CALLS` (`:132`), `HOST_ONLY` (`:182`), `MAX_TRACKS = 1024` (`:51`) |
+| `engine/src/api.rs` | As chamadas por nome (`[nome, ...args]` em f64), o mesmo protocolo dos exports do wasm. Usado pelo Android e pelo render offline nativo. | `apply` (`:56`), `Call::parse` (`:319`, valida e converte), `Call::apply` (`:423`, aplica), tabela `CALLS` (`:141`), `call_names()` (`:219`, os nomes da tabela, para os hospedeiros conferirem que cobrem todas), `HOST_ONLY` (`:226`, `pub` desde `ae91ef4`), `MAX_TRACKS = 1024` (`:52`) |
 | `engine/src/mixer.rs` | Canal, envio e cadeia de efeitos. | `Track` (`:33`: ganho, pan, mudo, solo, picos, suavização), `Send` (`:231`), `Chain` (`:384`) e `Slot` (`:330`), `Scratch` (`:296`), `Stereo` (`:318`) |
-| `engine/src/instrument.rs` | Contrato `Instrument`, tipos de faixa (`kind`), `create`, e os ids de parâmetro dos cinco instrumentos. | `trait Instrument` (`:16`), `kind` (`:36`), `create` (`:51`), `synth_param` (`:68`), `drum_param` (`:133`), `sampler_param` (`:183`), `fm_param` (`:202`), `wavetable_param` (`:248`), `contract` (`:317`, só teste) |
+| `engine/src/instrument.rs` | Contrato `Instrument`, tipos de faixa (`kind`), `create`, e os ids de parâmetro dos cinco instrumentos. | `trait Instrument` (`:16`), `kind` (`:36`), `create` (`:51`), `synth_param` (`:68`), `drum_param` (`:148`), `sampler_param` (`:183`), `fm_param` (`:202`), `wavetable_param` (`:248`), `contract` (`:344`, só teste: `source`, `rows`, `check`, `dart_ids`, `screaming`) |
 | `engine/src/synth.rs` | Sintetizador subtrativo (tipo 1): 2 osciladores com polyBLEP/BLAMP, sub, ruído, uníssono de até 7, SVF, 2 envelopes, LFO, glide, mono/legato. 16 vozes + 4 de folga. | `Synth` (`:455`), `SPECS` (`:65`, faixa/padrão por id) |
 | `engine/src/drums.rs` | Bateria sintetizada (tipo 2): 12 peças geradas na hora, 3 vozes por peça, chimbal fechado corta o aberto. | `Drums`, `drum_param::piece_for` |
 | `engine/src/sampler.rs` | Sampler (tipo 3): lê um `Arc<Sample>` afinado pela nota, Hermite de 4 pontos, passa-baixa Butterworth de 4ª ordem quando lê acima da altura original. 16 vozes + 4 de folga. Sem zonas toca um áudio único; com zonas delega o disparo a `sampler_zones.rs`. | `Sampler` (`:313`), `VOICES = 16` (`:32`), `SLOTS` (`:34`) |
@@ -62,7 +62,7 @@ O tempo é contado em quadros (amostras por canal) na taxa do motor; o documento
 | `engine/src/metronome.rs` | Clique senoidal de 30 ms: 1600 Hz no primeiro tempo do compasso, 1000 Hz nos outros. | `Metronome` |
 | `engine/src/testalloc.rs` | Só em teste (`#[cfg(test)]`, `lib.rs:81`): alocador global que conta alocações de uma thread. | `count` |
 
-Fora do crate, mas parte do contrato: `engine/wasm/src/lib.rs` (exports C do worklet) e `engine/android/src/` (superfície `jd_*`). O teste `apply_conhece_todos_os_exports_sem_ponteiro_do_wasm` (`api.rs:825`) lê o `lib.rs` do wasm e falha se um export novo não estiver espelhado em `CALLS`/`Call` ou em `HOST_ONLY`.
+Fora do crate, mas parte do contrato: `engine/wasm/src/lib.rs` (exports C do worklet) e `engine/android/src/` (superfície `jd_*`). O teste `apply_conhece_todos_os_exports_sem_ponteiro_do_wasm` (`api.rs:946`) lê o `lib.rs` do wasm e falha se um export novo não estiver espelhado em `CALLS`/`Call` ou em `HOST_ONLY`.
 
 ### Contratos dos traits
 
@@ -186,11 +186,11 @@ Todo parâmetro é um `u32` estável, com valor na unidade da tabela (Hz, s, dB,
 
 | Módulo | Ids | Observação |
 |---|---|---|
-| `synth_param` (`instrument.rs:68`) | 0–34, `COUNT = 35` | oscilador 1 (0–2), oscilador 2 (3–6), sub, ruído, uníssono (9–11), filtro (12–16), envelopes (17–24), LFO (25–29), glide, vozes, velocidade, nível, drive |
-| `drum_param` (`:133`) | `peça * 4 + k` (k: 0 volume, 1 afinação, 2 decaimento, 3 timbre), `MASTER = 48` | 12 peças, ids 0–47; ordem das peças e nota GM em `PIECE_PITCH` |
-| `sampler_param` (`:183`) | 0–8 | raiz, ADSR, nível, one-shot, afinação fina, velocidade |
-| `fm_param` (`:202`) | 0 algoritmo, 1 realimentação, operadores em `OP_BASE + op * OP_STRIDE + k` (`OP_BASE = 2`, `OP_STRIDE = 8`, 4 operadores, ids 2–33), 34–41 LFO/vozes/glide/nível; `COUNT = 42` | `fm_param::op(op, k)` calcula o id |
-| `wavetable_param` (`:248`) | 0–38, `COUNT = 39` | osciladores 1 (0–4) e 2 (5–9), sub, ruído, uníssono, filtro, envelopes, LFO, `ENV_POS` |
+| `synth_param` (`instrument.rs:79`) | 0–36, `COUNT = 37` | oscilador 1 (0–2), oscilador 2 (3–6), sub, ruído, uníssono (9–11), filtro (12–16), envelopes (17–24), LFO (25–29), glide, vozes, velocidade, nível, drive (34), `BEND_RANGE` (35) e `VIBRATO_RANGE` (36, da fase 8) |
+| `drum_param` (`:148`) | `peça * 4 + k` (k: 0 volume, 1 afinação, 2 decaimento, 3 timbre), `MASTER = 48` | 12 peças, ids 0–47; ordem das peças e nota GM em `PIECE_PITCH` |
+| `sampler_param` (`:198`) | 0–9 | raiz, ADSR, nível, one-shot, afinação fina, velocidade, `BEND_RANGE` (9) |
+| `fm_param` (`:219`) | 0 algoritmo, 1 realimentação, operadores em `OP_BASE + op * OP_STRIDE + k` (`OP_BASE = 2`, `OP_STRIDE = 8`, 4 operadores, ids 2–33), 34–41 LFO/vozes/glide/nível, `BEND_RANGE` (42) e `VIBRATO_RANGE` (43); `COUNT = 44` | `fm_param::op(op, k)` calcula o id |
+| `wavetable_param` (`:269`) | 0–40, `COUNT = 41` | osciladores 1 (0–4) e 2 (5–9), sub, ruído, uníssono, filtro, envelopes, LFO, `ENV_POS` (38), `BEND_RANGE` (39) e `VIBRATO_RANGE` (40) |
 | `eq_param` (`effect.rs:89`) | banda `b * 6 + k` (8 bandas, k: ligada, tipo, freq, ganho, Q, inclinação), `OUTPUT = 48` | maior tabela, motivo de `STATIC_PARAMS = 64` |
 | `compressor_param` (`:108`) | 0–10 | `SIDECHAIN = 10` (faixa-chave, −1 = a própria entrada) |
 | `gate_param` (`:134`) | 0–6 | `SIDECHAIN = 6` |
@@ -201,10 +201,10 @@ Todo parâmetro é um `u32` estável, com valor na unidade da tabela (Hz, s, dB,
 | `chorus_param` (`:228`) | 0–6 | 1–4 vozes, serve de flanger com atraso curto e realimentação |
 | `phaser_param` (`:244`) | 0–6 | 2, 4, 6, 8 ou 12 estágios |
 | `tremolo_param` (`:258`) | 0–5 | senoide, triângulo, quadrada; sincronizável |
-| `distortion_param` (`:270`) | 0–7 | 6 tipos, sobreamostragem 1×/2×/4×; latência fixa `LATENCY` |
+| `distortion_param` (`:270`) | 0–8 | 6 tipos, sobreamostragem 1×/2×/4×; `DITHER` (8, dither TPDF na quantização do bitcrusher, 0 desliga e 1 liga; a constante em `effect.rs` é de `ffff18c`, o efeito já a tinha em `fx/distortion.rs:22`); latência fixa `LATENCY` |
 | `filter_param` (`:287`) | 0–10 | SVF 12/24 dB, LFO, seguidor de envelope, sincronizável |
 
-Tipos de faixa (`instrument::kind`, `instrument.rs:36`): 0 áudio, 1 sintetizador, 2 bateria, 3 sampler, 4 barramento, 5 FM, 6 wavetable. O índice de `TrackKind` no Dart é o código do motor; tipo novo só entra no fim. Tipos de efeito (`effect::kind`, `effect.rs:37`): 1 EQ, 2 compressor, 3 gate, 4 limitador, 5 utilitário, 6 reverb, 7 delay, 8 chorus, 9 phaser, 10 tremolo, 11 distorção, 12 filtro; 0 esvazia o slot.
+Tipos de faixa (`instrument::kind`, `instrument.rs:47`): 0 áudio, 1 sintetizador, 2 bateria, 3 sampler, 4 barramento, 5 FM, 6 wavetable. O índice de `TrackKind` no Dart é o código do motor; tipo novo só entra no fim. Tipos de efeito (`effect::kind`, `effect.rs:37`): 1 EQ, 2 compressor, 3 gate, 4 limitador, 5 utilitário, 6 reverb, 7 delay, 8 chorus, 9 phaser, 10 tremolo, 11 distorção, 12 filtro; 0 esvazia o slot.
 
 `Engine::set_param` guarda o valor em `statics` apenas para ids abaixo de 64; `Instrument::set_param` de cada instrumento limita ao intervalo da tabela (o synth arredonda os discretos, `synth.rs:890`) e ignora id desconhecido.
 
@@ -231,7 +231,7 @@ Capturas (`record.rs`): até `MAX_CAPTURES = 64`; cada uma guarda até `MAX_BLOC
 
 ### Tabela de `engine::api::apply`
 
-`apply(engine, nome, args)` (`api.rs:55`) devolve `Ok(Some(v))` para as chamadas com retorno, `Ok(None)` para as outras, ou `Err(UnknownCall)` com o motor intocado. Regras de conversão (cabeçalho de `api.rs`, `wrap32` em `:203`): cada número é convertido como o JavaScript faz ao chamar um export do wasm (inteiros truncados com volta módulo 2³², `usize` de 32 bits, booleano = "diferente de zero" depois dessa conversão, f32 mais próximo); argumentos a mais são ignorados; argumento faltando, não finito (também depois de virar f32) ou `tracks` acima de 1024 são erro. Faixa `-1` é o master onde o export recebe `i32`. Antes de qualquer efeito, `Call::parse` valida e `Call::apply` só aplica, sem falhar.
+`apply(engine, nome, args)` (`api.rs:56`) devolve `Ok(Some(v))` para as chamadas com retorno, `Ok(None)` para as outras, ou `Err(UnknownCall)` com o motor intocado. Regras de conversão (cabeçalho de `api.rs`, `wrap32` em `:247`): cada número é convertido como o JavaScript faz ao chamar um export do wasm (inteiros truncados com volta módulo 2³², `usize` de 32 bits, booleano = "diferente de zero" depois dessa conversão, f32 mais próximo); argumentos a mais são ignorados; argumento faltando, não finito (também depois de virar f32) ou `tracks` acima de 1024 são erro. (O export `tracks` do wasm, que não devolve erro, ignora a chamada acima de 1024 e deixa o motor como estava, desde `ae91ef4`.) Faixa `-1` é o master onde o export recebe `i32`. Antes de qualquer efeito, `Call::parse` valida e `Call::apply` só aplica, sem falhar.
 
 Convenções abaixo: `faixa` é índice de zero; `bool` é 0/1; batidas são f64; ganhos são lineares.
 
@@ -244,7 +244,7 @@ Convenções abaixo: `faixa` é índice de zero; `bool` é 0/1; batidas são f64
 | `seek` | `batida` (f64) | Vai para a batida (mínimo 0); solta as notas do sequenciador. |
 | `loop_set` | `ligado` (u32), `início` (f64), `fim` (f64) | Loop em batidas; só liga se `fim > início` (início e fim mínimos 0). |
 | `metronome` | `ligado` (u32), `ganho` (f32) | Liga/desliga o clique e ajusta o ganho (padrão 0,6). |
-| `tracks` | `quantidade` (usize) | Cria ou remove faixas até `quantidade` (0 a 1024; acima disso erro). Faixas novas nascem sem efeitos, sem envios, saindo no master. |
+| `tracks` | `quantidade` (usize) | Cria ou remove faixas até `quantidade` (0 a 1024; acima disso é erro em `apply`, e **ignorada** no export do wasm: o motor fica como estava). Faixas novas nascem sem efeitos, sem envios, saindo no master. |
 | `track` | `faixa` (usize), `ganho` (f32), `pan` (f32), `mudo` (u32), `solo` (u32) | Estado estático do canal; índice inexistente é ignorado. |
 | `master` | `ganho` (f32), `pan` (f32) | Volume e balanço do master. |
 | `clips_clear` | nenhum | Apaga todos os clipes. |
@@ -286,9 +286,9 @@ Convenções abaixo: `faixa` é índice de zero; `bool` é 0/1; batidas são f64
 | `loudness_reset` | nenhum | Zera o medidor de loudness do master: integrado, faixa, máximos de momentâneo e curto prazo e true peak. Os filtros K-weighting seguem com o sinal que veem (não gera transiente). |
 | `loudness` | `tipo` (u32) | **Devolve** (f64) a medida do master depois do limitador: 0 momentâneo (LUFS), 1 curto prazo (LUFS), 2 integrado (LUFS), 3 true peak máximo (dBTP), 4 faixa de loudness (LU). −200 (`loudness::NONE`) = sem medida; tipo desconhecido também devolve −200. |
 
-Chamadas fora de `apply` (levam ponteiro, cada hospedeiro tem função própria; lista `HOST_ONLY`, `api.rs:182`): `alloc`, `dealloc`, `init`, `process`, `sample_load`, `analyzer`, `set_input`, `rec_notes`, `captured`, `peaks`, `stretch_run`, `stretch_channel`, `stretch_free`, `detect_bpm`, `detect_confidence`. Chamar uma delas por `apply` é erro com mensagem específica; `init` diz que o motor nasce no hospedeiro.
+Chamadas fora de `apply` (levam ponteiro, cada hospedeiro tem função própria; lista `HOST_ONLY`, `api.rs:226`, `pub`: o crate do Android a lê no teste de paridade): `alloc`, `dealloc`, `init`, `process`, `sample_load`, `analyzer`, `set_input`, `rec_notes`, `captured`, `peaks`, `stretch_run`, `stretch_channel`, `stretch_free`, `detect_bpm`, `detect_confidence`. Chamar uma delas por `apply` é erro com mensagem específica; `init` diz que o motor nasce no hospedeiro.
 
-`Call` (`api.rs:63`) é `Copy`, sem heap e com no máximo 96 bytes (era 64 até a `zone_add`, que leva uma `ZoneDef` inteira com quatro tempos em f64; teste `chamada_convertida_e_copia_simples`): um hospedeiro com thread de áudio valida na thread dele com `Call::parse` e manda o `Call` por uma fila sem trava; só o caminho de erro aloca (a mensagem).
+`Call` (`api.rs:64`) é `Copy`, sem heap e com no máximo 96 bytes (era 64 até a `zone_add`, que leva uma `ZoneDef` inteira com quatro tempos em f64; teste `chamada_convertida_e_copia_simples`): um hospedeiro com thread de áudio valida na thread dele com `Call::parse` e manda o `Call` por uma fila sem trava; só o caminho de erro aloca (a mensagem).
 
 ### O medidor de loudness (`engine/src/loudness.rs`)
 
@@ -322,17 +322,17 @@ Também guarda `momentary_max` e `short_term_max` (só `Meter::read`; nenhuma ch
 
 | Constante | Valor | Onde |
 |---|---|---|
-| `MAX_BLOCK` | 4096 quadros | `lib.rs:98` |
-| `CHUNK` | 128 quadros | `lib.rs:105` |
-| `AUTO_STEP` | 32 quadros | `lib.rs:114` |
-| `STOP_FADE_SECS` | 10 ms | `lib.rs:120` |
-| `WARMUP_SECS` | 50 ms | `lib.rs:109` |
-| `NOTES_RESERVED` | 1024 notas por faixa (reserva inicial) | `lib.rs:124` |
+| `MAX_BLOCK` | 4096 quadros | `lib.rs:100` |
+| `CHUNK` | 128 quadros | `lib.rs:107` |
+| `AUTO_STEP` | 32 quadros | `lib.rs:116` |
+| `STOP_FADE_SECS` | 10 ms | `lib.rs:122` |
+| `WARMUP_SECS` | 50 ms | `lib.rs:111` |
+| `NOTES_RESERVED` | 1024 notas por faixa (reserva inicial) | `lib.rs:126` |
 | `POINTS_RESERVED` | 256 pontos por lane (reserva inicial) | `lib.rs:390` |
-| `MAX_TRACKS` | 1024 (só em `apply`; o export do wasm não tem esse teto) | `api.rs:51` |
-| `MAX_SLOTS`, `MAX_SENDS` | 16 e 16 | `mixer.rs:22`, `:25` |
+| `MAX_TRACKS` | 1024 (em `apply` e, desde `ae91ef4`, também no export `tracks` do wasm, que ignora o que passa disso) | `api.rs:52` |
+| `MAX_SLOTS`, `MAX_SENDS` | 16 e 16 (o app os espelha em `DawController.maxEffectsPerChain` e `maxSendsPerTrack` e desabilita o botão de adicionar no 17º) | `mixer.rs:22`, `:25` |
 | `STATIC_PARAMS` | 64 | `mixer.rs:29` |
-| `MAX_REC_NOTES`, `MAX_CAPTURES` | 16 384 e 64 | `record.rs:16`, `:22` |
+| `MAX_REC_NOTES`, `MAX_CAPTURES` | 16 384 e 64 (render com mais saídas roda em passadas nas duas plataformas) | `record.rs:16`, `:32` |
 | `MAX_ZONES` | 128 zonas por sampler | `sampler_zones.rs:27` |
 | `MAX_GROUPS` | 64 (grupos de round-robin 0..63) | `sampler_zones.rs:29` |
 | `MAX_SLICES`, `FIRST_SLICE_NOTE` | 96 fatias, a partir da nota 24 (C1) | `sampler_zones.rs:31`, `:33` |
@@ -380,7 +380,7 @@ A regra do código (declarada em `effect.rs`, `instrument.rs`, `dsp.rs`, `record
 
 **Prova automática.** `engine/src/testalloc.rs` instala, só em teste, um `#[global_allocator]` que conta as alocações de uma thread dentro de `count(|| ...)`. Ele é usado em exatamente quatro testes: `nao_aloca_depois_do_new` de `fm.rs:1184` e de `wavetable.rs:1361` (notas em 16 alturas, troca de parâmetros, 50 renders, `note_off`, `release_all`, `silence`, exigindo 0 alocações), `zonas_nao_alocam_na_thread_de_audio` de `sampler_zones_tests.rs` (limpa e recria 128 zonas com round-robin e loop, dispara 70 notas, religa e desliga áudios por id, `release_all`, `silence`; exige 0 alocações no sampler com zonas) e `nao_aloca_depois_de_criado` de `loudness.rs` (o `Meter` sozinho: 4 s de seno em blocos de 128, `read`, `reset`, `push` de 4 s de uma vez e `read_kind`, exigindo 0 alocações; não cobre o `Engine` inteiro). **Não há teste de contagem para `synth`, `drums`, o `sampler` de áudio único, nenhum dos 12 efeitos, `Chain` nem o `Engine` inteiro**: para esses, a garantia de "sem alocação no áudio" é a leitura do código descrita acima e a convenção, não um teste (`(não confirmado)` por execução).
 
-O `panic = "abort"` do perfil `wasm` e o `catch_unwind` do perfil `android` estão em `Cargo.toml` da raiz; um pânico no `process` derruba o worklet (web) ou vira silêncio e código de erro (Android).
+O `panic = "abort"` do perfil `wasm` e o `catch_unwind` do perfil `android` estão em `Cargo.toml` da raiz; um pânico no `process` derruba o worklet (web: o host avisa o app, que mostra `Reiniciar o áudio`) ou vira silêncio e código de erro `ERR_PANIC` (Android: o polling de `jd_state` avisa o app, com o mesmo aviso).
 
 ## Como testar
 
@@ -392,7 +392,7 @@ cargo clippy -p jopendaw-engine --all-targets
 cargo fmt --check
 ```
 
-Os testes ficam no fim de cada arquivo (`#[cfg(test)]`): `lib.rs` tem 57 (transporte, notas no quadro exato, loop, solo com barramentos, automação, sidechain, NaN, gravação, capturas e a igualdade entre tamanhos de bloco), `api.rs` 6, `sampler_zones_tests.rs` 42 (zonas, camadas, round-robin, loop, trecho, áudio que chega e sai, alocação zero, fatiamento por número e por transientes com rajadas sintéticas) e cada instrumento e efeito tem os seus. Testes do contrato com o Dart: `synth.rs:1502`, `fm.rs:1209` e `wavetable.rs:1394` leem `app/lib/daw/instruments.dart` e conferem faixas, padrões e ids (pulam com aviso se o arquivo não existir). Para tocar de verdade e medir picos no navegador, ver [03-build-teste-e-depuracao.md](03-build-teste-e-depuracao.md).
+Os testes ficam no fim de cada arquivo (`#[cfg(test)]`): `lib.rs` tem 57 (transporte, notas no quadro exato, loop, solo com barramentos, automação, sidechain, NaN, gravação, capturas e a igualdade entre tamanhos de bloco), `api.rs` 6, `sampler_zones_tests.rs` 42 (zonas, camadas, round-robin, loop, trecho, áudio que chega e sai, alocação zero, fatiamento por número e por transientes com rajadas sintéticas) e cada instrumento e efeito tem os seus. Testes do contrato com o Dart: `synth.rs:1502`, `fm.rs:1209` e `wavetable.rs:1394` leem `app/lib/daw/instruments.dart` e conferem faixas, padrões e ids; desde `ae91ef4` também `tabela_e_ids_iguais_aos_do_app` em `drums.rs:1573` e `sampler.rs:854`, que leem `instruments.dart` (`drumParams`, `drumPieces`, `samplerParams`) e `presets.dart` (`DrumId`, `SamplerId`) e conferem, por id, mínimo, máximo, padrão e a clampagem de `set_param` (pulam com aviso se o arquivo não existir). Pontes: o crate `engine/android` tem `exports_do_wasm_e_chamadas_da_tabela_tem_par_no_android` (usa `api::call_names` e `api::HOST_ONLY`, ver [02](02-pontes-web-e-android.md)) e o crate `engine/wasm` tem `tracks_acima_do_teto_e_ignorado_como_no_apply`. Para tocar de verdade e medir picos no navegador, ver [03-build-teste-e-depuracao.md](03-build-teste-e-depuracao.md).
 
 ## Armadilhas conhecidas
 
@@ -404,13 +404,13 @@ Os testes ficam no fim de cada arquivo (`#[cfg(test)]`): `lib.rs` tem 57 (transp
 - **Zonas: o parâmetro `one_shot` do instrumento não vale, mas a interface ainda o usa.** Com zonas, quem manda é o `one_shot` de cada zona; o painel do app, porém, continua apagando a `Soltura` e desenhando o envelope curto conforme o parâmetro do instrumento, e o teclado da tela continua marcando o `root` do instrumento.
 - **Zonas: a `Sustentação` do ADSR vale também para vozes `one_shot`.** Fatias e golpes decaem com `Sustentação` abaixo de 1 (o ADSR é o do instrumento, comum a todas as zonas).
 - **Fatiamento duplicado em Rust e Dart.** `slice_points`/`slice_zones` do motor não são chamados por nenhum hospedeiro; o app usa a porta em Dart. Mudou um limiar em um, mude no outro.
-- **Ids de parâmetro são contrato.** Não reutilize nem renumere; id novo vai no fim e precisa entrar em `SPECS` do instrumento e em `instruments.dart`/`effects.dart`. Só synth, FM e wavetable têm teste que confere o Dart; bateria, sampler e os 12 efeitos não (`(não confirmado)` se há outra conferência).
+- **Ids de parâmetro são contrato.** Não reutilize nem renumere; id novo vai no fim e precisa entrar em `SPECS` do instrumento e em `instruments.dart`/`effects.dart`. Synth, FM, wavetable e, desde `ae91ef4`, bateria e sampler têm teste **Rust** que lê o Dart; os 12 efeitos são conferidos pelo lado Dart: `app/test/effects_contract_test.dart` lê `engine/src/effect.rs` e confere cada constante dos módulos `*_param` com as tabelas de `effects.dart` (foi por isso que `DITHER` ganhou espelho em `effect.rs`, em `ffff18c`).
 - **Ordem dos comandos importa.** `track_kind` antes de `param`; `fx_set` antes de `fx_param`; `tracks` antes de tudo que indexa faixa. `fx_param` com slot ≥ contagem é ignorado; `set_fx` e `send_set` esticam sozinhos.
-- **`tracks` sem teto no wasm.** O teto de 1024 vive só em `apply` (Android e render nativo); o export `tracks` do wasm aceita qualquer `usize`.
+- **`tracks` sem teto no wasm** (histórico; **resolvido em `ae91ef4`**). O teto de 1024 vivia só em `apply` (Android e render nativo); o export `tracks` do wasm aceitava qualquer `usize`, e um `−1` que dava a volta virava 4294967295 e tentava reservar gigabytes no wasm. Agora o export ignora a chamada acima do teto e mantém o motor como estava (`if n <= MAX_TRACKS`); a diferença de comportamento que sobra é que `apply` responde com erro e o export não responde nada.
 - **`track_kind` desconhecido** (≥ 7) deixa a faixa sem instrumento e sem ser barramento; os clipes dela ainda tocam.
 - **Latência dos efeitos não é compensada.** `distortion` e o efeito `limiter` atrasam o sinal de sua faixa (`LATENCY`; lookahead até 10 ms) sem compensação entre faixas, e o limitador de segurança do master só é compensado no render offline (`out_delay`).
 - **Chave de sidechain de barramento** chega com um pedaço (até 128 quadros) de atraso.
 - **Andamento e loop em f64.** `pos` e os limites do loop são quadros fracionários; a fração que passa do fim do loop é carregada. Testes que medem amostras em quadros exatos desligam o limitador (`set_limiter(false)`) por causa do lookahead.
 - **A automação só roda tocando.** Parado, valem os estáticos, mesmo com lanes cheias; um `param` durante a reprodução de um alvo automatizado só muda o estático (o que vale ao parar).
-- **Comentário desatualizado em `lib.rs:5`:** cita "o Oboe no Android"; o hospedeiro nativo usa AAudio (`engine/android/src/platform/aaudio.rs`, carregado em tempo de execução).
-- **Comentário desatualizado em `engine/wasm/src/lib.rs:137`:** descreve `track_kind` com tipos 0 a 4; existem também 5 (FM) e 6 (wavetable).
+- **Comentário desatualizado em `lib.rs:5`** (histórico; **resolvido em `ae91ef4`**): citava "o Oboe no Android"; agora diz AAudio, que é o que o hospedeiro nativo usa (`engine/android/src/platform/aaudio.rs`, carregado em tempo de execução).
+- **Comentário desatualizado em `engine/wasm/src/lib.rs:137`** (histórico; **resolvido em `ae91ef4`**): descrevia `track_kind` com tipos 0 a 4; agora lista também 5 (FM) e 6 (wavetable).
