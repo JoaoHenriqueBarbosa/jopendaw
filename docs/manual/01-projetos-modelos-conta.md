@@ -167,6 +167,10 @@ A sessão dura até 30 dias sem uso e, no máximo, 90 dias de qualquer forma; o 
 
 Um cartão entre o cartão de nome e email e o cartão com `Sair`. Ele mostra o que os seus áudios ocupam **no servidor** (a cota de 4 GB por conta, [capítulo 01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)) e deixa apagar o que nenhum projeto usa mais. Os números são carregados ao abrir a tela e depois de cada ação. Se o servidor não responder, o cartão simplesmente **não aparece** (sem mensagem de erro; o resto da tela segue valendo).
 
+![Tela Conta com o cartão Armazenamento de áudios aberto: uso da cota e a lista dos áudios com tamanho e os projetos que os usam.](../img/conta-armazenamento.jpg)
+
+*Tela Conta com o cartão Armazenamento de áudios aberto: uso da cota e a lista dos áudios com tamanho e os projetos que os usam.*
+
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Título `Armazenamento de áudios` | Identifica o cartão | | |

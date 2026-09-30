@@ -108,6 +108,14 @@ Fica embaixo da grade e alinha com ela no tempo. Cada nota é um "pirulito": has
 
 A faixa de baixo da grade (a mesma de 72 px, 84 no toque, que mostra a velocidade) tem quatro "visões": `Velocidade`, `Pitch bend`, `Modulação` e `Sustain`. As três últimas editam os **eventos de controle do clipe**: pontos (batida, valor) que o motor toca junto das notas, no instante exato, com o instrumento da faixa. Servem para desenhar um bend de guitarra ou de solo, um vibrato que entra devagar (roda de modulação) e o pedal de um piano. Também são o lugar onde aparece o que você gravou ao vivo com as rodas do teclado ou com um controlador MIDI (ver [Gravação](03c-gravacao.md)).
 
+![O menu do canto da faixa de controle: Velocidade, Pitch bend, Modulação e Sustain.](../img/faixa-de-controle-menu.jpg)
+
+*O menu do canto da faixa de controle: Velocidade, Pitch bend, Modulação e Sustain.*
+
+![Faixa Bend com pontos desenhados: a linha de controle fica sob a grade de notas e mostra a contagem de pontos.](../img/faixa-de-controle-bend.jpg)
+
+*Faixa Bend com pontos desenhados: a linha de controle fica sob a grade de notas e mostra a contagem de pontos.*
+
 #### Escolher a visão
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
