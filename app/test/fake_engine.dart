@@ -230,8 +230,13 @@ class FakeEngine implements AudioEngine {
 
   final saved = <(String, Uint8List, String)>[];
 
+  bool saveResult = true;
+
   @override
-  Future<void> saveFile(String name, Uint8List bytes, String mime) async => saved.add((name, bytes, mime));
+  Future<bool> saveFile(String name, Uint8List bytes, String mime) async {
+    saved.add((name, bytes, mime));
+    return saveResult;
+  }
 
   // o que ainda vier a entrar na ponte e estes testes não usam
   @override

@@ -15,7 +15,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'instruments.dart';
+import 'midi_cc.dart' show bendRangeOf, bendRangeParamId;
 import 'model.dart';
+import 'presets.dart' show Preset, presetsFor;
 import 'tempo_map.dart';
 
 /// Problema no arquivo, com a mensagem pronta para a tela (português).
@@ -550,6 +552,8 @@ Future<bool> _parseTrack(_Reader r, _ParseCtx ctx, List<_Group> out, List<(int, 
           control(ch, ccSustain, tick, d2 >= 64 ? 1.0 : 0.0);
         case 0xB when first >= 120:
           break; // all notes off e afins
+        case 0xB when first == 6 || first == 38 || (first >= 98 && first <= 101):
+          break; // RPN/NRPN (o alcance do bend que a exportação escreve): não é um controle perdido
         case 0xB:
           ctx.ignoredControls++;
         default:
@@ -586,7 +590,10 @@ class _OutTrack {
   final int channel;
   final List<MidiClip> clips;
   final double offset;
-  _OutTrack(this.name, this.channel, this.clips, this.offset);
+
+  /// A faixa do documento (para o programa e o alcance do bend); null num clipe avulso sem faixa.
+  final DawTrack? track;
+  _OutTrack(this.name, this.channel, this.clips, this.offset, [this.track]);
 }
 
 /// O arquivo pronto e o que entrou nele.
@@ -596,14 +603,101 @@ class MidiExport {
 
   /// Notas que ficaram de fora (fora de 0–127 ou fora do trecho do clipe).
   final int skipped;
-  const MidiExport(this.bytes, this.tracks, this.notes, this.skipped);
+
+  /// Pontos de controle (bend, modulação, pedal) que ficaram de fora por cair fora do trecho do clipe.
+  final int skippedControls;
+
+  /// Faixas com notas que não entraram no arquivo porque estão mudas (ou porque há outra em solo).
+  final List<String> silenced;
+  const MidiExport(this.bytes, this.tracks, this.notes, this.skipped, {this.skippedControls = 0, this.silenced = const []});
 }
 
-/// Faixas do documento que têm notas ou controles, na ordem da mesa.
+/// Faixas do documento que têm notas ou controles, na ordem da mesa (mudas e solos incluídos).
 List<DawTrack> exportableTracks(DawDoc doc) => [
   for (final t in doc.tracks)
     if (t.kind.isInstrument && t.midi.any((c) => c.notes.isNotEmpty || c.controls.isNotEmpty)) t,
 ];
+
+/// As faixas que [buildMidiFile] escreve quando o arquivo é do projeto todo: as de [exportableTracks]
+/// que se ouviriam (com alguma faixa em solo só as em solo; senão todas menos as mudas), como o
+/// render de áudio.
+List<DawTrack> audibleExportTracks(DawDoc doc) {
+  final soloed = doc.tracks.any((t) => t.solo);
+  return [
+    for (final t in exportableTracks(doc))
+      if (soloed ? t.solo : !t.mute) t,
+  ];
+}
+
+/// O preset (dos de fábrica) que mais se parece com o timbre da faixa agora: o de menos parâmetros
+/// diferentes, ignorando o alcance do bend e a afinação/nota base do sampler. Quem mexeu num botão
+/// depois de escolher o preset ainda cai nele; passando de [_presetMaxDiff] parâmetros diferentes,
+/// nenhum. Em empate vale o primeiro da lista (o "Inicial").
+Preset? _nearestPreset(DawTrack t) {
+  final skip = {
+    bendRangeParamId(t.kind),
+    if (t.kind == TrackKind.sampler) ...[0, 7],
+  };
+  Preset? best;
+  var bestDiff = 1 << 30;
+  for (final p in presetsFor(t.kind)) {
+    var diff = 0;
+    for (final spec in t.kind.params) {
+      if (skip.contains(spec.id)) continue;
+      final want = p.values[spec.id] ?? spec.def;
+      if ((t.param(spec.id) - want).abs() > 1e-6 * math.max(1, want.abs())) diff++;
+    }
+    if (diff < bestDiff) {
+      best = p;
+      bestDiff = diff;
+    }
+  }
+  return bestDiff <= _presetMaxDiff ? best : null;
+}
+
+const _presetMaxDiff = 6;
+
+/// O programa GM (0..127) que o arquivo pede para a faixa, pela categoria do preset (de fábrica) que mais se parece com o timbre dela
+/// agora (Baixos → Synth Bass, Leads → Lead, Pads → Pad, Teclas → piano elétrico…); sem preset
+/// reconhecido, um lead (sintetizador, FM e wavetable) ou o piano (sampler). A bateria vai no canal
+/// 10, onde o programa 0 é o kit padrão.
+int midiProgramFor(DawTrack t) {
+  if (t.kind == TrackKind.drums) return 0;
+  final cat = _nearestPreset(t)?.category ?? '';
+  if (cat.startsWith('Plucks')) return 45; // Pizzicato Strings
+  return switch (cat) {
+    'Baixos' => 38, // Synth Bass 1
+    'Leads' => 80, // Lead 1 (square)
+    'Pads' => 89, // Pad 2 (warm)
+    'Teclas' => 4, // Electric Piano 1
+    'Vocais' => 54, // Synth Voice
+    'Efeitos' => 98, // FX 3 (crystal)
+    'Texturas' => 88, // Pad 1 (new age)
+    'Básico' => 80,
+    _ => t.kind == TrackKind.sampler ? 0 : 80,
+  };
+}
+
+/// O que abre a trilha de uma faixa, no instante 0: o alcance do bend (RPN 0, igual ao "Alcance do
+/// bend" do instrumento; sem isso o outro programa usaria 2 semitons e o bend sairia errado) e o
+/// Program Change. A bateria só leva o Program Change.
+List<List<int>> _channelSetup(DawTrack t, int ch) {
+  final program = [0xC0 + ch, midiProgramFor(t)];
+  if (t.kind == TrackKind.drums) return [program];
+  final range = bendRangeOf(t).clamp(0.0, 24.0);
+  final semis = range.floor();
+  final cents = ((range - semis) * 100).round().clamp(0, 99);
+  return [
+    [0xB0 + ch, 101, 0],
+    [0xB0 + ch, 100, 0],
+    [0xB0 + ch, 6, semis],
+    [0xB0 + ch, 38, cents],
+    // RPN nulo: os controles de dados seguintes não mexem mais no alcance
+    [0xB0 + ch, 101, 127],
+    [0xB0 + ch, 100, 127],
+    program,
+  ];
+}
 
 /// Monta o .mid (tipo 1, 480 PPQ): uma trilha de andamento e compasso e uma por faixa, cada uma no
 /// seu canal (bateria no 10). Com [only] escreve só esse clipe, movido para o começo do arquivo;
@@ -612,12 +706,18 @@ List<DawTrack> exportableTracks(DawDoc doc) => [
 /// [MidiFormatException] se não há nada para escrever.
 MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, String title = ''}) {
   final outs = <_OutTrack>[];
+  final silenced = <String>[];
   if (only != null) {
     final drums = onlyTrack?.kind == TrackKind.drums;
-    outs.add(_OutTrack(only.name.isNotEmpty ? only.name : (onlyTrack?.name ?? ''), drums ? 9 : 0, [only], -only.start));
+    outs.add(_OutTrack(only.name.isNotEmpty ? only.name : (onlyTrack?.name ?? ''), drums ? 9 : 0, [only], -only.start, onlyTrack));
   } else {
     var k = 0;
-    for (final t in exportableTracks(doc)) {
+    final audible = audibleExportTracks(doc);
+    silenced.addAll([
+      for (final t in exportableTracks(doc))
+        if (!audible.contains(t)) t.name,
+    ]);
+    for (final t in audible) {
       final drums = t.kind == TrackKind.drums;
       var ch = 9;
       if (!drums) {
@@ -625,8 +725,11 @@ MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, Strin
         if (ch >= 9) ch++;
         k++;
       }
-      outs.add(_OutTrack(t.name, ch, t.midi, 0));
+      outs.add(_OutTrack(t.name, ch, t.midi, 0, t));
     }
+  }
+  if (outs.isEmpty && silenced.isNotEmpty) {
+    throw const MidiFormatException('As faixas com notas estão mudas (ou há outra em solo): tire o mudo, ou exporte só o clipe selecionado.');
   }
   if (outs.isEmpty || outs.every((o) => o.clips.every((c) => c.notes.isEmpty && c.controls.isEmpty))) {
     throw const MidiFormatException('Não há notas para exportar: desenhe ou grave um clipe de notas primeiro.');
@@ -660,12 +763,18 @@ MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, Strin
   _meta(head, 0x2F, const []);
   chunk(head);
 
-  var notes = 0, skipped = 0;
+  var notes = 0, skipped = 0, skippedControls = 0;
   for (final o in outs) {
     // desligar vem antes de controlar, que vem antes de ligar, no mesmo instante
     final ev = <({int tick, int order, int seq, List<int> data})>[];
     var seq = 0;
     final ch = o.channel;
+    final t0 = o.track;
+    if (t0 != null) {
+      for (final data in _channelSetup(t0, ch)) {
+        ev.add((tick: 0, order: -1, seq: seq++, data: data));
+      }
+    }
     for (final c in o.clips) {
       final at = c.start + o.offset;
       for (final n in c.notes) {
@@ -681,7 +790,10 @@ MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, Strin
         notes++;
       }
       for (final e in c.controls) {
-        if (!e.beat.isFinite || !e.value.isFinite || e.beat < 0 || e.beat > c.length) continue;
+        if (!e.beat.isFinite || !e.value.isFinite || e.beat < 0 || e.beat > c.length) {
+          skippedControls++;
+          continue;
+        }
         final t = ((at + e.beat) * midiExportPpq).round();
         if (e.cc == ccBend) {
           final w = ((e.value.clamp(-1.0, 1.0) * 8192).round() + 8192).clamp(0, 16383);
@@ -709,7 +821,7 @@ MidiExport buildMidiFile(DawDoc doc, {MidiClip? only, DawTrack? onlyTrack, Strin
     _meta(body, 0x2F, const []);
     chunk(body);
   }
-  return MidiExport(Uint8List.fromList(file), outs.length, notes, skipped);
+  return MidiExport(Uint8List.fromList(file), outs.length, notes, skipped, skippedControls: skippedControls, silenced: silenced);
 }
 
 /// Passos de uma rampa de andamento no arquivo: 1/16 de batida (o SMF só tem degraus).
@@ -824,31 +936,40 @@ class MidiImportReport {
   const MidiImportReport({required this.tracks, required this.notes, required this.tempoApplied, required this.warnings});
 }
 
-/// O andamento como o app o guarda: BPM inteiro entre 20 e 400.
-int appBpmFor(double bpm) => bpm.isFinite ? bpm.round().clamp(20, 400) : 120;
+/// O andamento como o app o guarda: BPM inteiro na janela do servidor (20 a 999).
+int appBpmFor(double bpm) => bpm.isFinite ? bpm.round().clamp(minBpmInt, maxBpmInt) : 120;
 
 // ------------------------------------------------------------------ montar faixas para o documento
 
-/// Uma faixa pronta para entrar no documento: o tipo (sintetizador ou bateria) e o clipe.
+/// Uma faixa pronta para entrar no documento: o tipo (o instrumento melódico escolhido ou a bateria) e o clipe.
 typedef MidiImportTrack = ({String name, TrackKind kind, MidiClip clip});
 
 /// Transforma o que foi lido em faixas e clipes (um por faixa do arquivo, começando em [start]).
-/// O tamanho de cada clipe fecha no compasso seguinte ao fim das notas.
-List<MidiImportTrack> midiImportTracks(MidiFileData data, {required int beatsPerBar, double start = 0, required String Function() newId}) {
+/// O tamanho de cada clipe fecha no compasso seguinte ao fim das notas (pelo [meter], o mapa de
+/// compassos que o projeto terá depois da importação; sem ele, [beatsPerBar] fixo). As faixas
+/// melódicas viram [melodic] (sintetizador, FM, wavetable ou sampler); o canal 10 é sempre bateria.
+List<MidiImportTrack> midiImportTracks(
+  MidiFileData data, {
+  required int beatsPerBar,
+  double start = 0,
+  required String Function() newId,
+  TrackKind melodic = TrackKind.synth,
+  MeterMap? meter,
+}) {
   final bar = beatsPerBar < 1 ? 4 : beatsPerBar;
+  double lengthFor(double end) {
+    if (meter == null || meter.isSingle) return math.max(bar, (end / bar).ceil() * bar).toDouble();
+    // o clipe cobre os compassos do mapa a partir de [start] até o fim das notas
+    final to = meter.ceilBarStart(start + end);
+    return math.max(meter.barBeatsAt(start), to - start);
+  }
+
   return [
     for (final t in data.tracks)
       (
         name: t.name,
-        kind: t.drums ? TrackKind.drums : TrackKind.synth,
-        clip: MidiClip(
-          id: newId(),
-          name: t.name,
-          start: start,
-          length: math.max(bar, (t.endBeat / bar).ceil() * bar).toDouble(),
-          notes: t.notes,
-          controls: t.controls,
-        ),
+        kind: t.drums ? TrackKind.drums : melodic,
+        clip: MidiClip(id: newId(), name: t.name, start: start, length: lengthFor(t.endBeat), notes: t.notes, controls: t.controls),
       ),
   ];
 }

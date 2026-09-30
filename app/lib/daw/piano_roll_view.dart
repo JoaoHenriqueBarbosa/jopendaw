@@ -233,9 +233,14 @@ String _formatLength(double beats) {
 }
 
 /// Duração em compassos e tempos ("2 compassos", "1 compasso e 2 tempos").
-String _formatSpan(double beats, int beatsPerBar) {
-  final bars = (beats / beatsPerBar + 1e-9).floor();
-  final rest = beats - bars * beatsPerBar;
+String _formatSpan(double beats, int beatsPerBar, {MeterMap? meter, double from = 0}) {
+  // com mapa de compassos, os compassos são os do arranjo a partir de [from] (o começo do clipe)
+  final (int bars, double rest) = meter == null || meter.isSingle
+      ? (() {
+          final n = (beats / beatsPerBar + 1e-9).floor();
+          return (n, beats - n * beatsPerBar);
+        })()
+      : meter.spanBars(from, beats);
   final parts = <String>[
     if (bars > 0) '$bars ${bars == 1 ? 'compasso' : 'compassos'}',
     if (rest > 1e-6) rest == rest.roundToDouble() ? '${rest.round()} ${rest.round() == 1 ? 'tempo' : 'tempos'}' : _formatLength(rest),

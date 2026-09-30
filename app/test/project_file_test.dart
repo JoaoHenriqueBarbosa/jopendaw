@@ -570,7 +570,7 @@ void main() {
       }
       final saved = DawDoc.fromJson(jsonDecode(store.data['doc:novo'] as String) as Map<String, dynamic>);
       expect(saved.tracks.map((t) => t.name), ['Voz', 'Sampler', 'Reverb']);
-      expect(saved.bpm, 134);
+      expect(saved.bpm, 133.5, reason: 'o documento mantém o decimal; só o espelho do servidor é inteiro (134)');
       expect(saved.beatsPerBar, 3);
       expect(saved.markers.map((m) => m.name), ['intro', 'refrão']);
     });

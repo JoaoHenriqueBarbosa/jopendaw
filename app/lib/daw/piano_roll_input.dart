@@ -79,6 +79,21 @@ extension _Input on _PianoRollState {
   double _snapFloor(double b) => _snapOff ? b : _tidy((b / _step + 1e-9).floor() * _step);
   double _snapCeil(double b) => _snapOff ? b : _tidy((b / _step - 1e-9).ceil() * _step);
 
+  /// Batidas do compasso que vale no ponto [rel] (relativo ao começo do clipe), pelo mapa de compassos.
+  double _barLen(double rel) => c.doc.meter.barBeatsAt(math.max(0.0, (_clip?.start ?? 0) + rel));
+
+  /// Próximo começo de compasso a partir de [rel] (a própria posição, se já é um começo). Sem mudança
+  /// de compasso conta do começo do clipe, como a grade; com mapa, pelos compassos do arranjo.
+  double _ceilBar(double rel) {
+    final m = c.doc.meter;
+    if (m.isSingle) {
+      final bar = c.doc.beatsPerBar.toDouble();
+      return _tidy((rel / bar - 1e-9).ceil() * bar);
+    }
+    final start = _clip?.start ?? 0;
+    return _tidy(m.ceilBarStart(math.max(0.0, start + rel)) - start);
+  }
+
   double get _newLength {
     final l = _lengths[_Prefs.length].beats;
     if (l > 0) return l;
@@ -102,7 +117,7 @@ extension _Input on _PianoRollState {
       if (n.end > hi) hi = n.end;
     }
     // espaço depois do fim para esticar o clipe ou escrever além dele
-    return (lo, hi + c.doc.beatsPerBar * 2);
+    return (lo, hi + _barLen(hi) * 2);
   }
 
   void _clampView() {
@@ -131,7 +146,7 @@ extension _Input on _PianoRollState {
       r0 = math.min(r0 ?? r, r);
       r1 = math.max(r1 ?? r, r);
     }
-    if (s1 - s0 <= 0) s1 = s0 + c.doc.beatsPerBar;
+    if (s1 - s0 <= 0) s1 = s0 + _barLen(0);
     // clipe comprido não vira um risco: no toque uma semicolcheia continua do tamanho de um dedo
     v.ppb = ((s.width - 16) / (s1 - s0)).clamp(_dims.coarse ? 64.0 : 24.0, 320.0);
     v.scrollX = s0;
@@ -733,7 +748,7 @@ extension _Input on _PianoRollState {
     final clip = _clip!, g = _g;
     final shortest = _snapOff ? 1 / 16 : _step;
     final len = _tidy(math.max(shortest, _snapRound(d.origLength + g.beatAt(d.last.dx) - d.downBeat)));
-    _label = 'Fim do clipe · ${_formatSpan(len, c.doc.beatsPerBar)}';
+    _label = 'Fim do clipe · ${_formatSpan(len, c.doc.beatsPerBar, meter: c.doc.meter, from: clip.start)}';
     _labelAt = (len, null);
     if (len == clip.length) {
       _refresh();
@@ -1166,7 +1181,7 @@ extension _Input on _PianoRollState {
       return true;
     }
     if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowRight) {
-      final step = shift ? c.doc.beatsPerBar.toDouble() : _unit;
+      final step = shift ? _barLen(_sel.map((n) => n.start).reduce(math.min)) : _unit;
       _nudge(k == LogicalKeyboardKey.arrowRight ? step : -step, repeat: repeat);
       return true;
     }
@@ -1175,11 +1190,14 @@ extension _Input on _PianoRollState {
 
   // ------------------------------------------------------------------ comandos
 
-  void _deleteNotes(List<MidiNote> doomed) {
+  void _deleteNotes(List<MidiNote> doomed, {List<MidiCc> Function(List<MidiCc>)? controls}) {
     final clip = _clip;
     if (clip == null || doomed.isEmpty) return;
     final set = doomed.toSet();
-    c.edit((_) => clip.notes.removeWhere(set.contains));
+    c.edit((_) {
+      clip.notes.removeWhere(set.contains);
+      if (controls != null) clip.controls = controls(clip.controls);
+    });
     _sel.removeAll(set);
     if (set.contains(_hover)) _hover = null;
     _justCreated = null;
@@ -1210,8 +1228,11 @@ extension _Input on _PianoRollState {
   }
 
   void _cut() {
+    if (_sel.isEmpty) return;
     _copy();
-    _deleteNotes(_sel.toList());
+    // o recortar leva junto o bend, a modulação e o pedal do trecho, como o copiar leva
+    final lo = _sel.map((n) => n.start).reduce(math.min), hi = _sel.map((n) => n.end).reduce(math.max);
+    _deleteNotes(_sel.toList(), controls: (list) => cutControls(list, lo, hi));
   }
 
   /// De quanto em quanto repetir um trecho de notas (posições contadas da primeira): em compassos
@@ -1222,7 +1243,7 @@ extension _Input on _PianoRollState {
     final first = notes.map((n) => n.start).reduce(math.min);
     final lastStart = notes.map((n) => n.start).reduce(math.max) - first;
     final end = notes.map((n) => n.end).reduce(math.max) - first;
-    final bar = c.doc.beatsPerBar.toDouble();
+    final bar = _barLen(first);
     if (end > bar / 2) {
       final bars = (end / bar - 1e-9).ceil();
       if (bars > 1 && end - (bars - 1) * bar <= bar / 2 && lastStart < (bars - 1) * bar - 1e-9) return (bars - 1) * bar;
@@ -1237,8 +1258,8 @@ extension _Input on _PianoRollState {
   void _addNotes(List<MidiNote> notes, {List<MidiCc> region = const [], double regionAt = 0}) {
     final clip = _clip!;
     final lastStart = notes.map((n) => n.start).reduce(math.max);
-    final bar = c.doc.beatsPerBar;
-    final target = _tidy(((lastStart + 1e-6) / bar).ceil() * bar.toDouble());
+    final bar = _barLen(lastStart);
+    final target = _ceilBar(lastStart + 1e-6);
     // colar muito longe do fim (a tela rolada lá adiante) não estica o clipe até lá
     final grow = target > clip.length + 1e-9 && lastStart < clip.length + bar * 8;
     c.edit((_) {

@@ -25,6 +25,7 @@ import 'controller.dart';
 import 'instruments.dart';
 import 'marker.dart';
 import 'meter.dart';
+import 'midi_cc.dart' show trimControlsLeft;
 import 'midi_convert_dialog.dart';
 import 'minimap.dart';
 import 'tempo_lane.dart';
@@ -78,7 +79,7 @@ void _selectMidi(DawController c, String id, int track) {
 double _snapDrag(DawController c, double b) => HardwareKeyboard.instance.isAltPressed ? b : c.snapBeat(b);
 
 /// Passo da grade em batidas (0 = livre).
-double _gridBeats(DawController c) => c.snap == Snap.bar ? c.doc.beatsPerBar.toDouble() : c.snap.beats;
+double _gridBeats(DawController c, [double at = 0]) => c.snap == Snap.bar ? c.doc.meter.barBeatsAt(math.max(0.0, at)) : c.snap.beats;
 
 class Timeline extends StatelessWidget {
   final DawController c;
@@ -2643,7 +2644,7 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
 
   /// Menor duração ao aparar: um passo da grade (1/16 de batida, livre).
   double _minLength() {
-    final g = _gridBeats(widget.c);
+    final g = _gridBeats(widget.c, widget.clip.start);
     return g > 0 && !HardwareKeyboard.instance.isAltPressed ? g : 0.0625;
   }
 
@@ -2675,9 +2676,10 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
             for (var i = 0; i < clip.notes.length && i < _orig.notes.length; i++) {
               clip.notes[i].start = _orig.notes[i].start - delta;
             }
-            for (var i = 0; i < clip.controls.length && i < _orig.controls.length; i++) {
-              clip.controls[i].beat = _orig.controls[i].beat - delta;
-            }
+            // refeito do original a cada passo (o estado escrito abaixo muda a lista): os eventos de antes
+            // do novo começo ficam guardados com batida negativa e o que valia ali (o pedal seguro, o
+            // bend) vira um evento no começo do clipe, como no corte
+            clip.controls = trimControlsLeft(_orig.controls, delta);
           });
         }
       case _Grab.right:

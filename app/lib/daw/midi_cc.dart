@@ -6,10 +6,27 @@ library;
 
 import 'dart:math' as math;
 
+import 'instruments.dart' show TrackKind;
 import 'model.dart';
 
 /// Um evento pronto para o motor: faixa, controle, batida absoluta da linha do tempo e valor.
 typedef EngineCc = ({int track, int cc, double beat, double value});
+
+/// Id do parâmetro "Alcance do bend" de cada instrumento (espelho de `instruments.dart`); a bateria
+/// não tem.
+int? bendRangeParamId(TrackKind k) => switch (k) {
+  TrackKind.synth => 35,
+  TrackKind.fm => 42,
+  TrackKind.wavetable => 39,
+  TrackKind.sampler => 9,
+  _ => null,
+};
+
+/// Alcance do bend da faixa em semitons (2 se o parâmetro não foi mexido ou o instrumento não tem).
+double bendRangeOf(DawTrack t) {
+  final id = bendRangeParamId(t.kind);
+  return id == null ? 2.0 : t.param(id);
+}
 
 /// Folga para batidas que caem "quase" num limite (ponto flutuante).
 const _eps = 1e-9;
@@ -36,7 +53,8 @@ List<EngineCc> flattenControls(List<DawTrack> tracks) {
   var index = 0;
   for (var i = 0; i < tracks.length; i++) {
     final t = tracks[i];
-    if (!t.kind.isInstrument) continue;
+    // a bateria não tem bend, modulação nem pedal: pontos desenhados à mão num clipe dela não vão ao motor
+    if (!t.kind.isInstrument || t.kind == TrackKind.drums) continue;
     for (final c in t.midi) {
       for (final cc in ccKinds) {
         final list = [
@@ -163,6 +181,28 @@ List<MidiCc> copyControls(List<MidiCc> events, double lo, double hi) {
   return out;
 }
 
+/// Tira os eventos do trecho [lo]..[hi) (o mesmo que [copyControls] copia): o "recortar" das notas
+/// leva junto o bend, a modulação e o pedal dali. Depois do trecho nada muda: se tirar os eventos
+/// deixaria um controle com outro valor em [hi] (o pedal que soltava dentro do trecho e passaria a
+/// ficar preso), entra um evento em [hi] com o valor que valia lá.
+List<MidiCc> cutControls(List<MidiCc> events, double lo, double hi) {
+  final out = <MidiCc>[];
+  for (final e in events) {
+    final inside = e.beat.isFinite && e.beat >= lo - _eps && e.beat < hi - _eps;
+    if (!inside) out.add(e.copy());
+  }
+  for (final cc in ccKinds) {
+    final was = _valueInForce(events, cc, hi - 2 * _eps);
+    final now = _valueInForce(out, cc, hi - 2 * _eps);
+    if (was == null) continue;
+    // sem nada antes, o controle já estava em repouso: só precisa de ponto se o de antes fica fora dele
+    if (now == null ? !_active(cc, was) : _sameState(cc, was, now)) continue;
+    if (out.any((e) => e.cc == cc && (e.beat - hi).abs() <= _eps)) continue;
+    out.add(MidiCc(cc: cc, beat: _tidy(hi), value: was));
+  }
+  return out;
+}
+
 /// Cola [region] (de [copyControls], batidas contadas do começo do trecho) em [at]: por controle, o
 /// que a região traz substitui o que havia entre o primeiro e o último evento colados.
 List<MidiCc> pasteControls(List<MidiCc> events, List<MidiCc> region, double at) {
@@ -272,6 +312,16 @@ double quantizeControl(int cc, double v) {
     ccSustain => pedalDown(c) ? 1.0 : 0.0,
     _ => (c * 127).round() / 127,
   };
+}
+
+/// Os controles de um clipe aparado à esquerda em [delta] batidas (as batidas do clipe andam [delta] para
+/// trás): os de antes do novo começo ficam guardados, com batida negativa, e o estado que valia no novo
+/// começo (o pedal seguro, o bend fora do centro) vira um evento em 0, como no corte. Refaz a lista a
+/// partir de [orig] (o clipe antes do gesto), então dá para chamar a cada passo do arraste.
+List<MidiCc> trimControlsLeft(List<MidiCc> orig, double delta) {
+  final out = [for (final e in orig) e.copy()..beat = e.beat - delta];
+  carryControls(out, 0);
+  return out;
 }
 
 /// Garante que o controle em vigor em [at] esteja escrito num evento em [at]: para cada controle fora

@@ -24,6 +24,7 @@ import 'instruments.dart';
 import 'midi_cc.dart';
 import 'midi_tools.dart';
 import 'model.dart';
+import 'tempo_map.dart';
 
 part 'piano_roll_cc.dart';
 part 'piano_roll_input.dart';
@@ -707,6 +708,7 @@ class _PianoRollState extends State<PianoRoll> {
           painter: _RulerPainter(
             g: g,
             bpb: c.doc.beatsPerBar,
+            meter: c.doc.meter,
             clipStart: clip.start,
             clipLength: clip.length,
             step: _Prefs.grid.beats,
@@ -745,7 +747,15 @@ class _PianoRollState extends State<PianoRoll> {
                     Positioned.fill(
                       child: RepaintBoundary(
                         child: CustomPaint(
-                          painter: _GridPainter(g: g, drums: drums, bpb: c.doc.beatsPerBar, step: _Prefs.grid.beats, scale: drums ? null : _scale),
+                          painter: _GridPainter(
+                            g: g,
+                            drums: drums,
+                            bpb: c.doc.beatsPerBar,
+                            meter: c.doc.meter,
+                            clipStart: clip.start,
+                            step: _Prefs.grid.beats,
+                            scale: drums ? null : _scale,
+                          ),
                         ),
                       ),
                     ),

@@ -487,7 +487,11 @@ class AudioEngine {
   void cancelRender() => _host.cancelRender();
 
   /// Oferece os bytes para salvar como arquivo (download no navegador).
-  Future<void> saveFile(String name, Uint8List bytes, String mime) => _host.saveFile(name, bytes.toJS, mime).toDart;
+  Future<bool> saveFile(String name, Uint8List bytes, String mime) async {
+    await _host.saveFile(name, bytes.toJS, mime).toDart;
+    // o navegador baixa direto: não há como cancelar
+    return true;
+  }
 
   /// sha-256 em hexa (a chave dos áudios no guardado local), pelo WebCrypto do navegador.
   Future<String> sha256Hex(Uint8List bytes) async => (await _host.sha256(bytes.toJS).toDart).toDart;

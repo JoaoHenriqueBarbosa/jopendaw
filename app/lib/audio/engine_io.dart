@@ -162,8 +162,8 @@ class AudioEngine implements EngineEvents {
   /// sha-256 em hexa (a chave dos áudios no guardado local).
   Future<String> sha256Hex(Uint8List bytes) => _native?.sha256Hex(bytes) ?? Future.value(sha256.convert(bytes).toString());
 
-  /// Oferece os bytes para salvar como arquivo.
-  Future<void> saveFile(String name, Uint8List bytes, String mime) =>
+  /// Oferece os bytes para salvar como arquivo. `false`: a pessoa cancelou (só o Android sabe dizer).
+  Future<bool> saveFile(String name, Uint8List bytes, String mime) =>
       _native?.saveFile(name, bytes, mime) ??
       Future.error(UnsupportedError('Salvar arquivos não funciona neste sistema: use o jopendaw no navegador ou no Android.'));
 }

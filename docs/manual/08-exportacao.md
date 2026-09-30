@@ -225,7 +225,10 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir
 ### O que não entra
 
 - **Áudio.** Clipes de áudio, gravações, tomadas e faixas congeladas (que são áudio) não vão para o `.mid`. Para levar o som, use o WAV desta mesma janela ou os stems.
-- **Som do instrumento.** Não há `Program Change` nem parâmetros do sintetizador, da bateria, do sampler, do FM ou da wavetable: o programa que abrir o arquivo escolhe o timbre dele.
+- **Som do instrumento.** Cada trilha abre com o alcance do pitch bend (RPN 0, igual ao `Alcance do bend` do instrumento) e um `Program Change` GM escolhido pela categoria do preset de fábrica mais parecido com o timbre da faixa (`Baixos` → baixo sintético, `Leads` → lead, `Pads` → pad, `Teclas` → piano elétrico, `Vocais` → voz sintética…; a bateria vai no canal 10 com o programa 0; sem preset reconhecido, lead, e piano no sampler). Os parâmetros do sintetizador, da bateria, do sampler, do FM e da wavetable não vão no arquivo: o programa que abrir o arquivo escolhe o timbre dele.
+- **Mudo e solo.** Ao exportar todas as faixas, as mudas não entram (com alguma faixa em solo, só as em solo entram), e a mensagem final lista quais ficaram de fora. O clipe selecionado sai mesmo se a faixa está muda.
+- **Pontos de controle fora do clipe** (bend, modulação e pedal antes do começo ou depois do fim) não saem, e a mensagem final conta quantos ficaram de fora, como faz com as notas.
+- **Cancelar o `Salvar como` no Android** não mostra `salvo`: a janela só confirma quando o arquivo foi gravado ou entregue a outro app.
 - **Efeitos, mixer e envios.** Volume, pan, mudo, solo, envios, barramentos, efeitos e o master não saem.
 - **Automação.** As curvas de automação do mixer e dos efeitos não saem. Só os três controles do clipe (pitch bend, modulação e sustain) saem.
 - **Alcance do bend.** O `Alcance do bend` do instrumento não é escrito (nenhum `RPN`), então outro programa usa o alcance padrão dele para o mesmo pitch bend.

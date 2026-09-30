@@ -29,17 +29,49 @@ TextPainter _text(TextStyle font, String s, double size, Color color, {bool bold
   return _texts.putIfAbsent('${font.fontFamily}|$s|$size|${color.toARGB32()}|$bold|$maxWidth', make);
 }
 
+/// Um compasso visível na grade ou na régua: onde começa (em batidas do clipe), quanto dura, o número
+/// e as batidas dele (a unidade do compasso: 1 num n/4, 1,5 num 6/8).
+class _Bar {
+  final double start, len, unit;
+  final int number;
+  const _Bar(this.start, this.len, this.unit, this.number);
+}
+
+/// Os compassos que cruzam [x0, x1] (batidas do clipe). Sem mapa de compassos (só `n/4`) eles contam do
+/// começo do clipe, como a grade de encaixe, e os números seguem os do arranjo quando o clipe começa num
+/// compasso; com mapa (6/8, mudanças), são os compassos do arranjo.
+List<_Bar> _barsIn(MeterMap? meter, double clipStart, int bpb, double x0, double x1) {
+  final out = <_Bar>[];
+  if (meter == null || meter.isSingle) {
+    final len = bpb.toDouble();
+    final off = clipStart / len;
+    final aligned = _near(off);
+    for (var b = (x0 / len).floor(); b <= (x1 / len).ceil(); b++) {
+      out.add(_Bar(b * len, len, 1, aligned ? off.round() + b + 1 : b + 1));
+    }
+    return out;
+  }
+  var (bar, _) = meter.barOf(math.max(0.0, clipStart + x0));
+  for (var n = 0; n < 4096; n++, bar++) {
+    final s = meter.barStart(bar) - clipStart;
+    if (s > x1) break;
+    out.add(_Bar(s, meter.barBeats(bar), meter.changeAt(bar).unit, bar));
+  }
+  return out;
+}
+
 /// Linhas das teclas (pretas sombreadas), compassos alternados e as linhas de compasso, tempo e
 /// subdivisão da grade, que somem quando ficariam apertadas demais.
 class _GridPainter extends CustomPainter {
   final _Geo g;
   final bool drums;
   final int bpb;
-  final double step;
+  final MeterMap? meter;
+  final double clipStart, step;
 
   /// Escala do clipe: as linhas dela ficam realçadas (a tônica mais) e as de fora, escurecidas.
   final ClipScale? scale;
-  _GridPainter({required this.g, required this.drums, required this.bpb, required this.step, this.scale});
+  _GridPainter({required this.g, required this.drums, required this.bpb, this.meter, this.clipStart = 0, required this.step, this.scale});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -66,27 +98,24 @@ class _GridPainter extends CustomPainter {
       if (strong || g.rowH >= 7) canvas.drawRect(Rect.fromLTWH(0, (y + g.rowH).roundToDouble() - 1, size.width, 1), strong ? octave : thin);
     }
 
-    final barBeats = bpb.toDouble();
-    final barPx = barBeats * g.ppb;
     final x0 = g.scrollX, x1 = g.beatAt(size.width);
+    final bars = _barsIn(meter, clipStart, bpb, x0, x1);
     final alt = Paint()..color = const Color(0x06FFFFFF);
-    for (var b = (x0 / barBeats).floor(); b <= (x1 / barBeats).ceil(); b++) {
-      if (b.isOdd) canvas.drawRect(Rect.fromLTWH(g.x(b * barBeats), 0, barPx, bottom), alt);
+    for (final b in bars) {
+      if (b.number.isEven) canvas.drawRect(Rect.fromLTWH(g.x(b.start), 0, b.len * g.ppb, bottom), alt);
     }
 
     final barLine = Paint()..color = const Color(0x33FFFFFF);
     final beatLine = Paint()..color = const Color(0x16FFFFFF);
     final subLine = Paint()..color = const Color(0x09FFFFFF);
-    final every = _barStep(barPx, 24);
+    final barBeats = bars.isEmpty ? bpb.toDouble() : bars.first.len;
+    final every = _barStep(barBeats * g.ppb, 24);
+    // as linhas de tempo e de subdivisão andam em passos fixos a partir do começo do clipe; as de
+    // compasso vêm do mapa e por cima (num 7/8 o compasso cai no meio de um tempo)
+    bool atBar(double beat) => bars.any((b) => (b.start - beat).abs() < 1e-6);
     void line(double beat) {
-      final bar = beat / barBeats;
-      final Paint p;
-      if (_near(bar)) {
-        p = bar.round() % every == 0 ? barLine : beatLine;
-      } else {
-        p = _near(beat) ? beatLine : subLine;
-      }
-      canvas.drawRect(Rect.fromLTWH(g.x(beat).roundToDouble(), 0, 1, bottom), p);
+      if (atBar(beat)) return;
+      canvas.drawRect(Rect.fromLTWH(g.x(beat).roundToDouble(), 0, 1, bottom), _near(beat) ? beatLine : subLine);
     }
 
     final sub = step > 0 ? step : .25;
@@ -94,10 +123,20 @@ class _GridPainter extends CustomPainter {
     for (var k = (x0 / unit).floor(); k <= (x1 / unit).ceil(); k++) {
       line(k * unit);
     }
+    for (final b in bars) {
+      canvas.drawRect(Rect.fromLTWH(g.x(b.start).roundToDouble(), 0, 1, bottom), (b.number - 1) % every == 0 ? barLine : beatLine);
+    }
   }
 
   @override
-  bool shouldRepaint(_GridPainter o) => !g.same(o.g) || drums != o.drums || bpb != o.bpb || step != o.step || scale?.encode() != o.scale?.encode();
+  bool shouldRepaint(_GridPainter o) =>
+      !g.same(o.g) ||
+      drums != o.drums ||
+      bpb != o.bpb ||
+      !identical(meter, o.meter) ||
+      clipStart != o.clipStart ||
+      step != o.step ||
+      scale?.encode() != o.scale?.encode();
 }
 
 /// As notas, o que fica fora do clipe (escurecido), o fim do clipe, o retângulo de seleção e a
@@ -336,12 +375,14 @@ class _KeysPainter extends CustomPainter {
 class _RulerPainter extends CustomPainter {
   final _Geo g;
   final int bpb;
+  final MeterMap? meter;
   final double clipStart, clipLength, step;
   final Color accent;
   final TextStyle font;
   _RulerPainter({
     required this.g,
     required this.bpb,
+    this.meter,
     required this.clipStart,
     required this.clipLength,
     required this.step,
@@ -357,32 +398,31 @@ class _RulerPainter extends CustomPainter {
     if (xs > 0) canvas.drawRect(Rect.fromLTRB(0, 0, xs, size.height), shade);
     if (xe < size.width) canvas.drawRect(Rect.fromLTRB(math.max(0, xe), 0, size.width, size.height), shade);
 
-    final barBeats = bpb.toDouble();
-    final barPx = barBeats * g.ppb;
-    final every = _barStep(barPx, 40);
     // o clipe começando num compasso do arranjo, os números seguem os do arranjo
-    final offset = clipStart / barBeats;
-    final aligned = _near(offset);
     final tick = Paint()..color = Colors.white24;
     final faint = Paint()..color = Colors.white12;
     final sub = step > 0 ? step : .25;
     final h = size.height;
-    for (var b = math.max(0, (g.scrollX / barBeats).floor()); b <= (g.beatAt(size.width) / barBeats).ceil(); b++) {
-      final x = g.x(b * barBeats).roundToDouble();
-      if (b % every == 0) {
+    final bars = _barsIn(meter, clipStart, bpb, math.max(0.0, g.scrollX), g.beatAt(size.width));
+    final every = _barStep((bars.isEmpty ? bpb.toDouble() : bars.first.len) * g.ppb, 40);
+    for (final bar in bars) {
+      if (bar.start < -1e-9 && (meter == null || meter!.isSingle)) continue;
+      final x = g.x(bar.start).roundToDouble();
+      if ((bar.number - 1) % every == 0) {
         canvas.drawRect(Rect.fromLTWH(x, 6, 1, h - 6), tick);
-        final tp = _text(font, '${aligned ? offset.round() + b + 1 : b + 1}', 11, Colors.white70);
+        final tp = _text(font, '${bar.number}', 11, Colors.white70);
         tp.paint(canvas, Offset(x + 4, 3));
       } else {
         canvas.drawRect(Rect.fromLTWH(x, h - 8, 1, 8), faint);
       }
       if (g.ppb >= 10) {
-        for (var i = 1; i < bpb; i++) {
-          canvas.drawRect(Rect.fromLTWH((x + i * g.ppb).roundToDouble(), h - 6, 1, 6), faint);
+        // um risco por tempo do compasso (a unidade dele: 1,5 batida num 6/8)
+        for (var t = bar.unit; t < bar.len - 1e-6; t += bar.unit) {
+          canvas.drawRect(Rect.fromLTWH((x + t * g.ppb).roundToDouble(), h - 6, 1, 6), faint);
         }
       }
       if (sub * g.ppb >= 9 && sub < 1) {
-        final n = (barBeats / sub).round();
+        final n = (bar.len / sub).round();
         for (var i = 1; i < n; i++) {
           final beat = i * sub;
           if (_near(beat)) continue;
@@ -410,7 +450,14 @@ class _RulerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RulerPainter o) =>
-      !g.same(o.g) || bpb != o.bpb || clipStart != o.clipStart || clipLength != o.clipLength || step != o.step || accent != o.accent || font != o.font;
+      !g.same(o.g) ||
+      bpb != o.bpb ||
+      !identical(meter, o.meter) ||
+      clipStart != o.clipStart ||
+      clipLength != o.clipLength ||
+      step != o.step ||
+      accent != o.accent ||
+      font != o.font;
 }
 
 /// Faixa de velocidade: um pirulito por nota (haste no início, cabeça na altura da velocidade e

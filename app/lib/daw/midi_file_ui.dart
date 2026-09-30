@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../audio/engine.dart';
 import 'controller.dart';
+import 'instruments.dart' show TrackKind;
 import 'midi_file.dart';
 import 'model.dart';
 
@@ -43,7 +44,7 @@ Future<void> importFiles(BuildContext context, DawController c) async {
 
 /// Importa um .mid: lê, pergunta pelo andamento se ele difere do projeto e mostra os avisos.
 Future<void> importMidiFlow(BuildContext context, DawController c, String name, Uint8List bytes) async {
-  final report = await c.importMidiBytes(name, bytes, confirmTempo: (d) => askUseFileTempo(context, d, c));
+  final report = await c.importMidiBytes(name, bytes, confirmTempo: (d) => askUseFileTempo(context, d, c), chooseKind: (d) => askImportKind(context, c));
   if (report == null || report.warnings.isEmpty || !context.mounted) return;
   await showDialog<void>(
     context: context,
@@ -67,6 +68,52 @@ Future<void> importMidiFlow(BuildContext context, DawController c, String name, 
   );
 }
 
+/// "Importar como": o instrumento das faixas melódicas do arquivo (a bateria do canal 10 é sempre
+/// bateria). Devolve null se a pessoa cancelar. Lembra a última escolha ([DawController.midiImportKind]).
+Future<TrackKind?> askImportKind(BuildContext context, DawController c) async {
+  var kind = c.midiImportKind;
+  final r = await showDialog<TrackKind>(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Importar como'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RadioGroup<TrackKind>(
+                groupValue: kind,
+                onChanged: (v) => setState(() => kind = v ?? kind),
+                child: Column(
+                  children: [
+                    for (final k in midiImportKinds) RadioListTile<TrackKind>(key: Key('midi-import-${k.name}'), value: k, dense: true, title: Text(k.label)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Vale para as faixas de notas do arquivo; o canal 10 vira Bateria. O Sampler fica mudo até você dar um áudio a ele.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(key: const Key('midi-import-go'), onPressed: () => Navigator.pop(context, kind), child: const Text('Importar')),
+        ],
+      ),
+    ),
+  );
+  if (r != null) c.midiImportKind = r;
+  return r;
+}
+
+/// Os instrumentos em que uma faixa melódica do .mid pode entrar.
+const midiImportKinds = [TrackKind.synth, TrackKind.fm, TrackKind.wavetable, TrackKind.sampler];
+
 /// "Usar os andamentos do arquivo (N mudanças, a partir de X BPM)?" — true para levar o mapa de
 /// andamento e de compassos do arquivo para o projeto.
 Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController c) async {
@@ -77,20 +124,20 @@ Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController
   final title = changes > 0
       ? 'Usar os andamentos do arquivo ($changes ${changes == 1 ? 'mudança' : 'mudanças'}, a partir de ${_bpmText(bpm!)} BPM)?'
       : bpm != null
-      ? 'Usar o andamento do arquivo (${appBpmFor(bpm)} BPM)?'
+      ? 'Usar o andamento do arquivo (${_bpmText(bpm)} BPM)?'
       : meterChanges > 0
       ? 'Usar os compassos do arquivo ($meterChanges ${meterChanges == 1 ? 'mudança' : 'mudanças'})?'
       : 'Usar o compasso do arquivo?';
   final meter = d.meterMap.isNotEmpty ? d.meterMap.first : null;
   final parts = <String>[
-    if (bpm != null) changes > 0 ? '${_bpmText(bpm)} BPM e $changes mudança${changes == 1 ? '' : 's'} de andamento' : '${appBpmFor(bpm)} BPM',
+    if (bpm != null) changes > 0 ? '${_bpmText(bpm)} BPM e $changes mudança${changes == 1 ? '' : 's'} de andamento' : '${_bpmText(bpm)} BPM',
     if (meter != null)
       'compasso ${meter.numerator}/${meter.denominator}${meterChanges > 0 ? ' e $meterChanges mudança${meterChanges == 1 ? '' : 's'} de compasso' : ''}'
     else if (d.beatsPerBar != null)
       'compasso ${d.beatsPerBar}/4',
   ];
   final nc = c.doc.tempoMap.length - 1;
-  final now = '${c.doc.bpm.round()} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${c.doc.beatsPerBar}/4';
+  final now = '${_bpmText(c.doc.bpm)} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${c.doc.beatsPerBar}/4';
   final r = await showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(
@@ -110,8 +157,18 @@ String _bpmText(double bpm) {
   return (bpm - r).abs() < 0.05 ? '$r' : bpm.toStringAsFixed(1).replaceAll('.', ',');
 }
 
+/// O texto de "salvo" com o que ficou de fora: notas e pontos de controle fora do trecho do clipe e
+/// faixas mudas.
+String exportSummary(String name, MidiExport out) {
+  String n(int v, String one, String many) => '$v ${v == 1 ? one : many}';
+  return '$name salvo: ${n(out.tracks, 'faixa', 'faixas')}, ${n(out.notes, 'nota', 'notas')}.'
+      '${out.skipped > 0 ? ' ${n(out.skipped, 'nota', 'notas')} fora do clipe ou de 0–127 ficaram de fora.' : ''}'
+      '${out.skippedControls > 0 ? ' ${n(out.skippedControls, 'ponto de controle', 'pontos de controle')} (bend, modulação ou pedal) fora do clipe ficaram de fora.' : ''}'
+      '${out.silenced.isNotEmpty ? ' Faixas mudas não entraram: ${out.silenced.join(', ')}.' : ''}';
+}
+
 /// Abre a janela de exportar MIDI (.mid): o clipe selecionado ou todas as faixas de notas.
-Future<void> showExportMidiDialog(BuildContext context, DawController c, {Future<void> Function(String name, Uint8List bytes, String mime)? save}) =>
+Future<void> showExportMidiDialog(BuildContext context, DawController c, {Future<bool?> Function(String name, Uint8List bytes, String mime)? save}) =>
     showDialog<void>(
       context: context,
       builder: (_) => ExportMidiDialog(c: c, save: save),
@@ -119,7 +176,9 @@ Future<void> showExportMidiDialog(BuildContext context, DawController c, {Future
 
 class ExportMidiDialog extends StatefulWidget {
   final DawController c;
-  final Future<void> Function(String name, Uint8List bytes, String mime)? save;
+
+  /// Devolve `false` quando a pessoa cancelou o "salvar como" (só o Android sabe dizer).
+  final Future<bool?> Function(String name, Uint8List bytes, String mime)? save;
   const ExportMidiDialog({super.key, required this.c, this.save});
 
   @override
@@ -156,13 +215,14 @@ class _ExportMidiDialogState extends State<ExportMidiDialog> {
       final out = one == null ? buildMidiFile(c.doc, title: title) : buildMidiFile(c.doc, only: one.$2, onlyTrack: one.$1, title: title);
       final name = midiFileName(one == null || one.$2.name.isEmpty ? title : one.$2.name);
       // octet-stream como no .jopendaw: com "audio/midi" alguns seletores do Android acrescentam outra extensão
-      await (widget.save ?? AudioEngine.instance.saveFile)(name, out.bytes, 'application/octet-stream');
+      final saved = await (widget.save ?? AudioEngine.instance.saveFile)(name, out.bytes, 'application/octet-stream');
       if (!mounted) return;
-      setState(
-        () => _done =
-            '$name salvo: ${out.tracks} faixa${out.tracks == 1 ? '' : 's'}, ${out.notes} nota${out.notes == 1 ? '' : 's'}.'
-            '${out.skipped > 0 ? ' ${out.skipped} nota${out.skipped == 1 ? '' : 's'} fora do clipe ou de 0–127 ficaram de fora.' : ''}',
-      );
+      if (saved == false) {
+        // cancelou o "salvar como": nada foi gravado, então nada de "salvo"
+        setState(() => _done = null);
+        return;
+      }
+      setState(() => _done = exportSummary(name, out));
     } on MidiFormatException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -176,7 +236,8 @@ class _ExportMidiDialogState extends State<ExportMidiDialog> {
   Widget build(BuildContext context) {
     final c = widget.c;
     final sel = _clip;
-    final tracks = exportableTracks(c.doc).length;
+    final tracks = audibleExportTracks(c.doc).length;
+    final silent = exportableTracks(c.doc).length - tracks;
     final clipName = sel?.$2.name ?? '';
     return AlertDialog(
       title: const Text('Exportar MIDI (.mid)'),
@@ -209,15 +270,19 @@ class _ExportMidiDialogState extends State<ExportMidiDialog> {
                     title: const Text('Todas as faixas de notas'),
                     subtitle: Text(
                       tracks == 0
-                          ? 'Não há faixas com notas.'
-                          : '$tracks faixa${tracks == 1 ? '' : 's'}, uma por canal (bateria no canal 10), nas posições do projeto.',
+                          ? (silent > 0 ? 'As faixas com notas estão mudas (ou há outra em solo).' : 'Não há faixas com notas.')
+                          : '$tracks faixa${tracks == 1 ? '' : 's'}, uma por canal (bateria no canal 10), nas posições do projeto.'
+                                '${silent > 0 ? ' $silent muda${silent == 1 ? '' : 's'} (ou fora do solo) não entra${silent == 1 ? '' : 'm'}.' : ''}',
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-            Text('Leva os andamentos e compassos do projeto, as notas e o pitch bend, a modulação e o pedal.', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Leva os andamentos e compassos do projeto, as notas, o pitch bend, a modulação e o pedal, o programa de cada faixa e o alcance do bend.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),

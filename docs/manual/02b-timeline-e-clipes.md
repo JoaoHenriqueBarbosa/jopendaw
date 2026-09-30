@@ -73,7 +73,7 @@ Menu de um lugar vazio da faixa:
 | **Adicionar ponto aqui** | Cria um ponto na batida do clique (com encaixe), no BPM que já vale ali, em salto. | sempre |
 | **Apagar todas as mudanças de andamento** | Remove todos os pontos menos o inicial; o andamento inicial fica. | só com mais de um ponto |
 
-Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer no andamento alteraria a gravação em andamento. Cada projeto guarda até 512 pontos de andamento e 256 mudanças de compasso; o que passar disso é descartado na hora da edição (os de batida ou compasso maiores primeiro).
+Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer no andamento alteraria a gravação em andamento. Cada projeto guarda até 4096 pontos de andamento e 1024 mudanças de compasso (os mesmos limites do motor); o ponto ou a mudança que passaria disso não entra e o app avisa (`O mapa de andamento chegou ao limite de 4096 pontos.`). Uma importação de MIDI com mais do que cabe avisa que o excedente foi ignorado.
 
 **Rampa: o que acontece com o tempo.** O BPM muda em reta em função da batida, e o tempo real do trecho sai da conta exata (integral): `segundos = 60 × L ÷ (B − A) × ln(B ÷ A)` para `L` batidas indo de `A` a `B` BPM. Exemplo: 4 batidas indo de 60 a 120 BPM levam 4 × ln 2 ≈ 2,77 s (a 90 BPM constante levariam 2,67 s). `(testado só por testes automáticos)`
 

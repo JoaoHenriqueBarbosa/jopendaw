@@ -30,6 +30,7 @@ class ExpressionWheels extends StatelessWidget {
         height: height,
         color: color,
         springBack: true,
+        reset: c.liveReset,
         onChanged: (v) => c.pitchBend(v, track: track, screen: true),
       ),
       const SizedBox(width: 4),
@@ -39,6 +40,7 @@ class ExpressionWheels extends StatelessWidget {
         height: height,
         color: color,
         springBack: false,
+        reset: c.liveReset,
         onChanged: (v) => c.modWheel(v, track: track, screen: true),
       ),
     ],
@@ -56,7 +58,18 @@ class ExpressionWheel extends StatefulWidget {
   /// Recebe o valor: −1..1 com [springBack], senão 0..1.
   final ValueChanged<double> onChanged;
 
-  const ExpressionWheel({super.key, required this.label, required this.height, required this.color, required this.springBack, required this.onChanged});
+  /// Avisa que o app já devolveu tudo ao repouso no motor (parar): a roda volta ao zero sem mandar nada.
+  final Listenable? reset;
+
+  const ExpressionWheel({
+    super.key,
+    required this.label,
+    required this.height,
+    required this.color,
+    required this.springBack,
+    required this.onChanged,
+    this.reset,
+  });
 
   @override
   State<ExpressionWheel> createState() => _ExpressionWheelState();
@@ -72,7 +85,29 @@ class _ExpressionWheelState extends State<ExpressionWheel> with SingleTickerProv
   int? _pointer;
 
   @override
+  void initState() {
+    super.initState();
+    widget.reset?.addListener(_onReset);
+  }
+
+  void _onReset() {
+    _spring.stop();
+    _pointer = null;
+    _set(0, send: false);
+  }
+
+  @override
+  void didUpdateWidget(ExpressionWheel old) {
+    super.didUpdateWidget(old);
+    if (old.reset != widget.reset) {
+      old.reset?.removeListener(_onReset);
+      widget.reset?.addListener(_onReset);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.reset?.removeListener(_onReset);
     _spring.dispose();
     // a roda some com a tela: o que ela deixou no motor volta ao repouso
     if (_value != 0) widget.onChanged(0);

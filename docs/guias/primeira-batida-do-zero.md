@@ -41,7 +41,7 @@ O modelo é só um ponto de partida e não ensina nada que você não possa desm
 
 1. Em `Projetos`, toque em `Novo projeto`. No campo `Nome`, `Minha primeira batida`; em `Começar com`, `Vazio`; `Criar`. (Criar precisa de rede: o cadastro do projeto é no servidor.)
 2. O estúdio abre com uma faixa `Áudio 1` vazia, que esta receita não usa. No cabeçalho dela, abra `Opções da faixa` (três pontos) e escolha `Apagar a faixa`: faixa vazia apaga direto, sem pergunta.
-3. Toque no botão `120 BPM · 4/4`. Em `BPM`, digite `124`; deixe `Tempos por compasso` em `4/4`; `Salvar` (ou `Enter`). A janela só aceita inteiros de 20 a 400.
+3. Toque no botão `120 BPM · 4/4`. Em `BPM`, digite `124`; deixe `Tempos por compasso` em `4/4`; `Salvar` (ou `Enter`). A janela aceita de 20 a 999 BPM, com decimais (`124,5`).
 4. Ligue o loop com `L`. A região do compasso 1 ao 4 já vem marcada, só desligada. Ligue também o metrônomo (`C`) para programar no tempo; ele não vai para a exportação.
 
 Um compasso a 124 BPM dura cerca de 1,9 s (4 batidas x 60 / 124); os 4 compassos do loop, cerca de 7,7 s.

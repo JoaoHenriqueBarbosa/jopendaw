@@ -21,6 +21,7 @@ import 'package:crypto/crypto.dart';
 import '../audio/engine.dart' show LocalStore;
 import '../models/project.dart';
 import 'model.dart';
+import 'tempo_map.dart' show maxBpmInt, minBpmInt;
 
 /// Versão do formato do arquivo que este app escreve e sabe ler.
 const projectFileFormat = 1;
@@ -460,12 +461,13 @@ Future<Project> importProjectBundle(
   remapDocIds(doc);
   var project = await createProject(importedProjectName(bundle.name, existingNames));
   try {
-    final bpm = doc.bpm.isFinite ? doc.bpm.round().clamp(20, 400) : 120;
+    // o espelho do servidor é inteiro e vai de 20 a 999, como o motor; o andamento com decimais fica no documento
+    final bpm = doc.bpm.isFinite ? doc.bpm.round().clamp(minBpmInt, maxBpmInt) : 120;
     final bpb = doc.beatsPerBar.clamp(1, 32);
     if (bpm != project.bpm || bpb != project.beatsPerBar) {
       project = await patchProject(project.id, {'bpm': bpm, 'beats_per_bar': bpb});
     }
-    doc.bpm = project.bpm.toDouble();
+    if (!doc.bpm.isFinite || doc.bpm.round() != project.bpm) doc.bpm = project.bpm.toDouble();
     doc.beatsPerBar = project.beatsPerBar;
     final total = bundle.samples.length;
     var done = 0;

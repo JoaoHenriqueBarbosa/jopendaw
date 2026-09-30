@@ -23,20 +23,8 @@ abstract final class _CcPrefs {
 const _laneNames = {0: 'Velocidade', ccBend: 'Pitch bend', ccMod: 'Modulação', ccSustain: 'Sustain'};
 const _laneShort = {0: 'Vel.', ccBend: 'Bend', ccMod: 'Mod.', ccSustain: 'Pedal'};
 
-/// Ids do parâmetro "Alcance do bend" de cada instrumento (espelho de `instruments.dart`).
-int? _bendRangeId(TrackKind k) => switch (k) {
-  TrackKind.synth => 35,
-  TrackKind.fm => 42,
-  TrackKind.wavetable => 39,
-  TrackKind.sampler => 9,
-  _ => null,
-};
-
 /// Alcance do bend da faixa, em semitons (2 se o parâmetro não foi mexido).
-double _bendRange(DawTrack t) {
-  final id = _bendRangeId(t.kind);
-  return id == null ? 2.0 : (t.params[id] ?? 2.0);
-}
+double _bendRange(DawTrack t) => bendRangeOf(t);
 
 extension _ControlLanes on _PianoRollState {
   /// O canto esquerdo da faixa: o rótulo do que ela mostra e o menu que troca de faixa.

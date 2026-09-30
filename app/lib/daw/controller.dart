@@ -536,6 +536,10 @@ class DawController extends ChangeNotifier {
   /// roll acende as teclas por aqui.
   final liveNotes = ValueNotifier<Set<int>>(const {});
 
+  /// Sobe a cada vez que o app devolve ao repouso o bend, a roda e o pedal ao vivo (parar, reset
+  /// do MIDI…): as rodas da tela escutam e voltam ao zero, sem mandar valor de novo.
+  final liveReset = ValueNotifier<int>(0);
+
   final waveforms = <String, Waveform>{};
   final _sampleIds = <String, int>{};
 
@@ -1042,6 +1046,7 @@ class DawController extends ChangeNotifier {
     playing.dispose();
     peaks.dispose();
     liveNotes.dispose();
+    liveReset.dispose();
     fxMeter.dispose();
     loudness.dispose();
     spectrum.dispose();
@@ -1649,8 +1654,11 @@ class DawController extends ChangeNotifier {
     if (recording) return _finishRecording();
     if (_recBusy) return;
     await _engine.resume();
+    final stopping = playing.value;
     _engine.calls([
-      [playing.value ? 'stop' : 'play'],
+      [stopping ? 'stop' : 'play'],
+      // parar também devolve ao repouso o que se tocou ao vivo (o motor só zera o que o clipe dirigia)
+      if (stopping) ..._releaseControls(),
     ]);
     playing.value = !playing.value;
   }
@@ -1662,6 +1670,8 @@ class DawController extends ChangeNotifier {
     _engine.calls([
       ['stop'],
       ['seek', to],
+      // pedal solto, bend e roda ao centro: o motor só devolve ao repouso o que o clipe dirigia
+      ..._releaseControls(),
     ]);
     playing.value = false;
     beat.value = to;
@@ -1707,14 +1717,22 @@ class DawController extends ChangeNotifier {
     });
   }
 
-  Future<void> setTempo(int bpm, int beatsPerBar) async {
+  /// Muda o andamento inicial (com decimais) e os tempos por compasso do compasso INICIAL. Se o
+  /// compasso inicial não é n/4 (6/8, 7/8…), só trocar os tempos por compasso o substitui por
+  /// `n/4`, senão o compasso mostrado e o do motor ficariam como estavam.
+  Future<void> setTempo(num bpm, int beatsPerBar) async {
     if (_blockedByRecording('mudar o andamento')) return;
+    final v = bpm.isFinite ? bpm.toDouble().clamp(minBpm, maxBpm).toDouble() : doc.bpm;
+    final bpb = beatsPerBar.clamp(1, 32);
     edit((d) {
-      d.bpm = bpm.toDouble();
-      d.beatsPerBar = beatsPerBar;
+      final changed = bpb != d.beatsPerBar;
+      d.bpm = v;
+      d.beatsPerBar = bpb;
       // o ponto da batida 0 do mapa é o andamento inicial, e o compasso 1 n/4 é o `beatsPerBar`
       if (d.tempoMap.isNotEmpty) d.tempoMap = [d.tempoMap.first.copyWith(bpm: d.bpm), ...d.tempoMap.skip(1)];
-      if (d.meterMap.isNotEmpty && d.meterMap.first.denominator == 4) d.meterMap = [MeterChange(1, beatsPerBar, 4), ...d.meterMap.skip(1)];
+      if (d.meterMap.isNotEmpty) {
+        if (d.meterMap.first.denominator == 4 || changed) d.meterMap = [MeterChange(1, bpb, 4), ...d.meterMap.skip(1)];
+      }
     });
     await _mirrorTempo();
   }
@@ -1759,6 +1777,13 @@ class DawController extends ChangeNotifier {
   void setTempoMap(List<TempoPoint> points, {bool undoable = true}) {
     if (_blockedByRecording('mudar o andamento')) return;
     final norm = normalizeTempoPoints(points, doc.bpm);
+    final distinct = {
+      for (final p in points)
+        if (p.beat.isFinite && p.bpm.isFinite) math.max(0.0, p.beat),
+    };
+    if (distinct.length > maxTempoPoints) {
+      error = '$tempoPointsFullMessage Os pontos além dele foram ignorados.';
+    }
     // o ponto dado na batida 0 manda no andamento inicial
     final given = points.where((p) => p.beat <= 0 && p.bpm.isFinite).lastOrNull;
     edit((d) {
@@ -1774,6 +1799,9 @@ class DawController extends ChangeNotifier {
   void setMeterMap(List<MeterChange> changes, {bool undoable = true}) {
     if (_blockedByRecording('mudar o compasso')) return;
     final norm = normalizeMeterChanges(changes, doc.beatsPerBar);
+    if ({for (final m in changes) math.max(1, m.bar)}.length > maxMeterChanges) {
+      error = '$meterChangesFullMessage As mudanças além dele foram ignoradas.';
+    }
     final first = changes.where((m) => m.bar <= 1).lastOrNull;
     edit((d) {
       if (norm.isNotEmpty) {
@@ -1798,6 +1826,11 @@ class DawController extends ChangeNotifier {
     if (at >= 0) {
       pts[at] = pts[at].copyWith(bpm: v);
     } else {
+      if (pts.length >= maxTempoPoints) {
+        error = tempoPointsFullMessage;
+        notifyListeners();
+        return b;
+      }
       pts.add(TempoPoint(b, v, ramp: ramp));
     }
     setTempoMap(pts);
@@ -1851,6 +1884,11 @@ class DawController extends ChangeNotifier {
     if (at >= 0) {
       list[at] = MeterChange(b, num, den);
     } else {
+      if (list.length >= maxMeterChanges) {
+        error = meterChangesFullMessage;
+        notifyListeners();
+        return;
+      }
       list.add(MeterChange(b, num, den));
     }
     setMeterMap(list);
@@ -1882,7 +1920,7 @@ class DawController extends ChangeNotifier {
       do {
         _mirrorAgain = false;
         if (_disposed || !ready || !_canSync()) return;
-        final want = (doc.bpm.round().clamp(20, 400), doc.beatsPerBar);
+        final want = (doc.bpm.round().clamp(minBpmInt, maxBpmInt), doc.beatsPerBar);
         if (want == _mirroredTempo) return;
         try {
           await _patchProject(project.id, {'bpm': want.$1, 'beats_per_bar': want.$2});
@@ -1902,7 +1940,7 @@ class DawController extends ChangeNotifier {
 
   /// O andamento espelhado ainda não chegou ao servidor (nos testes).
   @visibleForTesting
-  bool get tempoPending => (doc.bpm.round().clamp(20, 400), doc.beatsPerBar) != _mirroredTempo;
+  bool get tempoPending => (doc.bpm.round().clamp(minBpmInt, maxBpmInt), doc.beatsPerBar) != _mirroredTempo;
 
   // ------------------------------------------------------------------ edição
 
@@ -2143,7 +2181,7 @@ class DawController extends ChangeNotifier {
   /// Encaixa na grade atual.
   double snapBeat(double b) {
     if (snap == Snap.bar && !doc.meter.isSingle) return math.max(0.0, doc.meter.nearestBarStart(b));
-    final g = snap == Snap.bar ? doc.beatsPerBar.toDouble() : snap.beats;
+    final g = snap == Snap.bar ? doc.meter.barBeatsAt(math.max(0.0, b)) : snap.beats;
     if (g <= 0) return b;
     return (b / g).round() * g;
   }
@@ -2568,12 +2606,25 @@ class DawController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Importa um arquivo MIDI (.mid): uma faixa de sintetizador (bateria no canal 10) por faixa do
-  /// arquivo, cada uma com um clipe a partir de [at] (padrão: o cursor), tudo num passo do
-  /// desfazer. Se o arquivo traz andamento ou compasso diferentes dos do projeto, [confirmTempo]
-  /// decide se eles passam para o projeto. Erro de arquivo vai para [error] (mensagem legível) e
-  /// devolve null; sucesso devolve o [MidiImportReport], com os avisos. A lógica está em `midi_file.dart`.
-  Future<MidiImportReport?> importMidiBytes(String name, Uint8List bytes, {Future<bool> Function(MidiFileData data)? confirmTempo, double? at}) async {
+  /// O instrumento em que as faixas melódicas de um .mid entram (a bateria do canal 10 é sempre
+  /// bateria); a última escolha de "Importar como", que fica valendo na sessão.
+  TrackKind midiImportKind = TrackKind.synth;
+
+  /// Importa um arquivo MIDI (.mid): uma faixa por faixa do arquivo (do tipo [midiImportKind], ou o
+  /// que [chooseKind] escolher; bateria no canal 10), cada uma com um clipe (com o nome da trilha) a
+  /// partir de [at] (padrão: o cursor), tudo num passo do desfazer. [chooseKind] só é chamado se o
+  /// arquivo tem faixas melódicas; devolver null cancela a importação. Se o arquivo traz andamento
+  /// ou compasso diferentes dos do projeto, [confirmTempo] decide se eles passam para o projeto.
+  /// Erro de arquivo vai para [error] (mensagem legível) e devolve null; sucesso devolve o
+  /// [MidiImportReport], com os avisos. A lógica está em `midi_file.dart`.
+  Future<MidiImportReport?> importMidiBytes(
+    String name,
+    Uint8List bytes, {
+    Future<bool> Function(MidiFileData data)? confirmTempo,
+    Future<TrackKind?> Function(MidiFileData data)? chooseKind,
+    TrackKind? kind,
+    double? at,
+  }) async {
     if (_blockedByRecording('importar MIDI')) return null;
     status = 'Lendo $name…';
     notifyListeners();
@@ -2593,25 +2644,29 @@ class DawController extends ChangeNotifier {
     }
     status = null;
     if (_disposed) return null;
+    var melodic = kind ?? midiImportKind;
+    if (chooseKind != null && kind == null && data.tracks.any((t) => !t.drums)) {
+      final k = await chooseKind(data);
+      if (k == null || _disposed) return null;
+      melodic = k;
+    }
     var useTempo = false;
     if (confirmTempo != null && midiTempoDiffers(data, doc)) useTempo = await confirmTempo(data);
     if (_disposed) return null;
     final bar = useTempo ? (data.beatsPerBar ?? doc.beatsPerBar) : doc.beatsPerBar;
-    final items = midiImportTracks(data, beatsPerBar: bar, start: at ?? snapBeat(beat.value), newId: newId);
+    // o clipe fecha no compasso do mapa que o projeto terá (o do arquivo, se ele vai para o projeto)
+    final importedMap = useTempo ? importedMeter(data) : null;
+    final meter = importedMap != null ? MeterMap(importedMap.beatsPerBar, importedMap.changes) : doc.meter;
+    final items = midiImportTracks(data, beatsPerBar: bar, start: at ?? snapBeat(beat.value), newId: newId, melodic: melodic, meter: meter);
     edit((d) {
       if (useTempo) applyImportedTempo(d, data);
       final first = d.tracks.length;
       for (final it in items) {
         final n = d.tracks.length;
-        d.tracks.add(
-          DawTrack(
-            id: newId(),
-            name: it.name.isNotEmpty ? it.name : _nextTrackName(d, it.kind),
-            color: n % Palette.tracks.length,
-            kind: it.kind,
-            midi: [it.clip],
-          ),
-        );
+        final trackName = it.name.isNotEmpty ? it.name : _nextTrackName(d, it.kind);
+        // o clipe leva o nome da trilha (um arquivo sem nome de trilha usa o da faixa nova)
+        if (it.clip.name.isEmpty) it.clip.name = trackName;
+        d.tracks.add(DawTrack(id: newId(), name: trackName, color: n % Palette.tracks.length, kind: it.kind, midi: [it.clip]));
       }
       selectedClip = items.first.clip.id;
       _select(first);
@@ -2735,8 +2790,7 @@ class DawController extends ChangeNotifier {
   MidiClip createMidiClip(int track, double start, {double? length}) {
     if (!_isInstrument(track)) throw ArgumentError.value(track, 'track', 'clipe MIDI só entra em faixa de instrumento');
     final t = doc.tracks[track];
-    final bar = doc.beatsPerBar.toDouble();
-    final len = length != null && length > 0 ? length : bar;
+    final len = length != null && length > 0 ? length : doc.meter.barBeatsAt(math.max(0.0, start));
     final clip = MidiClip(id: newId(), name: t.name, start: math.max(0.0, start), length: len);
     edit((_) {
       t.midi.add(clip);
@@ -2847,6 +2901,7 @@ class DawController extends ChangeNotifier {
     ];
     _ccTrack.clear();
     _sustain = false;
+    liveReset.value++;
     return calls;
   }
 
@@ -2867,11 +2922,12 @@ class DawController extends ChangeNotifier {
     final key = cc << 1 | (screen ? 1 : 0);
     final calls = <List<Object>>[];
     final before = _ccTrack[key];
-    if (v != MidiCc.neutral && before != null && before != t && _isInstrument(before)) calls.add(_liveControlCall(before, cc, MidiCc.neutral));
+    // a origem deixou a faixa antiga fora do repouso e agora fala com outra: a antiga volta ao
+    // repouso seja qual for o valor novo (soltar o pedal já na faixa nova não pode deixar a antiga presa)
+    if (before != null && before != t && _isInstrument(before)) calls.add(_liveControlCall(before, cc, MidiCc.neutral));
     calls.add(_liveControlCall(t, cc, v));
     if (v == MidiCc.neutral) {
-      // só esquece se o registro era desta faixa (a roda de outra faixa pode ter o dela)
-      if (before == null || before == t) _ccTrack.remove(key);
+      _ccTrack.remove(key);
     } else {
       _ccTrack[key] = t;
     }
@@ -4392,9 +4448,10 @@ class DawController extends ChangeNotifier {
   /// (overdub, esticando o clipe em compassos inteiros se passarem dele) ou para um clipe novo que
   /// cobre os compassos gravados.
   void _placeRecordedNotes(DawTrack t, List<_RecNote> notes, _Recording r, bool wrapped, [List<_RecCc> ccs = const []]) {
-    final bar = doc.beatsPerBar.toDouble();
-    double floorBar(double b) => math.max(0.0, (b / bar + 1e-9).floor() * bar);
-    double ceilBar(double b) => (b / bar - 1e-9).ceil() * bar;
+    // os compassos são os do mapa de compassos (6/8, 7/8, mudanças no meio)
+    final meter = doc.meter;
+    double floorBar(double b) => math.max(0.0, meter.floorBarStart(math.max(0.0, b)));
+    double ceilBar(double b) => meter.ceilBarStart(math.max(0.0, b));
     // só controles, sem nota nenhuma (overdub do pedal ou do bend): entram no clipe que estava sob o
     // cursor, ou criam um clipe vazio que cobre o que foi gravado, como a gravação de notas faz
     final starts = [...notes.map((n) => n.start), ...ccs.map((e) => e.beat)];
@@ -4427,7 +4484,7 @@ class DawController extends ChangeNotifier {
     final from = wrapped ? math.min(r.start, r.loopStart) : r.start;
     final to = wrapped ? r.loopEnd : math.max(r.stopBeat, maxEnd);
     final start = floorBar(math.min(from, minStart));
-    final end = math.max(ceilBar(math.max(to, maxEnd)), start + bar);
+    final end = math.max(ceilBar(math.max(to, maxEnd)), start + meter.barBeatsAt(start));
     final clip = MidiClip(id: newId(), name: t.name, start: start, length: end - start, notes: [for (final n in notes) rel(n, start)]);
     _mergeControls(clip, ccs, start, r.stopBeat);
     t.midi.add(clip);
@@ -4889,7 +4946,7 @@ class DawController extends ChangeNotifier {
 
   /// Enquadra o trecho [from, to] (em batidas) na janela, com uma folga nas pontas.
   void fitRange(double from, double to) {
-    final span = math.max(to - from, doc.beatsPerBar.toDouble());
+    final span = math.max(to - from, doc.meter.barBeatsAt(math.max(0.0, from)));
     final pad = span * 0.04;
     pxPerBeat = (viewWidth / (span + 2 * pad)).clamp(4.0, 800.0);
     scrollBeat = math.max(0, from - pad);

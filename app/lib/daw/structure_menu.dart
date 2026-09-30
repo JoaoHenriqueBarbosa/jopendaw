@@ -127,7 +127,9 @@ class DurationLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = c.doc;
-    final bars = (d.contentEnd / d.beatsPerBar).ceil();
+    // compassos que o projeto ocupa, contados pelo mapa de compassos
+    final (lastBar, into) = d.meter.barOf(d.contentEnd);
+    final bars = d.contentEnd <= 0 ? 0 : (into <= 1e-9 ? lastBar - 1 : lastBar);
     return Tooltip(
       message: 'Duração do projeto: ${formatClock(d.durationSeconds)} ($bars ${bars == 1 ? 'compasso' : 'compassos'})',
       child: Padding(

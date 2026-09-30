@@ -108,4 +108,4 @@ Se a outra pessoa só precisa **ouvir**, mande o WAV (`Exportar`) em vez do proj
 | Sobrou um projeto vazio na lista depois de uma importação que falhou | O app não conseguiu apagar o projeto criado no meio da falha | Apague o projeto vazio pelo menu `Mais` do card |
 | No projeto importado, um clipe está em silêncio e diz `áudio fora deste aparelho` | O áudio faltava no arquivo (ver o primeiro sintoma) | Importe o som de novo naquele clipe |
 | O celular não mostra o arquivo no seletor | O filtro de extensão do Android | Renomeie para `.zip` (o app aceita) |
-| O andamento ou o compasso mudou na cópia | O andamento vira inteiro, de 20 a 400 BPM, e o compasso vai de 1 a 32 | Ajuste na barra do estúdio ([capítulo 02](../manual/02-transporte.md)) |
+| O andamento ou o compasso mudou na cópia | O espelho do servidor vira inteiro, de 20 a 999 BPM (o documento guarda o andamento com decimais), e o compasso vai de 1 a 32 | Ajuste na barra do estúdio ([capítulo 02](../manual/02-transporte.md)) |

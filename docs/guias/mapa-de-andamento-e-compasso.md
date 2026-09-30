@@ -21,7 +21,7 @@ Os números abaixo são um exemplo: uma música de 16 compassos que começa a 90
 ## Antes de começar: como o mapa funciona
 
 - Tudo no projeto (clipes, notas, automação, marcadores, loop) fica em **batidas**, e a batida é a semínima. O mapa só decide quantos segundos dura cada batida. Por isso notas, bateria programada e automação seguem o mapa sozinhas.
-- O **andamento inicial** é o primeiro ponto (batida 0), o mesmo `BPM` da janela `Andamento e compasso` (20 a 400, inteiro). Os outros pontos aceitam 20 a 999, com decimais (`92,5`).
+- O **andamento inicial** é o primeiro ponto (batida 0), o mesmo `BPM` da janela `Andamento e compasso` (20 a 999, com decimais: `92,5`), a mesma janela dos outros pontos.
 - Cada ponto diz como chega ao próximo: em **salto** (mantém o BPM e muda de uma vez no ponto seguinte) ou em **rampa** (o BPM anda em reta, em função da batida, até o BPM do seguinte). Os pontos novos nascem em salto, no BPM que já vale ali.
 - Numa música em 4/4, o compasso N começa na batida `4 × (N − 1)`: o compasso 9 é a batida 32, o 13 é a 48, o 17 é a 64. O título da janela `Digitar BPM…` (`Andamento na batida 32`) confere isso.
 - Sem nenhum ponto novo, o projeto soa exatamente como antes do mapa (um teste do motor compara a saída quadro a quadro com a do motor de antes). `(testado só por testes automáticos)`
@@ -58,7 +58,7 @@ Projeto de 16 compassos em 4/4, andamento inicial 120 (`120 BPM · 4/4`, sem mex
 2. Botão direito na faixa, sobre o número 13: `Adicionar ponto aqui`. O ponto nasce com 120 BPM (o que já vale ali).
 3. Botão direito na faixa, sobre o número 17: `Adicionar ponto aqui` (afaste o zoom se preciso). Botão direito nesse ponto, `Digitar BPM…` (título `Andamento na batida 64`), `70`, `Salvar`.
 4. Botão direito no **primeiro** ponto (o do compasso 13, batida 48), `Rampa até o próximo ponto`. A linha vira uma diagonal do 120 ao 70. No menu do ponto do compasso 17 o item de rampa fica desligado: ele é o último, não há para onde rampar. `(testado só por testes automáticos)`
-5. Toque a partir do compasso 11 com o metrônomo. No meio da rampa (compasso 15, batida 56) o botão do transporte mostra `95↗ BPM · 4/4`: a rampa é reta em função da batida, então na metade das batidas o BPM é a média, 95. O `↗` aparece em qualquer rampa, também nas que descem.
+5. Toque a partir do compasso 11 com o metrônomo. No meio da rampa (compasso 15, batida 56) o botão do transporte mostra `95↗ BPM · 4/4`: a rampa é reta em função da batida, então na metade das batidas o BPM é a média, 95. O `↗` aparece na rampa que sobe e o `↘` na que desce (uma rampa entre dois andamentos iguais não mostra seta).
 
 Conta para conferir (a fórmula `segundos = 60 × L ÷ (B − A) × ln(B ÷ A)`, com L = 16 batidas de A = 120 a B = 70): a rampa dura cerca de 10,35 s, contra 8 s se ficasse a 120; até a batida 48 são 24 s, então o fim do compasso 16 cai em torno de `0:34.35`. Metade das batidas (as 8 primeiras da rampa) leva 4,49 s e as outras 8 levam 5,86 s. O que vier depois do ponto de 70 BPM toca a 70. Um som que precisa "voltar a tempo" pede outro ponto depois, por exemplo 120 em salto no compasso 21.
 
@@ -80,7 +80,7 @@ Para pensar o 6/8 em dois tempos pontuados de 60 por minuto, o `BPM` do projeto 
 ## Variações
 
 - **Accelerando.** Igual à receita 2, com o ponto final mais alto (por exemplo de 100 a 140 em 8 compassos).
-- **Várias viradas.** Cada ponto novo cria uma virada; use marcadores (`M`, `Shift+M` para dar nome) para lembrar onde é o refrão. Cada projeto guarda até 512 pontos de andamento e 256 mudanças de compasso.
+- **Várias viradas.** Cada ponto novo cria uma virada; use marcadores (`M`, `Shift+M` para dar nome) para lembrar onde é o refrão. Cada projeto guarda até 4096 pontos de andamento e 1024 mudanças de compasso; ao chegar no limite o app avisa em vez de descartar.
 - **5/4 e 7/8.** Mesma janela: `5` e `4` (5 batidas por compasso) ou `7` e `8` (7/8 ocupa 3,5 batidas; o metrônomo clica por colcheia e marca o primeiro).
 - **Voltar a um andamento só.** Botão direito num lugar vazio da faixa `Andamento`, `Apagar todas as mudanças de andamento` (o andamento inicial fica).
 - **Gravar sobre o mapa.** Desenhe o mapa **antes** de gravar: gravando, o andamento e o compasso ficam travados (`Pare a gravação para mudar o andamento.`). A contagem tem o tamanho do compasso onde está o cursor (em 6/8, 3 batidas), com os quadros contados pelo mapa, e o metrônomo segue o mapa. Notas gravadas ficam em batidas e acompanham mudanças futuras do mapa; **áudio gravado não**: ele fica preso ao tempo real, então se você mexer no mapa antes dele depois de gravar, o clipe sai da grade.

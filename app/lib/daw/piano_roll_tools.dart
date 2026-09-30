@@ -50,8 +50,7 @@ extension _Tools on _PianoRollState {
     // nota além do fim do clipe fica muda: se a transformação empurrou o fim das notas para depois
     // do que já passava, o clipe cresce até o compasso que o contém (como colar e duplicar fazem)
     final endBefore = before.map((n) => n.end).reduce(math.max), endAfter = after.isEmpty ? 0.0 : after.map((n) => n.end).reduce(math.max);
-    final bar = c.doc.beatsPerBar.toDouble();
-    final grown = endAfter > math.max(clip.length, endBefore) + 1e-9 ? _tidy((endAfter / bar - 1e-9).ceil() * bar) : null;
+    final grown = endAfter > math.max(clip.length, endBefore) + 1e-9 ? _ceilBar(endAfter) : null;
     c.edit((_) {
       if (grown != null && grown > clip.length) clip.length = grown;
       // os eventos de controle do clipe (bend, modulação, pedal) andam junto das ferramentas de tempo

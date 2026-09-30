@@ -16,7 +16,7 @@ const minimapHeight = 28.0;
 double minimapSpan(DawController c) {
   final view = c.viewWidth / c.pxPerBeat;
   final content = math.max(c.arrangementEnd, c.scrollBeat + view);
-  return math.max(content * 1.05, c.doc.beatsPerBar * 4.0);
+  return math.max(content * 1.05, c.doc.meter.barStart(5));
 }
 
 class Minimap extends StatelessWidget {

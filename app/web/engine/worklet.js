@@ -30,9 +30,9 @@ const LEVELS_PER_SEC = 30;
 // altura 256 + controle e o valor no lugar da velocidade, e têm cota própria de 32768.
 const REC_NOTE_FLOATS = 5;
 const REC_NOTES_MAX = REC_NOTE_FLOATS * (16384 + 32768);
-// Chamadas de expressão e de mapa de andamento que um engine.wasm de antes delas não exporta:
-// ignoradas em vez de derrubar o lote inteiro de chamadas.
-const EXPRESSION_CALLS = new Set(['live_bend', 'live_cc', 'cc_add', 'cc_clear', 'tempo_clear', 'tempo_point', 'meter_clear', 'meter_point']);
+// Chamadas de expressão e de mapa de andamento e de compassos que um engine.wasm de antes delas não
+// exporta: ignoradas em vez de derrubar o lote inteiro de chamadas.
+const OPTIONAL_CALLS = new Set(['live_bend', 'live_cc', 'cc_add', 'cc_clear', 'tempo_clear', 'tempo_point', 'meter_clear', 'meter_point']);
 // Diferença de posição entre um bloco e o seguinte que conta como salto (seek) e não como
 // arredondamento: um milionésimo de batida é bem menos que um quadro.
 const BEAT_EPS = 1e-6;
@@ -55,8 +55,6 @@ class EngineProcessor extends AudioWorkletProcessor {
     this.levelBlocks = 0;
     this.levelPeak = 0;
     this.levelSent = false;
-    // batidas por quadro no andamento que o app mandou (o motor começa em 120)
-    this.beatsPerFrame = 120 / 60 / sampleRate;
     this.resetCapture();
     this.pool = [];
     for (let i = 0; i < REC_POOL; i++) this.pool.push([new Float32Array(REC_FRAMES), new Float32Array(REC_FRAMES)]);
@@ -130,11 +128,9 @@ class EngineProcessor extends AudioWorkletProcessor {
       w.sample_load(msg.id, pl, pr, frames, msg.rate);
     } else if (msg.t === 'calls') {
       for (const [name, ...args] of msg.list) {
-        if (EXPRESSION_CALLS.has(name) && typeof w[name] !== 'function') continue;
+        if (OPTIONAL_CALLS.has(name) && typeof w[name] !== 'function') continue;
         w[name](...args);
         if (name === 'watch_analyzer') this.analyzing = args[0] !== -2;
-        // o mesmo limite que o motor aplica ao andamento
-        else if (name === 'tempo' && Number.isFinite(args[0])) this.beatsPerFrame = Math.min(999, Math.max(20, args[0])) / 60 / sampleRate;
       }
     } else if (msg.t === 'capture') {
       this.capture(!!msg.on);
@@ -187,9 +183,10 @@ class EngineProcessor extends AudioWorkletProcessor {
         this.recL = pair[0];
         this.recR = pair[1];
         this.recPos = 0;
-        // um bloco novo no meio do bloco do motor começa `from` quadros depois (sem contar uma
-        // volta do loop bem ali: com o quantum de 128, que divide 4096, isso nem acontece)
-        this.recBeat = beat + from * this.beatsPerFrame;
+        // um bloco novo sempre começa no começo de um bloco do motor: o quantum de 128 divide o
+        // bloco de captura (4096), então `from` é 0 e a batida é a do próprio bloco do motor. Sem
+        // andamento à mão aqui, nada de somar quadros (com mapa de andamento não seria linear)
+        this.recBeat = beat;
       }
       const take = Math.min(n - from, REC_FRAMES - this.recPos);
       if (il) {

@@ -16,12 +16,23 @@ library;
 
 import 'dart:math' as math;
 
+/// Limites do mapa de andamento e de compassos: o conjunto único que o app, o espelho do servidor
+/// (`valid_bpm`: 20 a 999), a importação do `.jopendaw` e o motor (`engine/src/tempo.rs`:
+/// `MIN_BPM`, `MAX_BPM`, `MAX_TEMPO_POINTS`, `MAX_METER_POINTS`) usam. Mude tudo junto.
 const double minBpm = 20;
 const double maxBpm = 999;
 
-/// Pontos de andamento aceitos num documento (o resto é ignorado ao ler).
-const int maxTempoPoints = 512;
-const int maxMeterChanges = 256;
+/// O mesmo intervalo em inteiros, para o espelho `bpm` do servidor e os campos inteiros.
+const int minBpmInt = 20;
+const int maxBpmInt = 999;
+
+/// Pontos de andamento e mudanças de compasso aceitos num documento (o resto é ignorado ao ler).
+const int maxTempoPoints = 4096;
+const int maxMeterChanges = 1024;
+
+/// Mensagens de limite: quem chama põe no aviso da tela em vez de descartar em silêncio.
+const String tempoPointsFullMessage = 'O mapa de andamento chegou ao limite de $maxTempoPoints pontos.';
+const String meterChangesFullMessage = 'O mapa de compassos chegou ao limite de $maxMeterChanges mudanças.';
 
 /// Um ponto do mapa de andamento.
 class TempoPoint {
@@ -308,6 +319,30 @@ class MeterMap {
 
   /// Batidas do compasso que contém a batida.
   double barBeatsAt(double beat) => barBeats(barOf(beat).$1);
+
+  /// Começo do compasso que contém a batida (uma batida no começo exato de um compasso fica nele).
+  double floorBarStart(double beat) => barStart(barOf(beat + 1e-9).$1);
+
+  /// Começo do primeiro compasso que não termina antes da batida: a própria batida se ela cai no
+  /// começo de um compasso, senão o começo do seguinte.
+  double ceilBarStart(double beat) {
+    final (bar, into) = barOf(beat);
+    return into <= 1e-9 ? barStart(bar) : barStart(bar + 1);
+  }
+
+  /// Compassos inteiros e batidas que sobram em [length] batidas a partir de [from]. Contado pelo
+  /// mapa quando [from] cai no começo de um compasso; senão, pelo compasso de [from].
+  (int, double) spanBars(double from, double length) {
+    final (b0, into0) = barOf(math.max(0.0, from));
+    if (into0 <= 1e-9) {
+      final (b1, into1) = barOf(math.max(0.0, from) + length);
+      if (into1 >= barBeats(b1) - 1e-9) return (b1 + 1 - b0, 0);
+      return (b1 - b0, into1 <= 1e-9 ? 0 : into1);
+    }
+    final len = barBeats(b0);
+    final bars = (length / len + 1e-9).floor();
+    return (bars, length - bars * len);
+  }
 }
 
 /// As chamadas do motor que levam o mapa de andamento e o de compassos: `tempo_clear` e um

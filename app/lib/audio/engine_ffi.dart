@@ -1351,11 +1351,13 @@ final class FfiEngine {
 
   /// Oferece os bytes para salvar: o seletor de "salvar como" do Android (Storage Access
   /// Framework). Sem ele (aparelho sem o app de arquivos), a folha de compartilhar, que ainda deixa
-  /// mandar para o Drive, os Arquivos ou outro app. Cancelar não é erro.
-  Future<void> saveFile(String name, Uint8List bytes, String mime) async {
+  /// mandar para o Drive, os Arquivos ou outro app. Cancelar não é erro: devolve `false` (o seletor
+  /// devolve null, ou a folha de compartilhar é dispensada) e `true` quando o arquivo foi salvo ou
+  /// entregue a outro app.
+  Future<bool> saveFile(String name, Uint8List bytes, String mime) async {
     try {
-      await FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: mime, dialogTitle: 'Salvar $name');
-      return;
+      final saved = await FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: mime, dialogTitle: 'Salvar $name');
+      return saved != null;
     } on PlatformException catch (e) {
       if (e.code == 'already_active') throw StateError('Já há uma janela de salvar aberta: termine ela e tente de novo.');
       debugPrint('salvar arquivo: $e');
@@ -1365,12 +1367,13 @@ final class FfiEngine {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$name');
     await file.writeAsBytes(bytes, flush: true);
-    await SharePlus.instance.share(
+    final shared = await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: mime, name: name)],
         fileNameOverrides: [name],
       ),
     );
+    return shared.status != ShareResultStatus.dismissed;
   }
 
   // ---------------------------------------------------------------- MIDI

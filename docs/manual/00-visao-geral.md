@@ -45,7 +45,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | Gravar (círculo vermelho, `R`) | Liga e desliga a gravação nas faixas armadas. Na contagem pisca no andamento do projeto; gravando fica cheio | Tooltip diz quantas faixas estão armadas | Sem faixa armada o tooltip avisa `nenhuma faixa armada; arme no mixer (●)` |
 | Seta ao lado do gravar (`Opções de gravação`) | Menu com `Contagem de um compasso` (marcável) e `Configurações de gravação…` | | Abre a janela do [capítulo 09](09-configuracoes-atalhos-android.md) |
 | Posição | Mostra `compasso.tempo.semicolcheia` (ex.: `1.1.1`) e, embaixo, `m:ss.cc` | Antes do zero (contagem) mostra `−N` em vermelho | |
-| `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM inteiro de 20 a 400; `Tempos por compasso` de `1/4` a `12/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. O andamento é salvo no servidor: precisa de rede |
+| `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM de 20 a 999, com uma casa decimal; `Tempos por compasso` de `1/4` a `12/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. O andamento é salvo no servidor: precisa de rede |
 | `Loop (L) · arraste na régua para marcar` | Liga e desliga o loop | | |
 | `Metrônomo (C)` | Liga e desliga o clique | | |
 
@@ -195,7 +195,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 | Termo | Significado no jopendaw |
 |---|---|
-| Andamento / BPM | Batidas por minuto. Faixa de 20 a 400 no diálogo da barra. |
+| Andamento / BPM | Batidas por minuto. Faixa de 20 a 999 no diálogo da barra, com decimais. |
 | Armar | Deixar uma faixa pronta para receber a gravação (áudio da entrada, ou notas do teclado/MIDI). |
 | Automação | Curva que move um parâmetro (volume, pan, envio, instrumento, efeito) ao longo do tempo. |
 | Barramento (bus) | Faixa sem clipes que soma o áudio mandado por outras faixas, para tratá-las juntas (ex.: um reverb comum). |

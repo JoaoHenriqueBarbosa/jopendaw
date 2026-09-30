@@ -62,7 +62,7 @@ List<(String, List<(String, String)>)> _groups() => [
       ('$_mod+D', 'Duplicar o clipe'),
       ('S', 'Cortar no cursor'),
       ('Delete · Backspace', 'Apagar o clipe'),
-      ('$_mod+I', 'Importar áudio'),
+      ('$_mod+I', 'Importar áudio ou MIDI'),
       ('+  (ou  =)  /  −', 'Aproximar / afastar'),
       ('$_mod + roda', 'Zoom no ponto do mouse'),
       ('Shift + roda', 'Rolar na horizontal'),
