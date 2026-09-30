@@ -4,6 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../widgets/dialogs.dart';
+import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'model.dart';
@@ -135,4 +137,23 @@ class DurationLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Move a faixa [from] para [to]. Se o movimento desfaria rotas entre barramentos (a ordem das
+/// faixas é a ordem do sinal), pergunta antes, listando o que sai; desfazer traz tudo de volta.
+Future<void> moveTrackAsking(BuildContext context, DawController c, int from, int to) async {
+  final broken = c.routesBrokenByMove(from, to);
+  if (broken.isNotEmpty) {
+    final ok = await confirmAction(
+      context,
+      title: 'Mover a faixa?',
+      message:
+          'Barramento só manda sinal para um barramento que vem depois dele na lista. Mover a faixa para lá desfaz:\n'
+          '${broken.map((b) => '• $b').join('\n')}\n\n${withMod('Desfazer (Ctrl+Z)')} traz de volta.',
+      action: 'Mover mesmo assim',
+      destructive: true,
+    );
+    if (!ok) return;
+  }
+  c.moveTrack(from, to);
 }

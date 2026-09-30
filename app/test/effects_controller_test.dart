@@ -382,6 +382,29 @@ void main() {
       expect(c.doc.tracks[1].output, b1.id);
     });
 
+    test('mover faixa avisa antes o que desfaria entre barramentos', () {
+      final c = newController();
+      final b1 = c.addBusTrack(); // 2
+      final b2 = c.addBusTrack(); // 3
+      c.setOutput(2, b2.id);
+      c.setSend(2, b2.id);
+      c.addLane(2, AutoTarget(AutoKind.send, ref: b2.id));
+      // faixa comum e barramentos na ordem certa: nada quebra
+      expect(c.routesBrokenByMove(0, 1), isEmpty);
+      expect(c.routesBrokenByMove(3, 3), isEmpty);
+      // b2 antes de b1: o envio (com a automação) e a saída de b1 apontariam para trás
+      final warn = c.routesBrokenByMove(3, 2);
+      expect(warn, hasLength(2));
+      expect(warn.join(' '), allOf(contains(b1.name), contains(b2.name), contains('automação'), contains('master')));
+      // o aviso não mexe em nada; mover de fato desfaz, e desfazer volta
+      expect(c.doc.tracks[2].output, b2.id);
+      c.moveTrack(3, 2);
+      expect(c.doc.tracks[3].output, isNull);
+      c.undo();
+      expect(c.doc.tracks[2].output, b2.id);
+      expect(c.doc.tracks[2].sends, hasLength(1));
+    });
+
     test('apagar um barramento limpa envios, saídas e a automação desses envios', () {
       final c = newController();
       final b1 = c.addBusTrack(); // 2

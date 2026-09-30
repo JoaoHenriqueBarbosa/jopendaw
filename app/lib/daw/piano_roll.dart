@@ -577,7 +577,7 @@ class _PianoRollState extends State<PianoRoll> {
                     },
                     icon: const Icon(Icons.fit_screen),
                   ),
-                  const Tooltip(
+                  Tooltip(
                     message: _help,
                     triggerMode: TooltipTriggerMode.tap,
                     showDuration: Duration(seconds: 12),

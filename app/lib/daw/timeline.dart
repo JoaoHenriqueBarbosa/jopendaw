@@ -29,6 +29,7 @@ import 'midi_convert_dialog.dart';
 import 'minimap.dart';
 import 'warp_dialog.dart';
 import 'model.dart';
+import 'structure_menu.dart';
 
 const _rulerHeight = 30.0;
 
@@ -686,7 +687,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
       onLongPressEnd: (_) {
         final to = _dragTo;
         setState(() => _dragTo = null);
-        if (to != null && to != index) c.moveTrack(index, to);
+        if (to != null && to != index) moveTrackAsking(context, c, index, to);
       },
       onLongPressCancel: () => setState(() => _dragTo = null),
       child: Container(
@@ -1033,9 +1034,9 @@ class _TrackMenu extends StatelessWidget {
           case 'rename':
             onRename();
           case 'up':
-            c.moveTrack(index, index - 1);
+            moveTrackAsking(context, c, index, index - 1);
           case 'down':
-            c.moveTrack(index, index + 1);
+            moveTrackAsking(context, c, index, index + 1);
           case 'duplicate':
             c.duplicateTrack(index);
           case 'monitor':

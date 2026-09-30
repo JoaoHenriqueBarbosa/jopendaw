@@ -4482,4 +4482,31 @@ class DawController extends ChangeNotifier {
     _loopTo(r.$1, r.$2);
     return true;
   }
+
+  /// O que [moveTrack] desfaria em silêncio ao mover a faixa [from] para [to]: envios e saídas de
+  /// barramento para barramento que passariam a apontar para trás (e a automação desses envios).
+  /// Uma frase por rota; vazio se o movimento não quebra nada.
+  List<String> routesBrokenByMove(int from, int to) {
+    final n = doc.tracks.length;
+    if (from < 0 || from >= n) return const [];
+    to = to.clamp(0, n - 1);
+    if (to == from) return const [];
+    final order = List.of(doc.tracks);
+    order.insert(to, order.removeAt(from));
+    final index = {for (var i = 0; i < order.length; i++) order[i].id: i};
+    final out = <String>[];
+    for (var i = 0; i < order.length; i++) {
+      final t = order[i];
+      if (t.kind != TrackKind.bus) continue;
+      for (final s in t.sends) {
+        final j = index[s.target];
+        if (j == null || j > i || order[j].kind != TrackKind.bus) continue;
+        final auto = t.lanes.any((l) => l.target.kind == AutoKind.send && l.target.ref == s.target);
+        out.add('o envio de "${t.name}" para "${order[j].name}"${auto ? ' e a automação dele' : ''}');
+      }
+      final o = t.output == null ? null : index[t.output];
+      if (o != null && o <= i && order[o].kind == TrackKind.bus) out.add('a saída de "${t.name}" para "${order[o].name}" (volta ao master)');
+    }
+    return out;
+  }
 }
