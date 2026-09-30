@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/controller.dart';
+import 'package:jopendaw_app/daw/shortcuts_dialog.dart';
 
 void main() {
   test('fileira do meio brancas, de cima pretas, dó central na tecla A na oitava 4', () {
@@ -42,5 +43,19 @@ void main() {
   test('nota fora da faixa MIDI não toca', () {
     expect(keyboardNote(PhysicalKeyboardKey.keyA, 10), isNull);
     expect(keyboardNote(PhysicalKeyboardKey.keyA, -2), isNull);
+  });
+
+  test('todo atalho suspenso pelo teclado ligado é mesmo uma letra que o teclado usa', () {
+    final letters = {for (final k in noteKeys) k.debugName!.replaceAll('Key ', '')}..addAll(['Z', 'X', 'C', 'V']);
+    final listed = <String>{};
+    for (final (keys, _) in suspendedShortcuts) {
+      for (final part in keys.split('·')) {
+        final letter = part.trim().replaceAll('Shift+', '').split('/').first;
+        expect(letters, contains(letter), reason: keys);
+        listed.add(letter);
+      }
+    }
+    // os atalhos de letra sem modificador do estúdio: S E F L C X Z e K J do piano roll, Shift+H/L
+    expect(listed, containsAll(['S', 'E', 'F', 'L', 'C', 'X', 'Z', 'K', 'J', 'H']));
   });
 }

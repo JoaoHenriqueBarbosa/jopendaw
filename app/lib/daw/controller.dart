@@ -572,7 +572,18 @@ class DawController extends ChangeNotifier {
 
   /// Teclado do computador tocando notas na faixa selecionada (e oitava base dele).
   bool keyboardOn = false;
-  int keyboardOctave = 4;
+  final _keyboardOctaves = <TrackKind, int>{TrackKind.drums: 2};
+
+  /// Oitava base do teclado do computador na faixa que ele toca. É uma por tipo de faixa, como no
+  /// teclado da tela: a bateria só responde a notas 35–59, então nela a tecla A cai em C2 (36).
+  int get keyboardOctave => _keyboardOctaves[_keyboardKind] ?? 4;
+
+  TrackKind get _keyboardKind {
+    final t = doc.tracks;
+    final i = _inputTrack;
+    return i >= 0 && i < t.length ? t[i].kind : TrackKind.synth;
+  }
+
   double keyboardVelocity = 0.8;
 
   /// Teclas do editor aberto (o piano roll registra ao montar e limpa ao desmontar). O atalho
@@ -2420,7 +2431,7 @@ class DawController extends ChangeNotifier {
   void setKeyboardOctave(int octave) {
     final o = octave.clamp(0, 8);
     if (o == keyboardOctave) return;
-    keyboardOctave = o;
+    _keyboardOctaves[_keyboardKind] = o;
     notifyListeners();
   }
 

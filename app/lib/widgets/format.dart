@@ -1,6 +1,14 @@
 /// Textos e números como a tela mostra: plural, milhar com ponto e datas curtas.
 library;
 
+import 'package:flutter/foundation.dart';
+
+/// Tecla de modificador do sistema como aparece nos textos: ⌘ no Mac e no iOS, Ctrl nos outros.
+String get modKey => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS ? '⌘' : 'Ctrl';
+
+/// Troca o "Ctrl" de um texto de atalho pela tecla do sistema ("Ctrl+Z" → "⌘+Z" no Mac).
+String withMod(String text) => text.replaceAll('Ctrl', modKey);
+
 /// `plural(3, 'faixa')` → "3 faixas"; o plural irregular vai no terceiro argumento.
 String plural(int n, String one, [String? many]) => '${fmtInt(n)} ${n == 1 ? one : many ?? '${one}s'}';
 

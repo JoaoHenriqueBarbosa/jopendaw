@@ -257,7 +257,7 @@ void main() {
       ]);
       expect(c.liveNotes.value, {60});
       // a seleção muda antes de soltar: o note off vai para onde a nota está
-      c.selectTrack(0);
+      c.selectTrack(c.doc.tracks.indexWhere((t) => t.kind == TrackKind.drums));
       c.noteOff(60);
       expect(sent('live_off'), [
         ['live_off', 1, 60],
@@ -293,6 +293,24 @@ void main() {
       c.toggleKeyboard();
       expect(sent('live_off').last, ['live_off', 1, 73]);
       expect(c.handleNoteKey(down(PhysicalKeyboardKey.keyA)), isFalse);
+    });
+
+    test('a oitava do teclado é por tipo de faixa: a bateria toca sem apertar Z', () {
+      final c = newController();
+      c.addInstrumentTrack(TrackKind.drums);
+      c.toggleKeyboard();
+      expect(c.keyboardOctave, 2);
+      c.handleNoteKey(down(PhysicalKeyboardKey.keyA));
+      c.handleNoteKey(down(PhysicalKeyboardKey.keyP));
+      // A e P caem dentro do que a bateria responde (35–59), sem mexer na oitava
+      expect(sent('live_on').map((m) => m[2]), [36, 51]);
+      // mudar a oitava na bateria não muda a do sintetizador (e vice-versa)
+      c.handleNoteKey(down(PhysicalKeyboardKey.keyX));
+      expect(c.keyboardOctave, 3);
+      c.addInstrumentTrack(TrackKind.synth);
+      expect(c.keyboardOctave, 4);
+      c.selectTrack(c.doc.tracks.indexWhere((t) => t.kind == TrackKind.drums));
+      expect(c.keyboardOctave, 3);
     });
 
     test('limites de oitava e velocidade', () {

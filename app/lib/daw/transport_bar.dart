@@ -122,10 +122,14 @@ class TransportBar extends StatelessWidget {
         ];
         // desfazer no meio da gravação poderia apagar ou mover a faixa que está recebendo o áudio
         final tools = [
-          IconButton(tooltip: 'Desfazer (Ctrl+Z)', onPressed: c.canUndo && !recording ? c.undo : null, icon: const Icon(Icons.undo)),
-          IconButton(tooltip: 'Refazer (Ctrl+Shift+Z)', onPressed: c.canRedo && !recording ? c.redo : null, icon: const Icon(Icons.redo)),
+          IconButton(tooltip: withMod('Desfazer (Ctrl+Z)'), onPressed: c.canUndo && !recording ? c.undo : null, icon: const Icon(Icons.undo)),
+          IconButton(tooltip: withMod('Refazer (Ctrl+Shift+Z)'), onPressed: c.canRedo && !recording ? c.redo : null, icon: const Icon(Icons.redo)),
           IconButton(tooltip: 'Cortar no cursor (S)', onPressed: () => splitClipsAtPlayhead(c), icon: const Icon(Icons.content_cut)),
-          IconButton(tooltip: 'Duplicar (Ctrl+D)', onPressed: c.selectedClip == null ? null : () => duplicateSelectedClip(c), icon: const Icon(Icons.copy_all)),
+          IconButton(
+            tooltip: withMod('Duplicar (Ctrl+D)'),
+            onPressed: c.selectedClip == null ? null : () => duplicateSelectedClip(c),
+            icon: const Icon(Icons.copy_all),
+          ),
           IconButton(
             tooltip: 'Apagar o clipe (Delete)',
             onPressed: c.selectedClip == null ? null : () => deleteSelectedClip(c),
@@ -159,11 +163,15 @@ class TransportBar extends StatelessWidget {
           _Toggle(
             icon: Icons.keyboard,
             on: c.keyboardOn,
-            // a oitava à vista: é o que muda com Z/X sem outro retorno na tela
-            label: c.keyboardOn ? 'C${c.keyboardOctave}' : null,
+            // a oitava à vista (é o que muda com Z/X sem outro retorno na tela) e o aviso de que as letras
+            // viraram notas: os atalhos delas ficam suspensos até desligar
+            label: c.keyboardOn ? 'C${c.keyboardOctave} · sem atalhos' : null,
             tooltip: c.keyboardOn
-                ? 'Teclado do computador ligado (Ctrl+K): A a L tocam a partir do C${c.keyboardOctave}, Z/X mudam a oitava, C/V a intensidade ($velocity%)'
-                : 'Tocar com o teclado do computador (Ctrl+K)',
+                ? withMod(
+                    'Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C${c.keyboardOctave}, '
+                    'Z/X mudam a oitava, C/V a intensidade ($velocity%). Ctrl+K desliga',
+                  )
+                : withMod('Tocar com o teclado do computador (Ctrl+K)'),
             onTap: c.toggleKeyboard,
           ),
           _Toggle(
@@ -190,7 +198,11 @@ class TransportBar extends StatelessWidget {
         // empurraria as configurações para fora da vista num notebook comum
         List<Widget> files(bool labels) => !labels
             ? [
-                IconButton.filledTonal(tooltip: 'Importar áudio (Ctrl+I)', onPressed: idle ? c.importAudio : null, icon: const Icon(Icons.file_open_outlined)),
+                IconButton.filledTonal(
+                  tooltip: withMod('Importar áudio (Ctrl+I)'),
+                  onPressed: idle ? c.importAudio : null,
+                  icon: const Icon(Icons.file_open_outlined),
+                ),
                 const SizedBox(width: 4),
                 IconButton.filledTonal(
                   tooltip: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',

@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 
 import '../widgets/dialogs.dart';
 import '../widgets/feedback.dart';
+import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'automation_lane.dart';
 import 'clip_gain_dialog.dart';
@@ -135,7 +136,7 @@ class Timeline extends StatelessWidget {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${c.doc.tracks.length} faixas',
+                                        plural(c.doc.tracks.length, 'faixa'),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context).textTheme.labelSmall,
@@ -2320,7 +2321,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         ),
         const PopupMenuDivider(),
       ],
-      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
+      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: withMod('Ctrl+D')),
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
@@ -2649,7 +2650,7 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
     final v = await _showMenuAt(context, at, [
       _menuItem('open', Icons.edit_note, 'Abrir no editor', shortcut: 'E'),
       _menuItem('rename', Icons.drive_file_rename_outline, 'Renomear'),
-      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: 'Ctrl+D'),
+      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: withMod('Ctrl+D')),
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
     ]);

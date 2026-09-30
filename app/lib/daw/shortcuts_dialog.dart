@@ -1,20 +1,33 @@
 /// Janela com os atalhos do teclado do estúdio (tecla ? ou o botão de ajuda da barra).
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/format.dart';
 import '../widgets/theme.dart';
 
-/// Tecla de modificador do sistema: Cmd no Mac, Ctrl nos outros.
-String get _mod => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS ? '⌘' : 'Ctrl';
+String get _mod => modKey;
+
+/// Atalhos de letra que viram nota, oitava ou velocidade com o teclado do computador ligado (a
+/// camada dele vem antes; só o que tem $_mod escapa). Cada tecla daqui está em `noteKeys` ou é Z/X/C/V.
+const suspendedShortcuts = <(String, String)>[
+  ('C', 'Metrônomo (vira velocidade menor)'),
+  ('L', 'Loop liga/desliga (vira nota)'),
+  ('S', 'Cortar no cursor (vira nota)'),
+  ('X', 'Mixer (vira oitava acima)'),
+  ('Z  ·  Shift+Z', 'Enquadrar projeto / clipe (vira oitava abaixo)'),
+  ('E', 'Editor de notas (vira nota)'),
+  ('F', 'Efeitos da faixa (vira nota)'),
+  ('K  ·  J', 'Dividir / unir notas no piano roll (viram nota)'),
+  ('Shift+H  ·  Shift+L', 'Humanizar e legato no piano roll; Shift+L também faz o loop no clipe (viram nota)'),
+];
 
 List<(String, List<(String, String)>)> _groups() => [
   (
     'Transporte',
     [
       ('Espaço', 'Tocar / pausar'),
-      ('Enter', 'Parar e voltar ao começo (ou ao início do loop)'),
+      ('Enter · Home', 'Parar e voltar ao começo (ou ao início do loop)'),
       ('R', 'Gravar (com faixas armadas)'),
       ('L', 'Loop liga/desliga (arraste na régua para marcar a região)'),
       ('C', 'Metrônomo'),
@@ -36,7 +49,7 @@ List<(String, List<(String, String)>)> _groups() => [
     [
       ('Z', 'Enquadrar o projeto inteiro'),
       ('Shift+Z', 'Enquadrar o clipe selecionado'),
-      ('Menu Visão', 'Altura das faixas (P/M/G), seguir o cursor, régua em mm:ss'),
+      ('Menu Visão', 'Altura das faixas (pequena, média, grande), seguir o cursor, régua em mm:ss'),
       ('Clique em "comp."/"mm:ss"', 'Alterna a régua entre compassos e tempo'),
       ('Visão geral (embaixo)', 'Clique ou arraste para rolar o projeto'),
     ],
@@ -48,9 +61,9 @@ List<(String, List<(String, String)>)> _groups() => [
       ('$_mod+Shift+Z  ou  $_mod+Y', 'Refazer'),
       ('$_mod+D', 'Duplicar o clipe'),
       ('S', 'Cortar no cursor'),
-      ('Delete', 'Apagar o clipe'),
+      ('Delete · Backspace', 'Apagar o clipe'),
       ('$_mod+I', 'Importar áudio'),
-      ('+  /  −', 'Aproximar / afastar'),
+      ('=  ou  +  /  −', 'Aproximar / afastar'),
       ('$_mod + roda', 'Zoom no ponto do mouse'),
       ('Shift + roda', 'Rolar na horizontal'),
     ],
@@ -70,8 +83,15 @@ List<(String, List<(String, String)>)> _groups() => [
     'Teclado do computador ($_mod+K liga)',
     [
       ('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima'),
-      ('Z  /  X', 'Oitava abaixo / acima (com o teclado ligado, o Z não enquadra)'),
+      ('Z  /  X', 'Oitava abaixo / acima (só da faixa que está tocando: a bateria começa no C2)'),
       ('C  /  V', 'Velocidade menor / maior'),
+    ],
+  ),
+  (
+    'Suspensos enquanto o teclado do computador está ligado',
+    [
+      for (final (keys, what) in suspendedShortcuts) (keys, what),
+      ('Com $_mod', 'Os atalhos com $_mod continuam valendo (desfazer, duplicar, importar, $_mod+K desliga o teclado)'),
     ],
   ),
   (

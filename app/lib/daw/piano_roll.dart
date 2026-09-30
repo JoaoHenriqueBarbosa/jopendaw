@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/dialogs.dart';
+import '../widgets/format.dart';
 import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
@@ -596,18 +597,20 @@ class _PianoRollState extends State<PianoRoll> {
     );
   }
 
-  static const _help =
-      'Clique numa área vazia cria uma nota; arraste para definir a duração.\n'
-      'Arraste a nota para mover (Alt: sem grade; Alt no começo do arraste: duplica).\n'
-      'Bordas da nota redimensionam. Clique direito, dois cliques ou Delete apagam.\n'
-      'Shift ou Ctrl + arrastar seleciona por retângulo; Shift + clique acumula.\n'
-      'Ctrl+A tudo · Ctrl+C/X/V copia, recorta e cola no cursor · Ctrl+D duplica.\n'
-      'Setas ↑↓ transpõem (Shift: oitava) · ←→ movem pela grade (Shift: compasso) · Q quantiza.\n'
-      'K divide as notas no cursor · J une notas iguais adjacentes · Shift+H humaniza · Shift+L legato.\n'
-      'Ferramentas: escala, acordes, arpejador, humanizar, rampa de velocidade, inverter, escalar o tempo.\n'
-      'Dois cliques numa tecla selecionam as notas dela.\n'
-      'Ctrl + roda: zoom na horizontal · Alt + roda: altura das linhas (Cmd no lugar de Ctrl no Mac).\n'
-      'No toque: toque longo apaga a nota (ou começa a seleção), dois dedos rolam e dão zoom.';
+  static String get _help => withMod(
+    'Clique numa área vazia cria uma nota; arraste para definir a duração.\n'
+    'Arraste a nota para mover (Alt: sem grade; Alt no começo do arraste: duplica).\n'
+    'Bordas da nota redimensionam. Clique direito, dois cliques ou Delete apagam.\n'
+    'Shift ou Ctrl + arrastar seleciona por retângulo; Shift + clique acumula.\n'
+    'Ctrl+A tudo · Ctrl+C/X/V copia, recorta e cola no cursor · Ctrl+D duplica.\n'
+    'Setas ↑↓ transpõem (Shift: oitava) · ←→ movem pela grade (Shift: compasso) · Q quantiza.\n'
+    'K divide as notas no cursor · J une notas iguais adjacentes · Shift+H humaniza · Shift+L legato.\n'
+    'Ferramentas: escala, acordes, arpejador, humanizar, rampa de velocidade, inverter, escalar o tempo.\n'
+    'Dois cliques numa tecla selecionam as notas dela.\n'
+    'Com o teclado do computador ligado, K, J e Shift+H/L viram notas (atalhos suspensos).\n'
+    'Ctrl + roda: zoom na horizontal · Alt + roda: altura das linhas.\n'
+    'No toque: toque longo apaga a nota (ou começa a seleção), dois dedos rolam e dão zoom.',
+  );
 
   void _setTool(_Tool t) {
     _Prefs.tool = t;

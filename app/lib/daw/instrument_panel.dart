@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Curve;
 
+import '../widgets/format.dart';
 import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
@@ -181,7 +182,9 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
             const Spacer(),
             if (instrument) ...[
               IconButton(
-                tooltip: c.keyboardOn ? 'Teclado do computador tocando (A a L; Z/X muda a oitava)' : 'Tocar com o teclado do computador',
+                tooltip: c.keyboardOn
+                    ? 'Teclado tocando: atalhos suspensos (A a P tocam; Z/X mudam a oitava; C/V a intensidade)'
+                    : withMod('Tocar com o teclado do computador (Ctrl+K)'),
                 isSelected: c.keyboardOn,
                 onPressed: c.toggleKeyboard,
                 icon: const Icon(Icons.keyboard_outlined, size: 20),
