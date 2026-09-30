@@ -50,7 +50,7 @@ Durante a gravação ficam **travados**: mover o cursor e marcar/arrastar o loop
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Ícone de teclado (tooltip `Tocar com o teclado do computador (Ctrl+K)`; ligado: `Teclado do computador ligado (Ctrl+K): A a L tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%)`) | Liga as teclas como piano. Ligado, mostra a oitava no ícone (`C4`) | `A W S E D F T G Y H U J K O L P` = dó a ré# da oitava seguinte. Oitava **0 a 8**, padrão 4 (tecla `A` = dó central, nota 60). Intensidade **10% a 100%**, passo de 10%, padrão 80% | `Z`/`X` baixam/sobem a oitava; `C`/`V` diminuem/aumentam a intensidade. Segurar a tecla não reataca |
+| Ícone de teclado (tooltip `Tocar com o teclado do computador (Ctrl+K)`; ligado: `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga`) | Liga as teclas como piano. Ligado, mostra a oitava no ícone (`C4`) | `A W S E D F T G Y H U J K O L P` = dó a ré# da oitava seguinte. Oitava **0 a 8**, padrão 4 (tecla `A` = dó central, nota 60). Intensidade **10% a 100%**, passo de 10%, padrão 80% | `Z`/`X` baixam/sobem a oitava; `C`/`V` diminuem/aumentam a intensidade. Segurar a tecla não reataca |
 | Ícone de cabo (tooltip `Entrada MIDI: ligar teclado ou controlador`; depois `Entrada MIDI: <nomes>` ou `MIDI ligado, nenhum aparelho conectado: conecte e ele aparece aqui sozinho`) | Pede acesso ao MIDI e passa a ouvir todos os aparelhos. O número no ícone é a quantidade de aparelhos conectados | Web MIDI **sem sysex**; aparelho que entra ou sai com a página aberta é detectado sozinho | Precisa de um clique (gesto). Negado ou sem suporte: aviso em texto |
 
 O MIDI entende, em qualquer canal (o número do canal é ignorado):
@@ -112,6 +112,7 @@ As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrument
 - [Warp e altura](03b-warp-e-altura.md): esticar ou transpor uma gravação depois; o warp só liga com a gravação parada.
 - [Áudio para MIDI](03d-audio-para-midi.md): uma gravação de voz ou linha de baixo (que sai como WAV) pode virar notas.
 - [Mixer](06-mixer.md): efeitos, fader e envios da faixa; o monitor passa por eles.
+- [Compensação de latência dos efeitos](06e-compensacao-de-latencia.md): por que o som de um projeto com `Limitador` ou `Distorção` sai alguns ms atrasado e o que fazer ao gravar por cima.
 - [Transporte e barra de ferramentas](02-transporte.md): botão gravar, contagem, loop e a janela `Configurações`.
 - [Editor de notas (piano roll)](05-piano-roll.md): limpar, quantizar e editar as notas gravadas e, na faixa de controle, os pontos de bend, modulação e pedal.
 - [Painel de instrumento](04-painel-de-instrumento.md): as rodas do teclado da tela e o `Alcance do bend` de cada instrumento.
@@ -130,7 +131,9 @@ As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrument
 
 **Latência e compensação**
 - O app desconta sozinho do começo do áudio a soma de: latência do contexto e da saída do navegador (`baseLatency` + `outputLatency`), latência da entrada que o aparelho informa e a `Compensação de latência` da janela `Configurações`. O clipe sai alinhado com a grade.
-- Para calibrar: grave o metrônomo (ou um clique) pelo microfone e ajuste a compensação até a batida gravada cair na grade. Positivo adianta, negativo atrasa.
+- **O que não entra nessa conta:** a latência dos efeitos do projeto (compensação de latência, [06e](06e-compensacao-de-latencia.md)). O motor atrasa as faixas para alinhá-las quando há `Limitador` (pelo `Lookahead`, padrão 3 ms) ou `Distorção` (32 quadros, cerca de 0,67 ms a 48 kHz), então a música que você ouve enquanto grava, e o monitoramento da faixa armada, saem esse tanto atrasados, e o app não conhece esse valor. Quem toca acompanhando a música grava esse tanto atrasado; quem toca acompanhando o clique do metrônomo cai na grade `(lido do código; não confirmado ao ouvido)`. A cadeia do `Master` e o limitador de segurança do master (1,5 ms) também ficam de fora da conta.
+- **Como contornar:** ponha o `Lookahead` dos `Limitador` em 0 e tire a `Distorção` enquanto grava, ou some a latência deles (ms inteiros, por exemplo +3 ms para um `Limitador` de 3 ms) à `Compensação de latência`. Passo a passo em [06e](06e-compensacao-de-latencia.md#gravar-por-cima-de-um-projeto-com-efeitos-de-latência).
+- Para calibrar: grave o metrônomo (ou um clique) pelo microfone e ajuste a compensação até a batida gravada cair na grade. Positivo adianta, negativo atrasa. Calibre com os efeitos de latência tirados ou zerados, para medir só a do aparelho.
 - Ao parar, o app espera uma fração de segundo (a latência total mais 20 ms) para a entrada terminar de chegar, antes de encerrar.
 
 **Contagem**

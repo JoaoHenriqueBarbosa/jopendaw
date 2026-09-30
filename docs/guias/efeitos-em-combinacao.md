@@ -77,7 +77,7 @@ Duas convenções para todas as receitas:
 
 - **Sem barramento:** um `Compressor` como insert da própria faixa com o preset `Paralelo pesado` como vem (`Mistura` 40%) faz a mesma compressão paralela dentro do efeito. Perde a possibilidade de agrupar várias faixas e de tratar só a cópia com EQ.
 - **Cola no conjunto:** um segundo `Compressor` no insert da bateria, preset `Bateria cola` (`Limiar` −16 dB, `Razão` 2:1, `Ataque` 30 ms), antes do envio.
-- **Cópia mais suja:** `Distorção` `Fita` (`Drive` 6 dB, `Mistura` 100%) no barramento, depois do compressor. Ela atrasa a cópia em 0,67 ms em relação ao seco (ver "Se der errado").
+- **Cópia mais suja:** `Distorção` `Fita` (`Drive` 6 dB, `Mistura` 100%) no barramento, depois do compressor. Ela atrasa a cópia em 0,67 ms, mas o motor alinha o seco com essa latência (compensação de latência, [06e](../manual/06e-compensacao-de-latencia.md)); ver "Se der errado".
 
 ### Por que funciona
 
@@ -89,7 +89,7 @@ Duas convenções para todas as receitas:
 
 - **A bateria perde o punch:** o barramento está alto demais; baixe o fader em 3 dB.
 - **O barramento "bombeia" de modo audível:** aumente a `Soltura` para 150 ms.
-- **Efeito de pente ou som oco ao combinar seco e cópia:** o `Compressor` não tem latência, então não é a causa; se você pôs `Distorção` ou `Limitador` no barramento, eles atrasam o som (0,67 ms e o `Lookahead`, ver [latência](../manual/06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito)). Use o `Mistura` do próprio efeito no lugar do envio, ou tire o `Limitador` do barramento.
+- **Efeito de pente ou som oco ao combinar seco e cópia:** o `Compressor` não tem latência, então não é a causa. Se você pôs `Distorção` ou `Limitador` no barramento, eles atrasam a cópia (0,67 ms e o `Lookahead`), mas o motor atrasa o seco e as outras entradas do barramento do mesmo tanto, então isso não deveria fazer pente (ver [06e](../manual/06e-compensacao-de-latencia.md) e [latência](../manual/06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito); sem escuta no navegador) `(testado só por testes automáticos)`. Se mesmo assim soar oco, confira que o envio é mesmo o caminho do som e não duas cópias da faixa, tire o efeito de latência do barramento (`Lookahead` 0 no `Limitador`) para comparar, ou use o `Mistura` do próprio efeito no lugar do envio. Bypass do efeito não muda o alinhamento.
 
 ---
 

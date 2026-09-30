@@ -167,6 +167,7 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 - [07 Automação](07-automacao.md): mover volume, pan, envios e parâmetros no tempo; fader, pan e knobs seguem a automação enquanto toca.
 - [08 Exportação](08-exportacao.md): o arquivo sai depois do limitador do master (`Normalizar o loudness` leva a mixagem ao alvo de LUFS); "Congelar em áudio" leva volume, pan, saída e envios para a faixa nova.
 - [03c Gravação](03c-gravacao.md): armar e monitorar.
+- [06e Compensação de latência](06e-compensacao-de-latencia.md): como o motor alinha faixas, envios e sidechain quando há `Limitador` ou `Distorção`.
 - [Guia: mixagem e automação](../guias/mixagem-e-automacao.md): mix do zero, retorno de reverb, fades.
 - [Guia: loudness e master](../guias/loudness-e-master.md): levar o master a −14, −16 ou −23 LUFS sem estourar, e conferir o arquivo.
 
@@ -179,7 +180,7 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 - **Envio pré-fader continua com a faixa muda.** É a definição de pré-fader; se o reverb some quando você silencia a faixa, o envio é pós-fader.
 - **Envios e solo:** com outra faixa em solo, os envios das faixas que não estão em solo são cortados (menos os que vão para um barramento solado).
 - **Só faixas de áudio monitoram.** A entrada soma antes dos efeitos e o monitoramento tem a latência do aparelho.
-- **Latência de efeitos é compensada entre faixas:** o `Limitador` (pelo `Lookahead`, padrão 3 ms) e a `Distorção` (32 quadros) atrasam o som, e o motor atrasa as outras faixas, barramentos e retornos por igual para tudo chegar alinhado ao master (também na exportação, que descarta essa latência no começo). Ver [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito). A gravação ainda não soma essa latência à compensação.
+- **Latência de efeitos é compensada entre faixas:** o `Limitador` (pelo `Lookahead`, padrão 3 ms) e a `Distorção` (32 quadros) atrasam o som, e o motor atrasa as outras faixas, barramentos e retornos por igual para tudo chegar alinhado ao master (também na exportação, que descarta essa latência no começo). Vale para saídas, envios (pré e pós-fader), barramentos em cadeia e a chave do sidechain, com o efeito ligado ou em bypass. Limites: a gravação só compensa a latência do aparelho (a dos efeitos não), o monitoramento sai atrasado dessa latência, a automação de volume de uma faixa com efeito de latência age alguns ms adiantada e o clique do metrônomo não é atrasado. Capítulo próprio: [06e Compensação de latência](06e-compensacao-de-latencia.md); tabela dos efeitos em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito) `(testado só por testes automáticos)`.
 - **Limites do motor:** até 16 efeitos por cadeia (faixa ou master) e 16 envios por faixa. O app avisa antes de passar: com 16 efeitos a linha `Efeito` (e os botões `Adicionar efeito` / `Efeito` do painel de efeitos) ficam desabilitados com a dica `Limite de 16 efeitos por faixa`; com 16 envios não se cria outro e a dica é `Limite de 16 envios por faixa`. Remova um para liberar lugar (testado só por testes automáticos).
 - **O knob de envio não anda com a automação** do nível do envio (só a raia de automação mostra o valor). Fader, pan e knobs de efeito e instrumento andam em laranja, tocando.
 - **Salvo com o projeto:** ganho, pan, mudo, solo, armar, monitorar, efeitos, envios (nível e pré/pós) e saída de cada faixa, mais volume e balanço do master.
@@ -193,7 +194,7 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 | Teto | 0,966 de amplitude, ou seja, **−0,3 dBFS** (folga para a reconstrução do conversor) |
 | Lookahead | **1,5 ms** (72 amostras a 48 kHz); é também a latência que o master ganha |
 | Soltura | 80 ms |
-| Abaixo do teto | Transparente: o áudio só sai atrasado do lookahead, sem alteração |
+| Abaixo do teto | Transparente: o áudio só sai atrasado do lookahead, sem alteração. Como fica depois da soma, atrasa tudo por igual e não precisa de compensação entre faixas ([06e](06e-compensacao-de-latencia.md)) |
 | Ligado | Sempre; o app não tem chave para desligar |
 
 Ele existe para **nunca deixar passar nada acima do teto**, não para dar volume: não é o limitador de masterização (esse é o efeito `Limitador`, que você coloca no master ou nas faixas). Se o medidor do master vive encostado no topo, abaixe as faixas: o limitador está trabalhando o tempo todo e o som se achata.

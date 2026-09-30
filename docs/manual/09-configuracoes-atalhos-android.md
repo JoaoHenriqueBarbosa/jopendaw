@@ -85,7 +85,7 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 | `S` | Cortar no cursor |
 | `Delete` · `Backspace` | Apagar o clipe |
 | `Ctrl+I` | Importar áudio (a janela de atalhos diz só isso, mas o atalho abre o mesmo seletor do botão, que também aceita arquivos MIDI `.mid` e `.midi`) |
-| `=` ou `+` / `−` | Aproximar / afastar |
+| `+` (ou `=`) / `−` | Aproximar / afastar (passos de 1,25 vez, ancorados no cursor). O `+` também vale com `Shift+=` e no teclado numérico. A janela de atalhos mostra `+  (ou  =)  /  −` |
 | `Ctrl` + roda | Zoom no ponto do mouse |
 | `Shift` + roda | Rolar na horizontal |
 
@@ -147,8 +147,8 @@ Grupo novo: lista os atalhos de letra que deixam de agir (a letra vira nota, oit
 
 | Tecla | Ação |
 |---|---|
-| `+` e `−` do teclado numérico | Aproximar / afastar (o `=` e o `-` do teclado principal estão na janela) |
-| `+` do teclado principal (`Shift` + `=`) | A janela escreve `=` ou `+`, mas o código só compara com a tecla `=` e com o `+` do teclado numérico; se `Shift` + `=` vale como `=` no navegador, funciona `(não confirmado)` |
+| `+` e `−` do teclado numérico | Aproximar / afastar (o `+` e o `−` do teclado principal estão na janela) |
+| `+` do teclado principal (`Shift` + `=`) | A janela escreve `+  (ou  =)  /  −`. O código aceita a tecla `=`, a tecla `+`, o `+` do teclado numérico e qualquer tecla que digite o caractere `+` (o `Shift` + `=` de um teclado em que ele digita `+`), e, para afastar, a tecla `-`, o `−` do teclado numérico e qualquer tecla que digite `-`. `(lido do código; não testado com outros layouts de teclado)` |
 | `Ctrl+K` | Liga/desliga o teclado do computador (aparece só no título do grupo e nos tooltips) |
 
 **Regras de prioridade (quando duas coisas usam a mesma tecla)**
@@ -223,14 +223,14 @@ Só no app do Android o estúdio conversa com o aparelho por um canal próprio (
 |---|---|
 | O transporte começa a tocar ou a gravação começa | Liga o sinal de manter a tela acesa (`FLAG_KEEP_SCREEN_ON`). Repetir o mesmo estado não repete o pedido ao Android. |
 | O transporte para, ou você fecha a tela do projeto | Solta a tela: ela volta a apagar pelo tempo normal do aparelho. |
-| O app sai da tela (outro app na frente, botão de início, tela desligada) | Para o transporte sem voltar o cursor; se estava gravando, encerra a gravação e ela fica salva (como no `stop`); solta as notas tocadas ao vivo; fecha a entrada de áudio (o aviso de privacidade do microfone apaga). Um diálogo por cima, a cortina de notificações ou a tela dividida **não** contam como sair. |
-| O app volta à tela | Pede ao motor que garanta a saída tocando e reabre a entrada de áudio se alguma faixa de áudio ficou armada ou monitorando. |
+| O app sai da tela (outro app na frente, botão de início, tela desligada) | Para o transporte sem voltar o cursor; se estava gravando, encerra a gravação e ela fica salva (como no `stop`); solta as notas tocadas ao vivo; fecha a entrada de áudio (o aviso de privacidade do microfone apaga). Se estava gravando, a entrada **só fecha depois** de o fim da gravação terminar de ser recolhido (senão a cauda da tomada seria cortada); se você voltar ao app antes disso, ela nem chega a fechar. Um diálogo por cima, a cortina de notificações ou a tela dividida **não** contam como sair. |
+| O app volta à tela | Pede ao motor que garanta a saída tocando (o motor só reabre a saída se o Android a derrubou; se ela está tocando, nada muda) e reabre a entrada de áudio se alguma faixa de áudio ficou armada ou monitorando. Com o motor caído (o aviso `Reiniciar o áudio` na tela), não mexe no motor: quem o recria é o botão do aviso. |
 | O fone (com fio ou Bluetooth) sai | Para o transporte, como todo app de mídia, sem voltar o cursor, e solta as notas ao vivo; gravando, encerra a gravação. Sem nada tocando, não faz nada. |
-| Um aparelho de áudio entra ou sai (fone plugado, interface USB) | Não pausa; pede ao motor que garanta a saída. |
+| Um aparelho de áudio entra ou sai (fone plugado, interface USB) | Não pausa; pede ao motor que garanta a saída (reabre se a rota mudou e a saída caiu) e **relê a lista de entradas** do seletor de `Configurações`, sem abrir o microfone (ele só abre para armar, monitorar ou gravar). Se a entrada escolhida tinha sumido, o seletor volta para `Padrão do sistema` e aparece o aviso `A entrada de áudio escolhida foi desconectada: usando a entrada padrão.` Lista vazia não conta como entrada que sumiu (é falta de permissão). |
 
 Os dois avisos (fone que sai; aparelho que entra ou sai) só são escutados enquanto o app está à mostra. O de aparelho compara a lista de aparelhos de áudio com a da última vez e só avisa quando ela mudou, inclusive de algo plugado enquanto o app estava fora.
 
-No Android o pedido "garanta a saída" (`AudioEngine.resume()`) hoje não faz nada dentro do motor nativo: quem reabre a saída de áudio que o sistema derrubou ou que trocou de rota é o supervisor do motor (`jopendaw-sup`, verifica a cada 250 ms). O comportamento visível é o mesmo, mas a explicação dos comentários do código não bate com isso.
+No Android o pedido "garanta a saída" (`AudioEngine.resume()`) chama o `jd_start` do motor nativo, que só reabre a saída de áudio quando o sistema a derrubou ou a rota trocou (com a saída tocando, não faz nada). É o caminho imediato: o supervisor do motor (`jopendaw-sup`, verifica a cada 250 ms) faz o mesmo sozinho e continua como rede de segurança. Se a reabertura falhar, o app só registra no console de depuração e o supervisor tenta de novo. `(testado só por testes automáticos)`
 
 ## Instalação do app Android
 
@@ -311,6 +311,6 @@ Os atalhos deste assunto:
 | `Z` / `X` | Com o teclado ligado: oitava abaixo / acima da faixa que toca (a bateria começa no `C2`) |
 | `Enter` · `Home` | Parar e voltar ao começo |
 | `Delete` · `Backspace` | Apagar o clipe |
-| `=` ou `+` / `−` | Aproximar / afastar |
+| `+` (ou `=`) / `−` | Aproximar / afastar |
 | `Esc` | Fechar o painel de baixo |
 | `Enter` no campo de latência | Confirmar o número digitado |

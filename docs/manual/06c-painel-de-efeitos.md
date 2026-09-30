@@ -200,6 +200,7 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 
 - [06d Referência dos efeitos](06d-efeitos-referencia.md): cada parâmetro dos 12 efeitos, faixas, padrões e presets.
 - [06 Mixer](06-mixer.md): as linhas de insert de cada tira (com a luz que liga e desliga o efeito), os envios e barramentos onde `Reverb` e `Delay` costumam morar.
+- [06e Compensação de latência](06e-compensacao-de-latencia.md): o que o motor faz quando um efeito atrasa o som.
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): espectro e níveis para julgar o que o EQ e o compressor fizeram.
 - [07 Automação](07-automacao.md): mover qualquer parâmetro de efeito ao longo da música (filtro abrindo, mistura de reverb subindo).
 - [Efeitos em combinação](../guias/efeitos-em-combinacao.md): cadeia vocal, compressão paralela, sidechain, delay em ping-pong, pad largo, baixo distorcido.
@@ -207,7 +208,7 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 ## Limites e pegadinhas
 
 - **Máximo de 16 efeitos por cadeia** (faixa ou master), o que o motor comporta. Com 16 efeitos, o botão `Adicionar efeito` (computador), o botão `Efeito` (celular), o bloco `Adicionar efeito` no fim da fileira e a linha `Efeito` do mixer ficam desabilitados, e o tooltip diz `Limite de 16 efeitos por faixa`. Remova um efeito para liberar lugar (testado só por testes automáticos).
-- **Latência dos efeitos é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo, e o motor alinha todas as faixas, barramentos e retornos a essa latência (bypass incluído). Detalhes em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito).
+- **Latência dos efeitos é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo, e o motor atrasa as outras faixas, barramentos, envios (pré e pós-fader) e a chave do sidechain para tudo chegar alinhado ao master, com o efeito ligado ou em bypass (a luz do efeito não muda o alinhamento). Ficam de fora: a gravação do app, que só compensa a latência do aparelho, e a automação, que age alguns ms adiantada numa faixa com efeito de latência. Para tirar a latência de um `Limitador`, ponha o `Lookahead` em 0 ou remova o efeito. Capítulo [06e](06e-compensacao-de-latencia.md); tabela em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito) `(testado só por testes automáticos)`.
 - **Trocar a ordem, ligar, desligar, adicionar e remover** fazem crossfade de 10 ms: sem estalo. Mudar a ordem recria, no motor, os efeitos dos lugares que trocaram de tipo (pelo que o código de sincronização faz): o estado interno deles, como a cauda de um reverb ou os ecos de um delay, recomeça do zero. Trocar o **tipo** de efeito num slot não existe no painel: remova e adicione.
 - **Sidechain** só existe no `Compressor` e no `Gate`; não é automatizável; presets não o alteram; a faixa apagada aparece como `Faixa N (removida)` e o efeito volta a usar a própria entrada.
 - **Cauda:** com a entrada calada a cadeia continua rodando enquanto o efeito tem o que devolver (eco do delay de até 4 s, cauda do reverb). Parar o transporte não corta a cauda de imediato.

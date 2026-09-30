@@ -148,7 +148,7 @@ O arranjo não tem tecla para: selecionar clipe ou faixa; armar (`Armar para gra
 | `Ctrl+Z`, `Ctrl+I` ou `Ctrl+Y` não fazem nada | Está gravando | Pare a gravação (`R`, `Espaço` ou `Enter`) |
 | `R` recarrega a página | Você apertou `Ctrl+R` ou `Cmd+R` | `R` sozinho grava; com `Ctrl` fica para o navegador |
 | As setas não movem nada | Não há nota selecionada (elas só agem com seleção) | `Ctrl+A` ou selecione com o retângulo |
-| `+` não aproxima | A tecla `=` e o `+` do teclado numérico funcionam; o `+` com `Shift` no teclado principal `(não confirmado)` | Use `=`, o `+` do teclado numérico ou o botão `Aproximar` |
+| `+` não aproxima | A tecla `=`, o `+` do teclado numérico e `Shift+=` (o `+` do teclado principal) aproximam; a janela de atalhos lista `+ (ou =) / −` | Use `=`, o `+` do teclado numérico ou o botão `Aproximar` |
 | A bateria não soa quando toco as letras | A oitava está acima do que a bateria responde (só as notas 35 a 59; o padrão dela é `C2`), ou a faixa que toca não é a bateria (a oitava é por tipo de faixa; toca a selecionada, ou a primeira de instrumento armada) | Olhe o botão do teclado: numa bateria ele deve mostrar `C2 · sem atalhos`; volte com `Z` e confira qual faixa está selecionada ou armada |
 | No Mac o atalho não funciona | No Mac a tecla é `Cmd` (os tooltips agora escrevem `⌘`) | `Cmd+Z`, `Cmd+D`, `Cmd+K`... |
 | `Ctrl+D` adiciona o site aos favoritos | Pode acontecer em alguns navegadores se o app não consumir a tecla `(não confirmado)` | Use o botão `Duplicar (Ctrl+D)` da barra |

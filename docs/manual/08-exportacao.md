@@ -188,9 +188,9 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 
 O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir a melodia em outro programa ou guardá-la como texto musical. Vem do botão `Notas em MIDI (.mid)…` da janela **Exportar áudio**. Para o caminho de volta (importar um `.mid`), veja [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid).
 
-![Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Repare que o texto informa só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.](../img/exportar-midi.jpg)
+![Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Captura anterior à fase 11: o texto pequeno ainda diz que leva só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.](../img/exportar-midi.jpg)
 
-*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Repare que o texto informa só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.*
+*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. A captura é anterior à fase 11: o texto pequeno aparece com a frase antiga (`Leva o andamento (120 BPM) e o compasso (4/4)…`, só o inicial). Hoje o texto é `Leva os andamentos e compassos do projeto, as notas e o pitch bend, a modulação e o pedal.`, e o arquivo leva o mapa de andamento e o de compassos inteiros.*
 
 ### Janela Exportar MIDI (.mid)
 
@@ -198,7 +198,7 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir
 |---|---|---|---|
 | **Clipe selecionado** (opção) | Escreve só o clipe de notas selecionado na linha do tempo. O clipe **sai do começo do arquivo** (o início dele vira o instante zero), qualquer que seja a posição dele no projeto. Legenda: `<nome do clipe>, começa no início do arquivo.` (ou só `Começa no início do arquivo.` se o clipe não tem nome) | Padrão quando há um clipe de notas selecionado. Sem clipe de notas selecionado a opção fica desligada com a legenda `Selecione um clipe de notas na linha do tempo.` | Um clipe de áudio selecionado não conta: a opção continua desligada |
 | **Todas as faixas de notas** (opção) | Escreve todas as faixas de instrumento que têm notas ou controles, cada uma na **posição em que está no projeto** (o compasso 1 do projeto é o começo do arquivo). Legenda: `N faixa(s), uma por canal (bateria no canal 10), nas posições do projeto.` | Padrão quando não há clipe de notas selecionado. Sem nenhuma faixa com notas: desligada, legenda `Não há faixas com notas.` | Faixas de áudio e barramentos não entram |
-| Texto pequeno | `Leva o andamento (X BPM) e o compasso (N/4), as notas e o pitch bend, a modulação e o pedal.` | X e N são os do projeto | Ver "O que não entra": o texto vale só para o andamento e o compasso **iniciais** |
+| Texto pequeno | `Leva os andamentos e compassos do projeto, as notas e o pitch bend, a modulação e o pedal.` | Texto fixo (não muda com o projeto) | O arquivo leva o mapa de andamento e o de compassos, ver "O que fica no arquivo". Antes da fase 11 o texto trazia `Leva o andamento (X BPM) e o compasso (N/4)…` e só o inicial ia |
 | **Exportar** (com ícone de salvar) | Monta o arquivo e o entrega. Na web, baixa o arquivo (download do navegador, na pasta de downloads); no Android, abre a janela `Salvar <nome>` (se ela não estiver disponível, o app oferece o arquivo pelo compartilhar do sistema). Depois de salvar, o botão vira **Exportar de novo** e a janela continua aberta | Desligado enquanto trabalha, ou se não há faixa com notas nem clipe selecionado | |
 | **Cancelar** / **Fechar** | Fecha a janela (o texto vira **Fechar** depois de exportar) | | |
 | Resultado (texto abaixo dos botões) | `<nome>.mid salvo: N faixa(s), M nota(s).` e, se houve descarte, `K nota(s) fora do clipe ou de 0–127 ficaram de fora.` | | As contas são das notas; os controles descartados não entram na contagem |
@@ -211,7 +211,7 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir
 | Item | Como sai | Valores |
 |---|---|---|
 | Tipo e resolução | SMF (arquivo MIDI padrão) **tipo 1**, **480 pulsos por semínima** | Uma batida do app = 480 ticks; posições e durações são arredondadas ao tick mais próximo (uma nota tem no mínimo 1 tick de duração) |
-| Trilha 1 (andamento) | Nome do projeto, andamento (`Set Tempo`) e compasso (`Time Signature`) | Andamento do projeto (o inicial); compasso `N/4` com N = tempos por compasso do projeto |
+| Trilha 1 (andamento e compasso) | Nome do projeto e **todo** o mapa de andamento (`Set Tempo`, um por ponto) e o de compassos (`Time Signature`, um por mudança de fórmula) | Sem mapa: um `Set Tempo` (o andamento do projeto) e um `Time Signature` (a fórmula do projeto, ex.: `N/4`, `6/8`), como antes. Com mapa: um evento por ponto ou mudança, no tick da batida dele (480 por batida). Ver "Andamento e compasso no arquivo" |
 | Uma trilha por faixa | Nome da faixa, e as notas e os controles de **todos os clipes dela**, cada clipe na sua posição | Em `Clipe selecionado`, uma trilha só, com o nome do clipe (ou da faixa, se o clipe não tem nome) |
 | Canal | `Bateria` sempre no canal 10; as outras faixas em ordem nos canais 1 a 9 e 11 a 16 (o 10 é pulado) | A 16ª faixa melódica em diante volta ao canal 1 e divide o canal com a primeira. Em `Clipe selecionado`: canal 10 se a faixa é `Bateria`, canal 1 nas outras |
 | Faixas que entram | `Sintetizador`, `Bateria`, `Sampler`, `FM` e `Wavetable` com pelo menos um clipe com notas ou controles | Na ordem da mesa; faixa vazia fica de fora. Mudo e solo **não são consultados**: faixa muda também sai `(lido do código; não testado em uso)` |
@@ -229,8 +229,22 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir
 - **Efeitos, mixer e envios.** Volume, pan, mudo, solo, envios, barramentos, efeitos e o master não saem.
 - **Automação.** As curvas de automação do mixer e dos efeitos não saem. Só os três controles do clipe (pitch bend, modulação e sustain) saem.
 - **Alcance do bend.** O `Alcance do bend` do instrumento não é escrito (nenhum `RPN`), então outro programa usa o alcance padrão dele para o mesmo pitch bend.
-- **Andamento e compasso variáveis.** O arquivo leva **um** andamento (o inicial, o número do botão `120 BPM · 4/4` no início do projeto) e **um** compasso `N/4`. As mudanças do [mapa de andamento](02-transporte.md) (faixa de andamento sob a régua) e do mapa de compassos **não são exportadas**, embora o texto da janela diga `Leva o andamento (X BPM)`. As notas continuam nas mesmas batidas: o que se perde é a mudança de velocidade e a contagem dos compassos depois dela.
+- **Só o que o MIDI padrão tem para andamento.** O arquivo não guarda a rampa como rampa, só degraus (ver abaixo); a marca de rampa de cada ponto e a visibilidade da faixa de andamento não saem.
 - **Escala do clipe, marcadores, loop, seções.** Não saem.
+
+### Andamento e compasso no arquivo
+
+Desde a fase 11 o `.mid` leva o [mapa de andamento](02-transporte.md) e o mapa de compassos do projeto inteiros (`(testado só por testes automáticos)`: os testes escrevem e leem de volta salto, rampa e compassos, e nenhum programa externo abriu o arquivo).
+
+| Item | Como sai | Valores |
+|---|---|---|
+| Pontos de andamento | Um `Set Tempo` por ponto do mapa, no tick da batida do ponto, com o andamento em microssegundos por semínima | 24 bits (limitado a 1–16777215); o andamento do mapa vai de 20 a 999 BPM |
+| Rampa | Um ponto marcado como rampa que vai a um BPM diferente vira **degraus de 1/16 de batida** entre ele e o próximo ponto (o SMF só tem degraus) | Máximo de 4096 degraus por rampa (uma rampa de mais de 256 batidas sai com degraus mais largos que 1/16). Valores de microssegundos repetidos em seguida não geram evento novo |
+| Mudanças de compasso | Um `Time Signature` por mudança do mapa de compassos, no tick do começo do compasso em que ela vale | Numerador de 1 a 255 e denominador em potência de 2 (`1`, `2`, `4`, `8`, `16`, `32`); o app guarda numerador de 1 a 64. `6/8` sai como `6/8`, `7/8` como `7/8` (não é mais aproximado para `N/4`) |
+| Mesmo instante | Dois eventos de andamento no mesmo tick ficam com o último; no mesmo tick o andamento vem antes do compasso | |
+| `Clipe selecionado` | O clipe sai do começo do arquivo, e o mapa vai **deslocado** junto: o `Set Tempo` e o `Time Signature` do tick 0 são os que valiam no começo do clipe, e só os pontos e mudanças depois do começo do clipe entram | Um clipe que começa no meio de um compasso leva a fórmula desse compasso, e a mudança de compasso seguinte cai na batida exata dela, que pode ficar no meio de um compasso do arquivo (na importação de volta o app alinha e avisa, ver [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid)) `(lido do código; não testado em uso)` |
+
+As notas continuam nas mesmas batidas em qualquer programa que respeite o `Set Tempo` e o `Time Signature`. A ida e volta preserva o mapa (salto, rampa em degraus e compassos) mas não recupera a rampa como rampa: ao importar de volta, os degraus entram como pontos de andamento comuns (até 256 pontos, ver o capítulo de importação).
 
 Limites e pegadinhas do `.mid`:
 

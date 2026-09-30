@@ -41,7 +41,7 @@ Texto do diálogo: `Há uma versão mais nova no servidor e também mudanças fe
 | Botão (rótulo exato) | O que faz | Quando usar |
 |---|---|---|
 | `Decidir depois` | Fecha o diálogo e deixa o conflito de pé. O ícone vermelho reabre | Você está no meio de uma edição e quer terminar antes. Nada se perde e nada é enviado; suas mudanças continuam salvas no aparelho |
-| `Usar a versão do servidor` (vermelho) | Baixa a versão da nuvem (com os áudios que faltarem) e **descarta** as mudanças deste aparelho. Não dá para desfazer; o histórico de desfazer também é limpo | O outro aparelho tem o trabalho bom e o que se mexeu aqui foi pouco ou por engano |
+| `Usar a versão do servidor` (vermelho) | Baixa a versão da nuvem (com os áudios que faltarem) e **descarta** as mudanças deste aparelho. Não dá para desfazer; o histórico de desfazer também é limpo (e aparece o aviso `Projeto atualizado de outro aparelho. Desfazer não disponível para o que veio de lá.`) | O outro aparelho tem o trabalho bom e o que se mexeu aqui foi pouco ou por engano |
 | `Manter esta e enviar` (botão cheio) | Assume a versão deste aparelho e a envia por cima; a versão da nuvem é **substituída** | Este aparelho tem o trabalho que vale (por exemplo, você editou por horas offline) e o outro só tinha uma mexida acidental |
 
 Detalhes do que acontece:
@@ -60,6 +60,7 @@ Detalhes do que acontece:
 |---|---|---|
 | `Alguns áudios não foram enviados: cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta` | A conta chegou a 4 GB | Veja "Cotas e limites" abaixo: a tela `Conta` mostra o uso e apaga os áudios sem uso |
 | `Alguns áudios não foram enviados: arquivo grande demais (máximo de 512 MB)` | Um áudio passa de 512 MB | Divida ou reduza o arquivo |
+| `um áudio citado pelo projeto foi apagado neste instante; envie o áudio de novo e tente salvar outra vez` | O servidor recusou salvar o documento (`422`) porque um áudio que ele cita foi apagado (pela tela `Conta` ou por outro aparelho) no mesmo instante. Nada foi salvo na nuvem; o projeto continua íntegro no aparelho | Fechar e abrir o projeto de novo (o app refaz a pergunta de quais áudios a nuvem tem e reenvia o que falta) `(não confirmado: deduzido do código; não reproduzido)` |
 | `documento grande demais (máximo de 8 MB)` | O documento do projeto (faixas, notas, automação; sem os áudios) passa de 8 MB | Simplifique o projeto |
 | `A versão do servidor não abre nesta versão do app. Atualize o jopendaw.` | O documento da nuvem foi salvo por uma versão mais nova | Atualize o app ou recarregue a página |
 | `Não deu para sincronizar` | Erro sem detalhe | Continue trabalhando; a próxima edição ou a volta ao app tenta de novo |
@@ -83,17 +84,23 @@ A olhada só troca o projeto quando **todas** estas coisas são verdade; se qual
 - você **não** tem mudança pendente neste aparelho (nada por enviar) e não há conflito de pé;
 - não há outra conversa com a nuvem em andamento;
 - você **não está gravando**;
+- o **transporte não está tocando**: a versão nova espera a música parar, em vez de trocar o projeto debaixo do som;
+- **nenhum gesto está em andamento**: enquanto algum dedo, botão do mouse ou arraste estiver apertado em qualquer lugar da tela, a troca espera o gesto acabar (assim um arraste de clipe, de nota ou de ponto não vê o documento mudar no meio);
 - a nuvem tem uma versão **mais nova** que a que este aparelho conhece.
+
+Se o projeto está tocando ou você está com um gesto em andamento, a olhada não faz nada e tenta de novo na rodada seguinte (30 s depois, ou ao voltar ao app). Essas duas condições valem também no último instante: se você der play ou pegar um clipe enquanto os áudios da versão nova ainda descem, a troca é cancelada e fica para a próxima olhada.
 
 Como se comporta:
 
-- **Silenciosa.** O ícone não pisca, não aparece erro se a rede falhar e não há aviso de que o projeto mudou: o arranjo simplesmente passa a ser o da nuvem. Se você olha a tela enquanto outro aparelho envia, pode ver o projeto mudar sozinho.
+- **Não pisca, mas avisa.** O ícone de nuvem não muda e não aparece erro se a rede falhar. Quando o projeto é de fato trocado, aparece um aviso neutro (ícone de visto, na cor de destaque, não vermelho) com o texto `Projeto atualizado de outro aparelho. Desfazer não disponível para o que veio de lá.` Ele fica logo abaixo da barra de transporte no computador (no celular, no topo da tela do projeto, acima da barra de baixo), junto dos outros avisos, e só some quando você toca no `x` (tooltip `Dispensar`) ou fecha o projeto.
+- **Só avisa quando algo mudou.** Se o documento da nuvem é **igual** ao deste aparelho (a comparação ignora a ordem dos campos e as preferências do aparelho: metrônomo, contagem, latência, armar e monitorar), o app apenas adota o número da versão nova, **sem aviso e sem zerar o desfazer**. Acontece, por exemplo, quando o outro aparelho só mexeu numa preferência dele (ligou o metrônomo, armou uma faixa) ou deixou o projeto de novo como estava: a versão da nuvem subiu, mas não há nada para trazer.
 - **Baixa os áudios antes** e só troca o documento quando tudo está à mão. Se você editar no meio do caminho (ou nos últimos 0,4 s antes da troca), a troca não acontece; o que você editou continua seu e, quando o app enviar, cai no conflito de sempre (se o outro aparelho já tinha mudado) e aí você decide.
-- **Zera o desfazer**, como qualquer versão que vem da nuvem: `Ctrl+Z` não volta para antes da troca.
+- **Zera o desfazer e o refazer** quando troca: `Ctrl+Z` não volta para antes da troca. É o que o aviso diz.
 - **Mantém as preferências do aparelho** (metrônomo, contagem, latência, armar e monitorar); o andamento e o compasso vêm com o documento.
 - Nunca sobrescreve trabalho seu: com qualquer coisa pendente, ela não age.
+- O mesmo aviso aparece quando uma versão da nuvem entra por outro caminho: ao abrir, num aparelho novo, um projeto que já existe na nuvem, e depois de `Usar a versão do servidor`. Esses dois caminhos não esperam o transporte parar nem o gesto acabar (só não trocam com uma gravação em andamento). `(deduzido do código; o aviso nesses dois caminhos não foi visto na tela)`
 
-`(o pull periódico e o pull ao voltar o foco: testado só por testes automáticos)`
+`(o pull periódico, o pull ao voltar o foco, a espera do transporte e do gesto, o aviso e o "documento igual não avisa": testado só por testes automáticos)`
 
 ## Andamento e compasso
 
@@ -103,16 +110,16 @@ O andamento (BPM) e o compasso (tempos por compasso) são **parte do documento d
 - **O servidor guarda também um espelho** do andamento e do compasso (é o que a lista `Projetos` mostra). O envio do espelho é em segundo plano e sem alarde: se falhar, não aparece erro; ele fica pendente e sai de novo quando o documento é salvo (inclusive ao desfazer ou refazer), ao abrir o projeto, depois de aplicar uma versão vinda da nuvem e quando o ícone volta a `Sincronizado`. O espelho vai como inteiro entre 20 e 400.
 - **Reabrir ou trocar de aparelho não desfaz o andamento.** O andamento que vale é o do documento local (ou o do documento novo que veio da nuvem), nunca mais o do cadastro do projeto. Só um projeto sem documento ainda (recém-criado) parte do andamento e do compasso do cadastro.
 
-O subtítulo do projeto (`120 BPM · 4/4`) mostra o do documento aberto. `(lido do código e coberto por testes automáticos; não visto no Chrome)`
+O subtítulo do projeto (`120 BPM · 4/4`) mostra o do documento aberto, e a barra de transporte mostra o mesmo texto: o andamento sai sem casas quando é inteiro e com uma casa e vírgula quando não é (`120,5 BPM · 4/4`), nos dois lugares. `(lido do código e coberto por testes automáticos; não visto no Chrome)`
 
 ## Apagar um projeto: o que sai do aparelho
 
 Na lista `Projetos`, apagar um projeto (confirmação `Apagar "nome"?`, `O projeto some para sempre, com tudo o que estiver nele.`) apaga primeiro o projeto no servidor e depois **limpa este aparelho**:
 
 - o documento local do projeto, o estado de sincronização e o modelo pendente (se houver);
-- os **áudios guardados no aparelho que só esse projeto usava**. Um áudio que o documento local de **qualquer outro projeto da lista** ainda cita fica.
+- os **áudios guardados no aparelho que só esse projeto usava**. Um áudio que o documento local de **qualquer outro projeto** ainda cita fica. "Qualquer outro" é conferido de dois jeitos: os projetos da lista que está na tela e **todos os documentos de projeto guardados neste aparelho**, mesmo os que a lista não mostra (lista velha, projeto de outra conta que foi aberto aqui, projeto que só existe neste aparelho). Assim um áudio compartilhado com um projeto que a lista não conhece não é apagado por engano.
 
-A limpeza nunca dá erro para você: o que não deu para apagar fica como lixo inofensivo. Os sons derivados do warp (cache `warp:`) não entram na limpeza: não há como listá-los e eles se refazem a partir do original.
+A limpeza nunca dá erro para você: o que não deu para apagar fica como lixo inofensivo. Os sons derivados do warp (cache `warp:`) não entram na limpeza: a chave deles vem do áudio e dos parâmetros do warp, não do projeto, e eles se refazem a partir do original.
 
 O que **não** acontece: a limpeza é só deste aparelho. Um outro aparelho que já abriu o projeto continua com a cópia local dele (o projeto some da lista lá, mas o documento e os áudios guardados ficam). E os áudios continuam registrados na conta na nuvem até você apagá-los na tela `Conta` (ver "Cotas e limites"). `(lido do código e coberto por testes automáticos; não visto no Chrome)`
 
@@ -138,12 +145,13 @@ O que **não** acontece: a limpeza é só deste aparelho. Um outro aparelho que 
 
 **Sobre liberar espaço.** A tela `Conta` mostra o cartão `Armazenamento de áudios` (barra de uso, `X de 4,0 GB usados`, os áudios sem uso e a lista de todos os áudios com os projetos que os usam), com `Limpar áudios sem uso` e o apagar por item. Passo a passo e rótulos em [capítulo 01, seção Armazenamento de áudios](01-projetos-modelos-conta.md#armazenamento-de-áudios-na-tela-conta).
 
-- **O que conta como "em uso":** um áudio está em uso se o documento **sincronizado** de qualquer projeto da sua conta cita o arquivo (clipes de áudio, faixas de sampler, zonas do sampler). O que está em uso não pode ser apagado (o servidor responde `409` e o app nem oferece o botão); o resto aparece como `sem uso`.
+- **O que conta como "em uso":** um áudio está em uso se o documento **sincronizado** de qualquer projeto da sua conta cita o arquivo (clipes de áudio, faixas de sampler, zonas do sampler). O que está em uso não pode ser apagado (o servidor responde `409` com a lista dos projetos e o app nem oferece o botão; se o uso apareceu depois de a tela carregar, o app mostra `Este áudio ainda é usado em projetos; tire-o de lá antes de apagar.`); o resto aparece como `sem uso`.
 - **Apagar um projeto, uma faixa ou um clipe não devolve espaço sozinho.** O registro do áudio pertence à conta, não ao projeto: depois de apagar, o áudio fica `sem uso` e continua na cota até você apagá-lo na tela `Conta`. Apagar o projeto pelo app ainda limpa o aparelho (documento local e áudios que só ele usava), mas não o servidor.
-- **Limpeza em massa poupa o recém-enviado:** `Limpar áudios sem uso` não apaga o que subiu há menos de 1 hora (o áudio sobe antes do documento que o cita). O apagar por item não tem essa folga.
+- **O recém-enviado tem proteção de 1 hora nos dois apagares:** `Limpar áudios sem uso` não apaga o que subiu há menos de 1 hora (o áudio sobe antes do documento que o cita) e avisa quantos ficaram de fora. O apagar por item também recusa esse áudio (o servidor responde `409` com `recent: true`), mas o app pergunta antes (`Áudio enviado há pouco`, botão `Apagar mesmo assim`) e aí insiste, passando por cima só dessa proteção. Na lista, o áudio aparece como `sem uso · recém-enviado`. Antes da fase 11 o apagar por item não tinha essa folga. Detalhes em [capítulo 01, Armazenamento de áudios](01-projetos-modelos-conta.md#armazenamento-de-áudios-na-tela-conta).
 - **Áudio que só ainda não subiu no documento:** se você acabou de adicionar um áudio e o projeto ainda não sincronizou, o servidor não vê a citação. Espere o `Sincronizado` antes de limpar.
 - **Áudio igual em contas diferentes:** o servidor guarda o arquivo uma vez; ele só sai do disco (ou do S3) quando **nenhuma** conta o registra. Apagar o seu libera a **sua** cota do mesmo jeito.
-- Limite conhecido do servidor: se um documento passar a citar o áudio **exatamente durante** um apagar por item, o servidor pode apagar um áudio que acabou de ser citado (ele confere o uso uma vez, antes de apagar, e não trava as gravações de documento). Nesse caso outros aparelhos ficam sem conseguir baixar o áudio e mostram `áudio fora deste aparelho`; o aparelho que ainda tem o arquivo guardado pode tornar a enviá-lo `(lido do código; o efeito no app não foi reproduzido)`.
+- **Salvar o projeto no mesmo instante de um apagar (resolvido na fase 11).** Antes, se um documento passasse a citar o áudio exatamente durante um apagar por item, o servidor podia apagar um áudio recém-citado e outros aparelhos ficavam com `áudio fora deste aparelho`. Agora apagar, limpar, salvar o documento e criar uma conversão em MIDI tomam a mesma trava por conteúdo no servidor, e cada um confere o uso **depois** de tomá-la: ou o apagar espera o documento e o vê citando (recusa com `409`), ou o apagar termina antes e o salvar do documento é recusado com `422`. `(testado só por testes automáticos do servidor; não reproduzido com dois aparelhos)`
+- **`422` ao sincronizar: um áudio que o projeto cita foi apagado neste instante.** Quando o servidor recusa o documento por isso, o ícone de nuvem vai a `Erro` com a mensagem `um áudio citado pelo projeto foi apagado neste instante; envie o áudio de novo e tente salvar outra vez` (tabela `Mensagens do estado Erro`). Nada foi gravado e a versão da nuvem não mudou. O app **não** lê a lista de áudios sumidos nem os reenvia sozinho na tentativa seguinte, porque guarda que a nuvem "já tem" esses áudios; fechar e abrir o projeto de novo refaz a pergunta de quais áudios faltam. `(deduzido do código; não reproduzido)`
 - `Apagar a conta` (tela `Conta`) apaga tudo de uma vez.
 
 ## Quando você está offline
@@ -189,7 +197,7 @@ Conflito só aparece se outro aparelho abrir o projeto recém-importado e editar
 
 1. No celular, espere o ícone ficar `Sincronizado` (ele passa por `Sincronizando` alguns segundos depois da última edição).
 2. No computador, entre com a mesma conta, abra o projeto e espere o círculo sumir.
-3. Ao voltar ao celular mais tarde, ele traz a versão mais nova do computador sozinho, se você não tiver mudanças pendentes lá: com o projeto já aberto, em até cerca de 30 s ou ao voltar ao app; ao abrir de novo, na abertura.
+3. Ao voltar ao celular mais tarde, ele traz a versão mais nova do computador sozinho, se você não tiver mudanças pendentes lá: com o projeto já aberto, em até cerca de 30 s ou ao voltar ao app, desde que a música esteja parada e você não esteja no meio de um arraste (aparece o aviso `Projeto atualizado de outro aparelho...`); ao abrir de novo, na abertura.
 
 **Resolver um conflito**
 
@@ -222,7 +230,7 @@ Conflito só aparece se outro aparelho abrir o projeto recém-importado e editar
 
 ## Limites e pegadinhas
 
-- **Não é tempo real.** A versão nova de outro aparelho chega em até cerca de 30 s (ou ao voltar ao app), e só se você não tiver nada pendente. Se dois aparelhos abertos editam ao mesmo tempo, quem tiver mudança pendente não recebe: o conflito aparece quando o segundo tentar enviar. A troca automática é silenciosa e zera o desfazer (ver "Receber o que outro aparelho mudou").
+- **Não é tempo real.** A versão nova de outro aparelho chega em até cerca de 30 s (ou ao voltar ao app), e só se você não tiver nada pendente. Se dois aparelhos abertos editam ao mesmo tempo, quem tiver mudança pendente não recebe: o conflito aparece quando o segundo tentar enviar. A troca automática espera o transporte parar e o gesto acabar, mostra o aviso `Projeto atualizado de outro aparelho. Desfazer não disponível para o que veio de lá.` e zera o desfazer; se o documento da nuvem for igual ao seu, só adota a versão, sem aviso e sem zerar (ver "Receber o que outro aparelho mudou").
 - **Sem histórico de versões.** A nuvem guarda só a versão atual do documento; `Manter esta e enviar` e `Usar a versão do servidor` são definitivos. Um `.jopendaw` exportado antes de decidir é a forma de guardar uma versão que a nuvem vai perder.
 - **Dados só do aparelho** (não sincronizam): zoom e rolagem, altura das faixas, seleção, grade de encaixe, altura do painel inferior, a entrada de áudio escolhida, o estado do teclado do computador e do MIDI.
 - **O que fica só no aparelho se nunca sincronizar é seu risco:** limpar os dados do site no navegador ou desinstalar o app no Android apaga o que ainda não subiu. O app Android não participa do backup automático do sistema (`allowBackup` desligado no manifesto).

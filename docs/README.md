@@ -31,6 +31,7 @@ Comece por aqui, na ordem:
 | [06b Analisador e medidores](manual/06b-analisador-e-medidores.md) | Espectro e níveis |
 | [06c Painel de efeitos](manual/06c-painel-de-efeitos.md) | Cadeia de efeitos |
 | [06d Referência dos efeitos](manual/06d-efeitos-referencia.md) | Os 12 efeitos, parâmetro por parâmetro |
+| [06e Compensação de latência](manual/06e-compensacao-de-latencia.md) | Como o motor alinha faixas e envios quando o `Limitador` e a `Distorção` atrasam o som |
 | [07 Automação](manual/07-automacao.md) | Mover parâmetros no tempo |
 | [08 Exportação](manual/08-exportacao.md) | WAV, stems, congelar faixa |
 | [09 Configurações, atalhos e Android](manual/09-configuracoes-atalhos-android.md) | Ajustes, teclas, diferenças de plataforma |

@@ -84,7 +84,7 @@ Para pensar o 6/8 em dois tempos pontuados de 60 por minuto, o `BPM` do projeto 
 - **5/4 e 7/8.** Mesma janela: `5` e `4` (5 batidas por compasso) ou `7` e `8` (7/8 ocupa 3,5 batidas; o metrônomo clica por colcheia e marca o primeiro).
 - **Voltar a um andamento só.** Botão direito num lugar vazio da faixa `Andamento`, `Apagar todas as mudanças de andamento` (o andamento inicial fica).
 - **Gravar sobre o mapa.** Desenhe o mapa **antes** de gravar: gravando, o andamento e o compasso ficam travados (`Pare a gravação para mudar o andamento.`). A contagem tem o tamanho do compasso onde está o cursor (em 6/8, 3 batidas), com os quadros contados pelo mapa, e o metrônomo segue o mapa. Notas gravadas ficam em batidas e acompanham mudanças futuras do mapa; **áudio gravado não**: ele fica preso ao tempo real, então se você mexer no mapa antes dele depois de gravar, o clipe sai da grade.
-- **Exportar.** O WAV segue o mapa (o tempo do trecho e o fim dos clipes são contados por ele). Já `Exportar MIDI (.mid)` grava só o andamento inicial e o compasso inicial (`n/4`), sem o mapa. `(lido do código)`
+- **Exportar.** O WAV segue o mapa (o tempo do trecho e o fim dos clipes são contados por ele). `Exportar MIDI (.mid)` também leva o mapa: um `Set Tempo` por ponto (rampas em degraus de 1/16 de batida) e um `Time Signature` por mudança de compasso; e o `Importar` de um `.mid` traz o mapa de volta, se você aceitar a pergunta `Usar os andamentos do arquivo (N mudanças, a partir de X BPM)?`. `(testado só por testes automáticos)`
 
 ## Por que funciona
 
@@ -105,8 +105,8 @@ Para pensar o 6/8 em dois tempos pontuados de 60 por minuto, o `BPM` do projeto 
 | Editor de notas (linhas de compasso, `Shift`+← →) | Não: usa os tempos por compasso do compasso inicial | Guiar-se pela régua da timeline e pela grade de 1/8 ou 1/16 |
 | Tooltip de `Duração do projeto` (o número de compassos) | Não: conta pelo compasso inicial | O tempo (`m:ss`) está certo; o número de compassos não |
 | Lista de projetos e servidor | Só o andamento inicial e o compasso 1 (`n/4`) | O mapa completo viaja no documento sincronizado |
-| `Exportar MIDI (.mid)` | Não: só o andamento e o compasso iniciais | |
-| `Importar` de um `.mid` com mudanças de andamento | Não: só o primeiro andamento e o primeiro compasso entram (o aviso ainda diz `o app tem um andamento só`) | Refazer os pontos à mão na faixa `Andamento` |
+| `Exportar MIDI (.mid)` | Sim: todos os pontos de andamento e as mudanças de compasso; a rampa sai em degraus de 1/16 de batida (no máximo 4096 por rampa) | Nada `(testado só por testes automáticos)` |
+| `Importar` de um `.mid` com mudanças de andamento e de compasso | Sim, se você aceitar `Usar os andamentos do arquivo (N mudanças, a partir de X BPM)?`: o mapa do arquivo substitui o do projeto (pontos a menos de 0,05 BPM se fundem; no máximo 256 pontos; entram como saltos, sem rampa) | Para a rampa de volta, use `Rampa até o próximo ponto` no menu do ponto, na faixa `Andamento` `(testado só por testes automáticos)` |
 
 ## Se der errado
 
@@ -116,5 +116,5 @@ Para pensar o 6/8 em dois tempos pontuados de 60 por minuto, o `BPM` do projeto 
 - **O loop de áudio ficou adiantado depois da virada.** O warp usa só o andamento inicial; ver a receita 1.
 - **O eco do delay não acompanhou o andamento.** Mesmo motivo; ver a receita 1.
 - **A batida caiu fora depois de mexer no mapa.** Se você mudou o mapa antes de um clipe de áudio gravado ou sem warp, o clipe fica no mesmo tempo real e a grade se moveu. Mova o clipe (com Alt, sem encaixe) ou desfaça (Ctrl+Z).
-- **Um projeto inteiro em 6/8 ou 7/8 (uma só mudança, no compasso 1) e o metrônomo voltou a marcar como `n/4` depois de algumas edições.** Pelo código, a cada sincronização o app reenvia `tempo` com os `tempos por compasso`, e o motor, quando o mapa de compassos tem um ponto só, o troca por `n/4`; com duas mudanças ou mais o mapa resiste. É um bug provável, `(não confirmado por execução)`, sem contorno confirmado; ver [dev/01-motor.md](../dev/01-motor.md#armadilhas-conhecidas).
+- **Um projeto inteiro em 6/8 (uma só mudança, no compasso 1): o metrônomo já não volta para `3/4` depois de algumas edições.** Isso era um erro do motor (a cada sincronização o app reenvia `tempo` com os `tempos por compasso`, e o motor trocava o compasso único por `n/4`); a correção da fase 11 (`5f7c80b`) faz o motor manter o compasso único quando as batidas por compasso batem com as do `tempo` reenviado (`(testado só por testes automáticos)`, sem uso no app). **7/8 e outras fórmulas de batidas quebradas (`5/8`, `9/8`, `3/8`) não estão cobertas:** o app manda o `tempos por compasso` arredondado (7/8 vira 4), 3,5 não é igual a 4 e, pelo código, o motor ainda o troca por `4/4` na sincronização seguinte `(não confirmado por execução)`. Contorno: ponha uma segunda mudança de compasso (mesmo que igual, mais adiante) para o mapa deixar de ser de um ponto só `(não confirmado)`; ver [dev/01-motor.md](../dev/01-motor.md#armadilhas-conhecidas).
 - **O campo `Tempos por compasso` da janela `Andamento e compasso` não mudou nada.** Se o compasso inicial já é de outra fórmula (por exemplo 6/8), esse campo não o muda: use `Mudar compasso a partir de um compasso…` com `A partir do compasso` `1`.

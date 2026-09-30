@@ -134,6 +134,8 @@ Um fade de volume no `Master` funciona depois dos efeitos do master (o compresso
 | O knob do envio não anda com a automação do envio | O knob de envio não segue a automação | Olhe o valor na raia (cabeçalho) |
 | O filtro "pula" no começo do play | Antes do primeiro ponto vale o valor do primeiro ponto | Ponha o primeiro ponto no início do trecho, no valor de partida |
 | A raia sumiu | Ela foi ocultada (o olho riscado): continua valendo | `A` no cabeçalho, `Mostrar as ocultas` |
+| Numa faixa com `Limitador` ou `Distorção`, o fade de volume começa uns milissegundos antes do som | A compensação de latência atrasa o áudio, não a automação: numa faixa (ou barramento) cuja cadeia tem latência, o volume automatizado age alguns ms adiantado (3 ms com o `Lookahead` padrão) `(testado só por testes automáticos)` | Inaudível em fades de segundos; num corte seco, o ponto pode ir alguns ms mais para a frente na raia, ou o `Limitador` pode ir para o `Master`, onde não há o que alinhar. Ver [06e](../manual/06e-compensacao-de-latencia.md) |
+| O retorno de reverb ou de compressão paralela soa oco depois de pôr `Limitador` ou `Distorção` no barramento | Em princípio o motor alinha o seco e o retorno (compensação de latência); se soar oco, o motivo é outro (fase entre cópias, `Mistura` do efeito) | Compare com o `Lookahead` do `Limitador` em 0; ver [06e](../manual/06e-compensacao-de-latencia.md#conferir-se-a-mix-está-alinhada) e [Efeitos em combinação](efeitos-em-combinacao.md) |
 
 ### O que evitar
 

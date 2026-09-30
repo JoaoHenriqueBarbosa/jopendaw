@@ -143,6 +143,7 @@ Se o motor de áudio para de funcionar com o projeto aberto, o som some e aparec
 | Elemento (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Texto do aviso | Diz o que houve | `O motor de áudio parou de responder e o som ficou mudo. O projeto não foi perdido: reinicie o áudio para continuar.` | O projeto está no aparelho (e na nuvem, se sincronizado): nada é apagado |
+| Linha `Detalhe: …` (segunda linha do texto) | O motivo técnico que o motor informou, útil para quem for reportar o problema | Até 240 caracteres (o que passa vira `…`); a linha some quando o motor não informou nada. Na web costuma ser `O motor de áudio parou de responder.`, `O processamento do áudio caiu (erro no motor).` ou `O motor de áudio caiu: <primeira linha do erro>`; no Android, `A thread de áudio do motor caiu.` | O mesmo texto vai também ao console de depuração. `(o texto de cada motivo foi lido no código; a linha nunca foi vista na tela, sem teste automático que a confira)` |
 | Botão `Reiniciar o áudio` | Recria o motor de áudio, manda de novo os áudios e o documento e reabre a entrada de áudio se houver faixa de áudio armada ou monitorando | Vira `Reiniciando…` (desligado) enquanto trabalha | Na web o clique é o gesto que o navegador exige para liberar o áudio de novo |
 | Texto depois de uma tentativa que falhou | Explica por que o reinício falhou | `Não deu para reiniciar o áudio: <motivo>` | O botão volta; tente de novo |
 
@@ -209,7 +210,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Fader | O controle deslizante de volume. |
 | Grade | Ver Snap. |
 | Hash (SHA-256) | A "impressão digital" de um arquivo de áudio; identifica o áudio no aparelho e na nuvem. Arquivos iguais têm o mesmo hash e não se repetem. |
-| Latência | Atraso entre o som acontecer e ele ser ouvido ou gravado. A `Compensação de latência` ajusta a gravação. |
+| Latência | Atraso entre o som acontecer e ele ser ouvido ou gravado. A `Compensação de latência` ajusta a gravação; a latência de efeitos como o `Limitador` o motor compensa sozinho entre as faixas ([06e](06e-compensacao-de-latencia.md)). |
 | Loop | Região repetida. |
 | Marcador | Bandeirinha na régua que nomeia um ponto ou seção. |
 | Master | O canal final onde tudo se soma antes da saída. |

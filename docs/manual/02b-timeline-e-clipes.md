@@ -177,7 +177,7 @@ A linha **Nova faixa** (botão `+ Faixa` com uma seta) fica logo depois da últi
 | **Duplicar** (Ctrl+D) | Copia para logo depois. |
 | **Cortar no cursor** (S) | Divide no cursor. |
 | **Warp e altura…** | Abre a janela de warp. Ver [Warp e altura](03b-warp-e-altura.md). |
-| **Ganho do clipe…** | Abre o diálogo `Ganho do clipe`: um controle deslizante em dB só para este clipe (−40 a +12 dB, `−∞ dB (mudo)` no piso), o botão `Zerar (0 dB)` e o botão `Fechar`. O som e o desenho da onda mudam na hora; cada arraste do controle é um passo do desfazer. Ver [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe). |
+| **Ganho do clipe…** | Abre o diálogo `Ganho do clipe`: um controle deslizante em dB só para este clipe (−40 a +12 dB, `−∞ dB (mudo)` no piso), o botão `Zerar (0 dB)` e o botão `Fechar`. O som e o desenho da onda mudam na hora (com ganho alto a onda passa da altura e é **cortada na área dela**, que começa logo abaixo da faixa do nome do clipe: ela não invade o nome); cada arraste do controle é um passo do desfazer. Ver [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe). |
 | **Converter em notas (MIDI)** | Cria uma faixa de sintetizador com as notas detectadas no áudio. Ver [Áudio para MIDI](03d-audio-para-midi.md). |
 | **Apagar** (Delete) | Apaga o clipe. |
 
@@ -337,7 +337,7 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 - **Gravando** ficam travados: clicar e arrastar na régua e nas raias (cursor), marcadores (ir até eles), loop e o botão de armar. Faixas armadas mostram uma região vermelha crescendo (`Gravando`, ou `Tomada N` gravando em loop).
 - **Faixa só de barramento:** não tem clipes nem bolinha de gravar; a raia mostra `Barramento: recebe o som das faixas que enviam ou saem para ele`.
 - **Tudo daqui vai para o projeto** (faixas, clipes, marcadores, loop, pontos de andamento e mudanças de compasso), exceto zoom, rolagem, altura das faixas, seleção, modo da régua e se a faixa `Andamento` está à mostra.
-- **Mapa de andamento: o warp e os efeitos sincronizados não o seguem** (ver a tabela em [Faixa Andamento e mapa de compassos](#faixa-andamento-e-mapa-de-compassos)). Importar um arquivo `.mid` também não traz o mapa do arquivo: entram só o primeiro andamento e o primeiro compasso, e o aviso da importação ainda diz que o app tem um andamento só.
+- **Mapa de andamento: o warp e os efeitos sincronizados não o seguem** (ver a tabela em [Faixa Andamento e mapa de compassos](#faixa-andamento-e-mapa-de-compassos)). Já o arquivo `.mid` leva e traz o mapa: a exportação escreve todos os pontos e mudanças de compasso (rampas em degraus de 1/16 de batida) e a importação, se você aceitar a pergunta `Usar os andamentos do arquivo (N mudanças, a partir de X BPM)?`, passa o mapa do arquivo para a faixa `Andamento` e para o mapa de compassos, sempre como saltos (a rampa não volta como rampa). Ver [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid) e [Exportação](08-exportacao.md#notas-em-midi-mid).
 - **Um clipe de áudio sem warp muda de largura** quando você mexe no mapa antes dele, porque o áudio dura o mesmo em segundos e a batida passou a durar outra coisa. Cortar (S), aparar e sobrepor clipes contam pelos segundos reais entre as batidas.
 - **Web e Android:** o mesmo comportamento; no celular a seleção de clipes por toque usa bordas de 16 px, o menu do clipe abre com toque longo, e o duplo toque cria o clipe de notas.
 

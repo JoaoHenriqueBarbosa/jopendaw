@@ -104,7 +104,7 @@ Mover uma nota só na horizontal nunca a tira do lugar: o encaixe só age quando
 
 - as setas `↑` e `↓` (e `Shift+↑`/`Shift+↓`, uma oitava) andam de nota da escala em nota da escala, no sentido da seta: a seta primeiro sobe ou desce a altura e depois a nota cai na nota da escala mais próxima, com o empate a favor do sentido em que você vai. Se nenhuma nota muda, nada é gravado;
 - `Inverter na altura` espelha as alturas e depois encaixa o resultado na escala (empate para baixo);
-- `Inserir acorde…` (botão `Inserir nas notas`) encaixa as notas do acorde na escala. Um acorde que tem notas fora da escala (por exemplo `Maior` numa escala menor) tem essas notas puxadas para a escala; os acordes `Diatônico: …` já saem dentro dela.
+- `Inserir acorde…` (botão `Inserir nas notas`) encaixa as notas do acorde na escala. Um acorde que tem notas fora da escala (por exemplo `Maior` numa escala menor) tem essas notas puxadas para a escala; os acordes `Diatônico: …` já saem dentro dela. Em escala curta (por exemplo uma pentatônica), duas notas do acorde podem cair na mesma linha; o app **não duplica**: entre as notas que ficaram na mesma altura e no mesmo início, sobra a que estava mais perto da nota da escala (a primeira, no empate) e as outras somem, então o acorde pode sair com menos notas do que o tipo pede. Só vale quando o encaixe moveu alguma dessas notas; duplicatas que já existiam antes ficam como estavam. A mesma regra vale para `Inverter na altura` e `Prender seleção na escala` (usam o mesmo encaixe). (testado só por testes automáticos)
 
 Com uma das duas caixas desligada, essas três operações continuam podendo gerar notas fora da escala. Nada disso vale na bateria (testado só por testes automáticos).
 
