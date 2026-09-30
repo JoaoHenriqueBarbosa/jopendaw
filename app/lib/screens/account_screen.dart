@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../api/client.dart';
+import '../api/storage.dart';
 import '../auth/session.dart';
 import '../widgets/api_state.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/format.dart';
 import '../widgets/legal.dart';
 import '../widgets/page.dart';
 
@@ -18,8 +20,108 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
   final _session = Session.instance;
   final _api = ApiClient.instance;
 
+  StorageUsage? _usage;
+
   @override
-  Future<void> reload() => _session.refreshMe();
+  Future<void> reload() async {
+    await _session.refreshMe();
+    // o uso do armazenamento é um extra da tela: se falhar, o resto da conta continua valendo
+    await fetch(_api.storageUsage(), (u) => _usage = u);
+  }
+
+  Future<void> _cleanup() async {
+    final u = _usage;
+    if (u == null || u.unusedCount == 0) return;
+    if (!await confirmAction(
+      context,
+      title: 'Apagar áudios sem uso?',
+      message:
+          '${plural(u.unusedCount, 'áudio')} (${fmtBytes(u.unusedBytes)}) que nenhum projeto usa serão apagados do servidor. '
+          'Os arquivos guardados neste aparelho não mudam. Não tem volta.',
+      action: 'Apagar',
+      destructive: true,
+    )) {
+      return;
+    }
+    String? result;
+    await run(() async {
+      final r = await _api.cleanupSamples();
+      result = r.removed == 0 ? 'Nada para apagar.' : 'Liberei ${fmtBytes(r.freedBytes)} (${plural(r.removed, 'áudio')} apagados).';
+      if (r.skippedRecent > 0) result = '$result ${plural(r.skippedRecent, 'áudio')} enviado na última hora ficou de fora.';
+    });
+    if (mounted && result != null) setState(() => info = result);
+  }
+
+  Future<void> _deleteSample(StoredSample smp) async {
+    if (!await confirmAction(
+      context,
+      title: 'Apagar este áudio?',
+      message: '${smp.name ?? 'Áudio sem nome'} (${fmtBytes(smp.size)}) some do servidor. Não tem volta.',
+      action: 'Apagar',
+      destructive: true,
+    )) {
+      return;
+    }
+    String? result;
+    await run(() async => result = 'Liberei ${fmtBytes(await _api.deleteSample(smp.hash))}.');
+    if (mounted && result != null) setState(() => info = result);
+  }
+
+  Widget _storageCard(ThemeData theme) {
+    final u = _usage;
+    if (u == null) return const SizedBox.shrink();
+    final full = u.fraction >= 0.9;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Armazenamento de áudios', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: u.fraction, color: full ? theme.colorScheme.error : null),
+            const SizedBox(height: 8),
+            Text('${fmtBytes(u.usedBytes)} de ${fmtBytes(u.quotaBytes)} usados'),
+            if (u.unusedCount > 0) ...[
+              const SizedBox(height: 4),
+              Text('${plural(u.unusedCount, 'áudio')} sem uso em nenhum projeto (${fmtBytes(u.unusedBytes)}).', style: theme.textTheme.bodySmall),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _cleanup,
+                  icon: const Icon(Icons.cleaning_services_outlined),
+                  label: const Text('Limpar áudios sem uso'),
+                ),
+              ),
+            ],
+            if (u.samples.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text('Ver ${plural(u.samples.length, 'áudio')}'),
+                children: [
+                  for (final smp in u.samples)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(smp.name ?? 'Áudio sem nome', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                        '${fmtBytes(smp.size)} · ${smp.unused ? 'sem uso' : 'em ${smp.projects.join(', ')}'}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: smp.unused
+                          ? IconButton(tooltip: 'Apagar', icon: const Icon(Icons.delete_outline), onPressed: busy ? null : () => _deleteSample(smp))
+                          : null,
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _rename() async {
     final name = await promptText(context, title: 'Seu nome', label: 'Nome', initial: _session.user?.name ?? '', action: 'Salvar', maxLength: 80);
@@ -93,6 +195,7 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  _storageCard(theme),
                   Card(
                     child: Column(
                       children: [

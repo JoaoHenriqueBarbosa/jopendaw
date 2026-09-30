@@ -180,7 +180,7 @@ enum Output {
 /// O trabalho pesado, síncrono: decodificar e processar o áudio já lido do armazenamento. Roda em `spawn_blocking`.
 fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
     let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
-    let pcm = audio::decode_wav(&bytes)?;
+    let pcm = audio::decode_audio(&bytes)?;
     drop(bytes);
     set(0.1);
     match kind {
@@ -264,11 +264,18 @@ async fn run(s: &AppState, job: Claimed) {
 /// O FLAC gerado entra no armazenamento da conta como qualquer outro áudio (e conta na cota).
 async fn save_flac(s: &AppState, owner: Uuid, bytes: Vec<u8>) -> Result<Value, String> {
     let hash = storage::hex_sha256(&bytes);
-    s.store.store_bytes(&hash, &bytes).await.map_err(|e| {
-        tracing::error!(error = %e, "falha ao gravar o FLAC");
+    let internal = |what: &str, e: &dyn std::fmt::Display| {
+        tracing::error!(error = %e, "falha ao {what} o FLAC");
         "erro interno ao gravar o arquivo".to_string()
-    })?;
-    match storage::register(&s.pool, owner, &hash, bytes.len() as i64).await {
+    };
+    // a trava do hash cobre gravar e registrar: apagar o mesmo conteúdo de outra conta não pode cair no meio
+    let lock = storage::lock_hash(&s.pool, &hash).await.map_err(|e| internal("travar", &e))?;
+    s.store.store_bytes(&hash, &bytes).await.map_err(|e| internal("gravar", &e))?;
+    let registered = storage::register(&s.pool, owner, &hash, bytes.len() as i64).await;
+    if registered.is_ok() {
+        lock.commit().await.map_err(|e| internal("liberar a trava do", &e))?;
+    }
+    match registered {
         Ok(()) => Ok(json!({"sample": hash, "bytes": bytes.len()})),
         Err(RegisterError::Quota) => Err("cota de armazenamento de 4 GB excedida".into()),
         Err(RegisterError::Db(e)) => {

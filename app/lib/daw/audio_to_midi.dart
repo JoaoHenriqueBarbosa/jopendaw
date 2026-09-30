@@ -9,6 +9,26 @@ import '../api/client.dart';
 import '../api/sync_api.dart';
 import 'model.dart';
 
+/// Os dois ajustes da análise, com os padrões do servidor (`MidiParams::default`). A faixa é a da
+/// interface; o servidor aceita mais (0 a 5000 ms, -120 a 0 dB) e recusa o que passar disso.
+class MidiConvertOptions {
+  static const minNoteMsRange = (20.0, 500.0);
+  static const rmsFloorDbRange = (-80.0, -20.0);
+
+  /// Notas mais curtas que isto (em ms) são descartadas.
+  final double minNoteMs;
+
+  /// Abaixo deste nível (dB) o trecho conta como silêncio.
+  final double rmsFloorDb;
+
+  const MidiConvertOptions({this.minNoteMs = 60, this.rmsFloorDb = -45});
+
+  MidiConvertOptions copyWith({double? minNoteMs, double? rmsFloorDb}) =>
+      MidiConvertOptions(minNoteMs: minNoteMs ?? this.minNoteMs, rmsFloorDb: rmsFloorDb ?? this.rmsFloorDb);
+
+  Map<String, dynamic> toParams() => {'min_note_ms': minNoteMs, 'rms_floor_db': rmsFloorDb};
+}
+
 /// Uma nota como o servidor a devolve: tempos em segundos do áudio inteiro.
 class ServerNote {
   final int pitch;
@@ -67,10 +87,11 @@ Future<ConvertedNotes> runAudioToMidi(
   void Function(String stage, double? progress)? onProgress,
   bool Function()? isCancelled,
   Duration pollEvery = const Duration(seconds: 1),
+  MidiConvertOptions options = const MidiConvertOptions(),
 }) async {
   bool cancelled() => isCancelled?.call() ?? false;
   onProgress?.call('Analisando o áudio…', null);
-  var job = await api.createJob('audio_to_midi', sample);
+  var job = await api.createJob('audio_to_midi', sample, options.toParams());
   var failures = 0;
   while (true) {
     if (cancelled()) throw ConversionCancelled();

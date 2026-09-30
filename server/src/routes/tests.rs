@@ -533,7 +533,7 @@ async fn job_formato_nao_suportado_falha() {
         let r = new_job(&e, &a, kind, &hash, None).await;
         let j = wait_job(&e, &a, r.json()["id"].as_str().unwrap()).await;
         assert_eq!(j["status"], "failed");
-        assert_eq!(j["error"], "formato não suportado");
+        assert!(j["error"].as_str().unwrap().starts_with("formato de áudio não suportado"), "{j}");
         assert_eq!(j["result"], Value::Null);
     }
 }
@@ -597,4 +597,211 @@ async fn job_orfao_volta_para_a_fila() {
     // o worker do teste (ou o de outro teste) pega e termina
     let j = wait_job(&e, &a, &id.to_string()).await;
     assert_eq!(j["status"], "done", "{j}");
+}
+
+// ---------------------------------------------------------------- áudios: listar, apagar, cota
+
+async fn put_doc(e: &Env, u: &User, project: &str, base: i64, doc: Value) -> Res {
+    send_json(e, Method::PUT, &format!("/api/projects/{project}/doc"), u, json!({"base_version": base, "doc": doc})).await
+}
+
+async fn del(e: &Env, uri: &str, u: &User) -> Res {
+    call(e, Method::DELETE, uri, Some(&u.token), vec![], &[]).await
+}
+
+async fn post_empty(e: &Env, uri: &str, token: Option<&str>) -> Res {
+    call(e, Method::POST, uri, token, vec![], &[]).await
+}
+
+fn sample_row<'a>(list: &'a Value, hash: &str) -> &'a Value {
+    list["samples"].as_array().unwrap().iter().find(|s| s["hash"] == hash).unwrap_or_else(|| panic!("{hash} fora da lista: {list}"))
+}
+
+fn rand_bytes() -> Vec<u8> {
+    Uuid::new_v4().into_bytes().to_vec()
+}
+
+/// Faz o áudio parecer enviado há muito tempo (a limpeza em massa poupa o da última hora).
+async fn backdate(e: &Env, u: &User, hash: &str) {
+    sqlx::query("UPDATE samples SET created_at = now() - interval '2 hours' WHERE owner_id = $1 AND hash = $2")
+        .bind(u.id)
+        .bind(hash)
+        .execute(&e.state.pool)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn samples_listar_e_apagar() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let (used_clip, _) = upload(&e, &a, &rand_bytes()).await;
+    let (used_zone, _) = upload(&e, &a, &rand_bytes()).await;
+    let (loose_hash, _) = upload(&e, &a, &rand_bytes()).await;
+
+    // sem documento nenhum: tudo sem uso
+    let l = get(&e, "/api/samples", &a).await.json();
+    assert_eq!(l["quota_bytes"], storage::QUOTA_BYTES);
+    assert_eq!((l["used_bytes"].as_i64().unwrap(), l["unused_count"].as_u64().unwrap()), (48, 3));
+
+    // um documento cita um áudio pelo mapa `samples` e no clipe, outro só pela zona de um sampler
+    let p1 = project(&e, &a).await;
+    let p2 = project(&e, &a).await;
+    let doc1 = json!({"samples": {used_clip.clone(): {"name": "kick.wav", "duration": 1.0}}, "tracks": [{"audio": [{"sample": used_clip}]}]});
+    assert_eq!(put_doc(&e, &a, &p1, 0, doc1).await.status, StatusCode::OK);
+    let doc2 = json!({"tracks": [{"sampler": {"sample": null, "zones": [{"sample": used_zone, "low": 0}]}}]});
+    assert_eq!(put_doc(&e, &a, &p2, 0, doc2).await.status, StatusCode::OK);
+
+    let l = get(&e, "/api/samples", &a).await.json();
+    let s = sample_row(&l, &used_clip);
+    assert_eq!((s["name"].as_str(), s["unused"].clone(), s["project_count"].clone(), s["size"].clone()), (Some("kick.wav"), json!(false), json!(1), json!(16)));
+    assert_eq!(s["projects"][0]["id"], p1);
+    assert_eq!(sample_row(&l, &used_zone)["project_count"], 1, "a zona do sampler conta como uso");
+    assert_eq!(sample_row(&l, &loose_hash)["unused"], true);
+    assert_eq!((l["unused_bytes"].as_i64().unwrap(), l["unused_count"].as_u64().unwrap()), (16, 1));
+
+    // em uso: 409 com os projetos, e nada é apagado
+    for h in [&used_clip, &used_zone] {
+        let r = del(&e, &format!("/api/samples/{h}"), &a).await;
+        assert_eq!(r.status, StatusCode::CONFLICT);
+        assert_eq!(r.json()["projects"].as_array().unwrap().len(), 1);
+        assert!(e.state.store.exists(h).await.unwrap());
+    }
+    // sem uso: sai do registro e do armazenamento, e a cota volta
+    let r = del(&e, &format!("/api/samples/{loose_hash}"), &a).await;
+    assert_eq!((r.status, r.json()["freed_bytes"].clone()), (StatusCode::OK, json!(16)));
+    assert!(!e.state.store.exists(&loose_hash).await.unwrap());
+    assert_eq!(get(&e, &format!("/api/samples/{loose_hash}"), &a).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(get(&e, "/api/samples", &a).await.json()["used_bytes"], 32);
+    // de novo, hash inválido e sem login
+    assert_eq!(del(&e, &format!("/api/samples/{loose_hash}"), &a).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(del(&e, "/api/samples/xyz", &a).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(call(&e, Method::DELETE, &format!("/api/samples/{used_clip}"), None, vec![], &[]).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(call(&e, Method::GET, "/api/samples", None, vec![], &[]).await.status, StatusCode::UNAUTHORIZED);
+
+    // apagar o projeto NÃO apaga o áudio: ele passa a constar como sem uso, e a decisão fica com a pessoa
+    assert_eq!(del(&e, &format!("/api/projects/{p1}"), &a).await.status, StatusCode::NO_CONTENT);
+    let l = get(&e, "/api/samples", &a).await.json();
+    assert_eq!((sample_row(&l, &used_clip)["unused"].clone(), l["used_bytes"].clone()), (json!(true), json!(32)));
+    assert!(e.state.store.exists(&used_clip).await.unwrap());
+    assert_eq!(del(&e, &format!("/api/samples/{used_clip}"), &a).await.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn samples_apagar_devolve_a_cota() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let fake = storage::hex_sha256(b"enorme");
+    sqlx::query("INSERT INTO samples (owner_id, hash, size) VALUES ($1, $2, $3)")
+        .bind(a.id)
+        .bind(&fake)
+        .bind(storage::QUOTA_BYTES - 10)
+        .execute(&e.state.pool)
+        .await
+        .unwrap();
+    let body = rand_bytes();
+    let (hash, r) = upload(&e, &a, &body).await;
+    assert_eq!(r.status, StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(r.json()["error"].as_str().unwrap().contains("Conta"), "a mensagem aponta a saída");
+
+    let r = del(&e, &format!("/api/samples/{fake}"), &a).await;
+    assert_eq!((r.status, r.json()["freed_bytes"].as_i64()), (StatusCode::OK, Some(storage::QUOTA_BYTES - 10)));
+    let (_, r) = upload(&e, &a, &body).await;
+    assert_eq!(r.status, StatusCode::NO_CONTENT);
+    assert_eq!(get(&e, "/api/samples", &a).await.json()["used_bytes"], 16);
+    assert!(e.state.store.exists(&hash).await.unwrap());
+}
+
+#[tokio::test]
+async fn samples_isolamento_entre_contas_e_hash_igual() {
+    let e = env_or_skip!();
+    let (a, b) = (user(&e).await, user(&e).await);
+    let body = rand_bytes();
+    let (hash, _) = upload(&e, &a, &body).await;
+    // a conta B nunca enviou: não pode apagar, nem ver o áudio da A
+    assert_eq!(del(&e, &format!("/api/samples/{hash}"), &b).await.status, StatusCode::NOT_FOUND);
+    assert!(get(&e, "/api/samples", &b).await.json()["samples"].as_array().unwrap().is_empty());
+    assert!(e.state.store.exists(&hash).await.unwrap());
+    assert_eq!(get(&e, &format!("/api/samples/{hash}"), &a).await.status, StatusCode::OK);
+
+    // as duas enviam o mesmo conteúdo; a B usa num projeto dela, a A não usa em nenhum
+    let (_, r) = upload(&e, &b, &body).await;
+    assert_eq!(r.status, StatusCode::NO_CONTENT);
+    let pb = project(&e, &b).await;
+    assert_eq!(put_doc(&e, &b, &pb, 0, json!({"samples": {hash.clone(): {"name": "x.wav", "duration": 1.0}}})).await.status, StatusCode::OK);
+    // o projeto da B não segura o áudio da A (mas segura o da própria B)
+    assert_eq!(del(&e, &format!("/api/samples/{hash}"), &b).await.status, StatusCode::CONFLICT);
+    assert_eq!(del(&e, &format!("/api/samples/{hash}"), &a).await.status, StatusCode::OK);
+    // os bytes ficam, porque a B ainda os registra; a B lê normalmente
+    assert!(e.state.store.exists(&hash).await.unwrap());
+    let r = get(&e, &format!("/api/samples/{hash}"), &b).await;
+    assert_eq!((r.status, r.body), (StatusCode::OK, body.clone()));
+    assert_eq!(get(&e, &format!("/api/samples/{hash}"), &a).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(get(&e, "/api/samples", &b).await.json()["samples"].as_array().unwrap().len(), 1);
+
+    // quando a B também larga, aí sim os bytes saem
+    assert_eq!(put_doc(&e, &b, &pb, 1, json!({"samples": {}})).await.status, StatusCode::OK);
+    assert_eq!(del(&e, &format!("/api/samples/{hash}"), &b).await.status, StatusCode::OK);
+    assert!(!e.state.store.exists(&hash).await.unwrap());
+}
+
+#[tokio::test]
+async fn samples_limpar_sem_uso() {
+    let e = env_or_skip!();
+    let (a, b) = (user(&e).await, user(&e).await);
+    let (kept, _) = upload(&e, &a, &rand_bytes()).await;
+    let (old, _) = upload(&e, &a, &rand_bytes()).await;
+    let (fresh, _) = upload(&e, &a, &rand_bytes()).await;
+    let (busy, _) = upload(&e, &a, &rand_bytes()).await;
+    let (bs, _) = upload(&e, &b, &rand_bytes()).await;
+    let p = project(&e, &a).await;
+    assert_eq!(put_doc(&e, &a, &p, 0, json!({"tracks": [{"audio": [{"sample": kept}]}]})).await.status, StatusCode::OK);
+    for h in [&kept, &old, &busy] {
+        backdate(&e, &a, h).await;
+    }
+    backdate(&e, &b, &bs).await;
+    // uma tarefa em andamento com o áudio: fica
+    sqlx::query("INSERT INTO jobs (owner_id, kind, sample_hash, status) VALUES ($1, 'flac', $2, 'running')")
+        .bind(a.id)
+        .bind(&busy)
+        .execute(&e.state.pool)
+        .await
+        .unwrap();
+    assert_eq!(del(&e, &format!("/api/samples/{busy}"), &a).await.status, StatusCode::CONFLICT);
+
+    let r = post_empty(&e, "/api/samples/cleanup", Some(&a.token)).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json(), json!({"removed": 1, "freed_bytes": 16, "skipped_recent": 1}));
+    assert!(!e.state.store.exists(&old).await.unwrap());
+    for h in [&kept, &fresh, &busy] {
+        assert!(e.state.store.exists(h).await.unwrap(), "{h} deveria ter ficado");
+    }
+    // o áudio da outra conta é intocado, mesmo velho e sem uso
+    assert_eq!(get(&e, &format!("/api/samples/{bs}"), &b).await.status, StatusCode::OK);
+    assert_eq!(post_empty(&e, "/api/samples/cleanup", None).await.status, StatusCode::UNAUTHORIZED);
+    // de novo: nada mais a fazer
+    assert_eq!(post_empty(&e, "/api/samples/cleanup", Some(&a.token)).await.json()["removed"], 0);
+}
+
+#[tokio::test]
+async fn job_audio_para_midi_mp3_e_parametros_extremos() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let mp3 = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/seno440.mp3")).unwrap();
+    let (hash, _) = upload(&e, &a, &mp3).await;
+    let r = new_job(&e, &a, "audio_to_midi", &hash, Some(json!({"min_note_ms": 100, "rms_floor_db": -40}))).await;
+    let j = wait_job(&e, &a, r.json()["id"].as_str().unwrap()).await;
+    assert_eq!(j["status"], "done", "{j}");
+    assert!(j["result"]["notes"].as_array().unwrap().iter().any(|n| n["pitch"] == 69), "{j}");
+    // extremos: fora da faixa é 400 na criação; nos limites da faixa a tarefa roda sem quebrar
+    for p in
+        [json!({"min_note_ms": 5001}), json!({"min_note_ms": -0.5}), json!({"rms_floor_db": -121}), json!({"rms_floor_db": 0.1}), json!({"min_note_ms": "x"})]
+    {
+        assert_eq!(new_job(&e, &a, "audio_to_midi", &hash, Some(p)).await.status, StatusCode::BAD_REQUEST);
+    }
+    for p in [json!({"min_note_ms": 5000, "rms_floor_db": 0}), json!({"min_note_ms": 0, "rms_floor_db": -120})] {
+        let r = new_job(&e, &a, "audio_to_midi", &hash, Some(p)).await;
+        let j = wait_job(&e, &a, r.json()["id"].as_str().unwrap()).await;
+        assert_eq!(j["status"], "done", "{j}");
+    }
 }

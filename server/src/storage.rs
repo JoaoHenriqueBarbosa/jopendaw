@@ -335,6 +335,15 @@ pub async fn used_bytes(pool: &PgPool, owner: Uuid) -> Result<i64, sqlx::Error> 
     Ok(n)
 }
 
+/// Trava (até o fim da transação devolvida) o que se faz com um conteúdo, para gravar e apagar o mesmo
+/// hash não se cruzarem: sem ela, apagar o blob de uma conta enquanto outra acaba de "reaproveitá-lo"
+/// no envio deixaria um registro sem arquivo.
+pub async fn lock_hash(pool: &PgPool, hash: &str) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))").bind(hash).execute(&mut *tx).await?;
+    Ok(tx)
+}
+
 pub enum RegisterError {
     /// Passaria da cota da conta.
     Quota,

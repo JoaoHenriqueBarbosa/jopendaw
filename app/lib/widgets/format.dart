@@ -37,3 +37,15 @@ String sentence(String s) {
   final cap = '${t[0].toUpperCase()}${t.substring(1)}';
   return RegExp(r'[.!?]$').hasMatch(cap) ? cap : '$cap.';
 }
+
+/// Tamanho em bytes como a pessoa lê: "0 B", "12,3 MB", "3,9 GB" (base 1024, vírgula decimal).
+String fmtBytes(int bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var v = bytes.toDouble(), u = 0;
+  while (v >= 1024 && u < units.length - 1) {
+    v /= 1024;
+    u++;
+  }
+  if (u == 0) return '$bytes B';
+  return '${v.toStringAsFixed(v >= 100 ? 0 : 1).replaceAll('.', ',')} ${units[u]}';
+}

@@ -1,5 +1,6 @@
-/// Diálogo da conversão de áudio em notas: envia o áudio, acompanha o job do servidor com
-/// progresso e pode ser cancelado. Erros aparecem aqui mesmo, em texto.
+/// Diálogo da conversão de áudio em notas: primeiro os dois ajustes da análise (nota mínima e nível
+/// de silêncio), depois envia o áudio, acompanha o job do servidor com progresso e pode ser cancelado.
+/// Erros aparecem aqui mesmo, em texto.
 library;
 
 import 'package:flutter/material.dart';
@@ -29,17 +30,15 @@ class _ConvertDialogState extends State<_ConvertDialog> {
   double? _progress;
   String? _error;
   bool _cancelled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _run();
-  }
+  bool _started = false;
+  var _options = const MidiConvertOptions();
 
   Future<void> _run() async {
+    setState(() => _started = true);
     try {
       await widget.c.convertToMidi(
         widget.clipId,
+        options: _options,
         isCancelled: () => _cancelled || !mounted,
         onProgress: (stage, progress) {
           if (!mounted) return;
@@ -58,6 +57,38 @@ class _ConvertDialogState extends State<_ConvertDialog> {
     }
   }
 
+  Widget _optionsForm() {
+    final (noteLo, noteHi) = MidiConvertOptions.minNoteMsRange;
+    final (floorLo, floorHi) = MidiConvertOptions.rmsFloorDbRange;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Funciona melhor com uma voz ou instrumento por vez (monofônico).'),
+        const SizedBox(height: 16),
+        Text('Nota mínima: ${_options.minNoteMs.round()} ms'),
+        Slider(
+          key: const Key('convert-min-note'),
+          min: noteLo,
+          max: noteHi,
+          value: _options.minNoteMs.clamp(noteLo, noteHi),
+          onChanged: (v) => setState(() => _options = _options.copyWith(minNoteMs: v.roundToDouble())),
+        ),
+        const Text('Notas mais curtas que isto são descartadas.', style: TextStyle(fontSize: 12, color: Colors.white54)),
+        const SizedBox(height: 12),
+        Text('Nível de silêncio: ${_options.rmsFloorDb.round()} dB'),
+        Slider(
+          key: const Key('convert-rms-floor'),
+          min: floorLo,
+          max: floorHi,
+          value: _options.rmsFloorDb.clamp(floorLo, floorHi),
+          onChanged: (v) => setState(() => _options = _options.copyWith(rmsFloorDb: v.roundToDouble())),
+        ),
+        const Text('Trechos abaixo deste nível não viram nota. Suba para ignorar ruído de fundo.', style: TextStyle(fontSize: 12, color: Colors.white54)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final error = _error;
@@ -67,6 +98,8 @@ class _ConvertDialogState extends State<_ConvertDialog> {
         constraints: const BoxConstraints(maxWidth: 380),
         child: error != null
             ? Text(error)
+            : !_started
+            ? _optionsForm()
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,7 +113,10 @@ class _ConvertDialogState extends State<_ConvertDialog> {
       actions: [
         if (error != null)
           FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar'))
-        else
+        else if (!_started) ...[
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(onPressed: _run, child: const Text('Converter')),
+        ] else
           TextButton(
             onPressed: () {
               _cancelled = true;

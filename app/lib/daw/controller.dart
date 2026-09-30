@@ -1591,6 +1591,7 @@ class DawController extends ChangeNotifier {
     void Function(String stage, double? progress)? onProgress,
     bool Function()? isCancelled,
     Duration pollEvery = const Duration(seconds: 1),
+    MidiConvertOptions options = const MidiConvertOptions(),
   }) async {
     final f = _findClip(clipId);
     if (f == null) throw StateError('O clipe não existe mais.');
@@ -1598,7 +1599,7 @@ class DawController extends ChangeNotifier {
     final clip = f.$2;
     onProgress?.call('Enviando o áudio…', null);
     await sync.uploadSamples([clip.sample]);
-    final r = await runAudioToMidi(_api, clip.sample, onProgress: onProgress, isCancelled: isCancelled, pollEvery: pollEvery);
+    final r = await runAudioToMidi(_api, clip.sample, onProgress: onProgress, isCancelled: isCancelled, pollEvery: pollEvery, options: options);
     if (_disposed) throw ConversionCancelled();
     // o clipe pode ter mudado de lugar, de corte ou sumido enquanto o servidor trabalhava
     final now = _findClip(clipId);

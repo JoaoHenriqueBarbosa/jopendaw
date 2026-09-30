@@ -99,8 +99,10 @@ pub fn router(state: AppState) -> Router {
         // documento do projeto: o limite padrão do axum (2 MB) sai, o teto de 8 MB é do handler
         .route("/api/projects/{id}/doc", get(docs::get).put(docs::put).layer(DefaultBodyLimit::disable()))
         // áudios: sem limite padrão só aqui; o teto de 512 MB e a cota são aplicados no upload
+        .route("/api/samples", get(samples::list))
         .route("/api/samples/missing", post(samples::missing))
-        .route("/api/samples/{hash}", get(samples::download).put(samples::upload).layer(DefaultBodyLimit::disable()))
+        .route("/api/samples/cleanup", post(samples::cleanup))
+        .route("/api/samples/{hash}", get(samples::download).put(samples::upload).delete(samples::delete).layer(DefaultBodyLimit::disable()))
         // tarefas pesadas
         .route("/api/jobs", get(jobs::list).post(jobs::create))
         .route("/api/jobs/{id}", get(jobs::get))

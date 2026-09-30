@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../auth/session.dart';
 import '../models/account.dart';
 import '../models/project.dart';
+import 'storage.dart';
 import 'sync_api.dart';
 
 class ApiException implements Exception {
@@ -247,6 +248,14 @@ class ApiClient implements SyncApi {
     if (r.statusCode >= 400) throw _error(r);
     return r.bodyBytes;
   }
+
+  // ---- armazenamento de áudios (tela Conta) ----
+  Future<StorageUsage> storageUsage() async => StorageUsage.fromJson(await _get('/api/samples') as Map<String, dynamic>);
+
+  /// Apaga um áudio sem uso; devolve os bytes liberados. Em uso, o servidor responde 409.
+  Future<int> deleteSample(String hash) async => ((await _delete('/api/samples/$hash')) as Map<String, dynamic>)['freed_bytes'] as int;
+
+  Future<CleanupResult> cleanupSamples() async => CleanupResult.fromJson(await _json('POST', '/api/samples/cleanup', {}) as Map<String, dynamic>);
 
   @override
   Future<SyncJob> createJob(String kind, String sample, [Map<String, dynamic> params = const {}]) async =>

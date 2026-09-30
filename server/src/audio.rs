@@ -6,7 +6,14 @@
 use serde::Serialize;
 
 /// Mensagem das falhas de formato que o usuário pode corrigir (vai para o `error` do job).
-pub const UNSUPPORTED: &str = "formato não suportado";
+pub const UNSUPPORTED: &str = "formato de áudio não suportado (aceitos: WAV, FLAC, MP3, OGG Vorbis e AAC/M4A, mono ou estéreo)";
+
+/// Duração máxima que uma tarefa decodifica: a memória e o tempo de análise crescem com ela.
+pub const MAX_SECONDS: f64 = 600.0;
+
+fn too_long() -> String {
+    format!("áudio longo demais: o máximo é {} minutos", (MAX_SECONDS / 60.0) as u32)
+}
 
 /// Áudio decodificado: amostras intercaladas como inteiros de 24 bits (em `i32`). 24 bits cobre
 /// 16, 24 e o float de 32 sem perda relevante, e é o que o FLAC de saída grava.
@@ -68,6 +75,9 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
     }
     let frame = channels * (bits / 8);
     let usable = &data[..data.len() - data.len() % frame.max(1)];
+    if usable.len() / frame.max(1) > (MAX_SECONDS * rate as f64) as usize {
+        return Err(too_long());
+    }
     let samples: Vec<i32> = match (tag, bits) {
         (1, 16) => usable.as_chunks::<2>().0.iter().map(|c| (i16::from_le_bytes(*c) as i32) << 8).collect(),
         (1, 24) => usable.as_chunks::<3>().0.iter().map(|c| i32::from_le_bytes([0, c[0], c[1], c[2]]) >> 8).collect(),
@@ -88,6 +98,77 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
         return Err("áudio vazio".into());
     }
     Ok(Pcm { rate, channels, data: samples })
+}
+
+/// Decodifica qualquer formato aceito: o WAV pelo caminho rápido próprio e o resto (FLAC, MP3, OGG
+/// Vorbis, AAC/M4A, ALAC) pelo symphonia. Mono ou estéreo, até [`MAX_SECONDS`]. Os erros voltam em
+/// português, prontos para o `error` do job.
+pub fn decode_audio(bytes: &[u8]) -> Result<Pcm, String> {
+    match decode_wav(bytes) {
+        Err(e) if e == UNSUPPORTED => decode_symphonia(bytes),
+        r => r,
+    }
+}
+
+fn decode_symphonia(bytes: &[u8]) -> Result<Pcm, String> {
+    use symphonia::core::{
+        audio::SampleBuffer,
+        codecs::{CODEC_TYPE_NULL, DecoderOptions},
+        errors::Error as SymError,
+        formats::FormatOptions,
+        io::MediaSourceStream,
+        meta::MetadataOptions,
+        probe::Hint,
+    };
+    let bad = || UNSUPPORTED.to_string();
+    let mss = MediaSourceStream::new(Box::new(std::io::Cursor::new(bytes.to_vec())), Default::default());
+    let mut format =
+        symphonia::default::get_probe().format(&Hint::new(), mss, &FormatOptions::default(), &MetadataOptions::default()).map_err(|_| bad())?.format;
+    let track = format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL).ok_or_else(bad)?;
+    let track_id = track.id;
+    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).map_err(|_| bad())?;
+
+    let mut out: Vec<i32> = Vec::new();
+    let mut spec: Option<(u32, usize)> = None;
+    let mut buf: Option<SampleBuffer<f32>> = None;
+    // fim do arquivo (ou arquivo cortado): vale o que já saiu
+    while let Ok(packet) = format.next_packet() {
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            // pacote corrompido no meio: pula em vez de perder o arquivo todo
+            Err(SymError::DecodeError(_)) => continue,
+            Err(_) => break,
+        };
+        let s = decoded.spec();
+        let (rate, channels) = (s.rate, s.channels.count());
+        match spec {
+            None => {
+                if !(1..=2).contains(&channels) || rate == 0 || rate > 655_350 {
+                    return Err(bad());
+                }
+                spec = Some((rate, channels));
+            }
+            Some(first) if first != (rate, channels) => return Err(bad()),
+            _ => {}
+        }
+        if buf.as_ref().is_none_or(|b| b.capacity() < decoded.capacity() * channels) {
+            buf = Some(SampleBuffer::new(decoded.capacity() as u64, *s));
+        }
+        let b = buf.as_mut().expect("buffer criado acima");
+        b.copy_interleaved_ref(decoded);
+        out.extend(b.samples().iter().map(|&f| if f.is_nan() { 0 } else { (f * 8_388_608.0).round().clamp(I24_MIN as f32, I24_MAX as f32) as i32 }));
+        if out.len() / channels > (MAX_SECONDS * rate as f64) as usize {
+            return Err(too_long());
+        }
+    }
+    let (rate, channels) = spec.ok_or_else(|| "não consegui decodificar o áudio (arquivo corrompido ou codec não suportado, como Opus)".to_string())?;
+    if out.is_empty() {
+        return Err("áudio vazio".into());
+    }
+    Ok(Pcm { rate, channels, data: out })
 }
 
 impl Pcm {
@@ -523,6 +604,53 @@ mod tests {
         assert_eq!(decode_wav(&wav(1, 8, 1, 8000, &[1, 2, 3])).unwrap_err(), UNSUPPORTED);
         assert_eq!(decode_wav(&wav(1, 16, 6, 48_000, &[0; 12])).unwrap_err(), UNSUPPORTED);
         assert_eq!(decode_wav(&wav(3, 64, 1, 48_000, &[0; 16])).unwrap_err(), UNSUPPORTED);
+    }
+
+    fn fixture(name: &str) -> Vec<u8> {
+        std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata").join(name)).unwrap()
+    }
+
+    #[test]
+    fn decodifica_mp3_ogg_e_m4a_e_acha_a_nota() {
+        for (name, channels) in [("seno440.mp3", 1), ("seno440.ogg", 2), ("seno440.m4a", 1)] {
+            let pcm = decode_audio(&fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!((pcm.rate, pcm.channels), (22_050, channels), "{name}");
+            let secs = pcm.data.len() as f64 / channels as f64 / 22_050.0;
+            assert!((0.5..0.75).contains(&secs), "{name}: {secs}s");
+            let notes = audio_to_midi(&pcm.to_mono(), pcm.rate, MidiParams::default(), &|_| {});
+            assert!(notes.iter().any(|n| n.pitch == 69), "{name}: {notes:?}");
+        }
+    }
+
+    #[test]
+    fn decodifica_flac_e_wav_pelo_mesmo_ponto_de_entrada() {
+        let payload: Vec<u8> = (0..5000).flat_map(|i| (((i % 100) as i16 - 50) * 300).to_le_bytes()).collect();
+        let wav = wav(1, 16, 1, 44_100, &payload);
+        let pcm = decode_audio(&wav).unwrap();
+        let flac = encode_flac(&pcm).unwrap();
+        let back = decode_audio(&flac).unwrap();
+        assert_eq!((back.rate, back.channels, back.data), (pcm.rate, pcm.channels, pcm.data));
+    }
+
+    #[test]
+    fn lixo_e_arquivo_cortado_dao_erro_claro() {
+        assert_eq!(decode_audio(b"isto nao e audio").unwrap_err(), UNSUPPORTED);
+        assert_eq!(decode_audio(&[]).unwrap_err(), UNSUPPORTED);
+        // MP3 cortado no meio ainda decodifica o que deu; cortado antes do primeiro quadro é erro
+        let mp3 = fixture("seno440.mp3");
+        assert!(decode_audio(&mp3[..mp3.len() / 2]).is_ok());
+        assert!(decode_audio(&mp3[..8]).is_err());
+    }
+
+    #[test]
+    fn limite_de_duracao() {
+        // 11 minutos de silêncio a 8 kHz em 8 bits não cabem; o WAV é recusado antes de virar amostras
+        let secs = 660usize;
+        let payload = vec![0u8; secs * 8000 * 2];
+        assert_eq!(decode_wav(&wav(1, 16, 1, 8000, &payload)).unwrap_err(), too_long());
+        // no limite passa
+        let ok = vec![0u8; 599 * 8000 * 2];
+        assert!(decode_wav(&wav(1, 16, 1, 8000, &ok)).is_ok());
     }
 
     #[test]
