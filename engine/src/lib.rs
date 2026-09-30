@@ -96,7 +96,7 @@ pub mod wavetable;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub use metronome::Metronome;
+pub use metronome::{Metronome, Subdivision, Timbre};
 pub use mixer::{Chain, MAX_SENDS, MAX_SLOTS, STATIC_PARAMS, Send, Track, pan_gains};
 
 use analyzer::Analyzer;
@@ -962,6 +962,16 @@ impl Engine {
     pub fn set_metronome(&mut self, on: bool, gain: f32) {
         self.metronome.on = on;
         self.metronome.gain = gain;
+    }
+
+    /// Como o metrônomo soa (ver [`Metronome::set_style`]): timbre, subdivisão, nível do acento,
+    /// altura do acento (razão de frequência) e nível das subdivisões.
+    pub fn set_metronome_style(&mut self, timbre: u32, subdivision: u32, accent_level: f32, accent_pitch: f32, sub_level: f32) {
+        self.metronome.set_style(timbre, subdivision, accent_level, accent_pitch, sub_level);
+    }
+
+    pub fn metronome_style(&self) -> (Timbre, Subdivision) {
+        (self.metronome.timbre(), self.metronome.subdivision())
     }
 
     // ---------------------------------------------------------------- conteúdo

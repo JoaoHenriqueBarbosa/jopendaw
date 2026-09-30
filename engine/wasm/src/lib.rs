@@ -122,6 +122,14 @@ pub extern "C" fn metronome(on: u32, gain: f32) {
     engine().set_metronome(on != 0, gain);
 }
 
+/// Como o metrônomo soa: timbre (0 clique, 1 madeira, 2 bipe, 3 cowbell, 4 hi-hat), subdivisão (0 tempo,
+/// 1 colcheias, 2 tercina, 3 semicolcheias, 4 só o acento), nível e altura (razão de frequência) do acento e
+/// nível das subdivisões.
+#[unsafe(no_mangle)]
+pub extern "C" fn metronome_style(timbre: u32, subdivision: u32, accent_level: f32, accent_pitch: f32, sub_level: f32) {
+    engine().set_metronome_style(timbre, subdivision, accent_level, accent_pitch, sub_level);
+}
+
 /// Número de faixas, de 0 a [`MAX_TRACKS`] como em `api::apply` (o Android e o render usam o mesmo
 /// teto); acima disso a chamada é ignorada e o motor fica como estava, em vez de reservar
 /// gigabytes na memória do wasm (um −1 que deu a volta vira 4294967295).

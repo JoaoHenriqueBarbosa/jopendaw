@@ -95,6 +95,13 @@ pub enum Call {
         on: bool,
         gain: f32,
     },
+    MetronomeStyle {
+        timbre: u32,
+        subdivision: u32,
+        accent_level: f32,
+        accent_pitch: f32,
+        sub_level: f32,
+    },
     Tracks {
         n: usize,
     },
@@ -319,6 +326,7 @@ const CALLS: &[Signature] = &[
     sig("seek", &[("batida", F64)], None),
     sig("loop_set", &[("ligado", U32), ("início", F64), ("fim", F64)], None),
     sig("metronome", &[("ligado", U32), ("ganho", F32)], None),
+    sig("metronome_style", &[("timbre", U32), ("subdivisão", U32), ("nível do acento", F32), ("altura do acento", F32), ("nível da subdivisão", F32)], None),
     sig("tracks", &[("quantidade", Usize)], None),
     sig("track", &[("faixa", Usize), ("ganho", F32), ("pan", F32), ("mudo", U32), ("solo", U32)], None),
     sig("master", &[("ganho", F32), ("pan", F32)], None),
@@ -548,6 +556,9 @@ impl Call {
             "seek" => Call::Seek { beat: a.f64(0) },
             "loop_set" => Call::LoopSet { on: a.flag(0), start: a.f64(1), end: a.f64(2) },
             "metronome" => Call::Metronome { on: a.flag(0), gain: a.f32(1) },
+            "metronome_style" => {
+                Call::MetronomeStyle { timbre: a.u32(0), subdivision: a.u32(1), accent_level: a.f32(2), accent_pitch: a.f32(3), sub_level: a.f32(4) }
+            }
             "tracks" => {
                 let n = a.usize(0);
                 if n > MAX_TRACKS {
@@ -676,6 +687,9 @@ impl Call {
             Call::Seek { beat } => e.seek(beat),
             Call::LoopSet { on, start, end } => e.set_loop(on, start, end),
             Call::Metronome { on, gain } => e.set_metronome(on, gain),
+            Call::MetronomeStyle { timbre, subdivision, accent_level, accent_pitch, sub_level } => {
+                e.set_metronome_style(timbre, subdivision, accent_level, accent_pitch, sub_level)
+            }
             Call::Tracks { n } => e.set_track_count(n),
             Call::Track { track, gain, pan, mute, solo } => {
                 if let Some(t) = e.track_mut(track) {
@@ -1090,6 +1104,7 @@ mod tests {
             case(playing, "metronome", &[1.0, 0.8], |e| e.set_metronome(true, 0.8), Changes),
             // booleano é "diferente de zero" depois de virar inteiro: 0,5 é desligado
             case(playing, "metronome", &[0.5, 0.8], |e| e.set_metronome(false, 0.8), Same),
+            case(metered, "metronome_style", &[3.0, 2.0, 1.5, 2.0, 0.3], |e| e.set_metronome_style(3, 2, 1.5, 2.0, 0.3), Changes),
             case(playing, "tracks", &[2.0], |e| e.set_track_count(2), Changes),
             case(
                 playing,
