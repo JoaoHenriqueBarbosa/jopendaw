@@ -24,6 +24,35 @@ StepLayout grid(double step, {double length = 4}) => StepLayout(step: step, step
 EngineState state(double beat) => EngineState(beat, true, Float32List(0));
 
 void main() {
+  group('sequenciador: swing com rolos de 1/32', () {
+    final l16 = grid(0.25);
+    // chimbal 1/16 com rolo de 1/32 no fim, mais bumbo e caixa em passos pares e ímpares
+    List<MidiNote> clip() => [
+      for (var i = 0; i < 16; i++) note(42, i * 0.25),
+      for (final b in [3.0, 3.25, 3.5, 3.75]) note(42, b + 0.125),
+      note(36, 0), note(36, 0.25 * 7), note(38, 0.25 * 4), note(38, 0.25 * 12), note(38, 0.25 * 13),
+    ];
+
+    test('lê o swing apesar dos rolos; aplicar + tirar volta às notas originais', () {
+      final n = clip();
+      final orig = [for (final x in n) x.start];
+      expect(detectSwing(n, l16), 0);
+      final moved = retimeSwing(n, l16, 0, 0.41);
+      expect(moved, greaterThan(0));
+      expect(detectSwing(n, l16), closeTo(0.41, 1e-9));
+      expect(detectSwings(n, 4).map((e) => e.$2), [closeTo(0.41, 1e-9)]);
+      expect(removeAllSwing(n, 4), moved);
+      expect([for (final x in n) x.start], orig);
+    });
+
+    test('rolo 1/32 sozinho e humanização continuam 0', () {
+      expect(detectSwing([for (var i = 0; i < 16; i++) note(42, i * 0.125)], l16), 0);
+      final n = clip();
+      n[1].start += 0.03;
+      expect(detectSwing(n, l16), 0);
+    });
+  });
+
   group('sequenciador: detectSwing rígido', () {
     final l16 = grid(0.25);
 

@@ -280,28 +280,44 @@ int retimeSwing(List<MidiNote> notes, StepLayout l, double from, double to) {
 /// com swing: só há swing quando (1) TODAS as notas dos passos ímpares (o 2º, o 4º... contando do 1;
 /// o passo vai de `k·passo` até o próximo) estão no mesmo deslocamento, de 1% a 75% do passo; (2) há
 /// ao menos uma nota exatamente num passo par; e (3) nenhuma nota dos passos pares está fora da
-/// grade (se estiver, o desenho não é uma grade com swing, e lê 0). Notas só nos passos ímpares, ou
+/// grade (se estiver, o desenho não é uma grade com swing, e lê 0), salvo as a meio passo: rolos de
+/// 1/32 (nos passos pares e nos ímpares) são ignorados quando os outros ímpares dão um swing; se
+/// só há notas a meio passo nos ímpares, vale 50% só sem rolo nos pares. Notas só nos passos ímpares, ou
 /// todas retas, leem 0. Não há desempate: em 1/8 uma colcheia reta é 0% e só o deslocamento comum a
 /// todas as colcheias de contratempo vira swing (75% é o máximo). Um swing aplicado em 1/16 cai, em
 /// 1/8, em passos pares fora da grade e lê 0 ali: cada resolução lê o seu (ver [detectSwings]).
 double detectSwing(Iterable<MidiNote> notes, StepLayout l) {
   int? pct;
-  var evens = 0;
+  var evens = 0, halfEvens = 0, halfOdds = 0;
   for (final n in notes) {
     final k = (n.start / l.step + 1e-9).floor();
     if (k < 0) continue;
     final off = n.start - k * l.step;
     if (k.isEven) {
-      if (off.abs() > stepEps) return 0;
-      evens++;
+      if (off.abs() <= stepEps) {
+        evens++;
+      } else if ((off - l.step / 2).abs() <= stepEps) {
+        halfEvens++; // meio passo: rolo (1/32 em 1/16), não é swing
+      } else {
+        return 0;
+      }
       continue;
     }
     final p = (off / l.step * 100).round();
     if (p < 0 || p > 75 || (off - p / 100 * l.step).abs() > stepEps) return 0;
+    if (p == 50) {
+      halfOdds++; // pode ser rolo ou swing de 50%: decide-se abaixo
+      continue;
+    }
     if (pct != null && pct != p) return 0;
     pct = p;
   }
-  return pct == null || evens == 0 ? 0 : pct / 100;
+  if (pct == null) {
+    // só notas a meio passo nos ímpares: swing de 50% se não há rolo nos pares
+    if (halfOdds == 0 || halfEvens > 0) return 0;
+    pct = 50;
+  }
+  return evens == 0 ? 0 : pct / 100;
 }
 
 /// O swing que o clipe de [clipLength] batidas tem em cada resolução de [stepResolutions] (só as
