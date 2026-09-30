@@ -755,3 +755,175 @@ fn edicoes_aleatorias_com_latencia_nunca_quebram_e_voltam_ao_alinhamento() {
     assert_eq!(e.pdc_latency(), 144);
     assert!(max_err(&out, &sum, 144, 4000, out.len()) < 1e-4, "{}", max_err(&out, &sum, 144, 4000, out.len()));
 }
+
+/// O clique do metrônomo soa junto das faixas: atrasa a latência total (PDC e cadeia do master).
+#[test]
+fn metronomo_alinha_com_as_faixas_com_latencia() {
+    for (track_fx, master_fx, delay) in [(false, false, 0), (true, false, 144), (false, true, 144), (true, true, 288)] {
+        let mut e = impulses(1);
+        if track_fx {
+            fx(&mut e, 0, 0, fx_kind::LIMITER);
+        }
+        if master_fx {
+            fx(&mut e, -1, 0, fx_kind::LIMITER);
+        }
+        e.set_metronome(true, 1.0);
+        e.play();
+        let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+        let (mut left, mut right) = (Vec::new(), Vec::new());
+        while left.len() < AT + 2000 {
+            e.process(&mut l, &mut r);
+            left.extend_from_slice(&l);
+            right.extend_from_slice(&r);
+        }
+        // a faixa está toda à esquerda (o impulso) e o clique vai aos dois lados: a direita é só o clique e
+        // esquerda menos direita é só o impulso
+        let only: Vec<f32> = left.iter().zip(&right).map(|(a, b)| a - b).collect();
+        let imp = argmax(&only[AT - 100..]) + AT - 100;
+        let click = right.iter().enumerate().skip(AT - 100).find(|(_, v)| v.abs() > 1e-6).unwrap().0;
+        assert_eq!(imp, AT + delay, "impulso, latência {delay}");
+        // o primeiro quadro do clique é a fase zero (silêncio): o som começa um quadro depois
+        assert_eq!(click, AT + delay + 1, "clique, latência {delay}");
+        // e nada de clique antes (o do tempo 0 cai no começo e passa pelo mesmo atraso)
+        assert!(right[AT - 100..AT + delay].iter().all(|v| v.abs() < 1e-6));
+    }
+}
+
+/// Trocar o tipo de um efeito que soava, entre efeitos bem audíveis (senoide constante), mantém o
+/// crossfade de 10 ms mesmo com o recálculo da PDC entre um bloco e outro: um corte seco entre as
+/// duas saídas apareceria como um degrau grande.
+#[test]
+fn trocar_entre_efeitos_audiveis_mantem_o_crossfade() {
+    for (from, to) in
+        [(fx_kind::DISTORTION, fx_kind::EQ), (fx_kind::EQ, fx_kind::DISTORTION), (fx_kind::DISTORTION, fx_kind::FILTER), (fx_kind::FILTER, fx_kind::DISTORTION)]
+    {
+        let (mut e, _) = sine_engine();
+        fx(&mut e, 0, 0, from);
+        e.set_fx_param(0, 0, effect::distortion_param::DRIVE, 6.0);
+        e.set_fx_param(0, 0, effect::filter_param::CUTOFF, 300.0);
+        e.play();
+        let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+        let mut out = Vec::new();
+        let mut at = 0;
+        for k in 0..500 {
+            if k == 200 {
+                at = out.len();
+                e.set_fx(0, 0, to);
+                e.set_fx_param(0, 0, effect::distortion_param::DRIVE, 6.0);
+            }
+            e.process(&mut l, &mut r);
+            out.extend_from_slice(&l);
+        }
+        // o degrau máximo de antes da troca é o do próprio efeito; o crossfade não pode passar muito dele
+        let base = max_step(&out[2000..at]);
+        let step = max_step(&out[at.saturating_sub(64)..]);
+        assert!(step < base * 1.5 + 0.01, "{from} → {to}: degrau {step} contra {base} de antes");
+    }
+}
+
+/// A automação do lookahead do limitador muda a latência real: a PDC acompanha (no máximo a cada
+/// 20 ms) e a saída volta a ficar alinhada.
+#[test]
+fn automacao_do_lookahead_refaz_a_compensacao_com_limite_de_frequencia() {
+    let (mut e, sum) = sine_engine();
+    fx(&mut e, 0, 0, fx_kind::LIMITER);
+    // degrau de 3 ms para 10 ms na batida 1 (quadro 24000)
+    let lane = e.add_lane(0, auto_target::EFFECT, 0, effect::limiter_param::LOOKAHEAD);
+    for (beat, v) in [(0.0, 0.003), (1.0, 0.003), (1.001, 0.010), (4.0, 0.010)] {
+        e.add_point(lane, beat, v, 0.0);
+    }
+    e.play();
+    let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+    let mut out = Vec::new();
+    while out.len() < 90_000 {
+        e.process(&mut l, &mut r);
+        out.extend_from_slice(&l);
+    }
+    assert_eq!(e.pdc_latency(), 480, "a PDC ficou com a conta velha");
+    assert!(max_err(&out, &sum, 144, 4000, 24_000) < 1e-4, "antes");
+    assert!(max_err(&out, &sum, 480, 40_000, out.len()) < 1e-4, "depois");
+    assert!(e.pdc_runs < 6, "recalculou {} vezes", e.pdc_runs);
+    // rampa contínua: no máximo um recálculo a cada 20 ms (50 por segundo)
+    let (mut e, _) = sine_engine();
+    fx(&mut e, 0, 0, fx_kind::LIMITER);
+    let lane = e.add_lane(0, auto_target::EFFECT, 0, effect::limiter_param::LOOKAHEAD);
+    e.add_point(lane, 0.0, 0.0, 0.0);
+    e.add_point(lane, 2.0, 0.010, 0.0);
+    e.play();
+    let before = e.pdc_runs;
+    for _ in 0..(48_000 / 128) {
+        e.process(&mut l, &mut r);
+    }
+    let runs = e.pdc_runs - before;
+    assert!((30..=52).contains(&runs), "{runs} recálculos em 1 s");
+}
+
+/// Os atrasos da PDC crescem no comando (e com folga), não no bloco: depois de um comando de
+/// lookahead maior, processar não aloca; e uma rampa de lookahead automatizada, com os anéis já
+/// crescidos, também não.
+#[test]
+fn o_crescimento_dos_atrasos_da_pdc_acontece_no_comando() {
+    let (mut e, _) = sine_engine();
+    let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+    fx(&mut e, 0, 0, fx_kind::LIMITER);
+    e.play();
+    for _ in 0..100 {
+        e.process(&mut l, &mut r);
+    }
+    // o comando (pela mesma via do hospedeiro) recalcula e aloca; o bloco seguinte, não
+    let args = [0.0, 0.0, f64::from(effect::limiter_param::LOOKAHEAD), 0.010];
+    crate::api::apply(&mut e, "fx_param", &args).unwrap();
+    let allocs = crate::testalloc::count(|| {
+        for _ in 0..300 {
+            e.process(&mut l, &mut r);
+        }
+    });
+    assert_eq!(allocs, 0, "o bloco alocou depois do comando");
+    assert_eq!(e.pdc_latency(), 480);
+    // rampa automatizada (com os anéis já crescidos): sem alocar
+    let lane = e.add_lane(0, auto_target::EFFECT, 0, effect::limiter_param::LOOKAHEAD);
+    e.add_point(lane, 0.0, 0.0, 0.0);
+    e.add_point(lane, 2.0, 0.010, 0.0);
+    e.seek(0.0);
+    let allocs = crate::testalloc::count(|| {
+        for _ in 0..(2 * 48_000 / 128) {
+            e.process(&mut l, &mut r);
+        }
+    });
+    assert_eq!(allocs, 0, "a automação do lookahead alocou");
+}
+
+/// Um impulso na entrada, monitorado numa faixa com limitador (e o limitador de segurança ligado),
+/// sai depois de exatamente `latency_frames()`: é o que o app soma à latência do aparelho para
+/// pôr a gravação na posição certa.
+#[test]
+fn impulso_monitorado_sai_depois_da_latencia_exposta() {
+    for (track_fx, master_fx) in [(false, false), (true, false), (true, true)] {
+        let mut e = Engine::new(RATE);
+        e.set_tempo(120.0, 4);
+        e.set_track_count(2);
+        e.track_mut(0).unwrap().pan = -1.0;
+        e.set_monitor(0, true);
+        if track_fx {
+            fx(&mut e, 0, 0, fx_kind::LIMITER);
+        }
+        if master_fx {
+            fx(&mut e, -1, 0, fx_kind::LIMITER);
+        }
+        e.play();
+        let at = 5 * 128 + 37;
+        let (mut l, mut r) = (vec![0.0; 128], vec![0.0; 128]);
+        let mut out = Vec::new();
+        for k in 0..12 {
+            let mut input = vec![0.0f32; 128];
+            if k == at / 128 {
+                input[at % 128] = 0.25;
+            }
+            e.set_input(&input, None);
+            e.process(&mut l, &mut r);
+            out.extend_from_slice(&l);
+        }
+        let want = at + e.latency_frames();
+        assert_eq!(argmax(&out), want, "faixa {track_fx}, master {master_fx}, latência {}", e.latency_frames());
+    }
+}

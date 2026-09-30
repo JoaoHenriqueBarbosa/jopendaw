@@ -31,8 +31,9 @@
 //!
 //! Os efeitos rodam mesmo sem nada tocando enquanto houver cauda; quando a entrada está calada e
 //! a saída da cadeia fica em silêncio por mais tempo que o maior atraso que ela pode devolver, a
-//! cadeia para de rodar até a entrada voltar. Latência de efeito (lookahead) ainda não é
-//! compensada.
+//! cadeia para de rodar até a entrada voltar. A latência de efeito (lookahead, filtros de fase
+//! linear) é compensada por atrasos nas faixas que chegam mais cedo (PDC, `Engine::pdc_update`) e
+//! também no clique do metrônomo; a latência total sai em [`Engine::latency_frames`].
 //!
 //! # Automação
 //!
@@ -121,6 +122,9 @@ const WARMUP_SECS: f64 = 0.05;
 /// 0,7 ms a 48 kHz, fino o bastante para uma rampa de volume não dar degraus (o fader ainda
 /// suaviza entre um passo e outro).
 pub const AUTO_STEP: usize = 32;
+
+/// Intervalo mínimo entre dois recálculos da PDC causados por automação de latência (segundos).
+const PDC_AUTO_SECS: f64 = 0.02;
 
 /// Saída abaixo disso (−120 dB) conta como silêncio para a cadeia de efeitos poder parar.
 const SILENCE: f32 = 1e-6;
@@ -549,6 +553,9 @@ pub struct Engine {
     meter: MeterMap,
     /// O `beats_per_bar` do último `tempo`: o compasso a que `meter_clear` volta.
     beats_per_bar: u32,
+    /// O mapa de compassos vem de `meter_point` (o app o reenvia sempre que muda): o `tempo`,
+    /// reenviado a cada sincronização com o número de tempos arredondado, não mexe nele.
+    meter_custom: bool,
     /// Posições musicais a preservar enquanto o app reenvia o mapa (`tempo_clear` + pontos): o
     /// transporte e o loop em batidas, lidas antes da primeira mudança do lote e reaplicadas a cada
     /// ponto. Vale até o próximo bloco.
@@ -647,6 +654,19 @@ pub struct Engine {
     pdc_arrive: Vec<usize>,
     pdc_out: Vec<usize>,
     pdc_inmax: Vec<usize>,
+    /// O clique do metrônomo entra depois da cadeia do master: atrasa `pdc_total + pdc_master`
+    /// para soar junto das faixas (o limitador de segurança atrasa os dois igual). `metro_dirty`:
+    /// o anel tem clique gravado (esvaziar antes de voltar a gravar).
+    metro_delay: Delay,
+    metro_dirty: bool,
+    /// Quadros processados desde a criação (relógio do limite de frequência da PDC automatizada).
+    frames_run: u64,
+    /// A automação mexeu numa latência: recalcular a PDC quando o intervalo mínimo passar.
+    pdc_auto_pending: bool,
+    pdc_auto_last: u64,
+    /// Quantas vezes a PDC foi recalculada (os testes conferem o limite de frequência).
+    #[cfg(test)]
+    pdc_runs: u32,
 }
 
 /// Latência do limitador de segurança em quadros, medida por um impulso (o lookahead é detalhe
@@ -668,6 +688,7 @@ impl Engine {
             tempo: TempoMap::new(rate, 120.0),
             meter: MeterMap::new(4),
             beats_per_bar: 4,
+            meter_custom: false,
             anchor: None,
             playing: false,
             pos: 0.0,
@@ -725,6 +746,13 @@ impl Engine {
             pdc_arrive: Vec::new(),
             pdc_out: Vec::new(),
             pdc_inmax: Vec::new(),
+            metro_delay: Delay::new(),
+            metro_dirty: false,
+            frames_run: 0,
+            pdc_auto_pending: false,
+            pdc_auto_last: 0,
+            #[cfg(test)]
+            pdc_runs: 0,
         }
     }
 
@@ -734,7 +762,9 @@ impl Engine {
 
     // ---------------------------------------------------------------- andamento e posição
 
-    /// Muda o andamento inicial e o compasso (`beats_per_bar`/4, quando não há mapa de compassos).
+    /// Muda o andamento inicial e o compasso (`beats_per_bar`/4, só quando o app não mandou mapa de
+    /// compassos por `meter_point`: com mapa, quem manda nele é o mapa, e o `beats_per_bar` daqui
+    /// só vale para o `meter_clear` seguinte).
     /// As notas e os fins das que soam estão em batidas: seguem o andamento novo sem mais nada. Os
     /// efeitos sincronizados (delay, tremolo, filtro) recebem o andamento inicial.
     pub fn set_tempo(&mut self, bpm: f64, beats_per_bar: u32) {
@@ -744,7 +774,9 @@ impl Engine {
         let old = self.tempo.bpm0();
         self.tempo.set_bpm0(bpm);
         self.beats_per_bar = beats_per_bar.clamp(1, 32);
-        self.meter.set_initial(self.beats_per_bar);
+        if !self.meter_custom {
+            self.meter.set_initial(self.beats_per_bar);
+        }
         self.pos = self.beats_to_frames(beat);
         self.loop_start = self.beats_to_frames(ls);
         self.loop_end = self.beats_to_frames(le);
@@ -785,6 +817,7 @@ impl Engine {
 
     /// Volta o mapa de compassos a um compasso só (`beats_per_bar`/4, o do último `tempo`).
     pub fn meter_clear(&mut self) {
+        self.meter_custom = false;
         self.meter.clear(self.beats_per_bar);
     }
 
@@ -792,6 +825,7 @@ impl Engine {
     /// muda onde o metrônomo põe o tempo forte e a cada quanto clica; a batida do documento segue
     /// sendo a semínima (6/8 dura 3 batidas).
     pub fn meter_point(&mut self, bar: u32, num: u32, den: u32) {
+        self.meter_custom = true;
         self.meter.insert(bar, num, den);
     }
 
@@ -857,13 +891,22 @@ impl Engine {
             self.recorder.close_all(self.transport_beat());
         }
         self.playing = false;
-        self.metronome.silence();
+        self.silence_click();
         for lane in &mut self.lanes {
             lane.held.clear();
             if let Some(inst) = lane.instrument.as_mut() {
                 inst.release_all();
             }
             lane.stop_cc();
+        }
+    }
+
+    /// Corta o clique do metrônomo e o que ele guardava no atraso da PDC.
+    fn silence_click(&mut self) {
+        self.metronome.silence();
+        if self.metro_dirty {
+            self.metro_delay.clear();
+            self.metro_dirty = false;
         }
     }
 
@@ -876,7 +919,7 @@ impl Engine {
         if self.playing {
             self.recorder.jump(from, self.transport_beat());
         }
-        self.metronome.silence();
+        self.silence_click();
         for lane in &mut self.lanes {
             lane.release_held();
         }
@@ -1121,7 +1164,7 @@ impl Engine {
     /// Pânico: corta na hora todo som de instrumento (notas presas, caudas), as caudas dos efeitos
     /// e o metrônomo. O transporte segue como estava.
     pub fn panic(&mut self) {
-        self.metronome.silence();
+        self.silence_click();
         for lane in &mut self.lanes {
             lane.held.clear();
             if let Some(inst) = lane.instrument.as_mut() {
@@ -1351,6 +1394,10 @@ impl Engine {
     /// Uma faixa que só chega em outro barramento (ciclo de sidechain) não conta a chave.
     fn pdc_update(&mut self) {
         self.pdc_dirty = false;
+        #[cfg(test)]
+        {
+            self.pdc_runs += 1;
+        }
         let n = self.tracks.len();
         let cap = self.rate as usize;
         let fade = (mixer::FADE_SECS * self.rate) as usize;
@@ -1384,6 +1431,7 @@ impl Engine {
         let arrive_master = master_in.max(self.master_fx.key_need(usize::MAX, &self.pdc_out[..n], |_| true)).min(cap);
         self.pdc_total = arrive_master;
         self.pdc_master = self.master_fx.latency();
+        self.metro_delay.set_target(self.pdc_total + self.pdc_master, fade);
         for t in 0..n {
             let (arrive, out) = (self.pdc_arrive[t], self.pdc_out[t]);
             let rank = &self.rank;
@@ -1414,6 +1462,12 @@ impl Engine {
     pub fn pdc_latency(&mut self) -> usize {
         self.refresh();
         self.pdc_total
+    }
+
+    /// Põe em dia o roteamento e a PDC logo depois de um comando: os atrasos que crescem alocam
+    /// aqui, no comando (que já pode alocar, como o `set_fx`), e não no `process` seguinte.
+    pub fn settle(&mut self) {
+        self.refresh();
     }
 
     /// Põe em dia o roteamento e a PDC (o `process` faz isso a cada bloco; quem consulta a latência
@@ -1568,9 +1622,12 @@ impl Engine {
                 }
             }
             at::EFFECT if changed => {
-                if let Some(c) = self.chain_mut(t.track) {
+                // um parâmetro que mexe na latência (lookahead do limitador) deixa a PDC velha
+                let stale = self.chain_mut(t.track).is_some_and(|c| {
                     c.set_param(t.slot as usize, t.id, v, false, true);
-                }
+                    c.latency_stale(t.slot as usize)
+                });
+                self.pdc_auto_pending |= stale;
             }
             at::SEND if t.track >= 0 => {
                 if let Some(s) = self.strips.get_mut(t.track as usize).and_then(|s| s.sends.get_mut(t.slot as usize)) {
@@ -1608,9 +1665,11 @@ impl Engine {
                 }
             }
             at::EFFECT => {
-                if let Some(c) = self.chain_mut(t.track) {
+                let stale = self.chain_mut(t.track).is_some_and(|c| {
                     c.restore_param(t.slot as usize, t.id);
-                }
+                    c.latency_stale(t.slot as usize)
+                });
+                self.pdc_auto_pending |= stale;
             }
             at::SEND if t.track >= 0 => {
                 if let Some(s) = self.strips.get_mut(t.track as usize).and_then(|s| s.sends.get_mut(t.slot as usize)) {
@@ -1752,6 +1811,8 @@ impl Engine {
             s.chain.snap_delays();
         }
         self.master_fx.snap_delays();
+        self.metro_delay.snap();
+        self.metro_dirty = false;
         let warm = ((WARMUP_SECS * self.rate) as usize).max(CHUNK);
         for t in 0..self.tracks.len() {
             let (strip, buf) = (&mut self.strips[t], &mut self.bufs[t]);
@@ -1838,6 +1899,7 @@ impl Engine {
             self.render(l, r);
             done += chunk;
             self.clock += chunk as u64;
+            self.frames_run += chunk as u64;
             if self.playing {
                 self.pos += chunk as f64;
                 if looping && self.pos >= self.loop_end {
@@ -1858,6 +1920,12 @@ impl Engine {
             s.chain.collect();
         }
         self.master_fx.collect();
+        // a latência automatizada recalcula a PDC no máximo a cada PDC_AUTO_SECS
+        if self.pdc_auto_pending && self.frames_run.saturating_sub(self.pdc_auto_last) >= (PDC_AUTO_SECS * self.rate) as u64 {
+            self.pdc_auto_pending = false;
+            self.pdc_auto_last = self.frames_run;
+            self.pdc_dirty = true;
+        }
         self.refresh();
     }
 
@@ -1955,12 +2023,17 @@ impl Engine {
                 let [gl, gr] = self.master.now_gains();
                 let (cl, cr) = self.scratch.pair(n);
                 self.metronome.render(cl, cr, self.pos, &self.tempo, &self.meter, self.rate);
+                // o clique espera a latência das faixas (PDC e cadeia do master)
+                if self.metro_delay.active() {
+                    self.metro_delay.process(cl, cr);
+                    self.metro_dirty = true;
+                }
                 for i in 0..n {
                     out_l[i] += cl[i] * gl;
                     out_r[i] += cr[i] * gr;
                 }
             } else {
-                self.metronome.silence();
+                self.silence_click();
             }
         } else if self.tail > 0 {
             self.tail = self.tail.saturating_sub(n);

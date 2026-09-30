@@ -666,6 +666,13 @@ impl Chain {
         self.update_hold();
     }
 
+    /// A latência que o efeito do slot declara agora difere da que a PDC usa (um parâmetro
+    /// automatizado mexeu nela): a conta está velha.
+    pub fn latency_stale(&self, slot: usize) -> bool {
+        let cap = self.rate as usize;
+        self.slot(slot).is_some_and(|s| s.latency != s.fx.as_ref().filter(|_| !s.dying).map_or(0, |fx| fx.latency().min(cap)))
+    }
+
     /// Latência da cadeia inteira em quadros: a soma dos efeitos, ligados ou em bypass.
     pub fn latency(&self) -> usize {
         self.slots.iter().map(|s| s.latency).sum()

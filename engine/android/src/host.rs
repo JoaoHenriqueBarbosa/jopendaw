@@ -194,6 +194,12 @@ impl Host {
         self.meters().loudness(kind)
     }
 
+    /// `jd_engine_latency`: a última latência do motor (quadros) publicada pela thread de áudio.
+    pub fn engine_latency(&mut self) -> f64 {
+        self.pump();
+        self.meters().latency()
+    }
+
     pub fn spectrum(&mut self, out: &mut [f32]) -> usize {
         self.link.state.spectrum(out)
     }

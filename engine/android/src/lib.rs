@@ -54,6 +54,7 @@
 //! | `jd_offline_captured(h, index, l, r, n) -> i32` | −1 = saída do process, ≥ 0 = `capture_add` |
 //! | `jd_offline_free(h)` | |
 //! | `jd_latency() -> f64` | latência de saída em s (0 sem saída) |
+//! | `jd_engine_latency() -> f64` | latência do motor (PDC, cadeia do master, limitador) em quadros |
 //! | `jd_loudness(kind) -> f64` | loudness do master: 0 momentâneo, 1 curto prazo, 2 integrado, 3 true peak, 4 faixa; −200 = sem medida |
 
 // O contrato de segurança de todas as funções é o do topo: ponteiros válidos do tamanho indicado.
@@ -279,6 +280,14 @@ pub extern "C" fn jd_loudness(kind: i32) -> f64 {
         }
         with_host(jopendaw_engine::loudness::NONE, |h| h.loudness(kind as usize))
     })
+}
+
+/// Latência do motor em quadros (PDC das faixas, cadeia do master e limitador de segurança): quanto
+/// o som sai depois do que o transporte toca, além da latência do aparelho (`jd_latency`). A thread
+/// de áudio publica a cada bloco. 0 antes do primeiro bloco ou sem motor.
+#[unsafe(no_mangle)]
+pub extern "C" fn jd_engine_latency() -> f64 {
+    guard(0.0, || with_host(0.0, |h| h.engine_latency()))
 }
 
 // ------------------------------------------------------------------ decodificação
@@ -635,6 +644,7 @@ mod tests {
         let mut spec = [0.0f32; 1024];
         assert_eq!(unsafe { jd_spectrum(spec.as_mut_ptr(), spec.len()) }, 0);
         assert_eq!(jd_latency(), 0.0);
+        assert!(jd_engine_latency() >= 0.0);
         assert_eq!((jd_loudness(2), jd_loudness(3), jd_loudness(-1), jd_loudness(99)), (-200.0, -200.0, -200.0, -200.0));
         assert_eq!(calls(r#"[["loudness_reset"]]"#), 0);
         let mut json = [0u8; 16];

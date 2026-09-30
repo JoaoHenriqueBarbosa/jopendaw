@@ -52,7 +52,7 @@ impl std::error::Error for UnknownCall {}
 pub const MAX_TRACKS: usize = 1024;
 
 /// Aplica uma chamada. `Ok(Some(v))` para as que devolvem valor (`auto_lane`, `capture_add`,
-/// `fx_meter`, `beat`, `playing`, `loudness`), `Ok(None)` para as outras. Com erro, o motor fica intocado.
+/// `fx_meter`, `beat`, `playing`, `loudness`, `latency_frames`), `Ok(None)` para as outras. Com erro, o motor fica intocado.
 pub fn apply(engine: &mut Engine, name: &str, args: &[f64]) -> Result<Option<f64>, UnknownCall> {
     Call::parse(name, args).map(|call| call.apply(engine))
 }
@@ -108,6 +108,7 @@ pub enum Call {
     Playing,
     LoudnessReset,
     Loudness { kind: u32 },
+    LatencyFrames,
     ZonesClear { track: usize },
     ZoneAdd { track: usize, sample: u32, zone: ZoneDef },
     LiveBend { track: usize, value: f32 },
@@ -193,6 +194,7 @@ const CALLS: &[Signature] = &[
     sig("playing", &[], Some(U32)),
     sig("loudness_reset", &[], None),
     sig("loudness", &[("tipo", U32)], Some(F64)),
+    sig("latency_frames", &[], Some(F64)),
     sig("zones_clear", &[("faixa", Usize)], None),
     sig(
         "zone_add",
@@ -396,6 +398,7 @@ impl Call {
             "playing" => Call::Playing,
             "loudness_reset" => Call::LoudnessReset,
             "loudness" => Call::Loudness { kind: a.u32(0) },
+            "latency_frames" => Call::LatencyFrames,
             "zones_clear" => Call::ZonesClear { track: a.usize(0) },
             "zone_add" => {
                 // notas, velocidades e grupo passam pelo limite do MIDI; o modo é "diferente de zero" = até o fim
@@ -510,6 +513,7 @@ impl Call {
             Call::Playing => return Some(f64::from(u32::from(e.playing()))),
             Call::LoudnessReset => e.loudness_reset(),
             Call::Loudness { kind } => return Some(e.loudness(kind)),
+            Call::LatencyFrames => return Some(e.latency_frames() as f64),
             Call::ZonesClear { track } => e.clear_zones(track),
             Call::ZoneAdd { track, sample, zone } => e.add_zone(track, sample, zone),
             Call::LiveBend { track, value } => e.live_bend(track, value),
@@ -517,6 +521,9 @@ impl Call {
             Call::CcAdd { track, cc, beat, value } => e.add_cc(track, cc, beat, value),
             Call::CcClear => e.clear_cc(),
         }
+        // o que o comando mudou na PDC (latência nova, crescimento dos atrasos) se resolve já, no
+        // comando, e não no começo do próximo bloco
+        e.settle();
         None
     }
 }
@@ -906,6 +913,7 @@ mod tests {
             valued(playing, "playing", &[], |e| f64::from(u32::from(e.playing())), Query),
             case(measured, "loudness_reset", &[], |e| e.loudness_reset(), Changes),
             valued(measured, "loudness", &[3.0], |e| e.loudness(3), Query),
+            valued(playing, "latency_frames", &[], |e| e.latency_frames() as f64, Query),
             case(sounding, "live_bend", &[1.0, 1.0], |e| e.live_bend(1, 1.0), Changes),
             case(sounding, "live_cc", &[1.0, 1.0, 1.0], |e| e.live_cc(1, 1, 1.0), Changes),
             // controle que o motor não conhece e faixa que não existe: inócuos

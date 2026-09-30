@@ -574,6 +574,14 @@ pub extern "C" fn loudness(kind: u32) -> f64 {
     engine().loudness(kind)
 }
 
+/// Latência do motor em quadros: a PDC das faixas e barramentos, a cadeia de inserts do master e o
+/// limitador de segurança. É quanto o som sai depois do que o transporte toca (o app soma à do
+/// aparelho ao compensar a gravação).
+#[unsafe(no_mangle)]
+pub extern "C" fn latency_frames() -> f64 {
+    engine().latency_frames() as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

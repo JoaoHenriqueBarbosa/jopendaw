@@ -59,6 +59,8 @@ pub struct Meters {
     /// Loudness do master (momentâneo, curto prazo, integrado, true peak, faixa: os `kind` do motor),
     /// como os bits de um f64; a thread de áudio publica a cada bloco e o Dart lê quando quiser.
     loudness: [AtomicU64; LOUDNESS_KINDS],
+    /// Latência do motor em quadros (`Engine::latency_frames`), como os bits de um f64.
+    latency: AtomicU64,
 }
 
 /// Medidas de loudness publicadas.
@@ -84,6 +86,7 @@ impl Meters {
             input_lost: AtomicBool::new(false),
             broken: AtomicBool::new(false),
             loudness: std::array::from_fn(|_| AtomicU64::new(jopendaw_engine::loudness::NONE.to_bits())),
+            latency: AtomicU64::new(0.0f64.to_bits()),
         }
     }
 
@@ -130,6 +133,15 @@ impl Meters {
     /// A última medida publicada; −200 (sem medida) para um tipo que não existe.
     pub fn loudness(&self, kind: usize) -> f64 {
         self.loudness.get(kind).map_or(jopendaw_engine::loudness::NONE, |a| f64::from_bits(a.load(Ordering::Relaxed)))
+    }
+
+    pub fn set_latency(&self, frames: f64) {
+        self.latency.store(frames.to_bits(), Ordering::Relaxed);
+    }
+
+    /// A última latência do motor publicada, em quadros (0 antes da primeira).
+    pub fn latency(&self) -> f64 {
+        f64::from_bits(self.latency.load(Ordering::Relaxed))
     }
 
     pub fn set_broken(&self) {

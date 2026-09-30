@@ -341,6 +341,9 @@ impl Svf {
     }
 }
 
+/// O anel de um [`Delay`] cresce em múltiplos disto (quadros).
+const GROW_STEP: usize = 1024;
+
 /// Linha de atraso estéreo de tomada móvel, a peça da compensação de latência (PDC). O atraso
 /// pedido (`target`) é alcançado por um crossfade curto entre a tomada antiga e a nova: mudar a
 /// latência com som passando não estala nem pula. Com atraso zero (e nenhuma mudança em curso) a
@@ -381,7 +384,8 @@ impl Delay {
             self.pos = 0;
         }
         if self.l.len() < frames + 1 {
-            self.grow(frames + 1);
+            // com folga: uma latência automatizada que sobe aos poucos não realoca a cada degrau
+            self.grow((frames + 1).next_multiple_of(GROW_STEP));
         }
         self.cur = self.target;
         self.target = frames;
@@ -517,8 +521,8 @@ mod tests {
         let (mut l, mut r) = (vec![0.0; 10], vec![0.0; 10]);
         d.process(&mut l, &mut r);
         assert_eq!(l[0], 16.0, "{l:?}");
-        // (o anel só tinha 6 quadros: o que era mais velho que isso não existe para a tomada nova)
-        assert_eq!((l[1], l[2], l[3], l[8], l[9]), (0.0, 0.0, 15.0, 20.0, 0.0), "{l:?}");
+        // (o anel cresce com folga e guardou o histórico todo: a tomada nova acha os quadros de trás)
+        assert_eq!((l[1], l[2], l[3], l[8], l[9]), (13.0, 14.0, 15.0, 20.0, 0.0), "{l:?}");
         // voltar a zero devolve a entrada
         d.set_target(0, 4);
         let (mut l, mut r) = (vec![7.0; 8], vec![7.0; 8]);

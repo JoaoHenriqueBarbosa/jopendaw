@@ -110,11 +110,10 @@ Este é um teste de cancelamento: dois caminhos idênticos, um com efeito de lat
 
 ### Gravar por cima de um projeto com efeitos de latência
 
-O app compensa na gravação só a latência do aparelho (ver [03c](03c-gravacao.md)). O som que você ouve enquanto grava sai atrasado da latência do projeto, e a que o app não conhece.
+O app soma a latência do projeto (PDC, cadeia do `Master` e limitador de segurança) à do aparelho ao compensar a gravação, tanto no áudio quanto nas notas MIDI (ver [03c](03c-gravacao.md)). Você não precisa mais somá-la ao campo `Compensação de latência` da janela `Configurações`; ele continua sendo um ajuste fino, em ms inteiros. `(precisa do motor recompilado; testado só por testes automáticos)`
 
-1. Para gravar sem esse desvio, ponha o `Lookahead` dos `Limitador` em 0 (ou tire a `Distorção`) até terminar a gravação; depois restaure.
-2. Se preferir manter os efeitos, some a latência do projeto (passo "Saber quanta latência o projeto tem") ao campo `Compensação de latência` da janela `Configurações`, em ms inteiros: positivo adianta o clipe gravado. Um `Limitador` de 3 ms pede +3 ms.
-3. Se você toca acompanhando o clique do metrônomo, e não a música, o clipe já cai na grade sem esse ajuste (o clique não passa pelos atrasos; ver Limites) `(lido do código; não confirmado ao ouvido)`.
+1. Se o clipe gravado ainda cair um pouco fora, ajuste `Compensação de latência` como antes: positivo adianta o clipe gravado.
+2. O clique do metrônomo é atrasado da mesma latência total e soa junto das faixas; tocando junto dele, o clipe cai na grade `(testado só por testes automáticos; não confirmado ao ouvido)`.
 
 ### Mudar o Lookahead tocando
 
@@ -126,17 +125,16 @@ O app compensa na gravação só a latência do aparelho (ver [03c](03c-gravacao
 - [06d Referência dos efeitos](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito): `Limitador` e `Distorção`, parâmetro por parâmetro.
 - [06 Mixer](06-mixer.md): envios, barramentos, sidechain e o limitador de segurança do master.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md): adicionar, tirar e ligar efeitos.
-- [03c Gravação](03c-gravacao.md): a latência do aparelho é compensada; a da PDC não.
+- [03c Gravação](03c-gravacao.md): a latência do aparelho e a da PDC são compensadas.
 - [08 Exportação](08-exportacao.md): mixagem e stems saem alinhados.
 - [07 Automação](07-automacao.md): a automação age alguns ms adiantada numa faixa com efeito de latência.
 - [Efeitos em combinação](../guias/efeitos-em-combinacao.md) e [Mixagem e automação](../guias/mixagem-e-automacao.md): compressão paralela e retorno por barramento sem som oco.
 
 ## Limites e pegadinhas
 
-- **A gravação do app não compensa a latência da PDC.** Só a do aparelho e a `Compensação de latência` manual. O app não consulta a latência do motor (ele não está exposto nas pontes) `(lido do código)`.
+- **A latência do motor só chega ao app com o motor recompilado.** Com `engine.wasm` ou os `.so` de antes da fase 13, o app compensa só a latência do aparelho e a manual.
 - **O monitoramento de uma faixa de áudio armada também passa pelos atrasos.** A entrada soma antes dos efeitos da faixa e sai com a latência do projeto, além da do aparelho. Sem nenhum efeito de latência no projeto (`Lookahead` em 0 e sem `Distorção`), o monitor volta à latência do aparelho mais 1,5 ms do limitador de segurança.
 - **A automação age alguns milissegundos adiantada** em relação ao som de uma faixa (ou barramento) cuja cadeia tenha latência: o valor automatizado é aplicado ao som que está a essa latência de chegar. Numa faixa com `Limitador` de 3 ms, um fade de volume começa 3 ms antes do som correspondente. Faixas sem efeito de latência não sofrem isso. Notas e automação são agendadas no tempo da faixa; a compensação atrasa só o áudio já renderizado.
-- **O clique do metrônomo não é atrasado.** Ele entra depois da cadeia do `Master`, fora dos atrasos: soa adiantado da latência do projeto em relação às faixas (mais a latência da cadeia do `Master`) `(lido do código; não confirmado ao ouvido)`.
 - **Ao vivo, o som sai a latência do projeto depois do cursor.** Uns poucos milissegundos com os padrões; o app não mostra esse número.
 - **Reordenar efeitos e trocar o tipo** recria efeitos no motor ([06c](06c-painel-de-efeitos.md)); a latência é reavaliada, e a compensação segue.
 - **Automatizar `Lookahead`** não é acompanhado (ver Controles).

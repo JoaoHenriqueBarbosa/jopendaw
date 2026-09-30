@@ -388,3 +388,27 @@ fn extremos_de_andamento_dao_posicoes_finitas_e_ordenadas() {
         }
     }
 }
+
+/// Um compasso único n/8 (5/8, 7/8, 9/8) mandado por `meter_point` sobrevive ao `tempo` reenviado
+/// a cada sincronização com o número de tempos arredondado (7/8 = 3,5 vira 4; 5/8, 3; 9/8, 5).
+#[test]
+fn compasso_unico_n_8_sobrevive_ao_tempo_reenviado() {
+    for (num, rounded) in [(5u32, 3u32), (6, 3), (7, 4), (9, 5), (11, 6)] {
+        let mut e = Engine::new(RATE);
+        e.set_tempo(120.0, 4);
+        e.meter_clear();
+        e.meter_point(1, num, 8);
+        for _ in 0..3 {
+            e.set_tempo(120.0, rounded);
+            e.set_tempo(90.0, rounded);
+        }
+        assert_eq!(e.meter.points().len(), 1);
+        assert_eq!((e.meter.points()[0].num, e.meter.points()[0].den), (num, 8), "{num}/8");
+        assert!((e.meter.bar_start(2) - f64::from(num) / 2.0).abs() < 1e-9, "{num}/8 dura {} batidas", e.meter.bar_start(2));
+        // sem mapa, o `tempo` volta a mandar no compasso n/4
+        e.meter_clear();
+        e.set_tempo(120.0, rounded);
+        assert_eq!((e.meter.points()[0].num, e.meter.points()[0].den), (rounded, 4));
+        assert!((e.meter.bar_start(2) - f64::from(rounded)).abs() < 1e-9);
+    }
+}

@@ -381,6 +381,7 @@ impl AudioCore {
         for k in 0..LOUDNESS_KINDS {
             meters.set_loudness(k, e.loudness(k as u32));
         }
+        meters.set_latency(e.latency_frames() as f64);
         if self.analyzing {
             self.spectrum_frames += frames;
             if self.spectrum_frames >= self.spectrum_every || !self.spectrum_live {
@@ -517,6 +518,9 @@ pub(crate) mod tests {
         // 4 × 4800 quadros a 120 bpm (2 batidas por segundo) = 0,8 batida
         assert!((st[0] - 0.8).abs() < 1e-9, "batida {}", st[0]);
         assert!(st[4] > 0.1 && st[6] > 0.1, "picos {:?}", &st[4..8]);
+        // a latência do motor (aqui só a do limitador de segurança) sai publicada
+        let published = link.state.meters.latency();
+        assert!(published > 0.0 && published == core.engine.latency_frames() as f64, "latência {published}");
         // mono: a média dos dois lados
         let mut mono = vec![0.0f32; 480];
         core.render(&mut mono, 1);
