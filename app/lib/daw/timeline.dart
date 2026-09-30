@@ -19,6 +19,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/feedback.dart';
 import '../widgets/format.dart';
 import '../widgets/theme.dart';
+import 'audio_edit_ui.dart';
 import 'automation_lane.dart';
 import 'clip_gain_dialog.dart';
 import 'controller.dart';
@@ -2699,6 +2700,17 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: shortcutLabel('edit.split')),
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
+      PopupMenuItem<String>(
+        value: 'edit_audio',
+        child: Row(
+          children: [
+            const Icon(Icons.auto_fix_high, size: 18),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Editar áudio')),
+            const Icon(Icons.chevron_right, size: 18),
+          ],
+        ),
+      ),
       const PopupMenuDivider(),
       _menuItem('fadein_len', Icons.trending_up, 'Fade de entrada…'),
       _menuItem('fadeout_len', Icons.trending_down, 'Fade de saída…'),
@@ -2724,6 +2736,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         c.setFadeShapes(widget.clip.id, fadeOut: FadeShape.values[int.parse(f.substring(5))]);
       case 'gain':
         await showClipGainDialog(context, c, widget.clip.id);
+      case 'edit_audio':
+        await showEditAudioMenu(context, c, widget.clip.id, at);
       case 'to_midi':
         await showConvertToMidi(context, c, widget.clip.id);
       case 'fadein_len':
