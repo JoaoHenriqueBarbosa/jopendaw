@@ -302,7 +302,7 @@ void main() {
     test('o volume vai no ganho do metrônomo (0,5 é o de sempre) e o valor absurdo é limitado', () {
       final c = fakeController(e);
       c.toggleMetronome();
-      expect(e.sent('metronome').last, ['metronome', true, 0.5]);
+      expect(e.sent('metronome').last, ['metronome', true, 0.6]);
       c.setMetronomeOptions((o) => o.volume = 0.8);
       expect(e.sent('metronome').last, ['metronome', true, 0.8]);
       c.setMetronomeOptions((o) => o.volume = 40);
@@ -403,7 +403,7 @@ void main() {
       // 4 do pré-roll + 4 da contagem
       expect(e.sent('seek').last, ['seek', 4.0]);
       expect(c.countingIn, isTrue);
-      expect(e.sent('metronome').last, ['metronome', true, 0.5]);
+      expect(e.sent('metronome').last, ['metronome', true, 0.6]);
       c.debugEngineState(state(12.02));
       expect(c.countingIn, isFalse);
       e.feed(0, 400, (i) => 9);
@@ -468,6 +468,7 @@ void main() {
       // uma nota no pré-roll (5..6) e uma depois (9..10)
       e.notes = Float32List.fromList([1, 60, 5, 6, 0.8, 1, 62, 9, 10, 0.8]);
       c.debugRecordingElapsed(const Duration(seconds: 4));
+      c.debugEngineState(state(9.5));
       await c.toggleRecord();
       final clip = c.doc.tracks[1].midi.single;
       expect([for (final n in clip.notes) n.pitch], [62]);

@@ -622,7 +622,8 @@ class MetronomeOptions {
   /// Nível das subdivisões em relação ao volume (0 a 2).
   double subLevel;
 
-  static const defaultVolume = 0.5, defaultAccentLevel = 1.0, defaultAccentPitch = 1.6, defaultSubLevel = 0.5;
+  /// O volume padrão é o do motor (`metronome.rs`, ganho 0,6): o app e um motor novo soam igual.
+  static const defaultVolume = 0.6, defaultAccentLevel = 1.0, defaultAccentPitch = 1.6, defaultSubLevel = 0.5;
 
   MetronomeOptions({
     this.timbre = MetronomeTimbre.click,
@@ -672,7 +673,17 @@ class MetronomeOptions {
   MetronomeOptions copy() => MetronomeOptions.fromJson(toJson());
 
   /// A chamada do estilo ao motor (`metronome_style`): o que ele precisa para soar assim.
-  List<Object> get styleCall => ['metronome_style', timbre.index, subdivision.index, accentLevel, accentPitch, subLevel];
+  ///
+  /// O clique sai com `volume × nível`: com volume 1 e acento 200% o pico passaria de 1,0 (2,0). O nível
+  /// mandado ao motor é limitado para o produto não passar de [maxPeak] (o documento guarda o que a
+  /// pessoa pôs; o teto só vale no que soa).
+  List<Object> get styleCall => ['metronome_style', timbre.index, subdivision.index, effectiveLevel(accentLevel), accentPitch, effectiveLevel(subLevel)];
+
+  /// Pico máximo do clique (volume × nível).
+  static const maxPeak = 1.0;
+
+  /// [level] limitado para que `volume × level` não passe de [maxPeak].
+  double effectiveLevel(double level) => volume > 0 ? math.min(level, maxPeak / volume) : level;
 }
 
 class DawDoc {

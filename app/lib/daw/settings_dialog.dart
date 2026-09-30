@@ -320,7 +320,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
-                    onPressed: c.recording || !(c.doc.loopEnd - c.doc.loopStart > 0.01) ? null : () => c.setPunchRegion(c.doc.loopStart, c.doc.loopEnd),
+                    onPressed: c.recording || !c.loopRegionUsable ? null : () => c.setPunchRegion(c.doc.loopStart, c.doc.loopEnd),
                     child: const Text('Usar a região do loop'),
                   ),
                 ),

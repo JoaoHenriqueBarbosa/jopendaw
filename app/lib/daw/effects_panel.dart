@@ -473,7 +473,7 @@ class _EffectsPanelState extends State<EffectsPanel> {
         if (effectMonitoringNote(s.kind, s.params, bypass: s.bypass) case final note?) ...[
           const SizedBox(width: 7),
           Tooltip(
-            message: 'Este efeito está em $note: o áudio muda de verdade, inclusive na exportação',
+            message: effectMonitoringTooltip(note),
             child: Container(
               key: const ValueKey('fx-monitor-badge'),
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
@@ -820,3 +820,6 @@ class _AddTileState extends State<_AddTile> {
     ),
   );
 }
+
+/// A dica do selo de um efeito que muda o áudio: "está em solo", "está ouvindo a banda".
+String effectMonitoringTooltip(String note) => 'Este efeito está ${note == 'solo' ? 'em solo' : note}: o áudio muda de verdade, inclusive na exportação';

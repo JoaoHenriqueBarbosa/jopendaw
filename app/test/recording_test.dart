@@ -250,12 +250,12 @@ void main() {
       e.log!.clear();
       await c.toggleRecord();
       expect(c.countingIn, isTrue);
-      expect(e.sent('metronome').last, ['metronome', true, 0.5]);
+      expect(e.sent('metronome').last, ['metronome', true, 0.6]);
       expect(e.sent('seek').last, ['seek', 4.0]);
       c.debugEngineState(state(7.2));
-      expect(e.sent('metronome').last, ['metronome', true, 0.5]);
+      expect(e.sent('metronome').last, ['metronome', true, 0.6]);
       c.debugEngineState(state(7.6));
-      expect(e.sent('metronome').last, ['metronome', false, 0.5], reason: 'meio tempo antes, para não clicar no primeiro tempo');
+      expect(e.sent('metronome').last, ['metronome', false, 0.6], reason: 'meio tempo antes, para não clicar no primeiro tempo');
       expect(c.countingIn, isTrue);
       c.debugEngineState(state(8.02));
       expect(c.countingIn, isFalse);
@@ -291,7 +291,7 @@ void main() {
       expect(c.beat.value, -3, reason: 'o cursor conta o compasso antes do começo da gravação');
       c.debugEngineState(state(zone + 3.6));
       expect(e.sent('auto_lane'), isNotEmpty);
-      expect(e.sent('metronome').last, ['metronome', false, 0.5]);
+      expect(e.sent('metronome').last, ['metronome', false, 0.6]);
       c.debugEngineState(state(0.05));
       expect(c.countingIn, isFalse);
       expect(e.sent('loop_set').last, ['loop_set', true, 8.0, 16.0]);
@@ -344,7 +344,7 @@ void main() {
       expect(c.doc.tracks[0].clips, isEmpty);
       expect(c.canUndo, isFalse);
       expect(e.sent('loop_set').last, ['loop_set', false, 0.0, 16.0]);
-      expect(e.sent('metronome').last, ['metronome', false, 0.5]);
+      expect(e.sent('metronome').last, ['metronome', false, 0.6]);
       expect(e.sent('stop'), isNotEmpty);
       expect(e.sent('seek').last, ['seek', 0.0]);
     });

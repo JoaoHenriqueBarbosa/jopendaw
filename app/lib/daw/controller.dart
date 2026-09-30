@@ -385,6 +385,13 @@ class _Recording {
   /// Batida onde a gravação vale (o cursor quando ela começou).
   double start;
 
+  /// O transporte já chegou à batida onde a gravação vale (passou a contagem e o pré-roll). Parar antes
+  /// disso cancela a gravação (não há nada a guardar), com aviso.
+  bool started = true;
+
+  /// O punch out já pediu o fim da gravação (uma vez só).
+  bool punchStopped = false;
+
   /// Começou com o transporte andando: [start] é só uma estimativa (a posição que a tela tinha)
   /// até o primeiro bloco da captura chegar com a batida exata do primeiro quadro dele.
   bool startFromCapture;
@@ -941,9 +948,12 @@ class DawController extends ChangeNotifier {
       _cache.ccs = const [];
       _cache.auto = null;
       // o motor novo tem um andamento e um compasso só
+      // o estilo do metrônomo e a modulação também são do motor antigo: voltam ao padrão e vazia
       _cache
         ..tempoSig = ''
-        ..meterSig = '';
+        ..meterSig = ''
+        ..metroSig = ''
+        ..mod = const [];
       _cache.master
         ..count = -1
         ..slots.clear();
@@ -1056,6 +1066,7 @@ class DawController extends ChangeNotifier {
       ..start();
     final r = _rec;
     if (r != null && countingIn) _countInState(r, s);
+    if (r != null && recording && s.playing) _recordingState(r, s);
     // na contagem fora do lugar o motor está longe, na região vazia: o cursor anda o compasso antes
     // do começo da gravação, como na contagem no lugar (antes do zero, a barra mostra as batidas
     // que faltam), em vez de pular para lá (e a janela não o segue)
@@ -1999,6 +2010,9 @@ class DawController extends ChangeNotifier {
     edit((d) => d.preRollBars = v, undoable: false);
   }
 
+  /// Há uma região de loop ligada para o punch copiar (ligado e com largura).
+  bool get loopRegionUsable => doc.loopOn && doc.loopEnd - doc.loopStart > 0.01;
+
   /// Liga/desliga o punch. Ligando sem região, ela nasce da região do loop (se houver) ou de dois
   /// compassos a partir do cursor.
   void togglePunch() {
@@ -2006,7 +2020,9 @@ class DawController extends ChangeNotifier {
     edit((d) {
       d.punchOn = !d.punchOn;
       if (d.punchOn && d.punchRegion == null) {
-        final loop = d.loopEnd - d.loopStart > 0.01 && d.loopOn;
+        // o mesmo critério do botão "Usar a região do loop" ([loopRegionUsable]): só o loop ligado vale
+        // (o desligado guarda uma região qualquer, o padrão 0 a 16, que não é escolha da pessoa)
+        final loop = loopRegionUsable;
         final from = loop ? d.loopStart : snapBeat(math.max(0.0, beat.value));
         d.punchIn = from;
         d.punchOut = loop ? d.loopEnd : from + 2 * d.meter.barBeatsAt(from);
@@ -2041,6 +2057,12 @@ class DawController extends ChangeNotifier {
   /// Quanto tempo depois da última batida o andamento é aplicado ao projeto.
   static const tapCommitDelay = Duration(milliseconds: 1500);
 
+  /// Abaixo deste andamento (BPM) duas batidas não bastam: há um intervalo só, que quase se confunde com
+  /// uma pausa, e a espera de [tapCommitDelay] aplicaria antes da terceira. Exige [tapMinCommitTaps]
+  /// batidas e alonga a espera para 1,3 intervalo.
+  static const tapSlowBpm = 40.0;
+  static const tapMinCommitTaps = 3;
+
   /// O relógio do tap (s); os testes trocam.
   @visibleForTesting
   double Function()? debugTapClock;
@@ -2053,7 +2075,10 @@ class DawController extends ChangeNotifier {
     final v = _tap.tap(now);
     tapBpm.value = v;
     _tapTimer?.cancel();
-    if (v != null) _tapTimer = Timer(tapCommitDelay, commitTap);
+    if (v != null) {
+      final gap = Duration(milliseconds: (60000 / math.max(v, 1) * 1.3).round());
+      _tapTimer = Timer(gap > tapCommitDelay ? gap : tapCommitDelay, commitTap);
+    }
     return v;
   }
 
@@ -2062,9 +2087,15 @@ class DawController extends ChangeNotifier {
   double? commitTap() {
     _tapTimer?.cancel();
     final v = _tap.bpm;
+    final taps = _tap.count;
     _tap.reset();
     tapBpm.value = null;
     if (v == null || recording || _disposed) return null;
+    if (v < tapSlowBpm && taps < tapMinCommitTaps) {
+      notice = 'Abaixo de ${tapSlowBpm.round()} BPM, bata ao menos $tapMinCommitTaps vezes para aplicar o andamento.';
+      notifyListeners();
+      return null;
+    }
     if (v != doc.bpm) {
       unawaited(setTempo(v, doc.beatsPerBar, keepMeter: true));
       notice = 'Andamento: ${v.toStringAsFixed(1).replaceAll('.', ',')} BPM (tap).';
@@ -4254,6 +4285,10 @@ class DawController extends ChangeNotifier {
   /// ainda não terminou).
   LoudnessReport? exportReport;
 
+  /// Nome do arquivo cujo "Salvar" a pessoa cancelou no WAV direto da última exportação (null: nenhum).
+  /// A exportação para nesse arquivo.
+  String? exportSaveCanceledName;
+
   /// Taxa de amostragem do motor (a do contexto de áudio do aparelho: 44,1 ou 48 kHz, em geral):
   /// o espectro vai de 0 à metade dela.
   double engineRate = 48000;
@@ -4651,6 +4686,7 @@ class DawController extends ChangeNotifier {
       punch: punch,
       tempo: d.tempo,
     );
+    r.started = !count && preBeats <= 1e-9;
     _rec = r;
     recording = true;
     countingIn = count;
@@ -4727,7 +4763,10 @@ class DawController extends ChangeNotifier {
     final zone = r.zone;
     final done = zone != null ? s.beat < zone - 1e-6 : s.beat >= r.start - 1e-6;
     final end = zone != null ? zone + r.countBeats : r.start;
-    if (done || s.beat >= end - 0.5) _endPreRoll(r);
+    // o clique provisório é só da contagem: o pré-roll (o arranjo tocando antes do ponto de gravar) vem
+    // depois dela e não clica se o metrônomo está desligado
+    final clickEnd = zone != null ? end : r.start - r.preBeats;
+    if (done || s.beat >= clickEnd - 0.5) _endPreRoll(r);
     if (!done) return;
     countingIn = false;
     if (zone != null) {
@@ -4735,6 +4774,28 @@ class DawController extends ChangeNotifier {
       _sync();
     }
     notifyListeners();
+  }
+
+  /// Posição do transporte durante a gravação: marca a chegada ao ponto de gravar e, com punch, encerra
+  /// a gravação no punch out.
+  ///
+  /// Limitação do motor: a captura dele só liga e desliga junto do transporte (`setCapture`), e o
+  /// encerramento do app (latência da entrada, clipes, desfazer) passa por [_finishRecording], que para o
+  /// transporte também. Por isso o punch out para a gravação e o play (não segue tocando até a pessoa
+  /// parar). Com loop ligado a gravação atravessa várias passadas (tomadas): nela o punch out só recorta
+  /// os clipes ([_punchPlans]), a gravação segue até a pessoa parar.
+  void _recordingState(_Recording r, EngineState s) {
+    if (!r.started) {
+      if (countingIn || s.beat < r.start - 1e-6) return;
+      r.started = true;
+    }
+    final punch = r.punch;
+    if (punch == null || r.loopOn || r.punchStopped || _recBusy) return;
+    if (s.beat >= punch.$2 - 1e-6) {
+      r.punchStopped = true;
+      notice = 'A gravação parou no punch out.';
+      unawaited(_finishRecording());
+    }
   }
 
   /// Meio tempo antes do primeiro tempo da gravação: o metrônomo provisório cala (não clica no
@@ -4774,7 +4835,9 @@ class DawController extends ChangeNotifier {
     final r = _rec;
     if (r == null || !recording || _recBusy) return;
     _recBusy = true;
-    final cancel = countingIn;
+    // parar na contagem ou no pré-roll não deixa nada a guardar: cancela, mas avisa (não some em silêncio)
+    final cancel = countingIn || (!r.started && r.frames <= r.skip);
+    if (cancel) notice = 'Gravação cancelada: você parou antes do ponto de gravar (contagem ou pré-roll); nada foi gravado.';
     r
       ..stopBeat = _estimatedBeat()
       ..elapsed ??= r.clock.elapsed;
@@ -5435,6 +5498,7 @@ class DawController extends ChangeNotifier {
     _rendering = true;
     _exportCanceled = false;
     exportReport = null;
+    exportSaveCanceledName = null;
     status = 'Exportando…';
     notifyListeners();
     // ganho da mixagem em dB, para os stems quando pedirem o mesmo (a mixagem é a primeira saída)
@@ -5486,7 +5550,14 @@ class DawController extends ChangeNotifier {
           if (sink != null) {
             await sink(names[batch[k]]!, bytes);
           } else {
-            await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
+            final saved = await _engine.saveFile(names[batch[k]]!, bytes, 'audio/wav');
+            if (_disposed) return;
+            if (!saved) {
+              // a pessoa fechou a janela "Salvar" (só o Android sabe dizer): não é "Exportação concluída"
+              // e não adianta insistir nos próximos arquivos
+              exportSaveCanceledName = names[batch[k]];
+              return;
+            }
           }
           if (_disposed) return;
         }

@@ -81,7 +81,7 @@ void main() {
       expect(calls.first, ['tempo', 120.0, 4]);
       expect(named(calls, 'tracks').single, ['tracks', 3]);
       expect(named(calls, 'loop_set').single, ['loop_set', false, 0.0, 0.0]);
-      expect(named(calls, 'metronome').single, ['metronome', false, 0.5]);
+      expect(named(calls, 'metronome').single, ['metronome', false, 0.6]);
       expect(named(calls, 'clip_add').single.sublist(0, 4), ['clip_add', 0, 1, 0.0]);
       expect(named(calls, 'track_kind').map((x) => x[2]), [TrackKind.audio.index, TrackKind.synth.index, TrackKind.bus.index]);
       expect(named(calls, 'param'), hasLength(TrackKind.synth.params.length));

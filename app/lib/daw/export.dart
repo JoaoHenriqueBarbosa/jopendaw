@@ -538,7 +538,8 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
       }
     }
     final pending = _cx?.fallbacks.isNotEmpty ?? false;
-    final saveCanceled = _cx?.saveCanceled ?? false;
+    // WAV direto: o controlador avisa que o "Salvar" foi cancelado; compactado: o CompressedExport
+    final saveCanceled = (_cx?.saveCanceled ?? false) || c.exportSaveCanceledName != null;
     setState(() {
       _saveCanceled = error == null && saveCanceled;
       _fallback = error == null && pending && !saveCanceled;
@@ -639,7 +640,7 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
           const SizedBox(height: 12),
           Text(
             cx.compressed > 0
-                ? '${cx.compressed} ${cx.compressed == 1 ? 'arquivo foi salvo' : 'arquivos foram salvos'} compactados. '
+                ? '${cx.compressed} ${cx.compressed == 1 ? 'arquivo foi salvo compactado' : 'arquivos foram salvos compactados'}. '
                       '${n == 1 ? 'O outro já está renderizado' : 'Os outros $n já estão renderizados'} em WAV: dá para salvar assim, sem renderizar de novo.'
                 : 'O ${n == 1 ? 'arquivo já está renderizado' : 'áudio já está renderizado ($n arquivos)'} em WAV: dá para salvar assim, sem renderizar de novo.',
           ),
