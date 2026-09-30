@@ -17,7 +17,8 @@ Comece por aqui, na ordem:
 | [02b Timeline e clipes](manual/02b-timeline-e-clipes.md) | Faixas, clipes, marcadores, minimapa |
 | [02c Pastas de faixa](manual/02c-pastas-de-faixa.md) | Agrupar faixas sob um barramento, recolher e expandir, solo e stems da pasta |
 | [02d Histórico e versões](manual/02d-historico-e-versoes.md) | Passos do desfazer com nome e hora, painel `Histórico`, versões nomeadas do projeto (salvar, restaurar, comparar, duplicar) e as automáticas |
-| [03 Áudio e clipes](manual/03-audio-e-clipes.md) | Importar, fades, ganho |
+| [02e Congelar faixa e converter em áudio](manual/02e-congelar-faixa.md) | `Congelar faixa…` no lugar (o conteúdo fica guardado, `Descongelar` devolve), `Cauda dos efeitos`, `Converter em áudio…`, `Renderizar em faixa nova` (antigo `Congelar em áudio`), recusas e o que sobe à nuvem |
+| [03 Áudio e clipes](manual/03-audio-e-clipes.md) | Importar, fades, ganho, mudo, fase invertida (polaridade) e loop por clipe |
 | [03b Warp e altura](manual/03b-warp-e-altura.md) | Esticar no tempo, transpor, detectar andamento |
 | [03c Gravação](manual/03c-gravacao.md) | Microfone, tomadas, MIDI ao vivo, punch in/out, pré-roll e opções do metrônomo |
 | [03d Áudio para MIDI](manual/03d-audio-para-midi.md) | Converter melodia cantada em notas |
@@ -39,7 +40,7 @@ Comece por aqui, na ordem:
 | [06f MIDI learn](manual/06f-midi-learn.md) | Ligar knobs, faders e pedais de um controlador MIDI a controles do app |
 | [06g Modulação](manual/06g-modulacao.md) | LFO, seguidor de envelope e macro movendo os controles por cima do valor do knob, na aba `Modulação` |
 | [07 Automação](manual/07-automacao.md) | Mover parâmetros no tempo |
-| [08 Exportação](manual/08-exportacao.md) | WAV, FLAC e MP3 (pelo servidor), stems, congelar faixa |
+| [08 Exportação](manual/08-exportacao.md) | WAV, FLAC e MP3 (pelo servidor), stems, `Renderizar em faixa nova` (antigo congelar em áudio) |
 | [09 Configurações, atalhos e Android](manual/09-configuracoes-atalhos-android.md) | Ajustes, teclas, diferenças de plataforma |
 
 ### Guias de combinações
@@ -65,6 +66,8 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Remix com warp e altura](guias/remix-com-warp-e-altura.md) | Esticar, transpor e sobrepor |
 | [Editar áudio: dividir, limpar silêncios e nivelar](guias/editar-audio-dividir-quantizar-normalizar.md) | Loop de bateria fatiado e reordenado, voz sem silêncios longos e três vozes no mesmo LUFS |
 | [Fades e crossfades na prática](guias/fades-e-crossfades.md) | Emendar tomadas de voz, loop sem clique, entrada suave de um pad, com a curva de cada caso |
+| [Congelar faixas e poupar CPU](guias/congelar-faixas-e-poupar-cpu.md) | Baixo pesado congelado para mixar o resto, descongelar para mudar uma nota, converter em áudio para cortar e esticar, e a cauda certa para o reverb |
+| [Loops e polaridade de clipes](guias/loops-e-polaridade-de-clipes.md) | 1 compasso esticado em 8 com o loop do clipe, fase de dois microfones numa caixa (mutar e inverter) e A/B de tomadas mutando clipes |
 | [Trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md) | Nuvem, conflito, offline |
 | [Backup e levar o projeto para outro aparelho](guias/backup-e-levar-projeto-para-outro-aparelho.md) | Arquivo `.jopendaw` |
 | [Voltar atrás: histórico e versões](guias/voltar-atras-historico-e-versoes.md) | Experimentar uma mixagem e voltar (A contra B), recuperar o projeto de ontem, tirar uma cópia para uma variação |

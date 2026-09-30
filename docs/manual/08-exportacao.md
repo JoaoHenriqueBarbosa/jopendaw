@@ -13,7 +13,7 @@
 ## Onde fica
 
 - **Exportar:** botão **Exportar** (ícone de disquete com seta) na barra do transporte, à direita dos painéis e das entradas de notas. Tooltip: `Exportar áudio (WAV, FLAC ou MP3)` (até a fase 16 era `Exportar a música (e as faixas separadas) em WAV`, que continuava dizendo WAV mesmo com FLAC e MP3 na janela). Em barra estreita ou no celular mostra só o ícone. Não tem atalho de teclado. A mesma janela leva ao arquivo do projeto (`.jopendaw`): botão `Projeto inteiro (.jopendaw)…` no rodapé, descrito na tabela abaixo, e às notas em MIDI padrão: botão `Notas em MIDI (.mid)…`, descrito na seção [Notas em MIDI (.mid)](#notas-em-midi-mid).
-- **Congelar:** menu de três pontos (**Opções da faixa**) no cabeçalho de cada faixa, item **Congelar em áudio**.
+- **Congelar e renderizar:** menu de três pontos (**Opções da faixa**) no cabeçalho de cada faixa. Desde a fase 20 há três itens: **Congelar faixa…** (congela no lugar e dá para **Descongelar**), **Converter em áudio…** e **Renderizar em faixa nova** (o antigo **Congelar em áudio**, até a fase 19). O capítulo dos dois primeiros é [Congelar faixa e converter em áudio](02e-congelar-faixa.md); o terceiro está na seção abaixo.
 - Os dois rodam **fora de tempo real**, em um motor separado e sem tocar: não é preciso reproduzir a música, e o render é mais rápido do que tocar (não há medida documentada de quanto, `(não confirmado)`).
 
 ## Controles
@@ -135,6 +135,7 @@ O render aplica ao motor as mesmas chamadas do projeto e processa tudo até o fi
 
 - **Entra:** todas as faixas de áudio (com posição, corte, fades e as curvas deles, crossfades, ganho, warp, altura e inversão; ver [Fades e crossfade](03-audio-e-clipes.md#fades-e-crossfade)) e de instrumento (sintetizador, bateria, sampler, FM, wavetable), o volume, o pan, o mudo e o solo de cada faixa, os efeitos de cada faixa, os envios e os barramentos, o volume, o pan e os efeitos do master, **toda a automação** (de faixas, de efeitos e do master) e o limitador de segurança do master.
 - **Não entra:** o metrônomo, o loop (o arquivo é linear, do começo ao fim), a entrada do microfone e o monitoramento, notas tocadas ao vivo.
+- **Mudo, fase e loop do clipe (fase 20, `3a27233`):** o render roda as mesmas chamadas do que soa ao vivo, então o arquivo sai como se ouve. Um **clipe mudo** (`Silenciar o clipe`, selo `M`) **não entra** na mixagem, nem no stem da faixa dele, nem no [congelamento](#congelar-uma-faixa); é diferente do mudo da **faixa** (`M` no cabeçalho e no mixer), que já existia. Um clipe com a **fase invertida** (`Ø`) entra com o sinal trocado, que só muda o que se ouve onde ele soma com outro sinal (o ganho do clipe vai ao motor com sinal negativo). Um clipe em **loop** (`L`) entra com todas as repetições, cada uma como um clipe do render, com o fade de entrada só na primeira e o de saída só na última; a regra de **Fim do trecho** (abaixo) vale para cada repetição: a repetição que atravessa o fim é cortada ali, com o fade curto de saída, e as que começam depois dele saem. `(testado só por testes automáticos: os testes conferem a lista de chamadas ao motor e o espelho do ganho negativo; nenhum arquivo exportado foi ouvido)`. Uma faixa de áudio em que **todos** os clipes estão mudos ainda é congelável (ela não conta como vazia), mas o render sai em silêncio e o congelamento responde `A faixa "nome" não soou nada: nada para congelar.` `(lido do código)`
 - **Warp pendente:** se algum clipe ainda está processando o warp, a barra mostra `Processando o warp…` e a exportação espera terminar.
 - **Fim do trecho:** clipes que atravessam o fim terminam ali (com um fade de 10 ms, ou o que restar do fade de saída que já tinham, se passar de 10 ms; a curva desse fade é a de saída do próprio clipe `(lido do código; testado só por testes automáticos)`); notas que atravessam terminam com a soltura do instrumento; a cauda deixa soar o que já estava tocando (reverb, delay, releases) e a automação continua valendo nela. Nada novo começa depois do fim.
 - **Limitador do master:** a mixagem passa pelo limitador de segurança do motor (teto de −0,3 dBFS, antecipação de 1,5 ms, liberação de 80 ms). Por isso, sem normalização, a mixagem não passa de −0,3 dBFS em nenhum formato, nem em 32 bits float.
@@ -215,11 +216,17 @@ Os nomes são limpos para os sistemas de arquivos: `\ / : * ? " < > |` e caracte
 
 ## Congelar uma faixa
 
-**Congelar em áudio** renderiza uma faixa (instrumento, clipes, efeitos e a automação deles) para um clipe de áudio numa faixa nova, e deixa a original muda. Serve para fixar um som, poupar processamento ou levar o resultado para outro trabalho.
+Desde a fase 20 o menu da faixa tem **Congelar faixa…**, que congela **no lugar** (a faixa passa a tocar o áudio renderizado e **Descongelar** devolve o conteúdo), e **Converter em áudio…**, que troca o conteúdo por um clipe de áudio. Os dois usam o mesmo render da exportação, da faixa sozinha, sem o master, e estão no capítulo [Congelar faixa e converter em áudio](02e-congelar-faixa.md) (diálogo `Congelar "nome"`, cauda de 0 a 30 s, recusas, nuvem e `.jopendaw`).
+
+Como a exportação trata uma faixa congelada: o render é o do projeto como ele toca, então a faixa congelada sai com o áudio congelado (mais o fader, o pan e os envios, que continuam vivos), e nos stems ela é um stem como as outras. O fim do arquivo continua sendo o fim do último clipe **do conteúdo** mais a **Cauda** desta janela; o áudio congelado não o estende, então a cauda de um congelamento (8 s por padrão) só sai inteira se a **Cauda** da exportação também a cobrir (o máximo dela é 10 s) `(lido do código)`. O `.mid` continua levando as notas de uma faixa de instrumento congelada, porque elas seguem no projeto.
+
+## Renderizar em faixa nova (antigo `Congelar em áudio`)
+
+**Renderizar em faixa nova** (até a fase 19, **Congelar em áudio**) renderiza uma faixa (instrumento, clipes, efeitos e a automação deles) para um clipe de áudio numa faixa nova, e deixa a original muda. Serve para fixar um som, poupar processamento ou levar o resultado para outro trabalho, sem mexer na faixa original. A diferença para o **Congelar faixa…** é que aqui nasce uma segunda faixa; lá a própria faixa passa a tocar o áudio. Em faixa congelada o item fica desligado (legenda `Descongele antes`) e não pergunta a cauda (usa 8 s fixos).
 
 ### Quando está disponível
 
-O item fica desligado, com o motivo na legenda dele, em três casos: `Barramento não tem som próprio`, `A faixa está vazia` (faixa de áudio sem clipes, ou de instrumento sem nenhuma nota) e `Pare a gravação antes`. Se outro render está rodando, aparece `Espere o render em andamento terminar antes de congelar.`
+O item fica desligado, com o motivo na legenda dele, em quatro casos: `Barramento não tem som próprio`, `A faixa está vazia` (faixa de áudio sem clipes, ou de instrumento sem nenhuma nota), `Pare a gravação antes` e `Descongele antes` (faixa congelada). Se outro render está rodando, aparece `Espere o render em andamento terminar antes de congelar.` Ele **não** confere o sidechain (quem confere é o `Congelar faixa…`).
 
 ### Janela de progresso
 
@@ -229,7 +236,7 @@ O item fica desligado, com o motivo na legenda dele, em três casos: `Barramento
 | Texto | `A faixa vira áudio com o instrumento e os efeitos, numa faixa nova logo abaixo; esta fica muda.` |
 | Barra e percentual | `Preparando…`, depois `N%`. |
 | **Cancelar** | Interrompe e fecha (vira `Cancelando…`). Nada é alterado. |
-| Título `Não deu para congelar` | Erro. Botão **Fechar**. Mensagens: `A faixa "nome" não soou nada: nada para congelar.`, `A faixa "nome" foi apagada enquanto congelava.`, `O congelamento não terminou: ...`. |
+| Título `Não deu para congelar` | Erro. Botão **Fechar**. Mensagens: `A faixa "nome" não soou nada: nada para congelar.`, `A faixa "nome" foi apagada enquanto congelava.`, `A faixa "nome" mudou durante o render: o áudio já nasceria velho. Tente de novo.` (desde a fase 20, você mexeu no som da faixa com o render rodando), `O congelamento não terminou: ...`. |
 
 ### O que acontece
 
@@ -237,11 +244,11 @@ O item fica desligado, com o motivo na legenda dele, em três casos: `Barramento
 2. O render pega a faixa **depois dos efeitos**, com o fader em 0 dB e o pan no centro, sem mudo e sem solo de nenhuma faixa, e sem a automação de volume e de pan (para não aplicá-las duas vezes).
 3. O resultado é gravado em WAV 32 bits float na taxa do aparelho, e vira mono se os dois canais são idênticos.
 4. Uma **faixa de áudio nova** entra logo abaixo, chamada `<nome> (áudio)`, com a mesma cor, e fica selecionada junto com o clipe. O clipe começa onde começava o primeiro clipe da original e o arquivo aparece como `<nome> (congelada).wav` na lista de áudios do projeto.
-5. A faixa nova recebe o **volume, o pan, o mudo, o solo, a saída, os envios e a automação de volume, pan e envios** da original: ela soa na mixagem como a original soava, e o fader continua mexível. Se a original está numa [pasta](02c-pastas-de-faixa.md), a faixa nova herda a saída (a pasta, então o volume e os efeitos da pasta continuam valendo para ela), mas entra **fora** da pasta: não fica recuada, não some com a pasta recolhida e não conta em `N faixas` `(lido do código; não testado)`; mova-a com `Mover para a pasta "Nome"`.
+5. A faixa nova recebe o **volume, o pan, o mudo, o solo, a saída, os envios e a automação de volume, pan e envios** da original: ela soa na mixagem como a original soava, e o fader continua mexível. Se a original está numa [pasta](02c-pastas-de-faixa.md), a faixa nova herda a saída e o grupo (`groupId`) dela e entra **dentro da mesma pasta**, logo abaixo da original, com o bloco da pasta contíguo (correção da fase 16 A; antes este capítulo dizia que a faixa nova caía fora da pasta, o que o código não faz, ver [02c](02c-pastas-de-faixa.md#regras-e-limites)).
 6. A **original fica muda**, com o instrumento, os efeitos e os clipes intactos (é só reativar o M para voltar). Os envios pré-fader dela saem (senão continuariam soando e dobrariam); os pós-fader ficam, e calam junto com o mudo. Um sidechain que a original alimentava continua funcionando.
 7. Tudo é **um passo só do desfazer**: Ctrl+Z tira a faixa nova e devolve o som da original.
 
-A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). Para mudar o som, desfaça o congelamento, ajuste e congele de novo.
+A faixa `(áudio)` nova não tem instrumento nem efeitos (eles já estão no áudio). Para mudar o som, desfaça o passo, ajuste a original e renderize de novo. Se você prefere poder voltar à original sem criar uma segunda faixa, use o **Congelar faixa…** ([02e](02e-congelar-faixa.md)).
 
 ## Notas em MIDI (.mid)
 
@@ -285,7 +292,7 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles, mais o prog
 
 ### O que não entra
 
-- **Áudio.** Clipes de áudio, gravações, tomadas e faixas congeladas (que são áudio) não vão para o `.mid`. Para levar o som, use o WAV desta mesma janela ou os stems.
+- **Áudio.** Clipes de áudio, gravações, tomadas e faixas `(áudio)` de `Renderizar em faixa nova` (que são áudio) não vão para o `.mid`. Uma faixa de instrumento **congelada no lugar** continua levando as notas dela, porque o conteúdo segue no projeto `(lido do código)`; uma faixa **convertida em áudio** já não tem notas. Para levar o som, use o WAV desta mesma janela ou os stems.
 - **Som do instrumento.** Cada trilha abre com o alcance do pitch bend (RPN 0, igual ao `Alcance do bend` do instrumento) e um `Program Change` GM escolhido pela categoria do preset de fábrica mais parecido com o timbre da faixa (`Baixos` → baixo sintético, `Leads` → lead, `Pads` → pad, `Teclas` → piano elétrico, `Vocais` → voz sintética…; a bateria vai no canal 10 com o programa 0; sem preset reconhecido, lead, e piano no sampler). Os parâmetros do sintetizador, da bateria, do sampler, do FM e da wavetable não vão no arquivo: o programa que abrir o arquivo escolhe o timbre dele.
 - **Mudo e solo.** Ao exportar todas as faixas, as mudas não entram (com alguma faixa em solo, só as em solo entram), e a mensagem final lista quais ficaram de fora. O clipe selecionado sai mesmo se a faixa está muda.
 - **Pontos de controle fora do clipe** (bend, modulação e pedal antes do começo ou depois do fim) não saem, e a mensagem final conta quantos ficaram de fora, como faz com as notas.
@@ -354,14 +361,18 @@ Limites e pegadinhas do `.mid`:
 
 **Congelar um sintetizador pesado**
 1. No cabeçalho da faixa, abra os três pontos.
-2. **Congelar em áudio**; espere o `N%`.
-3. A faixa `<nome> (áudio)` aparece embaixo. Se quiser voltar, use Ctrl+Z.
+2. **Congelar faixa…**, deixe a **Cauda dos efeitos** em 8 s e toque em **Congelar**; espere o `N%`. A faixa ganha o floco azul e passa a tocar o áudio ([02e](02e-congelar-faixa.md)). Para voltar, **Descongelar** ou Ctrl+Z.
+
+**Renderizar uma faixa para uma faixa nova, mantendo a original**
+1. No cabeçalho da faixa, abra os três pontos.
+2. **Renderizar em faixa nova**; espere o `N%`.
+3. A faixa `<nome> (áudio)` aparece embaixo e a original fica muda. Se quiser voltar, use Ctrl+Z.
 
 ## Combina com
 
 - [Transporte](02-transporte.md): o botão **Exportar** e a região do loop marcada na régua.
 - [Projetos, modelos e conta](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw): o botão `Projeto inteiro (.jopendaw)…` desta janela, que guarda o projeto editável em vez do som.
-- [Timeline e clipes](02b-timeline-e-clipes.md): o menu da faixa (**Congelar em áudio**) e o comprimento do projeto.
+- [Timeline e clipes](02b-timeline-e-clipes.md): o menu da faixa (**Congelar faixa…**, **Converter em áudio…** e **Renderizar em faixa nova**) e o comprimento do projeto. O capítulo [Congelar faixa e converter em áudio](02e-congelar-faixa.md) descreve os dois primeiros.
 - [Mixer](06-mixer.md) e [Painel de efeitos](06c-painel-de-efeitos.md): o que define o som do master e dos stems.
 - [Analisador e medidores](06b-analisador-e-medidores.md): as leituras `M`, `S`, `I` e `TP` do master, para conferir o mix antes de normalizar.
 - [Editar áudio](03e-editar-audio.md#normalizar-clipe): `Normalizar clipe…` leva um clipe a um alvo de pico, RMS ou LUFS no projeto, antes do mix.
@@ -371,7 +382,7 @@ Limites e pegadinhas do `.mid`:
 - [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid): o caminho de volta, importar um `.mid` (o mesmo botão **Importar** do áudio).
 - [Editor de notas](05-piano-roll.md) e [Ferramentas MIDI](05b-ferramentas-midi.md): onde as notas exportadas são editadas.
 - [Guia: MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): melodia para outro DAW, pacote de acordes e backup das notas.
-- [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o áudio congelado é um áudio novo do projeto (`(não confirmado)` se conta na cota da nuvem); o WAV temporário do FLAC e do MP3 conta na cota enquanto está no servidor.
+- [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o áudio congelado (ou renderizado em faixa nova) é um áudio novo do projeto: sobe como os outros e conta na cota de 4 GB (o servidor considera em uso qualquer hash citado no documento; ver [01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)); o WAV temporário do FLAC e do MP3 conta na cota enquanto está no servidor.
 - [Guia: exportar para compartilhar e arquivar](../guias/exportar-para-compartilhar.md): prévia em MP3 por mensagem, arquivo em FLAC e o master final (WAV 24 bits e MP3 320).
 - Receitas: pasta [`../guias/`](../guias/).
 
@@ -390,7 +401,7 @@ Limites e pegadinhas do `.mid`:
 - **Deixe a aba aberta** durante o render no navegador; feche o app e o render some sem salvar.
 - **Um render por vez**, e não é possível exportar nem congelar gravando.
 - **Congelar não aceita barramento.** O som de um barramento depende das outras faixas; para fixá-lo, exporte a faixa como stem.
-- **A faixa congelada perde a edição de notas:** o clipe dela é áudio. A original continua com as notas.
+- **A faixa `(áudio)` de `Renderizar em faixa nova` perde a edição de notas:** o clipe dela é áudio. A original (muda) continua com as notas. Já a faixa do `Congelar faixa…` mantém as notas no projeto: mudá-las só vale depois do `Descongelar` ([02e](02e-congelar-faixa.md)).
 - **Web e Android:** mesmo motor e mesmas opções; muda só a entrega do arquivo (download versus janela de salvar) e o teto de memória (4 GiB versus 1,5 GiB).
 
 ## Atalhos

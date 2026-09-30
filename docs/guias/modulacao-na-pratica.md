@@ -59,6 +59,7 @@ O LFO em `Andamento` tira a fase da **posição em batidas** da música, não de
 | O wobble parece "chapado" em cima (fica aberto boa parte do ciclo) | A base está perto do topo do curso e o destino passa dos 20 kHz, onde a onda é presa (o preset, com ±1 oitava, já evita isso no `Corte` padrão) | Baixe a profundidade ou o `Corte` base (700 Hz é uma base equilibrada) |
 | Com o preset `Baixo ácido (303)` o wobble fica preso no fundo | O preset `Wobble no corte` nasce em `+10%` (±1 oitava: de 130 a 520 Hz com a base de 260 Hz), sem prender; se você subiu a profundidade para `+40%`, o destino desce além dos 20 Hz, o mínimo do knob, e a onda fica cortada embaixo | Desça a profundidade para `+25%` (com 260 Hz de base, de 46 Hz a 1,5 kHz) ou suba o `Corte` base para 700 Hz |
 | Arrastar a barra ou um knob do cartão com o projeto tocando faz o wobble "engasgar" | Isso era do motor antigo, que recomeçava a fase do LFO e o nível do seguidor a cada edição; desde a fase 18 o motor mantém os dois quando a modulação é reenviada igual (testado só por testes automáticos) | Se ainda ouvir, use `Andamento` (a fase vem da batida) e avise |
+| Apaguei um dos dois LFOs da faixa e o que ficou deu um salto de fase | Era assim até a fase 20: o motor guarda a fase por índice e o app reenviava o LFO 2 como se fosse o 1. Desde a fase 21 cada modulador guarda o índice que recebeu, então o que fica segue na fase dele (testado só por testes automáticos) | Nada; num app mais antigo, apague antes de tocar ou use `Andamento` |
 | Nada acontece | O clipe está sem notas, ou a barra do destino está em `0%`, ou o controle não é um destino (`Onda`, `Tipo`, `Vozes`) | Confira o cartão: a linha do destino mostra `+10%` (ou o valor que você pôs) e o nome `Instrumento · Corte` |
 
 ## Cenário 2: tremolo de pad
@@ -90,7 +91,7 @@ O destino de volume anda na **curva do fader** (ganho = 2 × posição³), entã
 | O tremolo estala | Uma forma com salto (`Dente de serra`, `Quadrada`, `Sample & hold`) em taxa alta | Elas já passam por um alisamento de ~1 ms; troque para `Senoide` ou `Triângulo` se ainda incomodar |
 | O volume passa de 0 dB nos picos | A base do fader mais a profundidade sobe além de 0 dB (o topo é +6 dB) | Abaixe o fader ou passe o LFO para `Unipolar` com destino negativo |
 | O fader não se mexe | Não é para se mexer: ele mostra a base | Confira o pontinho ciano no canto do fader e o cartão da aba |
-| No celular não acho o `Modular…` do fader | Toque longo no fader, no pan ou no nível de envio (e no mini fader do cabeçalho) abre o menu com `Modular…` | Ou use o `Destino` do cartão (lista `Volume`, `Pan`, `Envio → nome`) |
+| No celular não acho o `Modular…` do fader | Toque longo no fader, no pan ou no nível de envio (e no mini fader do cabeçalho) abre o menu com `Modular…`; o tooltip do fader e do pan lista o que o menu tem (`Aprender MIDI, Modular…, Mapeamentos MIDI…`, com `Remover mapeamento` se o controle está mapeado) | Ou use o `Destino` do cartão (lista `Volume`, `Pan`, `Envio → nome`) |
 
 ## Cenário 3: auto-pan de sintetizador
 

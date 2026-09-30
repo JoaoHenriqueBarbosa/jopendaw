@@ -73,6 +73,7 @@ A pasta é um barramento: a saída de cada faixa vai para ela, então o que voc�
 | A faixa não aparece na lista do diálogo | Já está numa pasta | `Tirar da pasta` antes, ou `Mover para a pasta "Nome"` |
 | Depois de `Desagrupar…` o efeito da pasta continua no som | Com efeitos, automação ou envios, o barramento fica e as faixas seguem saindo nele | Se não quer o efeito, `Ctrl+Z` e use `Apagar a pasta (as faixas ficam)…`, ou mande as faixas ao `Master` pelo botão de saída do mixer |
 | Mudei a saída de uma faixa da pasta no mixer e ela saiu da pasta | Fora da pasta ela não passaria mais pelo volume nem pelos efeitos dela; o app avisa antes (`Tirar "Nome" da pasta?`) | `Cancelar`, ou `Ctrl+Z` depois; para manter a faixa no grupo, deixe a saída dela na pasta |
-| Uma faixa congelada (`(áudio)`) e a original | A congelada entra na mesma pasta, logo abaixo da original (a original fica muda) | Nada a arrumar; apague uma das duas se não precisar |
+| Uma faixa `(áudio)` de `Renderizar em faixa nova` (antigo `Congelar em áudio`) e a original | A nova entra na mesma pasta, logo abaixo da original (a original fica muda) | Nada a arrumar; apague uma das duas se não precisar |
+| Uma faixa da pasta com `Congelar faixa…` | Nada muda de lugar: a faixa segue na pasta e ganha o floco azul | Nada a arrumar |
 | `Mover a faixa?`, `Agrupar as faixas?` ou `Tirar "Nome" da pasta?` avisam que uma saída vai mudar | A faixa entra ou sai de uma pasta (ou a pasta passaria de um barramento que ela alimenta) e tinha outra saída | `Cancelar`, ou confirme e `Ctrl+Z` se não gostar |
 | Recolhi e não vi o retângulo da gravação | Faixas armadas dentro de pasta recolhida não desenham a gravação | Expanda a pasta antes de gravar |

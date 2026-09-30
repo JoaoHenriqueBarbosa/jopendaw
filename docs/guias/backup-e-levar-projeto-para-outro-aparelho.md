@@ -113,4 +113,4 @@ Se a outra pessoa só precisa **ouvir**, mande o WAV (`Exportar`) em vez do proj
 
 ## Versões do projeto não viajam
 
-As `Versões…` do estúdio (cópias nomeadas do projeto, veja o [manual 01](../manual/01-projetos-modelos-conta.md)) ficam só no aparelho onde foram salvas e não sobem para a nuvem. Num aparelho novo a lista começa vazia. Para levar uma versão: `Versões…`, `Duplicar como novo projeto…` e exporte o projeto novo em `.jopendaw`; o `.jopendaw` de um projeto não carrega as versões dele.
+As `Versões…` do estúdio (cópias nomeadas do projeto, veja o [manual 01](../manual/01-projetos-modelos-conta.md)) ficam só no aparelho onde foram salvas e não sobem para a nuvem. Num aparelho novo a lista começa vazia. Para levar uma versão: `Versões…`, `Duplicar como projeto novo…` e exporte o projeto novo em `.jopendaw`; o `.jopendaw` de um projeto não carrega as versões dele.

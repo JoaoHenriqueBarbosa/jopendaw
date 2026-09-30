@@ -2,7 +2,7 @@
 
 > Corta um clipe de áudio em pedaços (pelos golpes, em partes iguais ou na grade), tira os silêncios, leva o clipe a um volume-alvo e encaixa cada golpe na grade, sem tocar no arquivo: serve para reorganizar um loop de bateria, limpar uma voz, nivelar vozes e apertar uma bateria gravada.
 
-Legenda de confiança: todo o capítulo vem da leitura do código (`app/lib/daw/audio_edit.dart`, `audio_edit_ui.dart`, `timeline.dart`) e dos testes automáticos (40 testes de lógica em `audio_edit_test.dart` e 11 de tela em `audio_edit_ui_test.dart`). **Nada foi visto nem ouvido rodando** no Chrome ou no Android `(testado só por testes automáticos)`.
+Legenda de confiança: todo o capítulo vem da leitura do código (`app/lib/daw/audio_edit.dart`, `audio_edit_ui.dart`, `timeline.dart`) e dos testes automáticos (46 testes de lógica em `audio_edit_test.dart` e os de tela em `audio_edit_ui_test.dart`; 6 e 3 deles são da fase 21). **Nada foi visto nem ouvido rodando** no Chrome ou no Android `(testado só por testes automáticos)`.
 
 ## Onde fica
 
@@ -17,7 +17,7 @@ Clique com o botão direito no clipe de áudio (computador) ou faça um toque lo
 
 O menu só existe no clipe de **áudio** (o clipe de notas não tem). Não há botão na barra nem atalho de teclado. Os diálogos cabem em 360 px de largura (celular).
 
-Toda ação é **não destrutiva**: o arquivo de áudio nunca é alterado. `Dividir`, `Remover silêncio` e `Quantizar` só trocam o clipe por vários clipes que apontam para o mesmo áudio (cada um com o seu `offset`, duração, ganho e fades); `Normalizar` só muda o `Ganho do clipe`. Cada ação é **um passo do desfazer**.
+Toda ação é **não destrutiva**: o arquivo de áudio nunca é alterado. `Dividir`, `Remover silêncio` e `Quantizar` só trocam o clipe por vários clipes que apontam para o mesmo áudio (cada um com o seu `offset`, duração, ganho e fades); `Normalizar` só muda o `Ganho do clipe`. Cada ação é **um passo do desfazer**, com o nome da ação no histórico (`Dividir clipe`, `Remover silêncio`, `Normalizar clipe`, `Quantizar por fatias`).
 
 ## Como funciona
 
@@ -29,7 +29,7 @@ Toda ação é **não destrutiva**: o arquivo de áudio nunca é alterado. `Divi
 
 Sem a forma de onda no aparelho, o espaço da prévia fica vazio. Enquanto você arrasta um deslizante, o valor muda na hora e a prévia é refeita **quando você solta** (o cálculo passa pelo áudio todo).
 
-**Depois de aplicar.** O diálogo troca o conteúdo por um aviso com o que foi feito, mais a frase `Dá para desfazer numa vez só (Ctrl+Z).`, e fica só o botão `Fechar`. Se a ação não deu, o aviso de erro aparece dentro do diálogo e nada muda.
+**Depois de aplicar.** O diálogo troca o conteúdo por um aviso com o que foi feito, mais a frase `Dá para desfazer numa vez só (Ctrl+Z).` (a tecla entre parênteses é a que está valendo agora para `Desfazer`: se você a trocou em `Personalizar`, aparece a nova; sem atalho, a frase termina sem parênteses), e fica só o botão `Fechar`. Se a ação não deu, o aviso de erro aparece dentro do diálogo e nada muda.
 
 **A detecção de transientes.** `Dividir por transientes…` e `Quantizar por fatias…` usam **o mesmo detector do `Fatiar sample…` do sampler** ([04c](04c-sampler.md#fatiar-sample)): a função `slicePoints`, espelho em Dart da conta de `engine/src/sampler_zones.rs` (os testes de paridade dos dois lados seguem valendo). Em resumo: mistura os canais em mono, mede a energia e a variação do sinal a cada 5 ms, procura os saltos de energia que passam de um limiar (contra a média das redondezas e contra o maior salto do áudio), exige 50 ms entre ataques, recua cada corte até o começo do ataque e, se der, até o cruzamento de zero mais próximo (até 2 ms), para não estalar. A diferença para o sampler: aqui o detector analisa só o **trecho que o clipe toca**, e não há o limite de 96 fatias (o teto é o de 500 clipes, ver [Limites](#limites-e-pegadinhas)).
 
@@ -46,22 +46,22 @@ Parte o clipe em vários, no mesmo lugar da linha do tempo: o som em sequência 
 | Título `Dividir por transientes` | Identifica o diálogo | | |
 | `Por transientes` / `N fatias iguais` / `Na grade` (chips) | Como achar os cortes | Padrão `Por transientes` | Cada modo mostra os seus controles abaixo |
 | `Sensibilidade` (só em `Por transientes`) | Quantos ataques contam como corte | 0% a 100%, padrão 50%; mostra `50%` | Ver [a detecção](#como-funciona) |
-| `Distância mínima entre cortes` (só em `Por transientes`) | Dois cortes mais próximos que isto viram um só (fica o primeiro) | 10 ms a 500 ms, padrão `50 ms` | Ver a pegadinha do valor escondido em [Limites](#limites-e-pegadinhas) |
+| `Distância mínima entre cortes` (só em `Por transientes`) | Dois cortes mais próximos que isto viram um só (fica o primeiro) | 10 ms a 500 ms, padrão `50 ms` | Só vale neste modo: em `N fatias iguais` e `Na grade` o controle não aparece e os cortes saem onde foi pedido |
 | `Fatias` (só em `N fatias iguais`) com os botões `Menos uma fatia` e `Mais uma fatia` (tooltips) | Número de fatias iguais no **tempo** (do trecho do clipe) | 2 a 96, padrão 8 (`−` apagado no 2 e `+` apagado no 96) | Não olha o som nem o andamento; o primeiro corte é o começo do clipe e não conta como corte |
 | `1/4` / `1/8` / `1/16` / `1/32` (chips, só em `Na grade`) | Um corte em cada linha da grade dentro do clipe | Começa na grade da barra: `1/4`→`1/4`, `1/8`→`1/8`, e `1/16`, `Livre` ou `Compasso`→`1/16` | `1/4` é uma batida. A linha que cai exatamente no começo do clipe não gera corte |
 | Prévia | Forma de onda com as linhas numeradas | | |
-| Resumo (texto pequeno) | `N fatias, com emendas de 2 ms que não mudam o som.` | | Sem cortes: `Nenhum transiente achado: tente mais sensibilidade, fatias iguais ou a grade.` (modo transientes) ou `Nenhum corte cai dentro do clipe.` (os outros). Passando de 500: `Fatias demais (N; o máximo é 500). Diminua a sensibilidade.` |
-| `Cancelar` / `Dividir` | Fecha / aplica | `Dividir` fica apagado sem cortes ou se o clipe foi recusado | |
+| Resumo (texto pequeno) | `N fatias, com emendas de 2 ms que não mudam o som.` | | Sem cortes: `Nenhum transiente achado: tente mais sensibilidade, fatias iguais ou a grade.` (modo transientes) ou `Nenhum corte cai dentro do clipe.` (os outros). Passando de 500: `Fatias demais (N; o máximo é 500). ` e a dica do modo: `Diminua a sensibilidade.` (por transientes), `Use menos fatias.` (fatias iguais) ou `Use uma grade maior.` (na grade) |
+| `Cancelar` / `Dividir` | Fecha / aplica | `Dividir` fica apagado sem cortes, com mais de 500 fatias (aparece `Fatias demais`) ou se o clipe foi recusado | |
 
 Resultado: `Dividido em N fatias, com emendas de 2 ms sem mudar o som.` (e, se o fade original era maior que a fatia, ` O fade original do clipe foi encurtado para caber na fatia.`). O primeiro pedaço fica selecionado.
 
 O que acontece com fades e nomes:
 
 - **Fades originais.** O fade de entrada do clipe (e a curva e a marca de fade automático dele) fica só na **primeira** fatia; o fade de saída fica só na **última**. Se o fade original é maior que a fatia que o recebe, ele é encurtado.
-- **Emendas.** Entre duas fatias coladas há uma emenda de **2 ms**: a fatia seguinte começa 2 ms antes do corte, com fade de entrada, e a anterior termina no corte com fade de saída do mesmo tamanho. A curva usada é a `Suave (padrão)` (o código 0 do motor, `x²`; ver [Áudio e clipes](03-audio-e-clipes.md#fades-e-crossfade)). **Ressalva:** essa curva não é uma rampa reta, então no meio dos 2 ms os dois lados somam 0,5 em amplitude (cerca de −6 dB por um instante), não 1. O teste do app usa rampas retas e por isso não vê isso; a queda de 2 ms dificilmente se ouve em material de bateria, mas pode aparecer em notas sustentadas `(lido do código; não ouvido)`.
+- **Emendas.** Entre duas fatias coladas há uma emenda de **2 ms**: a fatia seguinte começa 2 ms antes do corte, com fade de entrada, e a anterior termina no corte com fade de saída do mesmo tamanho. As duas tocam o mesmo trecho do áudio, então o que precisa somar 1 é a **amplitude**; por isso a emenda usa a curva `S (seno cosseno)` (código 3 do motor, `(1 − cos πx)/2`; ver [as curvas de fade](03-audio-e-clipes.md#fades-e-crossfade)), a única cuja entrada e saída espelhadas somam exatamente 1 em cada instante: o som em sequência é o do clipe original, sem buraco nem afundamento (a curva `Suave (padrão)`, `x²`, somaria só 0,5 no meio, cerca de −6 dB; era o que as emendas usavam antes da fase 21). O teste do app renderiza com a curva real do motor e confere que uma onda constante fica em 1 em volta de cada corte `(testado só por testes automáticos; não ouvido)`. Só a primeira fatia guarda o fade de entrada original (com a curva dele) e a última o de saída.
 - **Ganho, warp e demais campos** de cada fatia são cópias do clipe original (o ganho também).
 - **Nomes.** O clipe de áudio não tem nome próprio no documento, então não há o que nomear: as fatias são clipes comuns, na mesma faixa, cada um com um id novo, no mesmo lugar da lista.
-- **Posição.** Cada fatia começa onde o trecho dela já estava (nada anda). Como a fatia começa 2 ms antes do corte, arrastar uma fatia com o encaixe da grade põe o início do **clipe** na linha, e o ataque cai 2 ms depois dela.
+- **Posição.** Cada fatia começa onde o trecho dela já estava (nada anda). Como a fatia começa 2 ms antes do corte (a cabeça do crossfade fica antes do corte), arrastar uma fatia com o encaixe da grade põe o início do **clipe** na linha, e o ataque cai 2 ms depois dela. Isto **continua assim**: em `Na grade` o começo nominal da fatia (depois da cabeça do crossfade) é exatamente a linha da grade, e o golpe da grade toca na linha.
 
 ### Remover silêncio
 
@@ -93,7 +93,7 @@ Mede o trecho que o clipe toca e ajusta o **ganho do clipe** para chegar ao alvo
 | `Pico` / `RMS` / `LUFS` (chips) | O que medir e levar ao alvo | Padrão `Pico`. Trocar de chip volta o `Alvo` ao padrão do chip | Pico: o volume máximo. RMS: a média de energia. LUFS: o volume percebido |
 | `Alvo` (deslizante; mostra ex. `−1,0 dBFS`) | O valor que o trecho deve ter depois | `Pico`: −24,0 a 0,0 dBFS, padrão `−1,0`. `RMS`: −40,0 a 0,0 dBFS, padrão `−18,0`. `LUFS`: −40,0 a 0,0 LUFS, padrão `−14,0`. Passos de 0,5 | Para vozes de podcast, `LUFS` −16; para o ajuste de nível de uma tomada, `Pico` −1 |
 | Barra de progresso | Aparece enquanto mede | | O LUFS devolve o controle à tela a cada meio segundo de áudio |
-| `Medido: X unidade (pico Y dBFS)` | O valor do trecho no modo escolhido e o pico dele | Ex.: `Medido: −20,5 LUFS (pico −8,0 dBFS)` | A medida não depende do alvo: mexer no `Alvo` só refaz a conta |
+| `Medido: X unidade (pico Y dBFS)` | O valor do trecho no modo escolhido e o pico dele | Ex.: `Medido: −20,5 LUFS (pico −8,0 dBFS)` | A medida não depende do alvo: mexer no `Alvo` só refaz a conta. Ao tocar `Normalizar`, o app **reaproveita** essa medida e não mede o clipe de novo (o LUFS de um clipe longo custa) |
 | `Ganho do clipe: X (agora Y)` | O ganho que será aplicado e o ganho atual do clipe | Ex.: `Ganho do clipe: +4,5 dB (agora 0,0 dB)` | O novo ganho **substitui** o atual |
 | Aviso `Limitado porque …: o alvo não será atingido.` | O ganho foi segurado por um teto | Ver abaixo | |
 | Texto fixo | `Mede o trecho que o clipe toca e ajusta só o ganho dele; o áudio não é alterado.` | | |
@@ -101,7 +101,7 @@ Mede o trecho que o clipe toca e ajusta o **ganho do clipe** para chegar ao alvo
 
 Como mede e que ganho aplica:
 
-- **Sempre o áudio original do trecho** (de `offset` até `offset + duração`): ignora o `Ganho do clipe` atual, os fades, o fader da faixa, o pan e os efeitos. Por isso normalizar duas vezes dá o mesmo resultado.
+- **Sempre o áudio original do trecho** (de `offset` até `offset + duração`): ignora o `Ganho do clipe` atual, os fades, o fader da faixa, o pan e os efeitos. Por isso normalizar duas vezes dá o mesmo resultado. A medida que o diálogo mostra é a mesma que vira o ganho: `Normalizar` não mede o trecho uma segunda vez.
 - **`Pico`:** o maior valor de amostra (valor absoluto, todos os canais). **`RMS`:** a raiz da média dos quadrados de todas as amostras dos canais juntos. **`LUFS`:** o loudness integrado (ITU-R BS.1770, com os gates de −70 LUFS e de 10 LU), a mesma conta do `Normalizar o loudness` da exportação ([08](08-exportacao.md#normalizar-o-loudness)), mas só nos **dois primeiros canais** do arquivo, sem true peak.
 - **Ganho** = `Alvo` − medida, em dB, como **ganho absoluto** do clipe (ganho linear = 10^(dB/20)).
 - **Tetos.** Fora do modo `Pico`, o ganho não pode levar o pico do clipe além de 0 dBFS: se passaria, o ganho é reduzido até o pico chegar a 0 dBFS e o aviso diz `Limitado porque o pico do clipe chegou a 0 dBFS antes do alvo`. Em qualquer modo, o ganho do clipe vai no máximo a **+12 dB** (`Limitado porque o ganho do clipe vai até +12 dB`). O mínimo interno é cerca de −60 dB.
@@ -117,10 +117,10 @@ Corta o clipe nos transientes e leva o **começo de cada fatia** à linha de gra
 | Título `Quantizar por fatias` | Identifica o diálogo | | |
 | `Grade` (chips `1/4`, `1/8`, `1/16`, `1/32`) | A linha para onde cada golpe vai | Começa na grade da barra (`1/4`→`1/4`, `1/8`→`1/8`, `Livre`, `Compasso` e `1/16`→`1/16`) | `1/4` é uma batida |
 | `Força` | Quanto do caminho até a linha cada fatia anda | 0% a 100% em passos de 5%, padrão `100%` | 0% não move (equivale a dividir); 50% anda metade do caminho e guarda parte da pegada |
-| `Sensibilidade dos transientes` | A mesma `Sensibilidade` do detector | 0% a 100%, padrão `50%` | A distância mínima entre cortes é fixa em 50 ms aqui |
+| `Sensibilidade dos transientes` | A mesma `Sensibilidade` do detector | 0% a 100%, padrão `50%` | A distância mínima entre cortes é fixa em 50 ms aqui (não há controle) |
 | `Manter as fatias juntas` (interruptor) | Uma fatia que passa do começo da seguinte é cortada seco ali. Legenda: `Corta seco a fatia que a seguinte cobre, sem deixar rabo por baixo. Lacunas ficam em silêncio: o áudio nunca é esticado.` | Desligado | Desligado: a fatia deixa um rabo de até 10 ms que some com fade por baixo do ataque novo |
 | Prévia | Onda com as linhas dos cortes e, no pé, as setas até o lugar novo | | |
-| Resumo | `N fatias, M movidas (até X ms). As setas mostram para onde cada uma vai.` | | Sem transientes: `Nenhum transiente achado: não há o que quantizar. Aumente a sensibilidade.`; passando de 500: `Fatias demais (N; o máximo é 500). Diminua a sensibilidade.` |
+| Resumo | `N fatias, M movidas (até X ms). As setas mostram para onde cada uma vai.` (com uma só: `1 movida`) | | Sem transientes: `Nenhum transiente achado: não há o que quantizar. Aumente a sensibilidade.`; passando de 500: `Fatias demais (N; o máximo é 500). Diminua a sensibilidade.` |
 | `Cancelar` / `Quantizar` | Fecha / aplica | `Quantizar` fica apagado com menos de 2 fatias | |
 
 Como move: para cada fatia, a posição atual (em batidas, pelo mapa de andamento) vai para `posição + Força × (linha mais próxima − posição)`. O **começo do clipe** também é uma fatia e também vai à grade (um clipe que começa fora da grade anda). Nenhuma fatia vai para antes do zero.
@@ -142,6 +142,13 @@ O resultado resume: `N fatias, M movidas (até X,X ms).`, e, quando houve, `K fa
 O motivo: os cortes são pontos do arquivo original, e o som esticado, transposto ou invertido não cai nesses pontos; uma fatia ficaria fora do lugar no som processado. `Normalizar clipe…` **não** é recusado: ganho é ganho.
 
 Outras recusas, com a mensagem no lugar dos controles: `Este áudio não está neste aparelho. Importe o arquivo de novo para editá-lo.` (áudio de outro aparelho, ainda sem o arquivo aqui); `O trecho deste clipe está fora do áudio.`; `O clipe não existe mais.`
+
+### Clipe em loop, mudo ou com fase invertida
+
+Desde a fase 20 (`3a27233`) o clipe pode ter mudo (`M`), fase invertida (`Ø`) e loop (`L`). **Nenhuma das quatro ações recusa esses clipes**: a recusa acima só olha warp, transposição e `Inverter o áudio` (o `R`), e o loop, o mudo e a fase não contam como "processamento" `(lido do código)`.
+
+- **Mudo e fase invertida:** as fatias e os trechos mantidos herdam `M` e `Ø` (cada pedaço é uma cópia do clipe original com os cortes novos), então um clipe mudo continua mudo depois de dividido: desligue o mudo antes de dividir se quiser ouvir as fatias. `Normalizar clipe…` só muda o `Ganho do clipe…`: mede o áudio original, sem olhar a fase (que só troca o sinal), e deixa o mudo e a fase como estavam.
+- **Loop: desligue antes.** Os cortes e as medidas olham o trecho do arquivo de `offset` até `offset + duração`, e num clipe em loop a duração passa do trecho que repete: a detecção de transientes, o silêncio e a normalização leem o áudio que vem **depois** do trecho, não as repetições, e cada pedaço sai com o loop herdado do clipe original. O resultado não corresponde ao que se ouve `(lido do código; não testado)`. Desligue o item `Repetir em loop (estique a borda direita)` do menu do clipe (ele deixa uma repetição só) e edite essa repetição; ligue o loop depois, em cada pedaço que precisar dele. Ver [Áudio e clipes](03-audio-e-clipes.md#mudo-fase-invertida-e-loop-do-clipe).
 
 ## Passo a passo
 
@@ -186,10 +193,10 @@ Outras recusas, com a mensagem no lugar dos controles: `Este áudio não está n
 
 - **Um clipe por vez.** Não há seleção múltipla; cada ação vale para o clipe em que você abriu o menu.
 - **Tetos.** No máximo **500 clipes por ação** (`Fatias demais (N; o máximo é 500)…`, `Trechos demais (N; o máximo é 500)…`); `N fatias iguais` vai de 2 a 96. Um corte a menos de 5 ms das pontas do clipe é descartado. O clipe não tem limite de duração, mas a prévia e o cálculo rodam no próprio app (na tela): um áudio muito longo demora a refazer a prévia `(não confirmado o tempo)`.
-- **A `Distância mínima entre cortes` vale em todos os modos**, mesmo escondida: fora do modo `Por transientes` ela fica no último valor (50 ms na primeira abertura), então em `N fatias iguais` com fatias mais próximas que isso, ou em `Na grade` `1/32` acima de uns 150 BPM, alguns cortes somem e o resumo mostra o número real.
+- **A `Distância mínima entre cortes` é só do detector de transientes.** Em `N fatias iguais` e `Na grade` ela não aparece nem vale (antes da fase 21 valia escondida, no último valor): todo corte pedido sai, menos os a menos de 5 ms das pontas do clipe. Em `Na grade` `1/32` a 120 BPM em 2 s dá 31 cortes e 32 fatias.
 - **Nada é esticado.** `Quantizar por fatias` só move fatias; o que sobra entre elas é silêncio, e o que passa é cortado ou sobreposto. Serve para bateria tocada perto da grade; para adaptar um loop a outro andamento, use o warp.
-- **Fatia que cai na grade com encaixe.** Cada fatia começa 2 ms antes do golpe; o encaixe da timeline alinha o início do clipe, não o golpe.
-- **Desfazer.** Cada ação é um passo só, então `Ctrl+Z` volta tudo de uma vez. `Dividir`, `Remover silêncio` e `Quantizar` entram no histórico com o nome `Edição`; `Normalizar clipe` entra como `Ganho do clipe` `(lido do código)`. `Ctrl+Shift+Z` (ou `Ctrl+Y`) refaz a edição inteira.
+- **Fatia que cai na grade com encaixe.** Cada fatia começa 2 ms antes do corte (a cabeça do crossfade); o encaixe da timeline alinha o início do clipe, não o corte: o ataque cai 2 ms depois da linha. Não mudou na fase 21.
+- **Desfazer.** Cada ação é um passo só, então `Ctrl+Z` volta tudo de uma vez. Os nomes no histórico são `Dividir clipe`, `Remover silêncio`, `Quantizar por fatias` e `Normalizar clipe` (até a fase 20 os três primeiros apareciam como `Edição` e o último como `Ganho do clipe`); ver [02d](02d-historico-e-versoes.md#os-nomes-dos-passos). `Ctrl+Shift+Z` (ou `Ctrl+Y`) refaz a edição inteira.
 - **Normalizar não protege contra clip.** Fora do `Pico`, o pico do clipe fica no máximo em 0 dBFS, mas os efeitos da faixa e o fader podem levar o som além; olhe o [medidor](06b-analisador-e-medidores.md).
 - **LUFS de clipe mono ou com silêncio longo.** O clipe é medido sozinho (dois primeiros canais, com os gates do BS.1770), sem o pan e sem a soma com as outras faixas; o valor na mixagem pode ficar diferente do valor do clipe `(não confirmado com material real)`.
 - **O áudio precisa estar no aparelho.** Sem ele, nenhuma das quatro ações abre (ver as recusas acima).

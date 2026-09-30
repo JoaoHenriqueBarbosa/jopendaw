@@ -20,7 +20,7 @@ Os números são exemplos (loop a 100 BPM em 4/4, 1 batida = 0,6 s; voz de 5 min
 
 - **Clipe sem warp, sem transposição e sem inversão.** `Dividir`, `Remover silêncio` e `Quantizar` recusam o clipe (`Este clipe usa warp, transposição ou inversão…`). Em `Warp e altura…`: `Desligar o warp`, `Zerar` na altura e `Inverter o áudio` desligado. `Normalizar clipe…` vale em qualquer clipe.
 - **O áudio precisa estar neste aparelho.** Senão: `Este áudio não está neste aparelho. Importe o arquivo de novo para editá-lo.`
-- **Cada ação é um passo do desfazer.** `Ctrl+Z` volta a ação inteira; experimente à vontade.
+- **Cada ação é um passo do desfazer.** `Ctrl+Z` volta a ação inteira; experimente à vontade. No histórico o passo tem o nome da ação (`Dividir clipe`, `Remover silêncio`, `Quantizar por fatias`, `Normalizar clipe`; [02d](../manual/02d-historico-e-versoes.md#os-nomes-dos-passos)).
 - **Os pedaços são clipes comuns.** Mover um pedaço por cima de outro apara o que ele cobre ([02b](../manual/02b-timeline-e-clipes.md#limites-e-pegadinhas)): deixe espaço livre.
 
 ## Cenário 1: um loop de bateria fatiado e reordenado
@@ -47,7 +47,7 @@ Ponto de partida: um loop de bateria de 2 compassos a 100 BPM (4,8 s), bumbo nos
 
 O detector é o mesmo do fatiamento do sampler: ele procura saltos de energia e recua cada corte até o começo do ataque (e até o cruzamento de zero mais próximo, até 2 ms), então cada fatia começa no golpe, e não no meio dele. Cada fatia é um clipe que aponta para o mesmo arquivo e começa 2 ms antes do corte, com um fade de 2 ms que emenda com a fatia anterior: como elas ficam coladas, o som em sequência é o do loop original. A cópia por `Ctrl+D` cai no fim do clipe, por isso apagar o vizinho antes libera o lugar certo.
 
-O que merece atenção: a curva dessa emenda de 2 ms é a `Suave (padrão)` (`x²`), e não uma rampa reta: no meio dos 2 ms os dois lados somam 0,5 em amplitude, uma queda curtíssima (cerca de −6 dB) que em bateria não se ouve, mas que pode aparecer em nota sustentada `(lido do código; não ouvido)`. Se você ouvir um pequeno "tum" numa emenda de nota longa, junte de novo com `Ctrl+Z` e corte só onde há golpe.
+O que merece saber: a emenda de 2 ms usa a curva `S (seno cosseno)`, a que soma amplitude 1 em cada instante quando os dois lados tocam o mesmo trecho do áudio. Por isso o nível não afunda na emenda, nem em nota sustentada (até a fase 20 a emenda usava a `Suave (padrão)`, `x²`, que caía uns −6 dB no meio dos 2 ms). Um teste renderiza a emenda com a curva real do motor e confere o nível constante `(testado só por testes automáticos; não ouvido)`. Se ainda ouvir algo estranho numa emenda de nota longa, junte de novo com `Ctrl+Z` e corte só onde há golpe.
 
 ### Se der errado
 
@@ -55,9 +55,10 @@ O que merece atenção: a curva dessa emenda de 2 ms é a `Suave (padrão)` (`x�
 |---|---|---|
 | A prévia mostra `Nenhum transiente achado: tente mais sensibilidade, fatias iguais ou a grade.` | Loop sem ataques claros (pad, ruído) ou sensibilidade baixa | Suba a `Sensibilidade`, ou use `N fatias iguais` (16) ou `Na grade` |
 | Linha no meio de um prato ou de um bumbo longo | Sensibilidade alta demais | Desça a `Sensibilidade`, ou suba a `Distância mínima entre cortes` para 150 ms |
-| Alguns cortes sumiram em `N fatias iguais` ou `Na grade` `1/32` | A `Distância mínima entre cortes` (50 ms) segue valendo mesmo escondida | Use uma grade maior, ou abra o modo `Por transientes`, mude o valor e volte |
+| Faltam cortes em `Por transientes` | A `Distância mínima entre cortes` (50 ms) junta cortes mais próximos que isso | Desça o valor (mínimo 10 ms). Em `N fatias iguais` e `Na grade` ela não existe: todo corte pedido sai |
+| `Fatias demais (N; o máximo é 500)…` e `Dividir` apagado | Mais de 500 fatias (por exemplo `Na grade` `1/32` num clipe longo) | Siga a dica da mensagem: `Diminua a sensibilidade.`, `Use menos fatias.` ou `Use uma grade maior.` |
 | Ao soltar uma fatia, a vizinha ficou mais curta | Mover um clipe apara o que ele cobre | `Ctrl+Z`; deixe espaço livre ou use uma segunda faixa como mesa de trabalho |
-| Com o encaixe da grade o golpe cai um pouco depois da linha | A fatia começa 2 ms antes do golpe; o encaixe alinha o início do clipe | Normal (2 ms); se incomodar, arraste com `Alt` e confira de ouvido |
+| Com o encaixe da grade o golpe cai um pouco depois da linha | A fatia começa 2 ms antes do corte (a cabeça da emenda); o encaixe alinha o início do clipe | Normal (2 ms); se incomodar, arraste com `Alt` e confira de ouvido |
 | O diálogo mostra `Este clipe usa warp, transposição ou inversão…` | O clipe tem processamento | `Warp e altura…`: `Desligar o warp`, `Zerar`, desligue `Inverter o áudio` |
 
 ## Cenário 2: uma voz sem os silêncios longos

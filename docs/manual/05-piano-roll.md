@@ -26,7 +26,7 @@ O editor mostra um clipe por vez. A borda de cima da barra de ferramentas fica n
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Quadradinho colorido + nome do clipe + `· nome da faixa` (tooltip `Renomear o clipe`) | Abre o diálogo `Nome do clipe` (campo `Nome`, botão `Salvar`) | até 60 caracteres; sem nome aparece `Clipe MIDI` | A cor é a da faixa; as notas usam essa cor |
+| Quadradinho colorido + nome do clipe + `· nome da faixa` (tooltip `Renomear o clipe`) | Abre o diálogo `Nome do clipe` (campo `Nome`, botão `Salvar`) | até 60 caracteres; sem nome aparece `Clipe MIDI`. Salvar entra no histórico como `Renomear clipe` (até a fase 20 o passo saía sem nome, `Edição`) | A cor é a da faixa; as notas usam essa cor |
 | Lápis (tooltip `Lápis: clique numa área vazia cria nota, arraste define a duração`) | Ferramenta de desenho | Ligada por padrão | Com Lápis, arrastar no vazio só seleciona se você segurar `Shift` ou `Ctrl`/`Cmd` |
 | Seleção (tooltip `Seleção: arraste numa área vazia seleciona; dois cliques criam nota`) | Ferramenta de seleção por retângulo | Desligada por padrão | Um clique no vazio, sem arrastar, limpa a seleção |
 | `Ferramentas` (tooltip `Ferramentas de produtor: escala, acordes, arpejo, humanizar e transformações das notas`) | Abre o menu com os cinco submenus | Ver [Ferramentas MIDI](05b-ferramentas-midi.md) | Age na seleção; sem seleção, em todas as notas |
@@ -266,7 +266,7 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 
 ## Atalhos
 
-Valem com o editor ativo (último lugar clicado) e sem estar digitando num campo. `Ctrl` vira `Cmd` no Mac. As teclas desta tabela são as **padrão**: as 20 ações do contexto `Piano roll` (todas, menos o `Esc`) podem ser trocadas em `Atalhos do teclado` > `Personalizar`, e `Ctrl+D` pode ser a mesma tecla do `Duplicar o clipe` do arranjo, porque as camadas não conflitam ([capítulo 09](09-configuracoes-atalhos-android.md#contextos-e-camadas)). O resumo `?` do próprio editor, os tooltips (`Quantizar … na grade (Q)`) e as dicas do menu `Ferramentas` (`Shift+H`, `Shift+L`) têm o texto fixo, com a tecla padrão: se você trocou, a janela `?` mostra a de agora.
+Valem com o editor ativo (último lugar clicado) e sem estar digitando num campo. `Ctrl` vira `Cmd` no Mac. As teclas desta tabela são as **padrão**: as 20 ações do contexto `Piano roll` (todas, menos o `Esc`) podem ser trocadas em `Atalhos do teclado` > `Personalizar`, e `Ctrl+D` pode ser a mesma tecla do `Duplicar o clipe` do arranjo, porque as camadas não conflitam ([capítulo 09](09-configuracoes-atalhos-android.md#contextos-e-camadas)). O resumo `?` do próprio editor, o tooltip do botão de quantizar (`Quantizar … na grade (Q)`, que lia uma tecla escrita à mão até a fase 20 e desde a fase 21 sai do catálogo, ação `pr.quantize`) e as dicas do menu `Ferramentas` (`Shift+H`, `Shift+L`…) leem a tecla de agora: se você a trocou, o texto já mostra a nova (ação sem atalho fica sem parêntese; no resumo `?` aparece `—`). `(testado só por testes automáticos)`
 
 | Tecla | Ação |
 |---|---|

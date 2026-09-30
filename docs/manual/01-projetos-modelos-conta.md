@@ -296,7 +296,7 @@ Enquanto roda, o botão `Cancelar` fica desligado: não dá para interromper a m
 ### O que o arquivo NÃO contém
 
 - **Andamento e compasso do projeto como campos do servidor:** o arquivo guarda os do documento e, ao importar, eles são aplicados ao projeto novo (o andamento do espelho do servidor vira número inteiro entre 20 e 999, e o do documento importado mantém as casas decimais; o compasso é o do compasso 1 do mapa do documento: numerador entre 1 e 32 e a figura (`1`, `2`, `4`, `8`, `16` ou `32`) só se mudou, de modo que um arquivo que começa em `6/8` cria um projeto que aparece como `6/8` na lista e no subtítulo antes de abrir). No espelho do servidor um andamento com casas decimais é arredondado; no documento importado ele fica como estava.
-- **O histórico de desfazer e as versões nomeadas:** o projeto importado abre com o desfazer vazio e sem nenhuma versão (elas ficam só no aparelho onde foram salvas; ver [02d](02d-historico-e-versoes.md)). Para levar uma versão no arquivo, use `Duplicar como novo projeto…` nas `Versões` e exporte o projeto novo.
+- **O histórico de desfazer e as versões nomeadas:** o projeto importado abre com o desfazer vazio e sem nenhuma versão (elas ficam só no aparelho onde foram salvas; ver [02d](02d-historico-e-versoes.md)). Para levar uma versão no arquivo, use `Duplicar como projeto novo…` nas `Versões` e exporte o projeto novo.
 - **Os sons derivados do warp** (esticados, transpostos, invertidos): cada aparelho os refaz a partir do original, como na sincronização.
 - **Preferências do aparelho:** zoom e rolagem, altura das faixas, seleção, entrada de áudio escolhida, teclado e MIDI ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
 - **O vínculo com a nuvem:** id do projeto, versão no servidor e estado de sincronização. O projeto importado é um projeto novo, sem ligação com o original.
@@ -334,7 +334,7 @@ Resumo. O capítulo completo, com todos os botões, os nomes dos passos e os pas
 
 ### Histórico com nomes
 
-Cada passo do `Desfazer` tem nome (`Mover clipe`, `Apagar faixa`, `Mudar andamento` (arrastar pontos do mapa), `Inserir acorde`, `Gravar automação`, `Agrupar em pasta`…); o que não tem nome aparece como `Edição` com a hora. Os botões da barra dizem o passo no tooltip: `Desfazer: Mover clipe`, `Refazer: Apagar faixa`.
+Cada passo do `Desfazer` tem nome (`Mover clipe`, `Apagar faixa`, `Mudar andamento` (arrastar pontos do mapa), `Inserir acorde`, `Gravar automação`, `Agrupar em pasta`…); desde a fase 21 todas as ações têm nome (`Edição` com a hora só sai de um nome em branco). Os botões da barra dizem o passo no tooltip: `Desfazer: Mover clipe`, `Refazer: Apagar faixa`.
 
 Para abrir a lista: pressão longa (celular) ou botão direito (mouse) em `Desfazer` ou `Refazer` e `Histórico…`; o menu `Visão` (ícone de quatro setas para fora) com `Histórico…`; ou o atalho `Ctrl+Shift+H` (`⌘+Shift+H` no Mac), ação `Abrir o histórico` da janela de atalhos. O painel mostra `N passos (máx. 200)`, do mais recente ao mais antigo, com o estado de agora destacado; os passos em cinza foram desfeitos e ainda dá para refazer. Tocar num passo leva o projeto até ele de uma vez. `Limpar histórico` esquece o desfazer (o projeto fica como está; as versões não mudam). Durante a gravação o painel fica parado.
 
@@ -345,17 +345,17 @@ Uma versão é uma cópia do projeto inteiro (faixas, clipes, efeitos, automaç�
 - `Salvar versão…`: nome e nota opcional. Se o projeto está igual à versão mais nova, não guarda uma cópia idêntica (se a mais nova era automática, ela vira a sua, com o nome que você deu).
 - `Restaurar`: pergunta, guarda antes uma versão `Antes de restaurar <nome>` e troca o projeto. É um passo do `Desfazer`: desfazer volta ao que era antes.
 - `Comparar`: resumo do que difere do projeto de agora (faixas, clipes de áudio e MIDI, notas, efeitos, envios, raias de automação, marcadores: adicionados, removidos, mudados; andamento e compasso).
-- `Renomear…`, `Apagar…` e `Duplicar como novo projeto…` (cria um projeto novo na conta com aquela versão, pelo mesmo caminho da importação de `.jopendaw`).
-- `Salvar automaticamente`: liga e desliga as versões automáticas, a cada 5, 10, 15 (padrão), 30 ou 60 minutos de edição e ao abrir o projeto depois de mais de 1 hora. Ficam as últimas 20 automáticas; as que você salvou ou renomeou nunca saem sozinhas. A opção vale para o aparelho.
+- `Renomear…`, `Apagar…` e `Duplicar como projeto novo…` (cria um projeto novo na conta com aquela versão, pelo mesmo caminho da importação de `.jopendaw`).
+- `Salvar automaticamente`: liga e desliga as versões automáticas, a cada 5, 10, 15 (padrão), 30 ou 60 minutos depois da primeira edição (sai sozinha, mesmo sem nova edição) e ao abrir o projeto depois de mais de 1 hora, se ele tem mais que a faixa de áudio vazia do início. Ficam as últimas 20 automáticas; as que você salvou ou renomeou nunca saem sozinhas. A opção vale para o aparelho.
 - Aviso de espaço quando as versões do projeto passam de 50 MB; arquivo de versão ilegível é listado e pode ser limpo.
 
-**As versões são locais:** ficam só no aparelho em que foram salvas (chaves `snapshots:<projeto>:<id>` do guardado local) e não sobem para a nuvem; abrir o projeto num aparelho novo mostra a lista vazia. Apagar o projeto apaga as versões dele. Para levar uma versão a outro aparelho, use `Duplicar como novo projeto…` e depois o `.jopendaw` (veja o [guia de backup](../guias/backup-e-levar-projeto-para-outro-aparelho.md)). O formato da versão (`jopendaw-version`, versão 1) já está pronto para um envio opcional ao servidor numa fase futura.
+**As versões são locais:** ficam só no aparelho em que foram salvas (chaves `snapshots:<projeto>:<id>` do guardado local) e não sobem para a nuvem; abrir o projeto num aparelho novo mostra a lista vazia. Apagar o projeto apaga as versões dele. Para levar uma versão a outro aparelho, use `Duplicar como projeto novo…` e depois o `.jopendaw` (veja o [guia de backup](../guias/backup-e-levar-projeto-para-outro-aparelho.md)). O formato da versão (`jopendaw-version`, versão 1) já está pronto para um envio opcional ao servidor numa fase futura.
 
 ## Combina com
 
 - [00 Visão geral](00-visao-geral.md): o mapa do estúdio que abre depois de criar o projeto.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o que acontece com o projeto ao mudar de aparelho.
-- [02d Histórico e versões](02d-historico-e-versoes.md): o histórico de desfazer com nomes e as versões nomeadas (`Duplicar como novo projeto…` usa o mesmo caminho da importação).
+- [02d Histórico e versões](02d-historico-e-versoes.md): o histórico de desfazer com nomes e as versões nomeadas (`Duplicar como projeto novo…` usa o mesmo caminho da importação).
 - [08 Exportação](08-exportacao.md): o `Exportar` em WAV gera som; o `.jopendaw` guarda o projeto editável. Um não substitui o outro.
 - [Guia: backup e levar o projeto para outro aparelho](../guias/backup-e-levar-projeto-para-outro-aparelho.md): backup periódico, migrar entre aparelhos e enviar a um colaborador.
 - [04 Painel de instrumento](04-painel-de-instrumento.md) e [04b Bateria](04b-bateria.md): para mexer nos timbres que o modelo `Batida eletrônica` monta.

@@ -47,7 +47,7 @@ Tudo vale **na hora** e cada mudança é um passo do desfazer. Nada disso funcio
 
 ### No clipe
 
-O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao andamento), `+3st`/`-5st` (transposição), `R` (invertido), juntos separados por espaço, ou `processando…`. Só aparece em clipe com 40 px ou mais de largura. Falha: a borda do selo fica vermelha (tooltip `O warp não ficou pronto: o clipe toca o original`).
+O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao andamento), `+3st`/`-5st` (transposição), `R` (invertido), juntos separados por espaço, ou `processando…`. Desde a fase 20 o mesmo selo também mostra `M` (mudo do clipe), `Ø` (fase invertida) e `L` (loop do clipe), antes do `W`, e o tooltip passou a ser `M mudo, Ø fase invertida, L loop, W warp, R invertido no tempo` (o do warp pendente ou falho continua como está). Só aparece em clipe com 40 px ou mais de largura. Falha: a borda do selo fica vermelha (tooltip `O warp não ficou pronto: o clipe toca o original`).
 
 ## Passo a passo
 
@@ -106,6 +106,8 @@ O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao and
 - Música real, com andamento que varia (bateria humana, rubato), pode dar valores fora do esperado; confira de ouvido e corrija a mão (não confirmado além dos testes sintéticos).
 
 **Outros**
+- **`Inverter o áudio` não é a fase invertida.** Aqui o áudio toca de trás para a frente (selo `R`); o item `Inverter a fase (polaridade)` do menu do clipe (selo `Ø`) só troca o sinal, sem mexer no tempo, e não passa pelo processamento do warp: vale na hora e não gera derivado. Os dois podem estar ligados no mesmo clipe. Ver [Áudio e clipes](03-audio-e-clipes.md#mudo-fase-invertida-e-loop-do-clipe).
+- **Warp e loop do clipe combinam.** Com `Repetir em loop (estique a borda direita)` ligado, cada repetição toca o som já esticado e transposto (o trecho e as repetições são contados em segundos do áudio original, e na linha do tempo o warp os estica). A ordem não importa: o trecho que repete é guardado em segundos do áudio original, então ligar ou desligar o warp depois não o muda (só a largura dele na linha do tempo). Com `Inverter o áudio`, cada repetição toca o trecho invertido; só a repetição final, quando a duração não é múltipla do trecho, sai do lado errado do trecho `(lido do código; não ouvido)`. Mudar o warp com o loop ligado refaz o som de todas as repetições de uma vez (um derivado só, guardado em cache como sempre).
 - `Detectar` liga o warp assim que acha o andamento, sem esperar `Ajustar ao andamento`.
 - Web e Android usam o mesmo código do motor; só muda onde ele roda.
 

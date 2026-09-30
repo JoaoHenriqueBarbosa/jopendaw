@@ -1,6 +1,6 @@
 # Áudio e clipes
 
-> Como trazer um arquivo de áudio (ou um arquivo MIDI `.mid`) para o projeto e mexer no clipe que nasce dele: mover, aparar, fazer fades (com a curva de cada um) e crossfades, cortar, duplicar e levar para outra faixa de áudio.
+> Como trazer um arquivo de áudio (ou um arquivo MIDI `.mid`) para o projeto e mexer no clipe que nasce dele: mover, aparar, fazer fades (com a curva de cada um) e crossfades, cortar, duplicar, levar para outra faixa de áudio, silenciar o clipe, inverter a fase (polaridade) e repetir o trecho em loop esticando a borda.
 
 ## Onde fica
 
@@ -103,14 +103,14 @@ Não há limite de tamanho de arquivo nem de quantidade de notas no código; a l
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Forma de onda | Desenho do áudio em picos mínimo/máximo (um pico a cada 256 amostras). Só mostra o trecho do clipe (do `offset` ao fim), na altura do ganho do clipe | Cor da faixa | Sem o arquivo neste aparelho o clipe fica vermelho e mostra `áudio fora deste aparelho` |
+| Forma de onda | Desenho do áudio em picos mínimo/máximo (um pico a cada 256 amostras). Só mostra o trecho do clipe (do `offset` ao fim), na altura do ganho do clipe | Cor da faixa. Clipe **mudo**: onda em cinza claro translúcido. Fase **invertida**: onda espelhada (os picos que subiam descem). **Loop**: linha tracejada branca em cada emenda, e a onda recomeça do começo do trecho a cada emenda (ver [Mudo, fase invertida e loop do clipe](#mudo-fase-invertida-e-loop-do-clipe)) | Sem o arquivo neste aparelho o clipe fica vermelho e mostra `áudio fora deste aparelho` |
 | Clique no clipe | Seleciona (borda branca, fundo mais claro) e seleciona também a faixa dele | | O clipe selecionado é o alvo de `Cortar`, `Duplicar` e `Apagar` |
 | Arrastar o miolo | **Move** o clipe no tempo, com encaixe na grade. Arrastando na vertical, passa para **outra faixa de áudio** | Início nunca abaixo de 0 | `Alt` ao arrastar: livre, sem grade. Numa faixa que não é de áudio o clipe fica onde está |
-| Arrastar a borda esquerda | **Apara o começo**: o clipe encurta pela esquerda e o áudio continua no mesmo lugar do tempo (o `offset` anda junto) | Limites: começo do arquivo e fim do clipe (mínimo 0,01 s) | Borda de 8 px com mouse, 16 px com o dedo (e no máximo um quarto da largura do clipe) |
-| Arrastar a borda direita | **Apara o fim** (ou estende, até o fim do arquivo) | Mínimo 0,01 s; máximo o que sobra do arquivo depois do `offset` | Não dá para esticar além do arquivo |
+| Arrastar a borda esquerda | **Apara o começo**: o clipe encurta pela esquerda e o áudio continua no mesmo lugar do tempo (o `offset` anda junto) | Limites: começo do arquivo e fim do clipe (mínimo 0,01 s). **Com loop** o trecho que repete encolhe junto e não passa de (trecho − 0,01 s) | Borda de 8 px com mouse, 16 px com o dedo (e no máximo um quarto da largura do clipe) |
+| Arrastar a borda direita | **Apara o fim** (ou estende, até o fim do arquivo). **Com o loop ligado** (`Repetir em loop (estique a borda direita)`) estende além do arquivo, repetindo o trecho | Mínimo 0,01 s; máximo o que sobra do arquivo depois do `offset`; **com loop, 1 hora** (3600 s do áudio original) | Sem loop, não dá para esticar além do arquivo. Com loop, veja [abaixo](#mudo-fase-invertida-e-loop-do-clipe) |
 | Alça de fade in (círculo branco no canto de cima à esquerda) | Arrasta para a direita para criar/alongar o **fade in** | 0 até (duração do clipe − fade out); padrão 0 | O sombreado escuro mostra o que o fade tira e uma linha branca desenha a curva escolhida (ver [Fades e crossfade](#fades-e-crossfade)). Não usa grade. Mexer na alça faz o fade deixar de ser "automático" |
 | Alça de fade out (círculo branco no canto de cima à direita) | Arrasta para a esquerda para criar/alongar o **fade out** | 0 até (duração do clipe − fade in); padrão 0 | O tamanho também se digita no item `Fade de saída…` do menu ([abaixo](#tamanho-do-fade-por-campo)). A curva é a do item `Fade de saída: …` do menu; a de fábrica, `Suave (padrão)`, é a rampa **elevada ao quadrado** (`x²`; o fade in começa bem suave e ganha força no fim; o fade out é o inverso) |
-| Selo `W` / `+3st` / `R` / `processando…` | Aparece quando o clipe tem warp, transposição ou reverso ativos (só em clipe com 40 px ou mais de largura). Tooltip `Warp e altura` | | Detalhes em [Warp e altura](03b-warp-e-altura.md) |
+| Selo `M` / `Ø` / `L` / `W` / `+3st` / `R` / `processando…` | Um selo escuro no canto de cima do clipe, com as letras dos estados ligados separadas por espaço, sempre nesta ordem: `M` (mudo), `Ø` (fase invertida), `L` (loop), `W` (warp), `+3st` (transposição) e `R` (invertido no tempo); por exemplo `M Ø L W +3st R`. Só em clipe com 40 px ou mais de largura. Tooltip `M mudo, Ø fase invertida, L loop, W warp, R invertido no tempo` (até a fase 19 era `Warp e altura`; com warp pendente ou falho vale o tooltip do warp) | `M`, `Ø` e `L` entraram na fase 20 (`3a27233`) | `Ø` é a **polaridade**; `R` é o áudio tocado de trás para a frente, outra coisa. Detalhes em [Mudo, fase invertida e loop do clipe](#mudo-fase-invertida-e-loop-do-clipe) e em [Warp e altura](03b-warp-e-altura.md) |
 | Selo `N tomadas` | Aparece em clipe gravado em loop; tocar abre a lista de tomadas | | Detalhes em [Gravação](03c-gravacao.md) |
 
 Depois de qualquer arrasto que mexeu no clipe, ele passa a ficar **por cima** dos outros da mesma faixa: o que ele cobre é aparado, partido em dois ou removido. **A exceção é o crossfade automático:** se o clipe só cruza a borda de outro (entra na cauda ou na cabeça dele) e cobre no máximo metade do menor dos dois, o outro **não** é aparado: os dois ficam tocando juntos naquele trecho, um saindo e o outro entrando (ver [Fades e crossfade](#fades-e-crossfade)). Fora esse caso, não existem dois clipes de áudio tocando um sobre o outro na mesma faixa. Cada arrasto inteiro vale um só passo do desfazer.
@@ -120,11 +120,14 @@ Depois de qualquer arrasto que mexeu no clipe, ele passa a ficar **por cima** do
 | Item (rótulo exato) | O que faz | Atalho | Dica |
 |---|---|---|---|
 | `Tomadas` (só em clipe gravado em loop, com o número de tomadas) | Abre a lista `TOMADAS`; escolher uma troca o áudio do clipe (posição, corte e fades ficam) | | Ver [Gravação](03c-gravacao.md) |
-| `Duplicar` | Cria uma cópia logo depois do clipe (no fim dele) e seleciona a cópia | `Ctrl+D` (`⌘+D`) | A cópia leva warp, fades (com as curvas) e ganho |
-| `Cortar no cursor` | Parte o clipe em dois no cursor. O fade de entrada fica só no pedaço da esquerda e o de saída só no da direita (os fades da emenda zeram; a marca de fade automático desses lados é limpa) | `S` | Com clipe selecionado corta ele; sem seleção, corta tudo o que o cursor cruza na faixa atual (áudio e notas). Só corta se o cursor está dentro do clipe |
+| `Duplicar` | Cria uma cópia logo depois do clipe (no fim dele, contando todas as repetições de um loop) e seleciona a cópia | `Ctrl+D` (`⌘+D`) | A cópia leva warp, fades (com as curvas), ganho, mudo, fase invertida e loop |
+| `Cortar no cursor` | Parte o clipe em dois no cursor. O fade de entrada fica só no pedaço da esquerda e o de saída só no da direita (os fades da emenda zeram; a marca de fade automático desses lados é limpa) | `S` | Com clipe selecionado corta ele; sem seleção, corta tudo o que o cursor cruza na faixa atual (áudio e notas). Só corta se o cursor está dentro do clipe. Num clipe em loop, cortar no meio de uma repetição pode dar **três** clipes (ver [Cortar um clipe em loop](#cortar-um-clipe-em-loop)); mudo e fase valem nos pedaços |
 | `Warp e altura…` | Abre o diálogo de warp, transposição e reverso | | [Warp e altura](03b-warp-e-altura.md) |
 | `Ganho do clipe…` | Abre o diálogo `Ganho do clipe` (ver a seção abaixo) | | Só no clipe de áudio; o volume da faixa continua no mixer |
-| `Editar áudio` (com uma setinha `>`) | Abre um segundo menu com `Dividir por transientes…`, `Remover silêncio…`, `Normalizar clipe…` e `Quantizar por fatias…` (fase 18). Nada altera o arquivo: só troca o clipe por vários clipes do mesmo áudio, ou muda o ganho | Um passo do desfazer por ação. Dividir, remover silêncio e quantizar recusam clipe com warp, transposição ou inversão | Capítulo [Editar áudio](03e-editar-audio.md) |
+| `Silenciar o clipe` (marca de visto quando ligado) | Liga ou desliga o **mudo do clipe**: ele continua no arranjo, mas não soa (nem ao vivo, nem no arquivo exportado). O desenho da onda fica cinza e o selo ganha `M` | `0` (aparece no menu) | Desfazível (`Silenciar clipe` / `Reativar clipe` no histórico). Ver [Mudo, fase invertida e loop do clipe](#mudo-fase-invertida-e-loop-do-clipe) |
+| `Inverter a fase (polaridade)` (marca de visto quando ligado) | Troca o sinal do áudio do clipe (180° de fase, sem atraso). Sozinho não se ouve diferença; aparece ao somar com outro sinal (outro microfone, uma cópia). O selo ganha `Ø` e a onda é desenhada espelhada | | Desfazível (`Inverter a fase do clipe`, o mesmo nome ao ligar e ao desligar). Não é o `Inverter o áudio` do warp, que toca de trás para a frente |
+| `Repetir em loop (estique a borda direita)` (marca de visto quando ligado) | Liga o **loop do clipe**: o trecho que o clipe mostra agora vira o trecho que repete; depois, arrastar a borda direita para além dele repete o trecho até a nova duração (até 1 hora). Desligado de novo, sobra uma repetição só, o trecho. O selo ganha `L` | | Desfazível (`Loop do clipe` / `Desligar o loop do clipe`). Durante a gravação: `Pare a gravação para mudar o loop do clipe.` Não tem relação com o `Loop` do transporte (a região repetida na régua) |
+| `Editar áudio` (com uma setinha `>`) | Abre um segundo menu com `Dividir por transientes…`, `Remover silêncio…`, `Normalizar clipe…` e `Quantizar por fatias…` (fase 18). Nada altera o arquivo: só troca o clipe por vários clipes do mesmo áudio, ou muda o ganho | Um passo do desfazer por ação. Dividir, remover silêncio e quantizar recusam clipe com warp, transposição ou inversão. **Não** recusam clipe em loop, mudo ou com fase invertida (ver [Editar áudio](03e-editar-audio.md#clipe-em-loop-mudo-ou-com-fase-invertida)) | Capítulo [Editar áudio](03e-editar-audio.md) |
 | `Fade de entrada…`, `Fade de saída…` | Abrem o diálogo do tamanho do fade (ver [Tamanho do fade por campo](#tamanho-do-fade-por-campo)) | | Entram no desfazer como um passo |
 | `Fade de entrada: Suave (padrão)`, `Fade de entrada: Potência constante`, `Fade de entrada: Exponencial`, `Fade de entrada: S (seno cosseno)` | Escolhe a **curva do fade de entrada** do clipe. Os quatro itens ficam juntos, num bloco entre dois divisores, e o da curva atual leva uma marca de visto. Cada item tem um tooltip que explica a curva (o de `Suave (padrão)` diz que é `x²`, que os projetos antigos usam e que num crossfade o nível afunda uns 6 dB no meio). A rampa desenhada no clipe muda na hora | Padrão `Suave (padrão)` (o envelope de sempre, `x²`; até a fase 15 o rótulo era `Linear`). Desfazível, um passo por escolha | A curva só se ouve se o clipe tem fade de entrada (alça do canto esquerdo ou `Fade de entrada…`). Ver [Fades e crossfade](#fades-e-crossfade) |
 | `Fade de saída: Suave (padrão)`, `Fade de saída: Potência constante`, `Fade de saída: Exponencial`, `Fade de saída: S (seno cosseno)` | Igual, para o **fade de saída** | Padrão `Suave (padrão)` | Cada lado tem a sua curva: entrada e saída podem ser diferentes |
@@ -147,6 +150,91 @@ Depois de qualquer arrasto que mexeu no clipe, ele passa a ficar **por cima** do
 | `Fechar` | Fecha o diálogo. Não há botão de cancelar: o que foi mexido já vale, e o desfazer (`Ctrl+Z`) volta | | |
 
 Como funciona: o ganho fica no documento do projeto (campo `gain` do clipe), é enviado ao motor (multiplica o clipe junto com os fades) e vai junto com o projeto na sincronização; a exportação e o congelamento usam o mesmo documento `(não testado ouvindo o arquivo exportado)`. A onda desenhada no clipe cresce ou diminui na mesma proporção (o desenho é escalado pelo ganho). Com ganho alto (num áudio com picos cheios, a onda passa da altura já a partir de cerca de +0,4 dB, pois o desenho usa 95% da meia altura) ela é **cortada na borda da própria área da onda**, que fica abaixo da faixa do nome do clipe, então nunca invade o nome nem sai do clipe. `(lido do código; o corte não foi visto no Chrome)` A cópia (`Duplicar`) leva o ganho.
+
+### Mudo, fase invertida e loop do clipe
+
+Três itens do menu do clipe de áudio, entre `Ganho do clipe…` e `Editar áudio` (fase 20, `3a27233`). Os três ficam guardados **no clipe** (no projeto, não no arquivo de áudio), valem igual ao vivo, no render e na exportação, e entram no desfazer. `(testado só por testes automáticos: o app não foi usado no navegador para esta fase)`
+
+#### O que cada estado faz, e como se vê
+
+| Estado | Como liga | Selo | O que se vê no clipe | O que se ouve |
+|---|---|---|---|---|
+| **Mudo** | Item `Silenciar o clipe` ou a tecla `0` com o clipe selecionado | `M` | Onda em cinza claro translúcido (a cor da faixa some da onda; fundo e borda seguem iguais) | Nada: o clipe fica no arranjo, mas não é mandado ao motor |
+| **Fase invertida** | Item `Inverter a fase (polaridade)` | `Ø` | Onda espelhada de cima para baixo | O mesmo som com o sinal trocado (polaridade, 180° sem atraso). Sozinho soa igual; só muda ao **somar** com outro sinal |
+| **Loop** | Item `Repetir em loop (estique a borda direita)` | `L` | Quando o clipe já é maior que o trecho: uma linha tracejada branca em cada emenda e a onda recomeçando em cada uma | O trecho repetido, uma cópia atrás da outra, até o fim do clipe |
+
+O selo aparece no canto de cima do clipe, junto com o `W`, o `+3st` e o `R` do [warp](03b-warp-e-altura.md), e só em clipe com 40 px ou mais de largura. Ligar o loop sem esticar ainda não muda o desenho (não há emenda): o selo `L` já aparece, as linhas tracejadas só depois de esticar.
+
+#### Mudo do clipe
+
+- **Liga e desliga** pelo item `Silenciar o clipe` (a marca de visto mostra o estado) ou pela tecla `0`, que alterna o mudo do **clipe de áudio selecionado** (sem clipe de áudio selecionado, nada acontece; clipe de notas não tem mudo de clipe). O atalho é a ação `edit.mute` (`Silenciar o clipe`, contexto `Arranjo`) e pode ser trocado em [Personalizar atalhos](09-configuracoes-atalhos-android.md#personalizar-os-atalhos).
+- **Com o projeto tocando:** o app refaz a lista de clipes do motor sem parar o transporte. O clipe some (ou volta) na hora, sem rampa, então pode estalar se o corte pegar o som no meio `(lido do código; não ouvido)`.
+- **Não é** o `M` da faixa (que cala a faixa inteira no [mixer](06-mixer.md#solo-e-mudo)), **nem** o piso do `Ganho do clipe…` (`−∞ dB (mudo)`, que continua mandando o clipe ao motor com ganho 0). Serve para comparar tomadas e mixagens (A/B) sem apagar nada nem mexer em ganho: o clipe continua no lugar, com os fades e o warp, e volta com um toque.
+- **Exportação:** o clipe mudo não entra no arquivo, nem nos stems da faixa dele, pelo mesmo motivo de não soar ao vivo. O `Congelar em áudio` também o deixa de fora; uma faixa de áudio cujos clipes estão todos mudos não conta como vazia para o congelamento, mas o render dela sai em silêncio e o app responde `A faixa "nome" não soou nada: nada para congelar.` `(lido do código)`.
+- **Histórico:** os passos se chamam `Silenciar clipe` e `Reativar clipe`.
+
+#### Inverter a fase (polaridade)
+
+- **O que faz:** multiplica o sinal do clipe por −1. O documento guarda o ganho do clipe sempre positivo; só ao mandar para o motor o ganho vai com o sinal trocado (`−0,8` para um clipe com ganho 0,8). O `Ganho do clipe…`, o `Normalizar clipe…` e os fades seguem como sempre (o fade multiplica o ganho com sinal: o espelho vale nele também). A onda desenhada é a do sinal espelhado.
+- **Para que serve:** duas fontes que captam o mesmo som (dois microfones na mesma caixa, um direto e um microfone no amplificador, um original e uma cópia atrasada) podem se anular em parte ao somar, e o som fica fino. Inverter uma delas costuma devolver o corpo; ouça as duas posições e fique com a que soa melhor. Somar um clipe com uma cópia **idêntica** dele invertida cancela tudo (o teste do motor mede menos de 1e-6); para isso as duas precisam estar em faixas diferentes, porque na mesma faixa um clipe cobre o outro.
+- **Na faixa inteira:** o efeito `Utilitário` tem `Inverter esq.` e `Inverter dir.` (polaridade de cada canal da faixa), veja [06d](06d-efeitos-referencia.md#5-utilitário). O item do clipe vale só para aquele clipe.
+- **Não é** o `Inverter o áudio` do [Warp e altura](03b-warp-e-altura.md), que toca o áudio de trás para a frente (selo `R`). Os dois podem estar ligados juntos.
+- **Histórico:** `Inverter a fase do clipe` (o mesmo nome ao ligar e ao desligar).
+
+#### Loop do clipe
+
+**Ligar.** `Repetir em loop (estique a borda direita)` toma a duração atual do clipe como o **trecho que repete** (guardado em segundos do áudio original). Nada muda no som até você esticar. **Desligar** deixa uma repetição só: o clipe encolhe para o tamanho do trecho (ou fica como está, se já era menor).
+
+**Esticar.** Arraste a borda direita do clipe para além do fim do trecho (borda de 8 px com o mouse, 16 px com o dedo; a posição encaixa na grade, e `Alt` solta o encaixe). Com o loop ligado ela passa do fim do arquivo: o trecho se repete até a posição onde você soltar. Um arraste inteiro é um passo do desfazer.
+
+| O que | Como fica |
+|---|---|
+| Tamanho máximo | **1 hora** (3600 s do áudio original; com warp a largura na linha do tempo é essa duração vezes a razão do warp). Sem loop a borda não passa do fim do arquivo. Mínimo 0,01 s |
+| Última repetição | Se a duração não é múltiplo do trecho, a última repetição é **cortada**: toca só o começo do trecho |
+| Número de repetições | Até **4096** por clipe: além disso o resto do clipe não toca (o desenho continua). Só chega lá com trechos de menos de uns 0,9 s esticados a uma hora (`(testado só por testes automáticos)`) |
+| Borda esquerda | Apara o **trecho**: o `offset` anda e o trecho encolhe (ou cresce, se você puxa a borda para a esquerda, até o começo do arquivo) pelo mesmo tanto, e a posição do som na linha do tempo não muda. O trecho não fica menor que 0,01 s |
+| Borda direita abaixo do trecho | Encurtar abaixo do tamanho do trecho só corta o clipe; o trecho que repete continua com o tamanho de quando o loop foi ligado (o selo `L` fica). Esticar de novo repete o trecho original |
+| Emendas | Cada repetição é um clipe separado para o motor, colado na anterior: sem buraco e sem salto (o teste do motor usa uma rampa e confere amostra a amostra), mas **sem fade nem crossfade entre as repetições**. Se o trecho não abre e fecha num ponto parecido, pode estalar na emenda: apare o trecho até um ponto que fecha bem (um compasso redondo, por exemplo) |
+| Fades do clipe | O **fade de entrada** vale só na primeira repetição e o **de saída** só na última, cada um com a sua curva. Um fade maior que a primeira (ou a última) repetição fica **cortado** nela: a rampa não atravessa a emenda e o volume dá um salto `(lido do código)`; mantenha os fades menores que o trecho |
+| Ganho, mudo e fase | Valem iguais para todas as repetições |
+| Warp e transposição | Combinam: cada repetição toca o som já processado, e o trecho e as repetições são medidos em segundos do áudio original (a duração de cada repetição na linha do tempo segue o warp). Com `Inverter o áudio` (reverso) cada repetição toca o trecho invertido. **Exceção:** se a duração não é múltiplo do trecho e o reverso está ligado, a repetição final, cortada, toca o **fim** do trecho invertido em vez do começo `(lido do código; não ouvido)`: use uma duração múltipla do trecho |
+| Mapa de andamento | Cada repetição ocupa segundos reais constantes, como o clipe inteiro (o clipe não acompanha mudanças de andamento) |
+| Duplicar | A cópia leva tudo (loop, mudo, fase) e começa onde o clipe inteiro termina, depois da última repetição. Não há colar de clipes |
+| Por cima de outros clipes | O clipe em loop ocupa toda a duração esticada, então cobre (e apara) os outros da faixa como qualquer clipe; ver a pegadinha sobre **ser** coberto em [Limites e pegadinhas](#limites-e-pegadinhas) |
+| Histórico | `Loop do clipe` e `Desligar o loop do clipe`; esticar a borda direita é o passo `Aparar o fim do clipe`. Ligar ou desligar o loop fica bloqueado durante a gravação |
+
+#### Cortar um clipe em loop
+
+`Cortar no cursor` (`S`) entende o loop e mantém o som como estava:
+
+| Onde o cursor está | Resultado |
+|---|---|
+| Na **emenda** entre duas repetições | Dois clipes; o da direita recomeça do início do trecho e continua em loop (o da esquerda continua em loop, se ainda tem mais de uma repetição) |
+| No **meio de uma repetição**, com mais repetições depois | **Três** clipes: a esquerda (as repetições até o corte); a **sobra da repetição cortada**, sem loop, que toca do ponto do corte até o fim do trecho; e o loop inteiro que recomeça depois dela, com o fade de saída original |
+| No meio da **última** repetição | Dois clipes: a esquerda e a sobra, sem loop, com o fade de saída original |
+
+Cada pedaço fica selecionável e editável à parte; `Ctrl+Z` desfaz o corte inteiro (um passo só). Os pedaços herdam mudo e fase.
+
+#### Passo a passo
+
+**Mutar um clipe para comparar (A/B)**
+1. Ponha as duas tomadas em faixas diferentes (ou uma depois da outra), de modo que cubram o mesmo trecho da música.
+2. Clique na tomada A e aperte `0`: o selo mostra `M` e a onda fica cinza. Toque o trecho: só a B soa.
+3. Clique na B e aperte `0` (a B fica muda); clique na A e aperte `0` (a A volta). Toque de novo: agora só a A soa. Repita até decidir.
+4. Para ficar com uma, apague a outra (`Delete`) ou deixe-a muda como reserva: ela não vai ao arquivo exportado.
+
+**Inverter a fase de um microfone de caixa de baixo**
+1. Com dois microfones na caixa (um em cima, um embaixo) gravados em duas faixas, toque o trecho e ouça a soma: se a caixa soa oca e fina, as fases estão brigando.
+2. Clique no clipe do microfone de **baixo**, botão direito, `Inverter a fase (polaridade)`. O selo ganha `Ø` e a onda vira espelho.
+3. Toque de novo e compare. Desligue e ligue o item algumas vezes: fique com a posição em que o corpo da caixa aparece.
+4. Para ouvir cada microfone sozinho durante a comparação, use `0` no clipe do outro; lembre de desligar o mudo antes de exportar.
+
+**Transformar 1 compasso de loop em 8 sem copiar**
+1. Importe um loop de exatamente 1 compasso (num projeto de 120 BPM em 4/4, 2,000 s) e ponha-o no compasso 1. Ajuste a grade para `Compasso`.
+2. Botão direito no clipe, `Repetir em loop (estique a borda direita)`. O selo ganha `L`; nada muda ainda.
+3. Arraste a borda direita até o começo do compasso 9: o clipe fica com 16 s (8 repetições) e mostra uma linha tracejada em cada emenda.
+4. Dê um fade de saída em `Fade de saída…` (por exemplo `500` ms) se quiser uma saída suave; ele vale na última repetição.
+5. Para separar as repetições em dois clipes (por exemplo, mandar as quatro últimas para outra faixa), ponha o cursor numa emenda e aperte `S`: cada metade continua em loop e pode ser movida ou apagada à parte.
 
 ### Fades e crossfade
 
@@ -248,7 +336,7 @@ Um valor acima do máximo é **limitado** a ele em silêncio (a ajuda mostra o t
 |---|---|---|---|
 | `Cortar no cursor (S)` | Igual ao item do menu | | |
 | `Duplicar (Ctrl+D)` | Igual ao item do menu | Desligado sem clipe selecionado | |
-| `Apagar o clipe (Delete)` | Igual ao item do menu | Desligado sem clipe selecionado | Também vale a tecla `Backspace` |
+| `Apagar o clipe (Delete · Backspace)` | Igual ao item do menu | Desligado sem clipe selecionado | Também vale a tecla `Backspace` |
 | `Desfazer (Ctrl+Z)` / `Refazer (Ctrl+Shift+Z)` | Desfazem/refazem importar, mover, aparar, fades, cortar, apagar | | Desligados durante a gravação |
 
 ### Faixa de áudio e as outras faixas
@@ -321,6 +409,8 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 - [Editor de notas](05-piano-roll.md) e [Ferramentas MIDI](05b-ferramentas-midi.md): onde se mexe nas notas de um `.mid` importado (quantizar, escala, acordes).
 - [MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): levar uma melodia para outro DAW, trazer um pacote de acordes e guardar as notas em `.mid`.
 - [Fades e crossfades na prática](../guias/fades-e-crossfades.md): emendar duas tomadas de voz, um loop sem clique e a entrada suave de um pad, com a curva recomendada em cada caso.
+- [Loops e polaridade de clipes](../guias/loops-e-polaridade-de-clipes.md): esticar 1 compasso numa cama de 8 sem copiar, conferir a fase de dois microfones numa caixa (mutar e inverter) e comparar tomadas mutando clipes.
+- [Mixer](06-mixer.md#solo-e-mudo) e [Utilitário](06d-efeitos-referencia.md#5-utilitário): o `M` da faixa e a polaridade da faixa inteira (`Inverter esq.` e `Inverter dir.`), que são outra coisa que o mudo e a fase do clipe.
 
 ## Limites e pegadinhas
 
@@ -337,7 +427,10 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 - **O crossfade automático só age ao soltar um arrasto de mover ou aparar.** Depois disso os fades só são revistos quando o app reacomoda clipes de novo (outro arrasto, `Duplicar`, gravar por cima, `Apagar`). `Apagar` um dos dois clipes de um crossfade **revê** o fade do que ficou: o fade automático dele volta ao tamanho e à curva de antes na hora. `Cortar no cursor` num clipe que tem fade automático zera os fades da emenda (o de saída da metade da esquerda e o de entrada da direita) e **limpa a marca de automático** desses lados: o fade que virou 0 não é mais "devolvido" por uma revisão seguinte `(testado só por testes automáticos)`.
 - **Dois clipes sobrepostos na mesma faixa agora existem** (o do crossfade): a sobreposição de até metade do menor clipe toca os dois somados, com os fades. Fora o crossfade, vale a regra de que o clipe que você mexeu fica por cima.
 - **Projeto com curvas em app ou motor antigo:** o motor sem a chamada `clip_fade_shape` a ignora e o fade toca como `Suave (padrão)` (`x²`, o código 0); o desenho no clipe segue o que estiver salvo `(lido do código; não testado com um motor antigo de verdade)`.
-- O clipe nunca passa do fim do arquivo: aparar/estender à direita para nesse ponto.
+- O clipe nunca passa do fim do arquivo: aparar/estender à direita para nesse ponto. **A exceção é o loop do clipe** (`Repetir em loop (estique a borda direita)`), que repete o trecho até 1 hora.
+- **Clipe em loop coberto por outro clipe.** Quando você solta um clipe por cima do começo (ou do meio) de um clipe em loop, o app apara o loop como a um clipe comum: a sobra de baixo avança o `offset` pelo tempo coberto, sem respeitar a fase do trecho, e o som dela pode deixar de ser a continuação do loop (chega a tocar áudio de fora do trecho) `(lido do código; não ouvido)`. Para encaixar outro clipe num loop, **corte antes** (`S` entende o loop, ver [Cortar um clipe em loop](#cortar-um-clipe-em-loop)) ou ponha o outro numa faixa diferente.
+- **`Converter em notas (MIDI)` num clipe em loop** analisa o áudio corrido do arquivo a partir do `offset`, pela duração esticada do clipe, e não as repetições do trecho (mudo e fase não contam) `(lido do código)`. Desligue o loop antes de converter.
+- **Mudo, fase e loop num app ou projeto antigo.** Os campos novos do clipe (`muted`, `invert`, `loop_length`) só existem a partir de `3a27233`: um app anterior os ignora ao abrir e os perde ao salvar (o clipe volta a soar, sem fase invertida e sem loop). O motor não mudou (a fase é o ganho com o sinal trocado), então não há `.wasm` nem `.so` novos para isso.
 - Aparar não apaga nada do arquivo: o `offset` e a duração só escolhem o trecho que toca.
 - Não há arrastar-e-soltar de arquivos do sistema sobre a tela: só o botão `Importar` e `Ctrl+I`.
 - O arquivo `.mid` **não é guardado** no aparelho nem no servidor (ao contrário do áudio): só ficam as notas e os controles que viraram clipes. Importar o mesmo `.mid` duas vezes cria duas levas de faixas.
@@ -353,6 +446,7 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 | `Ctrl+I` (`⌘+I`) | Importar áudio ou MIDI (a janela de atalhos diz `Importar áudio ou MIDI`) |
 | `S` | Cortar no cursor |
 | `Ctrl+D` (`⌘+D`) | Duplicar o clipe |
+| `0` | Silenciar o clipe: liga ou desliga o mudo do clipe de áudio selecionado (id `edit.mute`) |
 | `Delete` ou `Backspace` | Apagar o clipe |
 | `Ctrl+Z` / `Ctrl+Shift+Z` (ou `Ctrl+Y`) | Desfazer / refazer |
 | `Alt` ao arrastar | Move o clipe sem encaixe na grade |

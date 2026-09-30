@@ -14,11 +14,11 @@
 
 *O painel `Versões`: a versão automática `Ao abrir o projeto`, marcada com o ícone de setas circulares e `automática`.*
 
-Situação de teste deste capítulo: o comportamento vem da leitura do código (`app/lib/daw/history.dart`, `history_ui.dart`, `snapshots.dart`, `snapshots_ui.dart`, `controller.dart`, `structure_menu.dart`, `transport_bar.dart`, `keymap.dart`) na versão `ed605e3`. Foram **vistos no Chrome** (pela sessão que escreveu o código): o painel `Histórico` com os passos, o menu do botão `Desfazer`, o painel `Versões`, `Salvar versão…` e a versão automática `Ao abrir o projeto` (as três imagens acima). Todo o resto, em particular `Restaurar`, `Comparar`, `Renomear…`, `Apagar…`, `Duplicar como novo projeto…`, as versões automáticas a cada N minutos, o limite de 20, o alerta de 50 MB e o uso no Android, é `(testado só por testes automáticos)` (`app/test/history_versions_test.dart`, 34 testes de lógica e 6 de tela) ou `(não confirmado)` quando o texto diz.
+Situação de teste deste capítulo: o comportamento vem da leitura do código (`app/lib/daw/history.dart`, `history_ui.dart`, `snapshots.dart`, `snapshots_ui.dart`, `controller.dart`, `structure_menu.dart`, `transport_bar.dart`, `keymap.dart`) na versão `ed605e3`, corrigida pela fase 21 (`6e87e92`). Foram **vistos no Chrome** (pela sessão que escreveu o código): o painel `Histórico` com os passos, o menu do botão `Desfazer`, o painel `Versões`, `Salvar versão…` e a versão automática `Ao abrir o projeto` (as três imagens acima). Todo o resto, em particular `Restaurar`, `Comparar`, `Renomear…`, `Apagar…`, `Duplicar como projeto novo…`, as versões automáticas a cada N minutos (inclusive o relógio de parede da fase 21), o limite de 20, o alerta de 50 MB e o uso no Android, é `(testado só por testes automáticos)` (`app/test/history_versions_test.dart`, 46 casos, 8 deles novos da fase 21, e `app/test/fase21_test.dart`) ou `(não confirmado)` quando o texto diz.
 
 ## Onde fica
 
-- **Botões `Desfazer` e `Refazer`** (as setas do grupo de edição da barra do estúdio, [capítulo 02](02-transporte.md#edição-e-visão)): o tooltip diz qual passo vale agora, por exemplo `Desfazer: Mudo (Ctrl+Z)`. **Botão direito** do mouse ou **pressão longa** do dedo (não confirmado no Android) abrem um menu com `Histórico… (N)`, `Versões…` e `Salvar versão…`. O clique normal continua desfazendo um passo.
+- **Botões `Desfazer` e `Refazer`** (as setas do grupo de edição da barra do estúdio, [capítulo 02](02-transporte.md#edição-e-visão)): o tooltip diz qual passo vale agora, por exemplo `Desfazer: Mudo (Ctrl+Z)`. **Botão direito** do mouse ou **pressão longa** do dedo (não confirmado no Android) abrem um menu com `Histórico… (N)`, `Versões…` e `Salvar versão…`, mas **só com o botão ligado**: `Desfazer` (ou `Refazer`) apagado, sem passo ou durante a gravação, não abre menu nenhum (antes da fase 21 abria, com o `Histórico` inerte). Sem nada a desfazer, o `Histórico… (N)` e as `Versões…` continuam no menu `Visão`. O clique normal continua desfazendo um passo.
 - **Menu `Visão`** da barra (tooltip `Visão: enquadrar, altura das faixas, seguir o cursor`, ícone de quatro setas para fora): os dois últimos itens, abaixo de um traço, são `Histórico… (N)` e `Versões…`. Não tem `Salvar versão…` aqui.
 - **Atalho `Ctrl+Shift+H`** (`⌘+Shift+H` no Mac): abre o painel `Histórico`. É a ação `Abrir o histórico` (id `history.open`) da janela de atalhos, pode ser trocada em `Personalizar` ([capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos)). Não há atalho para as `Versões`.
 - **Dentro dos painéis:** o `Histórico` tem o botão `Versões…` (fecha o histórico e abre as versões); as `Versões` têm o botão `Salvar versão…`.
@@ -32,8 +32,8 @@ Situação de teste deste capítulo: o comportamento vem da leitura do código (
 |---|---|---|
 | Há passo a desfazer | `Desfazer: <nome do passo> (Ctrl+Z)` | O tooltip só aparece com o mouse em cima; o dedo longo abre o menu, não o tooltip. |
 | Há passo a refazer | `Refazer: <nome do passo> (Ctrl+Shift+Z)` | |
-| Sem passo | `Desfazer (Ctrl+Z)` / `Refazer (Ctrl+Shift+Z)` | O botão fica apagado, mas o botão direito ainda abre o menu. |
-| Passo sem nome | `Desfazer: Edição (Ctrl+Z)` | Ver [passos sem nome](#os-nomes-dos-passos). |
+| Sem passo | `Desfazer (Ctrl+Z)` / `Refazer (Ctrl+Shift+Z)` | O botão fica apagado e o botão direito (ou a pressão longa) **não** abre o menu. |
+| Passo sem nome (nome em branco) | `Desfazer: Edição (Ctrl+Z)` | Hoje nenhuma ação do app grava passo sem nome (ver [os nomes](#os-nomes-dos-passos)). |
 
 A tecla entre parênteses é a que está valendo agora: se você trocou o atalho em `Personalizar`, o tooltip de `Desfazer` e `Refazer` já mostra a nova.
 
@@ -53,7 +53,7 @@ A tecla entre parênteses é a que está valendo agora: se você trocou o atalho
 | Lista de passos | Do mais recente (em cima) ao mais antigo; o último item é sempre `Início do histórico`. Tocar num passo leva o projeto ao estado **depois** dele, desfazendo ou refazendo quantos passos for preciso, numa operação só. | Cada linha: ícone, nome, hora (`14:05`, hora local) à direita. | O estado de agora fica destacado, com a legenda `Estado de agora`, e não responde ao toque. |
 | Passos em cinza, em itálico, com seta de refazer | Foram desfeitos e ainda dá para refazer; tocar neles avança até eles. | | Uma edição nova apaga todos os cinzas. |
 | `Início do histórico` | O projeto antes do primeiro passo guardado. Sem hora. | Tocar nele desfaz tudo o que o histórico guarda. | Com 200 passos cheios, o início é só o mais antigo que ainda cabe: o que já saiu da pilha não volta. |
-| Passo sem nome: `Edição (14:05)` | A hora vem junto do nome, no texto da linha, e não à direita. | | |
+| Passo sem nome: `Edição (14:05)` | A hora vem junto do nome, no texto da linha, e não à direita. | | Só aparece para um nome em branco; o app nomeia todas as ações desde a fase 21. |
 | Texto `Nenhuma edição ainda: o que você fizer no projeto aparece aqui.` | Aparece no lugar da lista enquanto não há passo. | | |
 | Aviso `Parado durante a gravação.` | Enquanto grava, a lista fica desabilitada e tocar num passo não faz nada. | | |
 | `Limpar histórico` | Pede confirmação (`Limpar o histórico?`: `O projeto fica como está, mas não dá mais para desfazer o que foi feito até aqui. As versões salvas não mudam.`; botões `Cancelar` e `Limpar`) e esquece todos os passos. | Desligado sem passos. | Não muda o projeto nem as versões. |
@@ -64,7 +64,7 @@ A tecla entre parênteses é a que está valendo agora: se você trocou o atalho
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| Campo `Nome` | O nome da versão (ou do projeto novo). | Até 80 caracteres. Em `Salvar versão` o padrão é `Versão 30/09/2026 14:05` (a data e a hora de agora) **já selecionado**: digitar substitui em vez de emendar. Vazio dá o erro `Dê um nome à versão.` | |
+| Campo `Nome` | O nome da versão (ou do projeto novo). | Até 80 caracteres. Em `Salvar versão` o padrão é `Versão 30/09/2026 14:05` (a data e a hora de agora) **já selecionado**: digitar substitui em vez de emendar. Em `Duplicar como projeto novo` o padrão é `<projeto> — <versão>`, **cortado em 80 caracteres** (antes da fase 21 um nome longo passava do limite do campo). Vazio dá o erro `Dê um nome à versão.` | |
 | Campo `Nota (opcional)` | Um texto livre que aparece embaixo da versão, em itálico. | Até 300 caracteres, até 3 linhas. Só em `Salvar versão` e `Renomear versão`; `Duplicar` não tem nota. | |
 | `Cancelar` | Fecha sem fazer nada. | | |
 | Botão de confirmar | `Salvar` (em `Salvar versão` e `Renomear versão`) ou `Criar projeto` (em `Duplicar como projeto novo`). | | |
@@ -77,13 +77,13 @@ A tecla entre parênteses é a que está valendo agora: se você trocou o atalho
 | Texto `Cópias do projeto inteiro (sem os áudios, que já ficam guardados à parte). Ficam só neste aparelho.` | Lembrete fixo. | | |
 | `Salvar versão…` | Abre `Salvar versão` e guarda. Mensagem: `Versão “nome” salva neste aparelho.` | Se o projeto é **igual** à versão mais nova, não guarda outra: `O projeto está igual à versão mais nova: não guardei outra cópia idêntica.` Se a mais nova era **automática** e o projeto é igual, ela vira a sua (manual), com o nome e a nota que você deu. | |
 | Interruptor `Salvar automaticamente` | Liga e desliga as versões automáticas. | Ligado por padrão. A escolha vale para o aparelho, para todos os projetos. | |
-| Lista `a cada N min` (só com o interruptor ligado) | O intervalo das versões automáticas. | `a cada 5 min`, `a cada 10 min`, `a cada 15 min` (padrão), `a cada 30 min`, `a cada 60 min`. | |
+| Lista `a cada N min` (só com o interruptor ligado) | O intervalo das versões automáticas. | `a cada 5 min`, `a cada 10 min`, `a cada 15 min` (padrão), `a cada 30 min`, `a cada 60 min`. | Só esses cinco valem: um valor guardado de outro jeito (por exemplo 7 ou 1440) volta ao padrão de 15 min. Mudar o intervalo vale já: o relógio em curso é refeito na próxima edição. |
 | Texto `Guardo as últimas 20 automáticas (também ao abrir o projeto depois de mais de 1 h). As que você salva nunca saem sozinhas.` | Lembrete das regras (só com o interruptor ligado). | | |
 | Cartão de cada versão | Do mais novo ao mais antigo: o nome (com o ícone de setas circulares se for automática), a linha `30/09/2026 13:50 · 4 faixas · 3 clipes · 10 KB · automática`, a nota (se houver). | Faixas não contam pastas; clipes contam os de áudio e os MIDI. | |
 | `Restaurar` | Pede confirmação e leva o projeto àquela versão (ver [restaurar](#restaurar)). | | |
 | `Comparar` / `Fechar comparação` | Abre ou fecha, dentro do cartão, o resumo do que difere entre a versão e o projeto de agora (ver [comparar](#comparar)). | | Não muda nada. |
-| Três pontos do cartão (tooltip `Mais ações`) | `Renomear…`, `Duplicar como novo projeto…` e `Apagar…`. | | |
-| Avisos | `As versões deste projeto já ocupam X (mais de 50,0 MB). Apague as que não precisa mais para liberar espaço.`; `N arquivo(s) de versão está(ão) ilegível(is)` com o botão `Limpar`; mensagens de erro e de sucesso das ações. | Os avisos de erro e de sucesso fecham no `x` do aviso. | |
+| Três pontos do cartão (tooltip `Mais ações`) | `Renomear…`, `Duplicar como projeto novo…` e `Apagar…`. | | O item leva o mesmo nome do título da janela que abre (até a fase 20 o item dizia `Duplicar como novo projeto…`). |
+| Avisos | `As versões deste projeto já ocupam X (mais de 50,0 MB). Apague as que não precisa mais para liberar espaço.` (o tamanho soma **bytes UTF-8**, o que o arquivo ocupa de fato; acentos e ideogramas contam mais de um byte); `N arquivo(s) de versão está(ão) ilegível(is)` com o botão `Limpar`; mensagens de erro e de sucesso das ações. | Os avisos de erro e de sucesso fecham no `x` do aviso. | |
 | Lista vazia | `Este aparelho ainda não tem versões deste projeto. As versões ficam só no aparelho onde foram salvas e não vêm da nuvem.` | | |
 | `Fechar` | Fecha o painel. | | |
 
@@ -99,20 +99,20 @@ O app dá nome à maioria das ações. Os nomes exatos, por assunto:
 
 | Assunto | Nomes dos passos |
 |---|---|
-| Faixas | `Adicionar faixa`, `Adicionar faixa de instrumento`, `Adicionar bus`, `Apagar faixa`, `Duplicar faixa`, `Mover faixa`, `Renomear faixa` (também para pasta), `Mudar a cor da faixa`, `Mudo`, `Solo`, `Mudar a saída da faixa`, `Congelar faixa` |
+| Faixas | `Adicionar faixa`, `Adicionar faixa de instrumento`, `Adicionar bus`, `Apagar faixa`, `Duplicar faixa`, `Mover faixa`, `Renomear faixa` (também para pasta), `Mudar a cor da faixa`, `Mudo`, `Solo`, `Mudar a saída da faixa`, `Congelar faixa` (vale para `Congelar faixa…` e para `Renderizar em faixa nova`), `Descongelar faixa`, `Converter em áudio` ([02e](02e-congelar-faixa.md)) |
 | Pastas | `Agrupar em pasta`, `Desfazer a pasta`, `Tirar da pasta`, `Pôr na pasta`, `Volume da pasta` |
-| Clipes | `Mover clipe`, `Aparar o início do clipe`, `Aparar o fim do clipe`, `Cortar clipe`, `Duplicar clipe`, `Apagar clipe`, `Renomear clipe` (clipe MIDI, pela linha do tempo), `Criar clipe MIDI`, `Ganho do clipe`, `Mudar fade`, `Mudar curva do fade`, `Ajustar o fade-in`, `Ajustar o fade-out`, `Aplicar crossfades`, `Detectar andamento do clipe`, `Trocar de take` |
+| Clipes | `Mover clipe`, `Aparar o início do clipe`, `Aparar o fim do clipe`, `Cortar clipe`, `Duplicar clipe`, `Apagar clipe`, `Renomear clipe` (clipe MIDI, pela linha do tempo e pelo piano roll), `Criar clipe MIDI`, `Silenciar clipe`, `Reativar clipe`, `Inverter a fase do clipe`, `Loop do clipe`, `Desligar o loop do clipe`, `Ganho do clipe` (também o deslizante do diálogo `Ganho do clipe…`), `Dividir clipe`, `Remover silêncio`, `Quantizar por fatias`, `Normalizar clipe`, `Mudar fade`, `Mudar curva do fade`, `Ajustar o fade-in`, `Ajustar o fade-out`, `Aplicar crossfades`, `Detectar andamento do clipe`, `Trocar de take` |
 | Importar, gravar, converter | `Importar áudio`, `Importar MIDI`, `Gravar`, `Converter áudio em MIDI` |
 | Mixer | `Volume da faixa`, `Volume do master`, `Volume`, `Pan`, `Adicionar envio`, `Mudar envio`, `Remover envio` |
 | Efeitos | `Adicionar efeito`, `Remover efeito`, `Mover efeito`, `Mudar parâmetro do efeito`, `Bypass do efeito`, `Preset de efeito` |
 | Instrumento e sampler | `Mudar parâmetro do instrumento`, `Aplicar preset`, `Trocar o áudio do instrumento`, `Adicionar zona do sampler`, `Dividir zona em camadas`, `Criar zona do áudio da faixa`, `Mudar zona do sampler`, `Mover zona do sampler`, `Duplicar zona do sampler`, `Remover zona do sampler`, `Limpar zonas do sampler`, `Fatiar o áudio` |
-| Modulação | `Adicionar fonte de modulação`, `Remover fonte de modulação`, `Atribuir modulação`, `Remover destino de modulação`, `Aplicar preset de modulação`, `Mudar modulação` |
+| Modulação | `Adicionar fonte de modulação`, `Remover fonte de modulação`, `Atribuir modulação`, `Remover destino de modulação`, `Aplicar preset de modulação`, `Mudar modulação`, `Mudar quantidade da modulação` (o deslizante de quantidade de cada destino) |
 | Automação | `Adicionar raia de automação`, `Remover raia de automação`, `Inserir ponto de automação`, `Apagar pontos de automação`, `Zerar a curva do ponto`, `Editar automação`, `Gravar automação` |
 | Notas e MIDI | `Inserir nota`, `Inserir acorde`, `Apagar notas`, `Colar notas`, `Transpor notas`, `Mover notas`, `Quantizar`, `Legato`, `Arpejo`, `Humanizar`, `Staccato`, `Mudar a escala`, `Editar notas`, `Transformar notas`, `Editar controle MIDI`, `Apagar evento de controle`, `Apagar a raia de controle`, `Sequenciador de passos`, `Controle MIDI mapeado` |
-| Andamento, loop e marcadores | `Mudar andamento`, `Mudar compasso`, `Região do loop`, `Mudar o loop`, `Região de punch`, `Adicionar marcador`, `Mover marcador`, `Renomear marcador`, `Cor do marcador`, `Remover marcador` |
+| Andamento, loop e marcadores | `Mudar andamento`, `Mudar compasso`, `Mudar andamento e compasso`, `Região do loop`, `Mudar o loop`, `Região de punch`, `Adicionar marcador`, `Mover marcador`, `Renomear marcador`, `Cor do marcador`, `Remover marcador` |
 | Versões | `Restaurar versão “<nome>”` |
 
-Quando uma ação não tem nome, o passo aparece como **`Edição`**, com a hora junto (`Edição (14:05)`). Hoje são assim, por exemplo, os cortes da edição de áudio por transientes (dividir, remover silêncio, quantizar por fatias), renomear um clipe pelo piano roll e alguns gestos de controle deslizante (no painel de modulação e no de zonas do sampler). Um nome em branco também vira `Edição`.
+Desde a fase 21 **toda** ação desfazível do app tem nome: um teste varre o código (`lib/`) atrás de `checkpoint()` sem nome e de `edit` desfazível sem rótulo, e não acha nenhum. O passo **`Edição`** (com a hora junto: `Edição (14:05)`) sobrou só como reserva para um nome em branco. Até a fase 20 apareciam assim os cortes da edição de áudio (dividir, remover silêncio, quantizar por fatias), renomear um clipe pelo piano roll e alguns deslizantes (modulação, zonas do sampler, ganho do clipe). Quem muda andamento e compasso na janela `Andamento e compasso` (e o tap tempo) grava o passo pelo que mudou de fato: `Mudar andamento` (só o BPM, ou nada mudou), `Mudar compasso` (só as batidas por compasso) ou `Mudar andamento e compasso`; antes saía como `Região do loop`. `(testado só por testes automáticos)`
 
 ### O que entra no histórico e o que não entra
 
@@ -156,21 +156,21 @@ As linhas possíveis: `Faixas` (pelo que é da própria faixa: nome, volume, pan
 
 - **`Renomear…`** (menu de três pontos do cartão): muda nome e nota. Renomear também **tira a versão da limpeza das automáticas**: ela deixa de ser `automática` e nunca mais sai sozinha. Erro: `Não deu para renomear: o arquivo da versão sumiu ou está ilegível.`
 - **`Apagar…`**: `Apagar “<nome>”?`, `Esta versão some do aparelho e não dá para recuperar. O projeto de agora não muda.` Botões `Cancelar` e `Apagar` (vermelho). Não há lixeira.
-- **`Duplicar como novo projeto…`**: abre `Duplicar como projeto novo` com o nome `<projeto> — <versão>` (`Criar projeto` confirma). Cria, na sua conta, um projeto novo com o documento daquela versão, pelo mesmo caminho do `Importar projeto` de um `.jopendaw` ([capítulo 01](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw)). Se já existe um projeto com o nome, o app acrescenta ` (importado)` (e um número, se precisar). O aviso `Criei o projeto “<nome>” com esta versão. Ele já está na sua lista de projetos.` traz o botão `Abrir`. O projeto original e a versão não mudam. Precisa de conta e de rede (o projeto é criado pela API). Os áudios não são copiados: o projeto novo cita os mesmos, que já estão no aparelho, e sobem pela sincronização normal na primeira abertura.
+- **`Duplicar como projeto novo…`**: abre `Duplicar como projeto novo` com o nome `<projeto> — <versão>` (`Criar projeto` confirma). Cria, na sua conta, um projeto novo com o documento daquela versão, pelo mesmo caminho do `Importar projeto` de um `.jopendaw` ([capítulo 01](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw)). Se já existe um projeto com o nome, o app acrescenta ` (importado)` (e um número, se precisar). O aviso `Criei o projeto “<nome>” com esta versão. Ele já está na sua lista de projetos.` traz o botão `Abrir`. O projeto original e a versão não mudam. Precisa de conta e de rede (o projeto é criado pela API). Os áudios não são copiados: o projeto novo cita os mesmos, que já estão no aparelho, e sobem pela sincronização normal na primeira abertura.
 
 ### Versões automáticas
 
 Com `Salvar automaticamente` ligado, o app guarda versões sozinho, sem perguntar:
 
-- **Durante a edição:** passados os minutos escolhidos (5 a 60; padrão 15) desde a última versão ou desde o começo da edição, a **próxima edição** dispara uma versão `Versão automática` do projeto naquele momento. Sem edição, não há versão nova (não é um relógio parado). Uma versão idêntica à mais nova não é guardada.
-- **Ao abrir o projeto:** se a versão mais nova tem mais de 1 hora (ou não há nenhuma) e o projeto tem ao menos um clipe (de áudio ou MIDI), guarda `Ao abrir o projeto`: o ponto de partida da sessão. Um projeto só com faixas de instrumento e sem clipes não ganha versão ao abrir.
+- **Durante a edição:** a primeira edição depois da última versão (ou do começo da sessão) arma um **relógio** dos minutos escolhidos (5 a 60; padrão 15). Passado o prazo, o app guarda `Versão automática` do projeto naquele momento, **mesmo que você não edite mais nada** (o relógio é de parede; antes da fase 21 era preciso uma edição depois do prazo). Quem edita sem parar também ganha a versão: a edição que passa do prazo dispara do mesmo jeito (vale o que vier primeiro). Guardar qualquer versão (manual ou automática), mudar o intervalo ou desligar o interruptor zera o relógio; sem nenhuma edição desde a última versão, não há versão nova. Uma versão idêntica à mais nova não é guardada. Com o app fechado ou o aparelho suspenso o relógio não anda `(não confirmado no Android)`.
+- **Ao abrir o projeto:** se a versão mais nova tem mais de 1 hora (ou não há nenhuma) e o projeto tem **conteúdo**, guarda `Ao abrir o projeto`: o ponto de partida da sessão. Vale conteúdo: mais de uma faixa, ou alguma faixa com clipe, nota, efeito, áudio de sampler ou zona, ou que não seja de áudio (um instrumento). Só a faixa de áudio vazia de um projeto recém-criado não ganha versão ao abrir. (Até a fase 20 exigia ao menos um clipe de áudio ou MIDI, então um projeto só com instrumento montado e ainda sem clipe ficava sem versão.)
 - **Limite:** ficam as **20 últimas automáticas**; as mais velhas saem. As que você salvou ou renomeou nunca saem sozinhas.
 
 ### Onde as versões ficam guardadas
 
 Só no aparelho onde foram salvas, no guardado local do app: no navegador, no IndexedDB (banco `jopendaw`), com as chaves `snapshots:<id do projeto>:<id da versão>`; no Android, em arquivos do app (pasta `jopendaw` dos documentos, com o nome da chave codificado). O interruptor e o intervalo ficam numa chave só do aparelho (`versions-prefs`). Apagar o projeto apaga as versões dele. Cada versão é um texto JSON do documento (formato `jopendaw-version`, versão 1); uma versão de um projeto pequeno tem da ordem de 10 KB.
 
-Quando as versões de um projeto passam de **50 MB** somados, o painel mostra o aviso de espaço; nada é apagado nem bloqueado, e salvar continua funcionando. Um arquivo de versão cortado ou de outro formato não derruba nada: é contado em `N arquivo(s) de versão está(ão) ilegível(is)`, e o botão `Limpar` apaga esses arquivos.
+Quando as versões de um projeto passam de **50 MB** somados (em bytes UTF-8, o mesmo número que o cartão mostra como `10 KB`), o painel mostra o aviso de espaço; nada é apagado nem bloqueado, e salvar continua funcionando. Um arquivo de versão cortado ou de outro formato não derruba nada: é contado em `N arquivo(s) de versão está(ão) ilegível(is)`, e o botão `Limpar` apaga esses arquivos.
 
 ## Passo a passo
 
@@ -184,7 +184,7 @@ Quando as versões de um projeto passam de **50 MB** somados, o painel mostra o 
 
 ### Salvar uma versão antes de um experimento
 
-1. Botão direito em `Desfazer` e `Salvar versão…`.
+1. Botão direito em `Desfazer` e `Salvar versão…` (se o `Desfazer` está apagado, sem nada a desfazer, o menu não abre: use `Versões…` no menu `Visão` e o botão `Salvar versão…` do painel).
 2. Digite um nome (`Antes da mudança de refrão`); o nome padrão já vem selecionado, então basta começar a digitar. Se quiser, escreva uma nota.
 3. `Salvar`. O aviso é `Versão “Antes da mudança de refrão” salva neste aparelho.`
 4. Faça o experimento. Para voltar, `Versões…` e `Restaurar` naquela versão.
@@ -197,7 +197,7 @@ Quando as versões de um projeto passam de **50 MB** somados, o painel mostra o 
 
 ### Duplicar uma versão como projeto novo
 
-1. `Versões…`, nos três pontos do cartão, `Duplicar como novo projeto…`.
+1. `Versões…`, nos três pontos do cartão, `Duplicar como projeto novo…`.
 2. Confira ou mude o nome (`<projeto> — <versão>`) e `Criar projeto`.
 3. No aviso `Criei o projeto “…” com esta versão…`, toque em `Abrir`, ou ache o projeto novo na tela `Projetos`.
 4. O projeto novo é independente: editar um não mexe no outro.
@@ -205,7 +205,7 @@ Quando as versões de um projeto passam de **50 MB** somados, o painel mostra o 
 ## Combina com
 
 - [02 Transporte](02-transporte.md): os botões `Desfazer` e `Refazer` da barra e o que a gravação trava.
-- [01 Projetos, modelos e conta](01-projetos-modelos-conta.md): `Importar projeto` e o `.jopendaw`, o mesmo caminho do `Duplicar como novo projeto…`.
+- [01 Projetos, modelos e conta](01-projetos-modelos-conta.md): `Importar projeto` e o `.jopendaw`, o mesmo caminho do `Duplicar como projeto novo…`.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o que zera o histórico e por que as versões não sobem.
 - [09 Configurações, atalhos e Android](09-configuracoes-atalhos-android.md): o atalho `Ctrl+Shift+H` e como trocá-lo.
 - Guia [Voltar atrás: histórico e versões](../guias/voltar-atras-historico-e-versoes.md): três cenários de uso.
@@ -214,15 +214,15 @@ Quando as versões de um projeto passam de **50 MB** somados, o painel mostra o 
 ## Limites e pegadinhas
 
 - **O histórico dura a sessão.** Fechar o projeto, recarregar a página ou receber o projeto de outro aparelho o esvazia. Para algo que precisa sobreviver, salve uma **versão**.
-- **As versões são só do aparelho.** Não sobem para a nuvem e não vão dentro do `.jopendaw` (o arquivo leva só o documento e os áudios). Num aparelho novo, o painel começa vazio. Para levar uma versão: `Duplicar como novo projeto…` e sincronize, ou exporte o projeto novo.
+- **As versões são só do aparelho.** Não sobem para a nuvem e não vão dentro do `.jopendaw` (o arquivo leva só o documento e os áudios). Num aparelho novo, o painel começa vazio. Para levar uma versão: `Duplicar como projeto novo…` e sincronize, ou exporte o projeto novo.
 - **Limpar os dados do site, desinstalar o app ou apagar o projeto apaga as versões** (elas moram no mesmo guardado local do documento e dos áudios). `(lido do código)`
 - **Restaurar não é Desfazer tudo.** Metrônomo, contagem, latência, punch, mapeamentos de MIDI learn, armar e pastas recolhidas ficam como estão.
 - **A restauração depende dos áudios.** Se um áudio que a versão cita não está mais no aparelho (por exemplo depois de `Limpar áudios sem uso`), o app o marca como ausente (o clipe fica sem som, como em qualquer áudio que o aparelho não tem). `(lido do código; não confirmado com um caso real)`
 - **`Antes de restaurar` pode não aparecer.** Se o projeto já era idêntico à versão mais nova, a cópia de segurança não é feita (o conteúdo já está nela).
-- **A versão automática durante a edição sai na primeira edição depois do intervalo**, e guarda o projeto já com essa edição. Para um ponto de volta garantido antes de mexer, salve você mesmo.
-- **Versões automáticas pedem conteúdo.** `Ao abrir o projeto` só existe se há ao menos um clipe; e só vale com o interruptor ligado.
-- **`Edição` sem nome.** Nem toda ação tem nome ainda: o passo aparece como `Edição (hora)`. A hora ajuda a achá-lo.
-- **Um nome errado no histórico.** Salvar na janela `Andamento e compasso` (`Salvar`, por exemplo ao mudar o BPM) cria o passo `Região do loop`, e não `Mudar andamento`; desfazer funciona normalmente, só o nome engana. `(lido do código: o nome vem da função setTempo)`
+- **A versão automática guarda o projeto como está no fim do prazo**, já com as edições feitas até ali, não o de antes de começar a mexer. Para um ponto de volta garantido antes de um experimento, salve você mesmo.
+- **Versões automáticas pedem conteúdo.** `Ao abrir o projeto` só existe se o projeto tem mais que a faixa de áudio vazia do início (mais faixas, clipes, notas, instrumento, efeito ou áudio de sampler); e só vale com o interruptor ligado.
+- **Sem `Edição` no dia a dia.** Desde a fase 21 toda ação tem nome; se aparecer `Edição (hora)`, é um nome em branco e a hora ajuda a achá-lo.
+- **Desfazer apagado não abre menu.** Com nada a desfazer, o botão direito em `Desfazer` não faz nada; `Versões…` e o `Histórico…` estão no menu `Visão`, e `Salvar versão…` dentro de `Versões`.
 - **`Ctrl+Shift+H` e o navegador.** Em alguns navegadores esse atalho também abre o histórico de navegação (por exemplo, no Firefox); se o app não receber a tecla, use o botão direito em `Desfazer` ou o menu `Visão`. `(não confirmado)`
 - **Tocar num passo do painel vai até o estado depois dele**, não "desfaz aquele passo": para voltar ao estado de **antes** do `Solo`, não adianta tocar em `Solo`; toque na linha logo abaixo dele (e o que foi feito depois do `Solo` também é desfeito).
 

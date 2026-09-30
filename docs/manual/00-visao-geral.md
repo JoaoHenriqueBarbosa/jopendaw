@@ -60,7 +60,7 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | `Refazer: <passo> (Ctrl+Shift+Z)` | Refaz | | Desligado gravando. Mesmo menu do botão direito |
 | `Cortar no cursor (S)` | Divide os clipes no cursor | | |
 | `Duplicar (Ctrl+D)` | Duplica o clipe selecionado | Desligado sem clipe selecionado | |
-| `Apagar o clipe (Delete)` | Apaga o clipe selecionado | Desligado sem clipe selecionado | |
+| `Apagar o clipe (Delete · Backspace)` | Apaga o clipe selecionado | Desligado sem clipe selecionado | |
 | `Grade de encaixe (Alt ao arrastar: livre)` | Menu da grade (snap) | `Livre`, `Compasso`, `1/4`, `1/8`, `1/16`; padrão `1/4` | Mostra o valor atual ao lado do ícone |
 | Botão `Automação` (ícone de linha quebrada; tooltip `Automação: <modo>. <dica>`) | Escolhe o modo de gravação da automação; fica entre a grade e o `Afastar` | Em `Ler` (padrão) só o ícone; nos outros modos aparece em vermelho com o nome do modo | Modos em [Capítulo 07](07-automacao.md) |
 | `Afastar` / `Aproximar` | Zoom horizontal | Passo de 1,5x | Também `−` e `+` |
@@ -110,7 +110,7 @@ Ocupa o meio da tela. À esquerda, uma coluna de cabeçalhos de faixa; à direit
 |---|---|---|---|
 | Canto da régua: `N faixas` e `comp.` / `mm:ss` | Mostra quantas faixas há; clicar alterna a régua entre compassos e minutos:segundos | Tooltip: `Régua em compassos: clique para alternar` | Mesmo efeito do item `Régua em minutos e segundos` |
 | Régua | Escala de compassos (ou tempo); arrastar nela marca a região do loop; abriga os marcadores | | |
-| Cabeçalho da faixa: nome | Nome da faixa; o menu `Opções da faixa` (três pontos) tem `Abrir o instrumento`, `Efeitos`, `Monitorar a entrada`, `Renomear`, `Duplicar a faixa`, `Congelar em áudio`, `Mover para cima`, `Mover para baixo`, `Agrupar em pasta…` (ou `Tirar da pasta`, `Mover para a pasta "Nome"`), `Trocar a cor`, `Apagar a faixa` | Alguns itens só existem conforme o tipo da faixa | Apagar uma faixa com conteúdo pede confirmação e dá para desfazer |
+| Cabeçalho da faixa: nome | Nome da faixa; o menu `Opções da faixa` (três pontos) tem `Abrir o instrumento`, `Efeitos`, `Monitorar a entrada`, `Renomear`, `Duplicar a faixa`, `Congelar faixa…` (ou `Descongelar`), `Converter em áudio…`, `Renderizar em faixa nova`, `Mover para cima`, `Mover para baixo`, `Agrupar em pasta…` (ou `Tirar da pasta`, `Mover para a pasta "Nome"`), `Trocar a cor`, `Apagar a faixa` | Alguns itens só existem conforme o tipo da faixa | Apagar uma faixa com conteúdo pede confirmação e dá para desfazer |
 | Linha de pasta (seta, ícone de pasta, nome, `M`, `S`, `Efeitos da pasta`, `N faixas`, volume) | Reúne as faixas logo abaixo sob um barramento de grupo; a seta (`Recolher a pasta` / `Expandir a pasta`) esconde as faixas | Criada por `Agrupar em pasta…` no menu da faixa | [Capítulo 02c](02c-pastas-de-faixa.md) |
 | `M` (`Mudo`) | Silencia a faixa | | |
 | `S` (`Solo`) | Só as faixas em solo tocam | | |
@@ -209,7 +209,9 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Armar | Deixar uma faixa pronta para receber a gravação (áudio da entrada, ou notas do teclado/MIDI). |
 | Automação | Curva que move um parâmetro (volume, pan, envio, instrumento, efeito) ao longo do tempo. Desenha-se na raia ou grava-se mexendo no controle com a música tocando (`Escrever`, `Toque`, `Trava`). |
 | Barramento (bus) | Faixa sem clipes que soma o áudio mandado por outras faixas, para tratá-las juntas (ex.: um reverb comum). |
-| Bounce / Congelar em áudio | Transforma uma faixa (com instrumento e efeitos) em áudio numa faixa nova; a original fica muda. |
+| Bounce / Renderizar em faixa nova (era `Congelar em áudio`) | Transforma uma faixa (com instrumento e efeitos) em áudio numa faixa nova; a original fica muda. |
+| Freeze / Congelar faixa | A própria faixa passa a tocar o áudio renderizado e o conteúdo fica guardado; `Descongelar` devolve tudo ([02e](02e-congelar-faixa.md)). |
+| Bounce in place / Converter em áudio | Troca o instrumento, as notas e os efeitos de uma faixa por um clipe de áudio, na própria faixa ([02e](02e-congelar-faixa.md)). |
 | Clipe | Trecho de áudio ou de notas numa faixa. |
 | Contagem | Um compasso de metrônomo antes de a gravação começar; opção `Contagem de um compasso`. |
 | Cursor (playhead) | A linha que marca onde a reprodução está. |
@@ -268,7 +270,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 - O andamento e o compasso moram no servidor: mudar o `120 BPM · 4/4` da barra chama a API. Sem rede o app mostra o novo andamento nesta sessão, mas o servidor guarda o antigo, e ao reabrir o projeto vale o do servidor (lido do código; o aviso de erro na tela ao falhar não foi confirmado).
 - O botão da barra sempre escreve `/4` (`120 BPM · 4/4`), mesmo que o cadastro do projeto no servidor tenha outra figura de tempo; o card da lista mostra a fórmula do cadastro.
 - Os tooltips, o item `Duplicar` do menu do clipe e a janela `Atalhos do teclado` mostram `⌘` no Mac e no iOS e `Ctrl` nos outros sistemas (`Desfazer (⌘+Z)` no Mac). Nesta tabela do capítulo eles aparecem como `Ctrl`.
-- **Os atalhos são personalizáveis (fase 16) e os tooltips acompanham a troca (fase 18).** Os tooltips e menus (`Loop (L)`, `Metrônomo (C)`, `Mixer (X)`…) leem a tecla de agora do catálogo; sobram poucas exceções com a tecla escrita à mão (por exemplo o `(Q)` do tooltip de quantizar no piano roll), que continuam mostrando a de fábrica. Ver [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos). `(lido do código)`
+- **Os atalhos são personalizáveis (fase 16) e os tooltips acompanham a troca (fase 18).** Os tooltips e menus (`Loop (L)`, `Metrônomo (C)`, `Mixer (X)`…) leem a tecla de agora do catálogo; desde a fase 21 nenhuma dica leva a tecla escrita à mão (o `(Q)` do tooltip de quantizar no piano roll e o `(Ctrl+Z)` da janela de edição de áudio eram as últimas). Ver [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos). `(lido do código)`
 - No menu `Visão`, `Faixas pequenas`, `Faixas médias` e `Faixas grandes` não têm atalho de teclado (antes da fase 9 o menu mostrava siglas `(P)`, `(M)` e `(G)` que pareciam atalhos; `M` cria marcador).
 - Só há motor de áudio no navegador e no Android. Em outro sistema (um build de computador nativo) a tela do projeto avisa (`O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.`) e não toca.
 - Se o som some de repente e aparece o aviso vermelho com o botão `Reiniciar o áudio`, o motor caiu; veja "Aviso de falha do áudio" acima. O projeto não é perdido.

@@ -69,7 +69,7 @@ Se a faixa-chave só é processada depois da faixa que a usa (por exemplo, um ba
 
 - **Mixagem e stems saem alinhados com a linha do tempo.** O render offline descarta a latência total no começo: o primeiro quadro do arquivo é o da posição de partida, para a mixagem e para cada stem. Um stem de faixa é capturado no ponto em que a faixa entra no destino dela (depois do fader e do atraso de saída), e os stems de faixas com e sem efeito de latência batem quadro a quadro com a mixagem.
 - **O resultado do render é o mesmo do tempo real**, só deslocado da latência (teste automático).
-- **Congelar em áudio** usa o mesmo render; pelo código o resultado também sai alinhado `(não confirmado)`.
+- **`Congelar faixa…`, `Converter em áudio…` e `Renderizar em faixa nova`** (antigo `Congelar em áudio`) usam o mesmo render; pelo código o resultado também sai alinhado `(não confirmado)`. Numa faixa congelada a cadeia de efeitos não roda no motor (já está no áudio), então a latência dos efeitos dela deixa de entrar na compensação `(lido do código; não confirmado ao ouvido)` ([02e](02e-congelar-faixa.md)).
 - Ver [08 Exportação](08-exportacao.md).
 
 ## Limite de 1 segundo

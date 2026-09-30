@@ -310,7 +310,7 @@ Além da curva, um controle pode ser movido por um **modulador** que soma por ci
 - Os controles de opções e inteiros andam em degraus: um `Tipo` de filtro automatizado troca de tipo a cada valor inteiro que a curva atravessa.
 - Sem sidechain automatizável.
 - Mostrar, ocultar e o estado aberto/fechado da raia **não** entram no desfazer.
-- Depois de **congelar** uma faixa em áudio, o volume e o pan (com as automações deles) passam para a faixa nova; a automação de efeitos e instrumento vira som no arquivo.
+- Depois de `Renderizar em faixa nova` (antigo `Congelar em áudio`), o volume e o pan (com as automações deles) passam para a faixa nova; a automação de efeitos e instrumento vira som no arquivo. Com `Congelar faixa…` (no lugar), as raias de volume, pan e envio seguem vivas na própria faixa; as de instrumento e de efeito ficam no projeto mas **não são enviadas ao motor** até o `Descongelar` (já estão no áudio) ([02e](02e-congelar-faixa.md)).
 
 ## Atalhos
 
