@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/audio/engine.dart' show EngineState, ccPitchBase;
 import 'package:jopendaw_app/daw/controller.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
+import 'package:jopendaw_app/daw/keymap.dart' show keyboardTooltip;
 import 'package:jopendaw_app/daw/midi_learn.dart';
 import 'package:jopendaw_app/daw/midi_map.dart';
 import 'package:jopendaw_app/daw/model.dart';
@@ -15,7 +16,6 @@ import 'package:jopendaw_app/daw/project_file.dart';
 import 'package:jopendaw_app/daw/sync.dart';
 import 'package:jopendaw_app/daw/tempo_format.dart';
 import 'package:jopendaw_app/daw/tempo_map.dart';
-import 'package:jopendaw_app/widgets/format.dart';
 
 import 'fake_engine.dart';
 import 'fake_sync_api.dart';
@@ -294,7 +294,7 @@ void main() {
     });
 
     test('6: os textos citam o menu do knob e o Shift+K', () {
-      expect(keyboardTooltip(on: true, octave: 4, velocityPercent: 80), contains('Shift+H/K/L'));
+      expect(keyboardTooltip(on: true, octave: 4, velocityPercent: 80), contains('Shift+H/K/L/Z'));
     });
   });
 }

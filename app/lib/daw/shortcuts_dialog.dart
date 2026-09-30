@@ -3,7 +3,6 @@
 /// aparece aqui. O botão "Personalizar" troca a lista pela tela de personalização (`keymap_ui.dart`).
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/format.dart';
@@ -25,7 +24,11 @@ Map<KeyCategory, List<(String, String)>> _extras() => {
   ],
   KeyCategory.edit: [('$modKey + roda', 'Zoom no ponto do mouse'), ('Shift + roda', 'Rolar na horizontal')],
   KeyCategory.midiLearn: [('Botão direito · toque longo', 'Menu do controle: aprender ou remover o mapeamento')],
-  KeyCategory.keyboard: [('A W S E D F T G Y H U J K O L P', 'Notas: do dó até o ré# da oitava de cima')],
+  KeyCategory.keyboard: [
+    (noteKeyLetters.map(KeyboardLayoutHints.instance.labelFor).join(' '), 'Notas: do dó até o ré# da oitava de cima'),
+    if (KeyboardLayoutHints.instance.differsFromQwerty)
+      ('Por posição', 'As teclas de nota, oitava e velocidade seguem a posição no teclado (a fileira do A), não a letra: o seu layout não é QWERTY.'),
+  ],
   KeyCategory.pianoRoll: [
     ('Clique no vazio', 'Nova nota (arraste para a duração)'),
     ('Alt ao arrastar', 'Sem grade; no começo do arraste, duplica'),
@@ -73,7 +76,8 @@ List<(String, List<(String, String)>)> shortcutGroups(Keymap km) {
     }
     rows.addAll(extras[cat] ?? const []);
     if (cat == KeyCategory.keyboard) {
-      groups.add(('${cat.title} (${km.labelOf('kbd.toggle')} liga)', rows));
+      // sem atalho no liga/desliga, o título não diz "Sem atalho liga": só o botão da barra liga
+      groups.add((km.bindingsOf('kbd.toggle').isEmpty ? cat.title : '${cat.title} (${km.labelOf('kbd.toggle')} liga)', rows));
     } else {
       groups.add((cat.title, rows));
     }
@@ -82,14 +86,26 @@ List<(String, List<(String, String)>)> shortcutGroups(Keymap km) {
   if (suspended.isNotEmpty) {
     groups.add((
       'Suspensos enquanto o teclado do computador está ligado',
-      [...suspended, ('Com $modKey', 'Os atalhos com $modKey continuam valendo (desfazer, duplicar, importar, ${km.labelOf('kbd.toggle')} desliga o teclado)')],
+      [
+        ...suspended,
+        (
+          'Com $modKey',
+          km.bindingsOf('kbd.toggle').isEmpty
+              ? 'Os atalhos com $modKey continuam valendo (desfazer, duplicar, importar); o teclado do computador desliga pelo botão da barra'
+              : 'Os atalhos com $modKey continuam valendo (desfazer, duplicar, importar, ${km.labelOf('kbd.toggle')} desliga o teclado)',
+        ),
+        // decisão: o Shift não dá prioridade ao atalho; a tecla de nota vale com ou sem ele
+        ('Com Shift', 'Não muda nada: Shift+L toca a nota L, como L. Os atalhos com Shift nessas letras ficam suspensos; desligue o teclado para usá-los'),
+      ],
     ));
   }
   return groups;
 }
 
-/// Celular sem teclado físico: a lista vale só para leitura. Na web e no computador dá para personalizar.
-bool get canCustomizeShortcuts => kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS);
+/// O botão "Personalizar" aparece em todo aparelho: quem tem teclado físico ligado no celular ou no tablet (Android
+/// com teclado Bluetooth, por exemplo) também personaliza. Sem nenhuma tecla vista, a tela de personalizar avisa que
+/// precisa de um teclado físico ([shortcutsNeedKeyboardHint]).
+bool get canCustomizeShortcuts => true;
 
 Future<void> showShortcuts(BuildContext context, {bool? canCustomize, Keymap? keymap}) => showDialog<void>(
   context: context,

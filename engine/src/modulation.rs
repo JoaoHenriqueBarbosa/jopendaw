@@ -323,8 +323,9 @@ impl Engine {
     }
 
     /// Esquece todos os moduladores e destinos: os alvos voltam à base. O app reenvia tudo com
-    /// [`Engine::mod_source`] e [`Engine::mod_dest`]; o que voltar igual segue sem degrau e sem
-    /// reiniciar a fase do LFO (o estado só some no passo seguinte, se não voltou).
+    /// [`Engine::mod_source`] e [`Engine::mod_dest`]; o que voltar igual (mesmo tipo) segue sem
+    /// degrau e sem reiniciar a fase do LFO nem o nível do seguidor: o `mod_clear` só desliga, e o
+    /// estado só some no passo seguinte, se o modulador não voltou.
     pub fn mod_clear(&mut self) {
         for tm in self.mods.iter_mut().chain(std::iter::once(&mut self.master_mod)) {
             for s in &mut tm.src {
@@ -361,8 +362,10 @@ impl Engine {
         let Some(s) = tm.src.get_mut(index) else { return };
         let fin = |v: f32, lo: f32, hi: f32, def: f32| if v.is_finite() { v.clamp(lo, hi) } else { def };
         let kind = kind.min(kind::MACRO);
-        // trocar o tipo recomeça o estado; o resto da configuração muda sem mexer nele
-        if !s.live || s.kind != kind {
+        // trocar o tipo recomeça o estado; o resto da configuração muda sem mexer nele. Um modulador
+        // do mesmo tipo que o `mod_clear` só desligou mantém fase e nível (o app reenvia tudo a cada
+        // edição); quem não voltou até o passo seguinte perde o estado em `mod_reconcile`
+        if s.kind != kind {
             *s = Source { kind, ..Source::NEW };
         }
         s.live = true;

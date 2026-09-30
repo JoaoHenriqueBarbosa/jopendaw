@@ -28,6 +28,7 @@ import 'tempo_map.dart';
 import 'tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
 import 'warp_dialog.dart' show parseBpm;
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
+import 'keymap.dart';
 
 /// Para onde as ações do transporte (botões e atalhos) mandam uma falha que o controlador não
 /// transformou em aviso: a tela mostra inline, em vez de a exceção sumir no console. Null: a ação
@@ -107,14 +108,16 @@ class TransportBar extends StatelessWidget {
         final recording = c.recording;
         final transport = [
           IconButton(
-            tooltip: recording ? 'Parar a gravação e voltar (Enter)' : 'Parar e voltar (Enter)',
+            tooltip: recording ? 'Parar a gravação e voltar${shortcutHint('transport.stop')}' : 'Parar e voltar${shortcutHint('transport.stop')}',
             onPressed: () => stopTransport(c, onError),
             icon: const Icon(Icons.stop),
           ),
           ValueListenableBuilder<bool>(
             valueListenable: c.playing,
             builder: (_, playing, _) => IconButton.filled(
-              tooltip: recording ? 'Parar a gravação (espaço)' : (playing ? 'Pausar (espaço)' : 'Tocar (espaço)'),
+              tooltip: recording
+                  ? 'Parar a gravação${shortcutHint('transport.play')}'
+                  : (playing ? 'Pausar${shortcutHint('transport.play')}' : 'Tocar${shortcutHint('transport.play')}'),
               onPressed: () => playOrPause(c, onError),
               icon: Icon(playing ? Icons.pause : Icons.play_arrow),
             ),
@@ -125,8 +128,8 @@ class TransportBar extends StatelessWidget {
             icon: Icons.compare_arrows,
             on: d.punchActive,
             tooltip: d.punchRegion == null
-                ? 'Punch (P): grava só numa região. Ligue e ajuste as pontas na régua'
-                : 'Punch (P): a gravação só vale entre o punch in e o punch out da régua',
+                ? 'Punch${shortcutHint('transport.punch')}: grava só numa região. Ligue e ajuste as pontas na régua'
+                : 'Punch${shortcutHint('transport.punch')}: a gravação só vale entre o punch in e o punch out da régua',
             onTap: c.togglePunch,
           ),
           const SizedBox(width: 4),
@@ -135,16 +138,16 @@ class TransportBar extends StatelessWidget {
           // o andamento não muda no meio de uma gravação: as batidas do que já foi gravado mudariam
           // de lugar em relação ao áudio que ainda está chegando
           _TempoButton(c: c, onPressed: recording ? null : () => _editTempo(context)),
-          _Toggle(icon: Icons.repeat, on: d.loopOn, tooltip: 'Loop (L) · arraste na régua para marcar', onTap: c.toggleLoop),
-          _Toggle(icon: Icons.av_timer, on: d.metronome, tooltip: 'Metrônomo (C)', onTap: c.toggleMetronome),
+          _Toggle(icon: Icons.repeat, on: d.loopOn, tooltip: 'Loop${shortcutHint('transport.loop')} · arraste na régua para marcar', onTap: c.toggleLoop),
+          _Toggle(icon: Icons.av_timer, on: d.metronome, tooltip: 'Metrônomo${shortcutHint('transport.metronome')}', onTap: c.toggleMetronome),
         ];
         // desfazer no meio da gravação poderia apagar ou mover a faixa que está recebendo o áudio
         final tools = [
-          IconButton(tooltip: withMod('Desfazer (Ctrl+Z)'), onPressed: c.canUndo && !recording ? c.undo : null, icon: const Icon(Icons.undo)),
-          IconButton(tooltip: withMod('Refazer (Ctrl+Shift+Z)'), onPressed: c.canRedo && !recording ? c.redo : null, icon: const Icon(Icons.redo)),
-          IconButton(tooltip: 'Cortar no cursor (S)', onPressed: () => splitClipsAtPlayhead(c), icon: const Icon(Icons.content_cut)),
+          IconButton(tooltip: 'Desfazer${shortcutHint('edit.undo')}', onPressed: c.canUndo && !recording ? c.undo : null, icon: const Icon(Icons.undo)),
+          IconButton(tooltip: 'Refazer${shortcutHint('edit.redo')}', onPressed: c.canRedo && !recording ? c.redo : null, icon: const Icon(Icons.redo)),
+          IconButton(tooltip: 'Cortar no cursor${shortcutHint('edit.split')}', onPressed: () => splitClipsAtPlayhead(c), icon: const Icon(Icons.content_cut)),
           IconButton(
-            tooltip: withMod('Duplicar (Ctrl+D)'),
+            tooltip: 'Duplicar${shortcutHint('edit.duplicate')}',
             onPressed: c.selectedClip == null ? null : () => duplicateSelectedClip(c),
             icon: const Icon(Icons.copy_all),
           ),
@@ -173,10 +176,25 @@ class TransportBar extends StatelessWidget {
           if (MediaQuery.sizeOf(context).width >= 1640) DurationLabel(c: c),
         ];
         final panels = [
-          _Toggle(icon: Icons.tune, on: c.dock == Dock.mixer, tooltip: 'Mixer (X)', onTap: () => toggleDock(c, Dock.mixer)),
-          _Toggle(icon: Icons.edit_note, on: c.dock == Dock.editor, tooltip: 'Editor de notas (E)', onTap: () => toggleDock(c, Dock.editor)),
-          _Toggle(icon: dockInstrumentIcon(c), on: c.dock == Dock.instrument, tooltip: 'Instrumento da faixa (I)', onTap: () => toggleDock(c, Dock.instrument)),
-          _Toggle(icon: Icons.auto_fix_high, on: c.dock == Dock.effects, tooltip: 'Efeitos da faixa (F)', onTap: () => toggleDock(c, Dock.effects)),
+          _Toggle(icon: Icons.tune, on: c.dock == Dock.mixer, tooltip: 'Mixer${shortcutHint('panel.mixer')}', onTap: () => toggleDock(c, Dock.mixer)),
+          _Toggle(
+            icon: Icons.edit_note,
+            on: c.dock == Dock.editor,
+            tooltip: 'Editor de notas${shortcutHint('panel.editor')}',
+            onTap: () => toggleDock(c, Dock.editor),
+          ),
+          _Toggle(
+            icon: dockInstrumentIcon(c),
+            on: c.dock == Dock.instrument,
+            tooltip: 'Instrumento da faixa${shortcutHint('panel.instrument')}',
+            onTap: () => toggleDock(c, Dock.instrument),
+          ),
+          _Toggle(
+            icon: Icons.auto_fix_high,
+            on: c.dock == Dock.effects,
+            tooltip: 'Efeitos da faixa${shortcutHint('panel.effects')}',
+            onTap: () => toggleDock(c, Dock.effects),
+          ),
         ];
         final velocity = (c.keyboardVelocity * 100).round();
         final inputs = [
@@ -216,7 +234,7 @@ class TransportBar extends StatelessWidget {
         List<Widget> files(bool labels) => !labels
             ? [
                 IconButton.filledTonal(
-                  tooltip: withMod('Importar áudio ou MIDI (Ctrl+I)'),
+                  tooltip: 'Importar áudio ou MIDI${shortcutHint('edit.import')}',
                   onPressed: idle ? () => importFiles(context, c) : null,
                   icon: const Icon(Icons.file_open_outlined),
                 ),
@@ -272,7 +290,11 @@ class TransportBar extends StatelessWidget {
                     ),
                     // em janelas estreitas os atalhos ficam na tecla ? e nas Configurações: o botão não cabe
                     if (MediaQuery.sizeOf(context).width >= 1640)
-                      IconButton(tooltip: 'Atalhos do teclado (?)', onPressed: () => showShortcuts(context), icon: const Icon(Icons.keyboard_command_key)),
+                      IconButton(
+                        tooltip: 'Atalhos do teclado${shortcutHint('help.shortcuts')}',
+                        onPressed: () => showShortcuts(context),
+                        icon: const Icon(Icons.keyboard_command_key),
+                      ),
                     if (c.status != null) ...[
                       const SizedBox(width: 12),
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -431,17 +453,17 @@ class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderS
   }
 
   String _tooltip() {
-    if (c.countingIn) return 'Contando o compasso de entrada: toque para cancelar (R)';
-    if (c.recording) return 'Gravando: toque para parar (R)';
+    if (c.countingIn) return 'Contando o compasso de entrada: toque para cancelar${shortcutHint('transport.record')}';
+    if (c.recording) return 'Gravando: toque para parar${shortcutHint('transport.record')}';
     final armed = c.doc.tracks.where((t) => t.armed && t.kind.hasClips).length;
     final count =
         '${c.doc.countIn ? ', com um compasso de contagem' : ''}'
         '${c.doc.preRollBars > 0 ? ', ${c.doc.preRollBars} de pré-roll' : ''}'
         '${c.doc.punchActive ? ', só na região de punch' : ''}';
     return switch (armed) {
-      0 => 'Gravar (R): nenhuma faixa armada; arme no mixer (●)',
-      1 => 'Gravar (R) na faixa armada$count',
-      _ => 'Gravar (R) nas $armed faixas armadas$count',
+      0 => 'Gravar${shortcutHint('transport.record')}: nenhuma faixa armada; arme no mixer (●)',
+      1 => 'Gravar${shortcutHint('transport.record')} na faixa armada$count',
+      _ => 'Gravar${shortcutHint('transport.record')} nas $armed faixas armadas$count',
     };
   }
 
@@ -480,7 +502,7 @@ class _RecordButtonState extends State<_RecordButton> with SingleTickerProviderS
           onSelected: (v) => v is int ? c.setPreRoll(v) : _menu(v as _RecordMenu),
           itemBuilder: (_) => [
             CheckedPopupMenuItem<Object>(value: _RecordMenu.countIn, checked: c.doc.countIn, child: const Text('Contagem de um compasso')),
-            CheckedPopupMenuItem<Object>(value: _RecordMenu.punch, checked: c.doc.punchActive, child: const Text('Punch in/out (P)')),
+            CheckedPopupMenuItem<Object>(value: _RecordMenu.punch, checked: c.doc.punchActive, child: Text('Punch in/out${shortcutHint('transport.punch')}')),
             const PopupMenuDivider(),
             const PopupMenuItem<Object>(enabled: false, height: 28, child: Text('Pré-roll: toca a música antes de gravar')),
             for (var n = 0; n <= DawDoc.maxPreRollBars; n++)

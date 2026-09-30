@@ -111,6 +111,7 @@ class _DawStudioState extends State<DawStudio> {
   void initState() {
     super.initState();
     unawaited(Keymap.instance.load());
+    KeyboardLayoutHints.instance.install();
   }
 
   /// Falha de uma ação do transporte (gravar, parar a gravação) que o controlador não transformou
@@ -243,7 +244,8 @@ class _DawStudioState extends State<DawStudio> {
       onKeyEvent: _onKey,
       child: ExcludeFocus(
         child: ListenableBuilder(
-          listenable: c,
+          // os tooltips e menus mostram os atalhos atuais: personalizar refaz a tela
+          listenable: Listenable.merge([c, Keymap.instance, KeyboardLayoutHints.instance]),
           builder: (context, _) => Column(
             children: [
               if (desktop) transport,
@@ -270,7 +272,13 @@ class _DawStudioState extends State<DawStudio> {
               if (c.notice != null)
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: InlineNotice(c.notice!, error: false, onClose: c.clearNotice),
+                  child: _AutoDismiss(
+                    // um aviso novo (outro texto) tem o seu próprio tempo
+                    key: ValueKey(c.notice),
+                    after: DawController.noticeDuration,
+                    onDismiss: c.clearNotice,
+                    child: InlineNotice(c.notice!, error: false, onClose: c.clearNotice),
+                  ),
                 ),
               if (_actionError != null)
                 Padding(
@@ -297,4 +305,34 @@ class _DawStudioState extends State<DawStudio> {
       ),
     );
   }
+}
+
+/// Chama [onDismiss] depois de [after] (o aviso informativo some sozinho); o relógio morre com o widget.
+class _AutoDismiss extends StatefulWidget {
+  final Duration after;
+  final VoidCallback onDismiss;
+  final Widget child;
+  const _AutoDismiss({super.key, required this.after, required this.onDismiss, required this.child});
+
+  @override
+  State<_AutoDismiss> createState() => _AutoDismissState();
+}
+
+class _AutoDismissState extends State<_AutoDismiss> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(widget.after, widget.onDismiss);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

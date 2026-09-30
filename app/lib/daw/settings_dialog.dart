@@ -14,6 +14,7 @@ import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'mixer_panel.dart' show InputLevelMeter;
+import 'keymap.dart';
 import 'model.dart';
 import 'shortcuts_dialog.dart' show showShortcuts;
 import 'transport_bar.dart' show describeActionError;
@@ -472,8 +473,8 @@ class _MetronomeSection extends StatelessWidget {
           ),
         Text(
           o.mode == MetronomeMode.recording
-              ? 'Liga e desliga pelo botão do metrônomo (C); nesse modo ele só soa gravando, na contagem e no pré-roll.'
-              : 'Liga e desliga pelo botão do metrônomo (C). O clique acompanha o compasso e o andamento do projeto.',
+              ? 'Liga e desliga pelo botão do metrônomo${shortcutHint('transport.metronome')}; nesse modo ele só soa gravando, na contagem e no pré-roll.'
+              : 'Liga e desliga pelo botão do metrônomo${shortcutHint('transport.metronome')}. O clique acompanha o compasso e o andamento do projeto.',
           style: muted,
         ),
       ],

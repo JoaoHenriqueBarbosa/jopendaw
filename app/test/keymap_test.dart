@@ -909,10 +909,33 @@ void main() {
         ),
       );
       await t.tap(find.byKey(const ValueKey('keymap-import')));
-      await t.pump();
+      await t.pumpAndSettle();
+      // pede confirmação com o resumo e nada muda antes dela
+      expect(find.text('Importar atalhos?'), findsOneWidget);
+      expect(find.textContaining('1 atalho será trocado'), findsOneWidget);
+      expect(km.bindingsOf('panel.mixer'), [k('B')]);
+      await t.tap(find.byKey(const ValueKey('keymap-import-cancel')));
+      await t.pumpAndSettle();
+      expect(km.bindingsOf('panel.mixer'), [k('B')]);
+      expect(km.bindingsOf('panel.effects'), [k('F')]);
+      await t.tap(find.byKey(const ValueKey('keymap-import')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('keymap-import-confirm')));
+      await t.pumpAndSettle();
       expect(km.bindingsOf('panel.effects'), [k('G')]);
       expect(km.bindingsOf('panel.mixer'), [k('X')]);
       expect(find.textContaining('com avisos'), findsOneWidget);
+      // "Desfazer importação" devolve as personalizações de antes
+      await t.ensureVisible(find.text('Desfazer importação'));
+      await t.tap(find.text('Desfazer importação'));
+      await t.pumpAndSettle();
+      expect(km.bindingsOf('panel.mixer'), [k('B')]);
+      expect(km.bindingsOf('panel.effects'), [k('F')]);
+      expect(find.text('Desfazer importação'), findsNothing);
+      await t.tap(find.byKey(const ValueKey('keymap-import')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('keymap-import-confirm')));
+      await t.pumpAndSettle();
       expect(find.textContaining('nada'), findsWidgets);
       expect(t.takeException(), isNull);
     });
@@ -972,15 +995,16 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
-    test('canCustomizeShortcuts: web e computador sim; Android e iOS nativos não', () {
-      if (kIsWeb) return;
+    test('canCustomizeShortcuts: sempre; o celular sem teclado visto só ganha o aviso', () {
+      expect(canCustomizeShortcuts, isTrue);
       for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
         debugDefaultTargetPlatformOverride = p;
-        expect(canCustomizeShortcuts, isFalse, reason: '$p');
+        expect(shortcutsNeedKeyboardHint(false), isTrue, reason: '$p');
+        expect(shortcutsNeedKeyboardHint(true), isFalse, reason: '$p');
       }
       for (final p in [TargetPlatform.macOS, TargetPlatform.windows, TargetPlatform.linux]) {
         debugDefaultTargetPlatformOverride = p;
-        expect(canCustomizeShortcuts, isTrue, reason: '$p');
+        expect(shortcutsNeedKeyboardHint(false), isFalse, reason: '$p');
       }
       debugDefaultTargetPlatformOverride = null;
     });

@@ -13,7 +13,7 @@ import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Curve;
 
-import '../widgets/format.dart';
+import 'keymap.dart' show keyboardTooltip;
 import '../widgets/responsive_scaffold.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';

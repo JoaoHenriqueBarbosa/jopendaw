@@ -168,9 +168,16 @@ abstract class UserPresetStorage {
   Future<String?> readBackup() async => null;
 }
 
+/// Guardado que mantém várias cópias (a principal e as extras `.bak.<ms>`).
+abstract interface class MultiBackupStorage {
+  /// Todas as cópias guardadas, da mais recente para a mais antiga (a principal `userpresets.bak` é a mais antiga;
+  /// as extras `userpresets.bak.<ms>` vêm de arquivos ilegíveis posteriores).
+  Future<List<String>> readBackups();
+}
+
 /// No `LocalStore` do aparelho (web: IndexedDB; Android: arquivo; outros sistemas: nada guardado, e
 /// então os presets valem só até fechar o app).
-class LocalUserPresetStorage implements UserPresetStorage {
+class LocalUserPresetStorage implements UserPresetStorage, MultiBackupStorage {
   static const key = 'userpresets';
 
   /// Onde vai o conteúdo ilegível antes de ser sobrescrito (se já há outra cópia diferente, `userpresets.bak.<ms>`).
@@ -189,6 +196,21 @@ class LocalUserPresetStorage implements UserPresetStorage {
     final old = await readBackup();
     if (old == raw) return;
     await _store.put(old == null ? backupKey : '$backupKey.${DateTime.now().millisecondsSinceEpoch}', raw);
+  }
+
+  @override
+  Future<List<String>> readBackups() async {
+    final keys = await _store.keys(backupKey);
+    // `userpresets.bak.<ms>`: quanto maior o número, mais recente; a principal (sem número) é a mais antiga
+    int stamp(String k) => k == backupKey ? 0 : (int.tryParse(k.substring(backupKey.length + 1)) ?? 0);
+    final valid = keys.where((k) => k == backupKey || (k.startsWith('$backupKey.') && int.tryParse(k.substring(backupKey.length + 1)) != null)).toList()
+      ..sort((a, b) => stamp(b).compareTo(stamp(a)));
+    final out = <String>[];
+    for (final k in valid) {
+      final v = await _store.get(k);
+      if (v is String && v.trim().isNotEmpty) out.add(v);
+    }
+    return out;
   }
 
   @override
@@ -215,6 +237,24 @@ class MemoryUserPresetStorage implements UserPresetStorage {
   Future<void> writeBackup(String raw) async => backup ??= raw;
   @override
   Future<String?> readBackup() async => backup;
+}
+
+/// O resultado de [UserPresets.restoreFromBackup].
+class PresetRestore {
+  /// Quantos presets voltaram.
+  final int restored;
+
+  /// Quantos já existiam (mesmo nome no mesmo tipo) e ficaram como estavam.
+  final int duplicates;
+
+  /// Quantos ficaram de fora por causa do limite de presets por tipo ([maxUserPresetsPerKind]).
+  final int overLimit;
+
+  /// Quantas cópias foram lidas.
+  final int copies;
+  const PresetRestore({required this.restored, required this.duplicates, required this.overLimit, this.copies = 1});
+
+  int get skipped => duplicates + overLimit;
 }
 
 enum _Stored { ok, unreadable, future }
@@ -286,6 +326,8 @@ class UserPresets extends ChangeNotifier {
       // não dá para saber o que há lá: não grava por cima
       _readOnly = true;
       loadNotice = 'Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.';
+      // o arquivo principal não abriu, mas pode haver cópias de outra vez: oferece restaurar
+      hasBackup = await _anyBackup();
       notifyListeners();
       return;
     }
@@ -313,33 +355,54 @@ class UserPresets extends ChangeNotifier {
       final have = {for (final p in _items) p.id};
       _items.insertAll(0, r.presets.where((p) => !have.contains(p.id) && !exists(p.family, p.kind, p.name)));
     }
-    try {
-      hasBackup = (await _storage.readBackup()) != null;
-    } catch (_) {
-      hasBackup = false;
-    }
+    hasBackup = await _anyBackup();
     notifyListeners();
   }
 
-  /// Tenta recuperar os presets da cópia do arquivo que não deu para ler (`userpresets.bak`) e os
-  /// soma aos atuais: os que já existem (mesmo nome no tipo) ou que passariam do limite ficam de
-  /// fora. Lê o que der mesmo de um arquivo cortado ao meio (preset por preset). Lança
-  /// [PresetFormatException] se não há cópia, se ela não rende nenhum preset ou se o guardado atual
-  /// é só leitura (o que se restaurasse não seria gravado). A cópia continua lá.
-  Future<({int restored, int skipped})> restoreFromBackup() async {
+  /// Todas as cópias, da mais recente para a mais antiga (só a principal, se o guardado não tem extras).
+  Future<List<String>> _backups() async {
+    final st = _storage;
+    if (st is MultiBackupStorage) return (st as MultiBackupStorage).readBackups();
+    final one = await st.readBackup();
+    return one == null ? const [] : [one];
+  }
+
+  Future<bool> _anyBackup() async {
+    try {
+      return (await _backups()).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Tenta recuperar os presets das cópias do arquivo que não deu para ler (`userpresets.bak` e as extras
+  /// `userpresets.bak.<número>`, da mais recente para a mais antiga) e os soma aos atuais: os que já existem (mesmo
+  /// nome no tipo) ou que passariam do limite de [maxUserPresetsPerKind] ficam de fora, e o resultado conta os dois
+  /// casos à parte. Lê o que der mesmo de um arquivo cortado ao meio (preset por preset). Lança
+  /// [PresetFormatException] se não há cópia, se elas não rendem nenhum preset ou se o guardado atual é só leitura
+  /// (o que se restaurasse não seria gravado). As cópias continuam lá.
+  Future<PresetRestore> restoreFromBackup() async {
     await load();
     if (_readOnly) throw PresetFormatException('Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.');
-    String? raw;
+    var raws = <String>[];
     try {
-      raw = await _storage.readBackup();
+      raws = await _backups();
     } catch (_) {}
-    if (raw == null || raw.trim().isEmpty) throw PresetFormatException('Não há cópia de presets neste aparelho.');
-    final found = salvage(raw);
+    raws = [
+      for (final r in raws)
+        if (r.trim().isNotEmpty) r,
+    ];
+    if (raws.isEmpty) throw PresetFormatException('Não há cópia de presets neste aparelho.');
+    final found = [for (final r in raws) ...salvage(r)];
     if (found.isEmpty) throw PresetFormatException('Não consegui recuperar nenhum preset da cópia: o arquivo está danificado demais.');
-    var restored = 0, skipped = 0;
+    var restored = 0, duplicates = 0, overLimit = 0;
     for (final p in found) {
-      if (exists(p.family, p.kind, p.name) || of(p.family, p.kind).length >= maxUserPresetsPerKind) {
-        skipped++;
+      if (exists(p.family, p.kind, p.name)) {
+        duplicates++;
+        continue;
+      }
+      if (of(p.family, p.kind).length >= maxUserPresetsPerKind) {
+        overLimit++;
         continue;
       }
       _items.add(byId(p.id) == null ? p : UserPreset(id: _newId(), family: p.family, kind: p.kind, name: p.name, values: p.values, created: p.created));
@@ -349,7 +412,7 @@ class UserPresets extends ChangeNotifier {
       loadNotice = null;
       _changed();
     }
-    return (restored: restored, skipped: skipped);
+    return PresetRestore(restored: restored, duplicates: duplicates, overLimit: overLimit, copies: raws.length);
   }
 
   /// Os presets que dá para ler de [raw], mesmo com o JSON quebrado: primeiro pelo caminho normal;

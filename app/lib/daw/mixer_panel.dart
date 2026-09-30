@@ -19,11 +19,14 @@ import 'instruments.dart';
 import 'loudness_panel.dart';
 import 'meter.dart';
 import 'midi_learn_ui.dart';
+import 'modulation_ops.dart' show ModulationOps;
+import 'modulation_ui.dart' show showModulateDialog;
 import 'model.dart';
 import 'timeline.dart' show ToggleChip;
 import 'structure_menu.dart' show confirmGroupRoute;
 import 'track_groups.dart';
 import 'track_groups_ui.dart';
+import 'keymap.dart';
 
 /// Altura de uma linha das listas de inserts e de envios.
 const _row = 18.0;
@@ -385,10 +388,11 @@ class _RecordRow extends StatelessWidget {
     if (!t.kind.hasClips) return const SizedBox.shrink();
     final audio = t.kind == TrackKind.audio;
     final armTip = switch ((audio, t.armed)) {
-      (true, false) => 'Armar para gravar: ao gravar (R), o que entra no microfone vira um clipe nesta faixa',
-      (true, true) => 'Armada: grava o que entra no microfone ao gravar (R)\nToque para desarmar',
-      (false, false) => 'Armar para gravar: ao gravar (R), as notas que você tocar (teclado do computador ou MIDI) viram um clipe nesta faixa',
-      (false, true) => 'Armada: grava as notas tocadas ao vivo ao gravar (R)\nToque para desarmar',
+      (true, false) => 'Armar para gravar: ao gravar${shortcutHint('transport.record')}, o que entra no microfone vira um clipe nesta faixa',
+      (true, true) => 'Armada: grava o que entra no microfone ao gravar${shortcutHint('transport.record')}\nToque para desarmar',
+      (false, false) =>
+        'Armar para gravar: ao gravar${shortcutHint('transport.record')}, as notas que você tocar (teclado do computador ou MIDI) viram um clipe nesta faixa',
+      (false, true) => 'Armada: grava as notas tocadas ao vivo ao gravar${shortcutHint('transport.record')}\nToque para desarmar',
     };
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -735,7 +739,8 @@ class _FaderState extends State<_Fader> with _DragValue {
       onIncrease: () => _step(1),
       onDecrease: () => _step(-1),
       child: Tooltip(
-        message: 'Volume: ${formatDb(gain)} dB\nArraste (Shift: fino) ou use a roda · duplo clique: 0 dB',
+        message:
+            'Volume: ${formatDb(gain)} dB\nArraste (Shift: fino) ou use a roda · duplo clique: 0 dB\nBotão direito ou toque longo: Aprender MIDI, Modular…',
         waitDuration: const Duration(milliseconds: 900),
         child: MouseRegion(
           cursor: SystemMouseCursors.resizeUpDown,
@@ -903,7 +908,7 @@ class _PanKnobState extends State<_PanKnob> with _DragValue {
   Widget build(BuildContext context) {
     final pan = _pan;
     return Tooltip(
-      message: 'Pan: ${_label(pan)}\nArraste na vertical ou use a roda · duplo clique: centro',
+      message: 'Pan: ${_label(pan)}\nArraste na vertical ou use a roda · duplo clique: centro\nBotão direito ou toque longo: Aprender MIDI, Modular…',
       waitDuration: const Duration(milliseconds: 800),
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeUpDown,
@@ -1435,6 +1440,7 @@ class _SendRowState extends State<_SendRow> with _DragValue {
         _item('pre', 'Pré-fader', checked: s.pre),
         const PopupMenuDivider(),
         _item('unity', 'Nível em 0 dB', icon: Icons.exposure_zero),
+        if (c.canModulate(widget.track, AutoTarget(AutoKind.send, ref: bus))) _item('modulate', 'Modular…', icon: Icons.waves),
         _item('remove', 'Remover envio', icon: Icons.delete_outline),
       ],
     ]);
@@ -1444,6 +1450,8 @@ class _SendRowState extends State<_SendRow> with _DragValue {
         c.setSend(widget.track, bus, pre: v == 'pre', undoable: true);
       case 'unity':
         c.setSend(widget.track, bus, level: 1, undoable: true);
+      case 'modulate':
+        showModulateDialog(context, c, widget.track, AutoTarget(AutoKind.send, ref: bus));
       case 'remove':
         c.removeSend(widget.track, bus);
     }
@@ -1458,7 +1466,7 @@ class _SendRowState extends State<_SendRow> with _DragValue {
     final tip = s == null
         ? (_full ? '${DawController.sendLimitHint}: remova um envio para criar este' : 'Enviar para $name: toque para criar (pós-fader) ou arraste para dosar')
         : 'Envio para $name: ${formatDb(s.level)} dB, ${s.pre ? 'pré' : 'pós'}-fader\n'
-              'Arraste ou use a roda · duplo clique: 0 dB · botão direito: pré/pós e remover';
+              'Arraste ou use a roda · duplo clique: 0 dB · botão direito ou toque longo: pré/pós, Modular… e remover';
     return Tooltip(
       message: tip,
       waitDuration: const Duration(milliseconds: 800),

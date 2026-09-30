@@ -38,6 +38,7 @@ import 'structure_menu.dart';
 import 'tempo_format.dart' show formatPitch;
 import 'track_groups.dart';
 import 'track_groups_ui.dart';
+import 'keymap.dart';
 
 const _rulerHeight = 30.0;
 
@@ -1043,6 +1044,7 @@ class _TrackHeaderState extends State<_TrackHeader> {
                                         track: index,
                                         target: volume,
                                         radius: 6,
+                                        secondaryMenu: true,
                                         child: _MiniFader(
                                           key: _faderKey,
                                           gain: follows ? c.liveValue(index, AutoKind.volume) : t.gain,
@@ -1276,7 +1278,7 @@ class _KindButton extends StatelessWidget {
     final open = bus ? c.dock == Dock.effects && c.effectsTrack == index : c.dock == Dock.instrument && c.selectedTrack == index;
     final tooltip = bus
         ? (open ? 'Fechar os efeitos' : 'Barramento: abrir os efeitos')
-        : (open ? 'Fechar o instrumento (I)' : '${t.kind.label}: abrir o instrumento (I)');
+        : (open ? 'Fechar o instrumento${shortcutHint('panel.instrument')}' : '${t.kind.label}: abrir o instrumento${shortcutHint('panel.instrument')}');
     return SizedBox(
       width: width,
       height: 24,
@@ -2541,7 +2543,7 @@ PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {Stri
       Icon(icon, size: 18),
       const SizedBox(width: 12),
       Expanded(child: Text(label)),
-      if (shortcut != null) ...[const SizedBox(width: 16), Text(shortcut, style: const TextStyle(fontSize: 12, color: Colors.white54))],
+      if (shortcut != null && shortcut.isNotEmpty) ...[const SizedBox(width: 16), Text(shortcut, style: const TextStyle(fontSize: 12, color: Colors.white54))],
     ],
   ),
 );
@@ -2693,8 +2695,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         ),
         const PopupMenuDivider(),
       ],
-      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: withMod('Ctrl+D')),
-      _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
+      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: shortcutLabel('edit.duplicate')),
+      _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: shortcutLabel('edit.split')),
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
       const PopupMenuDivider(),
@@ -2706,7 +2708,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       _menuItem('crossfade_all', Icons.compare_arrows, 'Crossfade em toda a faixa'),
       const PopupMenuDivider(),
       _menuItem('to_midi', Icons.piano, 'Converter em notas (MIDI)'),
-      _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
+      _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: shortcutLabel('edit.delete')),
     ]);
     if (v == null || !mounted) return;
     // age sobre este clipe, qualquer que seja a seleção ao fechar o menu
@@ -3041,11 +3043,11 @@ class _MidiClipViewState extends State<_MidiClipView> with _DragEdit {
   Future<void> _menu(Offset at) async {
     final c = widget.c;
     final v = await _showMenuAt(context, at, [
-      _menuItem('open', Icons.edit_note, 'Abrir no editor', shortcut: 'E'),
+      _menuItem('open', Icons.edit_note, 'Abrir no editor', shortcut: shortcutLabel('panel.editor')),
       _menuItem('rename', Icons.drive_file_rename_outline, 'Renomear'),
-      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: withMod('Ctrl+D')),
-      _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
-      _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
+      _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: shortcutLabel('edit.duplicate')),
+      _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: shortcutLabel('edit.split')),
+      _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: shortcutLabel('edit.delete')),
     ]);
     if (v == null || !mounted) return;
     _selectMidi(c, widget.clip.id, widget.track);

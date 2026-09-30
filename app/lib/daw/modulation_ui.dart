@@ -14,11 +14,11 @@ import 'modulation.dart';
 import 'modulation_ops.dart';
 
 const _rateSpec = ParamSpec(0, 'Taxa', '', modRateMin, modRateMax, 1, unit: 'Hz', curve: Curve.log);
-const _depthSpec = ParamSpec(1, 'Profund.', '', 0, 1, 1, unit: '%');
+const _depthSpec = ParamSpec(1, 'Profundidade', '', 0, 1, 1, unit: '%');
 const _phaseSpec = ParamSpec(2, 'Fase', '', 0, 1, 0, unit: '%');
 const _gainSpec = ParamSpec(3, 'Ganho', '', 0, 8, 2, unit: 'x');
-const _attackSpec = ParamSpec(4, 'Ataque', '', 0.5, 500, 10, unit: 'ms', curve: Curve.log);
-const _releaseSpec = ParamSpec(5, 'Soltura', '', 5, 3000, 120, unit: 'ms', curve: Curve.log);
+const _attackSpec = ParamSpec(4, 'Ataque', '', 0.5, 5000, 10, unit: 'ms', curve: Curve.log);
+const _releaseSpec = ParamSpec(5, 'Soltura', '', 5, 5000, 120, unit: 'ms', curve: Curve.log);
 const _valueSpec = ParamSpec(6, 'Valor', '', 0, 1, 0, unit: '%');
 
 String _ms(double v) =>
@@ -182,7 +182,9 @@ class _ModulationPanelState extends State<ModulationPanel> {
                   tooltip: 'Modulações prontas',
                   onSelected: (p) => _run(c.modApplyPreset(track, p)),
                   itemBuilder: (_) => [
-                    for (final p in modPresets)
+                    for (final p in modPresets.where(
+                      (p) => !p.hideWithoutTarget || p.availableFor(ModTrackView(track < 0 ? null : c.doc.tracks[track], c.effectsOf(track))),
+                    ))
                       PopupMenuItem(
                         value: p,
                         child: SizedBox(

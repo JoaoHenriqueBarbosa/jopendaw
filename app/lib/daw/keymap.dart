@@ -310,6 +310,12 @@ class KeyCombo {
       }
     }
     if (!keyTokens.contains(rest)) return null;
+    // o teclado entrega Shift+/ como o caractere ?, e o resolver vê `?` sem Shift: a forma escrita
+    // `Shift+/` nunca dispararia, então vale como `?`
+    if (shift && rest == '/') {
+      rest = '?';
+      shift = false;
+    }
     if (shift && _shiftFree.contains(rest)) return null;
     return KeyCombo(rest, mod: mod, shift: shift, alt: alt);
   }
@@ -407,6 +413,18 @@ class KeymapImport {
   final List<String> warnings;
   final int applied;
   KeymapImport(this.warnings, this.applied);
+}
+
+/// O que um `.jokeys` traria, antes de aplicar.
+class KeymapImportPlan {
+  /// As ações personalizadas que o arquivo define (já sem o que foi descartado).
+  final Map<String, List<KeyCombo>> custom;
+  final List<String> warnings;
+
+  /// Quantas ações personalizadas há agora (serão substituídas).
+  final int replacing;
+  KeymapImportPlan._(this.custom, this.warnings, this.replacing);
+  int get incoming => custom.length;
 }
 
 // ------------------------------------------------------------------------------- guardado
@@ -511,7 +529,18 @@ class Keymap extends ChangeNotifier {
   /// O texto dos atalhos da ação na tela ("Enter · Home"), ou "Sem atalho".
   String labelOf(String id, {String none = 'Sem atalho'}) {
     final b = bindingsOf(id);
-    return b.isEmpty ? none : b.map((c) => c.label).join(' · ');
+    if (b.isEmpty) return none;
+    // o teclado tocando é por posição física: o rótulo é o da tecla real neste layout, quando já se sabe
+    final physical = _byId[id]?.context == KeyContext.playing;
+    return b.map((c) => physical ? KeyboardLayoutHints.instance.labelFor(c.token) : c.label).join(' · ');
+  }
+
+  /// A dica de atalho para tooltips e menus: " (L)" com os atalhos atuais da ação, ou "" se ela está
+  /// sem atalho. Sai do mesmo catálogo que a janela de atalhos, então o que a pessoa personalizar
+  /// aparece nas dicas.
+  String hintOf(String id) {
+    final b = bindingsOf(id);
+    return b.isEmpty ? '' : ' (${labelOf(id)})';
   }
 
   // ------------------------------------------------------------------ resolver
@@ -659,7 +688,8 @@ class Keymap extends ChangeNotifier {
     }
   }
 
-  void _changed() {
+  void _changed({bool keepUndo = false}) {
+    if (!keepUndo) _beforeImport = null;
     _index.clear();
     notifyListeners();
     _persist();
@@ -697,24 +727,52 @@ class Keymap extends ChangeNotifier {
             loadNotice = 'O arquivo dos seus atalhos está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você mudar vale só até fechar o app.';
           }
       }
-      // o que já foi mudado nesta sessão antes de o carregamento acabar vale mais
-      for (final e in r.custom.entries) {
-        _custom.putIfAbsent(e.key, () => e.value);
+      // o que já foi mudado nesta sessão antes de o carregamento acabar vale mais; do guardado só entra o
+      // que não bate com um atalho que a sessão já tomou
+      final dropped = _mergeStored(r.custom);
+      if (dropped > 0) {
+        final n = dropped == 1 ? 'Um atalho guardado foi descartado' : '$dropped atalhos guardados foram descartados';
+        loadNotice = '$n porque você já os usou em outra ação nesta sessão, antes de o carregamento terminar.';
       }
       _index.clear();
     }
     notifyListeners();
   }
 
+  /// Junta o guardado com o que a sessão já mudou. A sessão vence: uma combinação guardada que outra
+  /// ação (mudada agora) já usa na mesma camada é descartada. Devolve quantas.
+  int _mergeStored(Map<String, List<KeyCombo>> stored) {
+    var dropped = 0;
+    final session = Map.of(_custom);
+    for (final e in stored.entries) {
+      if (session.containsKey(e.key)) continue;
+      final a = _byId[e.key];
+      if (a == null) continue;
+      final kept = <KeyCombo>[];
+      for (final c in e.value) {
+        final taken = keyCatalog.any((o) => o.id != a.id && !o.fixed && _scope(o.context) == _scope(a.context) && (session[o.id]?.contains(c) ?? false));
+        if (taken) {
+          dropped++;
+        } else {
+          kept.add(c);
+        }
+      }
+      _setCustom(e.key, kept);
+    }
+    return dropped;
+  }
+
   /// Espera as gravações pendentes (testes).
   Future<void> flush() => _writes;
 
   void _persist() {
-    if (_readOnly) return;
-    final json = _encode(_localFormat);
     _writes = _writes.then((_) async {
+      // espera o carregamento: gravar antes dele sobrescreveria o que estava guardado (o `_load` junta
+      // o guardado com o que a sessão já mudou, e só depois vale gravar)
+      await load();
+      if (_readOnly) return;
       try {
-        await _storage.write(json);
+        await _storage.write(_encode(_localFormat));
         if (saveError != null) {
           saveError = null;
           notifyListeners();
@@ -768,7 +826,27 @@ class Keymap extends ChangeNotifier {
   /// Valida e aplica um `.jokeys`, no lugar das personalizações de agora. Recusa (lança [KeymapFormatException])
   /// arquivo grande demais, que não é JSON, de outro formato ou de versão mais nova. Ação desconhecida, tecla
   /// inválida ou reservada e conflito são descartados, cada um com um aviso.
-  KeymapImport importBytes(Uint8List bytes) {
+  KeymapImport importBytes(Uint8List bytes) => applyImport(planImport(bytes));
+
+  /// Personalizações de antes da última importação, para [undoImport]; some quando a pessoa muda outra coisa.
+  Map<String, List<KeyCombo>>? _beforeImport;
+
+  bool get canUndoImport => _beforeImport != null;
+
+  /// Volta ao que havia antes da última importação (só nesta sessão).
+  bool undoImport() {
+    final before = _beforeImport;
+    if (before == null) return false;
+    _custom
+      ..clear()
+      ..addAll(before);
+    _beforeImport = null;
+    _changed(keepUndo: true);
+    return true;
+  }
+
+  /// Lê e valida um `.jokeys` sem aplicar: o que ele traria e o que seria descartado (para confirmar antes).
+  KeymapImportPlan planImport(Uint8List bytes) {
     if (bytes.length > maxKeymapFileBytes) throw KeymapFormatException('O arquivo é grande demais para ser de atalhos.');
     Object? j;
     try {
@@ -784,11 +862,20 @@ class Keymap extends ChangeNotifier {
     final warnings = <String>[];
     final parsed = _parseBindings(j['bindings'] as Map, warnings);
     final clean = _sanitize(parsed, warnings);
+    return KeymapImportPlan._(clean, warnings, _custom.length);
+  }
+
+  /// Aplica o plano no lugar das personalizações de agora (guarda as de antes para [undoImport]).
+  KeymapImport applyImport(KeymapImportPlan plan) {
+    final before = {
+      for (final e in _custom.entries) e.key: [...e.value],
+    };
     _custom
       ..clear()
-      ..addAll(clean);
-    _changed();
-    return KeymapImport(warnings, clean.length);
+      ..addAll(plan.custom);
+    _changed(keepUndo: true);
+    _beforeImport = before;
+    return KeymapImport(plan.warnings, plan.custom.length);
   }
 
   /// Lê o mapa `id → [teclas]`, descartando o que não presta (com aviso em [warnings]).
@@ -816,6 +903,7 @@ class Keymap extends ChangeNotifier {
           warnings.add('Tecla inválida "$item" em "${a.label}" descartada.');
           continue;
         }
+        if (c.token == '?' && item is String && item.contains('/')) warnings.add('"$item" em "${a.label}" vale como ?, que é o que o teclado envia.');
         final why = reservedReason(c, a.context);
         if (why != null) {
           warnings.add('${c.label} em "${a.label}" descartada: $why');
@@ -881,4 +969,110 @@ LogicalKeyboardKey? logicalKeyForToken(String token) {
     if (e.value == token) return e.key;
   }
   return null;
+}
+
+/// Celular ou tablet sem nenhuma tecla de teclado físico vista ainda: a tela de personalizar avisa que precisa de um.
+/// Vale também no navegador do celular (`defaultTargetPlatform` segue o aparelho).
+bool shortcutsNeedKeyboardHint(bool physicalKeyboardSeen) =>
+    !physicalKeyboardSeen && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+
+/// A dica de atalho (" (L)") de uma ação, com os atalhos atuais do app; "" se está sem atalho.
+String shortcutHint(String id) => Keymap.instance.hintOf(id);
+
+/// O atalho de uma ação como texto puro ("L", "Ctrl+Z"), ou [none] se está sem atalho.
+String shortcutLabel(String id, {String none = ''}) => Keymap.instance.labelOf(id, none: none);
+
+/// O que se sabe do layout do teclado da pessoa. O teclado tocando é por posição física (a fileira A W S E D F
+/// tem o mesmo formato em qualquer layout), mas os tokens do catálogo são as letras do QWERTY nessas posições.
+/// O Flutter só diz a letra real de uma tecla quando ela é apertada, então aprendemos dos eventos: depois que a
+/// pessoa aperta uma tecla, o rótulo passa a ser a letra que está nela.
+class KeyboardLayoutHints extends ChangeNotifier {
+  KeyboardLayoutHints._();
+  static final KeyboardLayoutHints instance = KeyboardLayoutHints._();
+
+  final Map<String, String> _real = {};
+  bool _installed = false;
+
+  /// Já chegou alguma tecla de um teclado (físico): sem isso, no celular, personalizar não faz sentido.
+  final ValueNotifier<bool> physicalKeyboardSeen = ValueNotifier(false);
+
+  /// Começa a escutar o teclado (uma vez; idempotente).
+  void install() {
+    if (_installed) return;
+    _installed = true;
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  bool _onKey(KeyEvent e) {
+    if (e is KeyDownEvent) {
+      physicalKeyboardSeen.value = true;
+      learn(e.physicalKey, e.logicalKey);
+    }
+    return false;
+  }
+
+  /// Registra a letra que a tecla física [physical] produz neste layout.
+  void learn(PhysicalKeyboardKey physical, LogicalKeyboardKey logical) {
+    final token = _physicalToToken[physical];
+    if (token == null) return;
+    final label = logical.keyLabel;
+    if (label.length != 1) return;
+    final real = label.toUpperCase();
+    if (_real[token] == real) return;
+    _real[token] = real;
+    notifyListeners();
+  }
+
+  /// O rótulo de uma tecla por posição: a letra real, com a posição do QWERTY entre parênteses se difere.
+  String labelFor(String token) {
+    final real = _real[token];
+    if (real == null || real == token) return tokenLabel(token);
+    return '$real (posição do $token)';
+  }
+
+  /// Alguma tecla aprendida difere do QWERTY.
+  bool get differsFromQwerty => _real.entries.any((e) => e.key != e.value);
+
+  @visibleForTesting
+  void reset() {
+    _real.clear();
+    physicalKeyboardSeen.value = false;
+  }
+}
+
+/// As teclas que deixam de ser atalho (viram nota, oitava ou velocidade) com o teclado do computador ligado, para as
+/// dicas: `C E F J K L P S T X Z e Shift+H/K/L`. Sai do catálogo e dos atalhos atuais; sem Ctrl/Cmd nem Alt.
+String suspendedKeysLabel([Keymap? keymap]) {
+  final km = keymap ?? Keymap.instance;
+  final notes = noteKeyLetters.toSet();
+  final playing = <String>{
+    for (final a in keyCatalog)
+      if (a.context == KeyContext.playing) ...km.bindingsOf(a.id).map((c) => c.token),
+  };
+  final plain = <String>{}, shifted = <String>{};
+  for (final a in keyCatalog) {
+    if (a.context == KeyContext.playing) continue;
+    for (final c in km.bindingsOf(a.id)) {
+      if (c.mod || c.alt || !(notes.contains(c.token) || playing.contains(c.token))) continue;
+      (c.shift ? shifted : plain).add(c.token);
+    }
+  }
+  final parts = plain.toList()..sort();
+  final shiftText = shifted.isEmpty ? '' : 'Shift+${(shifted.toList()..sort()).join('/')}';
+  if (parts.isEmpty) return shiftText;
+  return shiftText.isEmpty ? parts.join(' ') : '${parts.join(' ')} e $shiftText';
+}
+
+/// Tooltip do botão do teclado do computador (barra de transporte e painel do instrumento): o mesmo texto nos dois,
+/// com os atalhos atuais. [octave] e [velocityPercent] só aparecem com o teclado ligado.
+String keyboardTooltip({required bool on, required int octave, required int velocityPercent, Keymap? keymap}) {
+  final km = keymap ?? Keymap.instance;
+  final hasToggle = km.bindingsOf('kbd.toggle').isNotEmpty;
+  if (!on) return 'Tocar com o teclado do computador${hasToggle ? ' (${km.labelOf('kbd.toggle')})' : ''}';
+  final hints = KeyboardLayoutHints.instance;
+  String k(String id) => km.labelOf(id, none: '—');
+  final off = hasToggle ? '${km.labelOf('kbd.toggle')} desliga' : 'Desligue pelo botão';
+  return 'Teclado tocando: atalhos suspensos (${suspendedKeysLabel(km)}). ${hints.labelFor(noteKeyLetters.first)} a ${hints.labelFor(noteKeyLetters.last)} '
+      'tocam a partir do C$octave, ${k('kbd.octaveDown')}/${k('kbd.octaveUp')} mudam a oitava, '
+      '${k('kbd.velocityDown')}/${k('kbd.velocityUp')} a intensidade ($velocityPercent%). O Shift não muda nada: Shift+L toca a nota L. $off';
 }

@@ -634,3 +634,58 @@ fn a_modulacao_de_volume_se_ouve_na_saida() {
     assert!((peak - std::f32::consts::FRAC_1_SQRT_2).abs() < 0.03, "{peak}");
     assert!(low < 0.05, "{low}");
 }
+
+/// Reenviar a mesma modulação (`mod_clear` + fontes + destinos, como o app faz a cada edição) com o
+/// projeto tocando não recomeça a fase do LFO nem o nível do seguidor.
+#[test]
+fn reenviar_a_modulacao_preserva_a_fase_e_o_nivel() {
+    let send_lfo = |e: &mut Engine| {
+        e.mod_source(0, 0, kind::LFO, 3.0, false, 1.0, 0.0, true, shape::SINE, 10.0, 100.0, 0.0);
+        e.mod_dest(0, 0, 0, at::VOLUME, 0, 0, 0.5, 0.0, 2.0, scale::LINEAR);
+    };
+    let mut a = engine();
+    let mut b = engine();
+    send_lfo(&mut a);
+    send_lfo(&mut b);
+    a.play();
+    b.play();
+    let before_a = gains(&mut a, 120);
+    let before_b = gains(&mut b, 120);
+    assert_eq!(before_a, before_b);
+    // b é reenviado no meio do ciclo; a segue sem mexer
+    b.mod_clear();
+    send_lfo(&mut b);
+    let (after_a, after_b) = (gains(&mut a, 60), gains(&mut b, 60));
+    for (i, (x, y)) in after_a.iter().zip(&after_b).enumerate() {
+        assert!((x - y).abs() < 1e-4, "passo {i}: {x} contra {y} (a fase recomeçou)");
+    }
+
+    // seguidor: o nível já subido sobrevive ao reenvio
+    let mut c = follower(50.0, 200.0, 1.0);
+    let mut d = follower(50.0, 200.0, 1.0);
+    let (vc, vd) = (gains(&mut c, 300), gains(&mut d, 300));
+    assert_eq!(vc, vd);
+    assert!(vd[299] > 0.3, "o seguidor subiu: {}", vd[299]);
+    d.mod_clear();
+    d.mod_source(0, 0, kind::FOLLOWER, 0.0, false, 1.0, 0.0, false, 0, 50.0, 200.0, 0.0);
+    d.mod_dest(0, 0, 0, at::VOLUME, 0, 0, 1.0, 0.0, 1.0, scale::LINEAR);
+    let (nc, nd) = (gains(&mut c, 5), gains(&mut d, 5));
+    for (x, y) in nc.iter().zip(&nd) {
+        assert!((x - y).abs() < 1e-4, "o nível recomeçou: {x} contra {y}");
+    }
+}
+
+/// Trocar o tipo do modulador no reenvio recomeça o estado (não herda a fase do LFO).
+#[test]
+fn trocar_o_tipo_no_reenvio_recomeca_o_estado() {
+    let mut e = engine();
+    e.mod_source(0, 0, kind::LFO, 3.0, false, 1.0, 0.0, true, shape::SINE, 10.0, 100.0, 0.0);
+    e.mod_dest(0, 0, 0, at::VOLUME, 0, 0, 0.5, 0.0, 2.0, scale::LINEAR);
+    e.play();
+    gains(&mut e, 50);
+    e.mod_clear();
+    e.mod_source(0, 0, kind::MACRO, 0.0, false, 1.0, 0.0, false, 0, 0.0, 0.0, 1.0);
+    e.mod_dest(0, 0, 0, at::VOLUME, 0, 0, 0.5, 0.0, 2.0, scale::LINEAR);
+    // macro 1 unipolar, +0,5 do curso 0..2 sobre a base 1 (meio): 1,0 + 1,0 = 2
+    assert!((gains(&mut e, 1)[0] - 2.0).abs() < 1e-4);
+}

@@ -57,12 +57,3 @@ String fmtBytes(int bytes) {
   if (u == 0) return '$bytes B';
   return '${v.toStringAsFixed(v >= 100 ? 0 : 1).replaceAll('.', ',')} ${units[u]}';
 }
-
-/// Tooltip do botão do teclado do computador (barra de transporte e painel do instrumento): o mesmo
-/// texto nos dois. [octave] e [velocityPercent] só aparecem com o teclado ligado.
-String keyboardTooltip({required bool on, required int octave, required int velocityPercent}) => withMod(
-  on
-      ? 'Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/K/L). A a P tocam a partir do C$octave, '
-            'Z/X mudam a oitava, C/V a intensidade ($velocityPercent%). Ctrl+K desliga'
-      : 'Tocar com o teclado do computador (Ctrl+K)',
-);

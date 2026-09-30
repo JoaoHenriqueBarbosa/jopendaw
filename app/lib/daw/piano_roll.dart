@@ -599,20 +599,25 @@ class _PianoRollState extends State<PianoRoll> {
     );
   }
 
-  static String get _help => withMod(
-    'Clique numa área vazia cria uma nota; arraste para definir a duração.\n'
-    'Arraste a nota para mover (Alt: sem grade; Alt no começo do arraste: duplica).\n'
-    'Bordas da nota redimensionam. Clique direito, dois cliques ou Delete apagam.\n'
-    'Shift ou Ctrl + arrastar seleciona por retângulo; Shift + clique acumula.\n'
-    'Ctrl+A tudo · Ctrl+C/X/V copia, recorta e cola no cursor · Ctrl+D duplica.\n'
-    'Setas ↑↓ transpõem (Shift: oitava) · ←→ movem pela grade (Shift: compasso) · Q quantiza.\n'
-    'K divide as notas no cursor · J une notas iguais adjacentes · Shift+H humaniza · Shift+L legato.\n'
-    'Ferramentas: escala, acordes, arpejador, humanizar, rampa de velocidade, inverter, escalar o tempo.\n'
-    'Dois cliques numa tecla selecionam as notas dela.\n'
-    'Com o teclado do computador ligado, K, J e Shift+H/L viram notas (atalhos suspensos).\n'
-    'Ctrl + roda: zoom na horizontal · Alt + roda: altura das linhas.\n'
-    'No toque: toque longo apaga a nota (ou começa a seleção), dois dedos rolam e dão zoom.',
-  );
+  /// O resumo do editor; as teclas saem do catálogo (os atalhos que a pessoa personalizou aparecem aqui).
+  static String get _help {
+    String l(String id) => shortcutLabel(id, none: '—');
+    return withMod(
+      'Clique numa área vazia cria uma nota; arraste para definir a duração.\n'
+      'Arraste a nota para mover (Alt: sem grade; Alt no começo do arraste: duplica).\n'
+      'Bordas da nota redimensionam. Clique direito, dois cliques ou ${l('pr.delete').split(' · ').first} apagam.\n'
+      'Shift ou Ctrl + arrastar seleciona por retângulo; Shift + clique acumula.\n'
+      '${l('pr.selectAll')} tudo · ${l('pr.copy')} copia · ${l('pr.cut')} recorta · ${l('pr.paste')} cola no cursor · ${l('pr.duplicate')} duplica.\n'
+      '${l('pr.up')} ${l('pr.down')} transpõem (${l('pr.octaveUp')} ${l('pr.octaveDown')}: oitava) · '
+      '${l('pr.left')} ${l('pr.right')} movem pela grade (${l('pr.barLeft')} ${l('pr.barRight')}: compasso) · ${l('pr.quantize')} quantiza.\n'
+      '${l('pr.split')} divide as notas no cursor · ${l('pr.join')} une notas iguais adjacentes · ${l('pr.humanize')} humaniza · ${l('pr.legato')} legato.\n'
+      'Ferramentas: escala, acordes, arpejador, humanizar, rampa de velocidade, inverter, escalar o tempo.\n'
+      'Dois cliques numa tecla selecionam as notas dela.\n'
+      'Com o teclado do computador ligado, as teclas de nota viram notas, com ou sem Shift (atalhos suspensos: ${suspendedKeysLabel()}).\n'
+      'Ctrl + roda: zoom na horizontal · Alt + roda: altura das linhas.\n'
+      'No toque: toque longo apaga a nota (ou começa a seleção), dois dedos rolam e dão zoom.',
+    );
+  }
 
   void _setTool(_Tool t) {
     _Prefs.tool = t;

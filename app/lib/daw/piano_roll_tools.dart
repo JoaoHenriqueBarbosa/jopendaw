@@ -395,7 +395,7 @@ extension _Tools on _PianoRollState {
               run();
             },
       leadingIcon: Icon(checked == null ? icon : (checked ? Icons.check_box : Icons.check_box_outline_blank), size: 18),
-      trailingIcon: hint == null ? null : Text(hint, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+      trailingIcon: hint == null || hint.isEmpty ? null : Text(hint, style: const TextStyle(color: Colors.white38, fontSize: 12)),
       child: Text(label),
     );
     Widget group(IconData icon, String label, List<Widget> items) => SubmenuButton(leadingIcon: Icon(icon, size: 18), menuChildren: items, child: Text(label));
@@ -454,9 +454,9 @@ extension _Tools on _PianoRollState {
           item(Icons.graphic_eq, 'Arpejador…', sel ? _arpDialog : null),
         ]),
         group(Icons.tune, 'Seleção', [
-          item(Icons.shuffle, 'Humanizar…', has ? _humanizeDialog : null, hint: 'Shift+H'),
+          item(Icons.shuffle, 'Humanizar…', has ? _humanizeDialog : null, hint: shortcutLabel('pr.humanize')),
           item(Icons.trending_up, 'Rampa de velocidade', has ? () => _transform(velocityRamp) : null),
-          item(Icons.link, 'Legato', has ? () => _transform(legato) : null, hint: 'Shift+L'),
+          item(Icons.link, 'Legato', has ? () => _transform(legato) : null, hint: shortcutLabel('pr.legato')),
           item(Icons.more_horiz, 'Staccato…', has ? _staccatoDialog : null),
           item(Icons.flip, 'Inverter no tempo', has ? () => _transform(mirrorTime, controls: _mirrorCc()) : null),
           item(Icons.swap_vert, 'Inverter na altura', has && melodic ? () => _transform((n) => _keepSnap(mirrorPitch(n))) : null),
@@ -469,8 +469,8 @@ extension _Tools on _PianoRollState {
           item(Icons.tune, 'Personalizado…', has ? _scaleTimeDialog : null),
         ]),
         group(Icons.content_cut, 'Cortar e limpar', [
-          item(Icons.content_cut, 'Dividir no cursor', has ? _splitAtCursor : null, hint: 'K'),
-          item(Icons.merge_type, 'Unir notas iguais adjacentes', has ? _joinNotes : null, hint: 'J'),
+          item(Icons.content_cut, 'Dividir no cursor', has ? _splitAtCursor : null, hint: shortcutLabel('pr.split')),
+          item(Icons.merge_type, 'Unir notas iguais adjacentes', has ? _joinNotes : null, hint: shortcutLabel('pr.join')),
           item(Icons.filter_none, 'Remover duplicadas', has ? () => _transform(removeDuplicates) : null),
           item(Icons.vertical_align_center, 'Aparar sobrepostas', has ? () => _transform(trimOverlaps) : null),
         ]),

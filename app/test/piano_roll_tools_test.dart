@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/instruments.dart';
+import 'package:jopendaw_app/daw/keymap.dart' show keyboardTooltip;
 import 'package:jopendaw_app/daw/model.dart';
 import 'package:jopendaw_app/daw/piano_roll.dart' show dropSnapCollisions;
-import 'package:jopendaw_app/widgets/format.dart';
 
 import 'piano_roll_test.dart' show TestDaw, click, geoFor, host, key, mac, riff, settle;
 

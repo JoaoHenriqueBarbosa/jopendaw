@@ -211,22 +211,23 @@ Future<void> handleUserPresetChoice(
         context,
         title: 'Restaurar do backup?',
         text:
-            'Na abertura, o arquivo dos seus presets estava ilegível e uma cópia dele foi guardada. Vou tentar recuperar os presets dessa cópia e somá-los '
-            'aos que você tem agora (os que têm o mesmo nome no mesmo tipo ficam como estão). A cópia continua guardada.',
+            'Na abertura, o arquivo dos seus presets estava ilegível e uma cópia dele foi guardada. Vou tentar recuperar os presets das cópias (a mais recente primeiro) e somá-los '
+            'aos que você tem agora (os que têm o mesmo nome no mesmo tipo ficam como estão). As cópias continuam guardadas.',
         confirm: 'Restaurar',
       );
       if (!ok || !context.mounted) return;
       try {
         final r = await store.restoreFromBackup();
-        final skipped = r.skipped == 0
-            ? ''
-            : ' ${r.skipped} já existia${r.skipped == 1 ? '' : 'm'} (mesmo nome) e ficou${r.skipped == 1 ? '' : 'ram'} como estava${r.skipped == 1 ? '' : 'm'}.';
+        String n(int k, String one, String many) => k == 1 ? one : many;
+        final skipped =
+            '${r.duplicates == 0 ? '' : ' ${r.duplicates} ${n(r.duplicates, 'já existia (mesmo nome) e ficou como estava', 'já existiam (mesmo nome) e ficaram como estavam')}.'}'
+            '${r.overLimit == 0 ? '' : ' ${r.overLimit} ${n(r.overLimit, 'ficou de fora', 'ficaram de fora')} porque o tipo já tem o máximo de $maxUserPresetsPerKind presets.'}';
         if (context.mounted) {
           await showPresetMessage(
             context,
             r.restored == 0 ? 'Nada novo para restaurar' : 'Presets restaurados',
             r.restored == 0
-                ? 'Todos os presets da cópia já estão na sua lista.$skipped'
+                ? 'Nenhum preset da cópia pôde ser somado.$skipped'
                 : '${r.restored} preset${r.restored == 1 ? '' : 's'} restaurado${r.restored == 1 ? '' : 's'}.$skipped',
           );
         }

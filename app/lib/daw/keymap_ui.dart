@@ -203,7 +203,12 @@ class _KeymapEditorState extends State<KeymapEditor> {
     try {
       final f = await (widget.pick ?? pickKeymapFile)();
       if (f == null || !mounted) return;
-      final r = km.importBytes(f.$2);
+      // valida sem aplicar e pede confirmação: importar troca todas as personalizações de agora
+      final plan = km.planImport(f.$2);
+      if (!mounted) return;
+      final ok = await _confirmImport(f.$1, plan);
+      if (ok != true || !mounted) return;
+      final r = km.applyImport(plan);
       if (!mounted) return;
       _stop();
       setState(() {
@@ -227,6 +232,37 @@ class _KeymapEditorState extends State<KeymapEditor> {
         });
       }
     }
+  }
+
+  Future<bool?> _confirmImport(String name, KeymapImportPlan plan) {
+    final n = plan.incoming;
+    final what = n == 1 ? '1 atalho será trocado' : '$n atalhos serão trocados';
+    final now = plan.replacing == 0
+        ? 'Você não tem personalizações agora.'
+        : 'As suas ${plan.replacing == 1 ? '1 personalização atual serão descartadas' : '${plan.replacing} personalizações atuais serão descartadas'}.';
+    final warn = plan.warnings.isEmpty
+        ? ''
+        : '\n\n${plan.warnings.length} ${plan.warnings.length == 1 ? 'aviso' : 'avisos'} (o que não vale no arquivo é descartado).';
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Importar atalhos?'),
+        content: Text('$name: $what. $now Dá para desfazer logo depois, nesta sessão.$warn'),
+        actions: [
+          TextButton(key: const ValueKey('keymap-import-cancel'), onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(key: const ValueKey('keymap-import-confirm'), onPressed: () => Navigator.pop(ctx, true), child: const Text('Importar')),
+        ],
+      ),
+    );
+  }
+
+  void _undoImport() {
+    if (!km.undoImport()) return;
+    _stop();
+    setState(() {
+      _noteError = false;
+      _note = 'Importação desfeita: seus atalhos de antes voltaram.';
+    });
   }
 
   bool _matches(KeyAction a) {
@@ -263,7 +299,28 @@ class _KeymapEditorState extends State<KeymapEditor> {
         ),
         const SizedBox(height: 10),
         if (km.problem != null) ...[InlineNotice(km.problem!), const SizedBox(height: 8)],
-        if (_note != null) ...[InlineNotice(_note!, error: _noteError, onClose: () => setState(() => _note = null)), const SizedBox(height: 8)],
+        ValueListenableBuilder<bool>(
+          valueListenable: KeyboardLayoutHints.instance.physicalKeyboardSeen,
+          builder: (_, seen, _) => shortcutsNeedKeyboardHint(seen)
+              ? const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: InlineNotice(
+                    'Regravar atalhos precisa de um teclado físico e nenhum foi detectado neste aparelho. Conecte um (USB ou Bluetooth) e aperte uma tecla; sem ele você só consegue ver a lista.',
+                    error: false,
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+        if (_note != null) ...[
+          InlineNotice(
+            _note!,
+            error: _noteError,
+            onClose: () => setState(() => _note = null),
+            actionLabel: km.canUndoImport && !_noteError ? 'Desfazer importação' : null,
+            onAction: km.canUndoImport && !_noteError ? _undoImport : null,
+          ),
+          const SizedBox(height: 8),
+        ],
         TextField(
           key: const ValueKey('keymap-search'),
           controller: _search,

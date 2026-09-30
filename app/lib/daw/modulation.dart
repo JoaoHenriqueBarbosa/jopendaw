@@ -7,6 +7,8 @@
 /// o motor toca é a base (o controle ou a automação) mais a modulação; a base nunca é gravada.
 library;
 
+import 'dart:math' as math;
+
 import 'effects.dart';
 import 'instruments.dart';
 import 'model.dart';
@@ -300,8 +302,8 @@ class TrackModulation {
   }
 
   /// Tira os destinos que [keep] rejeita (o efeito foi apagado, o envio saiu, o parâmetro não
-  /// existe mais) e os moduladores que ficaram sem destino nenhum e sem serem uma macro. Devolve se
-  /// mudou algo.
+  /// existe mais). O modulador que fica sem destino NÃO sai: continua no cartão, à espera de
+  /// destinos (quem o apaga é o usuário). Devolve se mudou algo.
   bool prune(bool Function(AutoTarget target) keep) {
     var changed = false;
     for (final s in sources) {
@@ -336,7 +338,14 @@ class ModPreset {
   /// Como achar o alvo na faixa: [target] devolve o alvo (ou null se a faixa não tem) e a quantidade.
   final (AutoTarget, double)? Function(ModTrackView track) target;
 
-  const ModPreset(this.id, this.name, this.description, this.build, this.target);
+  /// Esconde o preset do menu quando a faixa não tem o alvo (o vibrato só faz sentido onde há uma
+  /// afinação geral da faixa).
+  final bool hideWithoutTarget;
+
+  const ModPreset(this.id, this.name, this.description, this.build, this.target, {this.hideWithoutTarget = false});
+
+  /// O preset tem alvo nesta faixa?
+  bool availableFor(ModTrackView v) => target(v) != null;
 }
 
 /// O que um preset precisa saber da faixa para achar o alvo.
@@ -356,19 +365,27 @@ AutoTarget? _instrumentParam(ModTrackView v, bool Function(ParamSpec p) test) {
   return null;
 }
 
+/// A quantidade (−1..1 do curso) que move [oct] oitavas para cada lado num parâmetro logarítmico:
+/// o curso do corte (20 Hz–20 kHz) tem cerca de 10 oitavas, então ±1 oitava é ±0,1 dele.
+double _octaveAmount(ParamSpec p, double oct) => oct / (math.log(p.max / p.min) / math.ln2);
+
 /// Os presets de fábrica.
 final modPresets = <ModPreset>[
   ModPreset(
     'wobble',
     'Wobble no corte',
-    'LFO sincronizado (1/8) movendo o corte do filtro',
+    'LFO sincronizado (1/8) movendo o corte do filtro em ±1 oitava',
     (id) => ModSource(id: id, shape: LfoShape.sine, sync: true, division: 15),
     (v) {
+      // ±1 oitava na escala logarítmica do corte (em percentual do curso, 40% prendia a onda no
+      // topo com o corte padrão de 2400 Hz)
       final inst = _instrumentParam(v, (p) => p.name == 'Corte');
-      if (inst != null) return (inst, 0.4);
+      if (inst != null) return (inst, _octaveAmount(v.track!.kind.params.firstWhere((p) => p.id == inst.param), 1));
       // sem instrumento com corte: o primeiro filtro da cadeia
       for (final s in v.effects) {
-        if (s.kind == EffectKind.filter) return (AutoTarget(AutoKind.effect, ref: s.id, param: 1), 0.4);
+        if (s.kind == EffectKind.filter) {
+          return (AutoTarget(AutoKind.effect, ref: s.id, param: 1), _octaveAmount(filterParams.firstWhere((p) => p.id == 1), 1));
+        }
       }
       return null;
     },
@@ -390,11 +407,16 @@ final modPresets = <ModPreset>[
   ModPreset(
     'vibrato',
     'Vibrato de afinação',
-    'LFO de 5,5 Hz movendo a afinação em centésimos de semitom',
+    'LFO de 5,5 Hz movendo a afinação da faixa em ±12 centésimos (só no Sampler)',
     (id) => ModSource(id: id, shape: LfoShape.sine, rate: 5.5),
     (v) {
-      final t = _instrumentParam(v, (p) => p.unit == 'ct' && p.curve == Curve.linear);
+      // só o Sampler tem uma afinação da faixa toda; no sintetizador, no FM e no wavetable os
+      // parâmetros em ct mexem em um oscilador ou operador só (dá batimento, não vibrato) e a
+      // bateria afina por peça: nesses o preset fica escondido
+      if (v.track?.kind != TrackKind.sampler) return null;
+      final t = _instrumentParam(v, (p) => p.name == 'Afinação' && p.unit == 'ct');
       return t == null ? null : (t, 0.06);
     },
+    hideWithoutTarget: true,
   ),
 ];

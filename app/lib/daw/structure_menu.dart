@@ -5,10 +5,10 @@ library;
 import 'package:flutter/material.dart';
 
 import '../widgets/dialogs.dart';
-import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'model.dart';
+import 'keymap.dart';
 
 Widget _row(IconData icon, String text, {Color? color}) => Row(
   children: [
@@ -70,10 +70,10 @@ class SectionsMenu extends StatelessWidget {
             ),
           ),
         const PopupMenuDivider(),
-        PopupMenuItem(value: 'add', child: _row(Icons.add, 'Marcador no cursor (M)')),
+        PopupMenuItem(value: 'add', child: _row(Icons.add, 'Marcador no cursor${shortcutHint('marker.add')}')),
         PopupMenuItem(enabled: c.canLoopBetweenMarkers, value: 'between', child: _row(Icons.repeat, 'Loop entre marcadores')),
         PopupMenuItem(enabled: c.canLoopSection, value: 'section', child: _row(Icons.repeat_on, 'Loop desta seção')),
-        PopupMenuItem(enabled: c.canLoopSelection, value: 'selection', child: _row(Icons.repeat_one, 'Loop no clipe selecionado (Shift+L)')),
+        PopupMenuItem(enabled: c.canLoopSelection, value: 'selection', child: _row(Icons.repeat_one, 'Loop no clipe selecionado${shortcutHint('loop.clip')}')),
       ],
     );
   }
@@ -108,8 +108,8 @@ class ViewMenu extends StatelessWidget {
     icon: Icon(Icons.zoom_out_map, color: c.follow ? null : Colors.white54),
     onSelected: _pick,
     itemBuilder: (_) => [
-      PopupMenuItem(value: 'all', child: _row(Icons.fit_screen, 'Enquadrar tudo (Z)')),
-      PopupMenuItem(value: 'sel', child: _row(Icons.center_focus_strong_outlined, 'Enquadrar a seleção (Shift+Z)')),
+      PopupMenuItem(value: 'all', child: _row(Icons.fit_screen, 'Enquadrar tudo${shortcutHint('view.fitAll')}')),
+      PopupMenuItem(value: 'sel', child: _row(Icons.center_focus_strong_outlined, 'Enquadrar a seleção${shortcutHint('view.fitClip')}')),
       const PopupMenuDivider(),
       for (final s in LaneScale.values) CheckedPopupMenuItem(value: 'h:${s.name}', checked: c.laneScale == s, child: Text('Faixas ${_laneScalePlural[s]}')),
       const PopupMenuDivider(),
@@ -152,7 +152,7 @@ Future<bool> confirmGroupRoute(BuildContext context, {required String title, req
       title: title,
       message:
           '${intro ?? 'A pasta é um barramento: a faixa que entra ou sai dela troca de saída. Isto muda:'}\n'
-          '${lines.map((b) => '• $b').join('\n')}\n\n${withMod('Desfazer (Ctrl+Z)')} traz de volta.',
+          '${lines.map((b) => '• $b').join('\n')}\n\n${'Desfazer${shortcutHint('edit.undo')}'} traz de volta.',
       action: action,
       destructive: true,
     );
@@ -176,7 +176,7 @@ Future<void> moveTrackAsking(BuildContext context, DawController c, int from, in
     final ok = await confirmAction(
       context,
       title: 'Mover a faixa?',
-      message: '${parts.join('\n\n')}\n\n${withMod('Desfazer (Ctrl+Z)')} traz de volta.',
+      message: '${parts.join('\n\n')}\n\n${'Desfazer${shortcutHint('edit.undo')}'} traz de volta.',
       action: 'Mover mesmo assim',
       destructive: true,
     );

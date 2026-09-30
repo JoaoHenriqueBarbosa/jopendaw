@@ -16,6 +16,7 @@ import 'midi_map.dart';
 import 'model.dart';
 import 'modulation_ops.dart';
 import 'modulation_ui.dart';
+import 'keymap.dart';
 
 /// Cor do contorno dos controles no modo aprender.
 const midiLearnColor = Color(0xFFE3B341);
@@ -62,7 +63,16 @@ class MidiLearnControl extends StatelessWidget {
                 showMidiLearnMenu(context, c, track, target, e.position);
               }
             },
-            child: body,
+            // no toque (sem botão direito) o toque longo abre o mesmo menu, com "Modular…"
+            child: GestureDetector(
+              supportedDevices: const {PointerDeviceKind.touch, PointerDeviceKind.stylus, PointerDeviceKind.invertedStylus},
+              onLongPress: () {
+                if (l.learning) return;
+                final box = context.findRenderObject() as RenderBox;
+                showMidiLearnMenu(context, c, track, target, box.localToGlobal(box.size.center(Offset.zero)));
+              },
+              child: body,
+            ),
           );
         }
         return Stack(
@@ -248,8 +258,8 @@ class MidiLearnButton extends StatelessWidget {
         child: IconButton(
           key: const ValueKey('midi-learn-button'),
           tooltip: on
-              ? 'Sair do modo Aprender MIDI (Shift+K)'
-              : 'Aprender MIDI (Shift+K): clique num controle e mexa no botão do seu teclado${n > 0 ? '\n$n mapeamento${n == 1 ? '' : 's'} · botão direito: lista' : ''}',
+              ? 'Sair do modo Aprender MIDI${shortcutHint('midilearn.toggle')}'
+              : 'Aprender MIDI${shortcutHint('midilearn.toggle')}: clique num controle e mexa no botão do seu teclado${n > 0 ? '\n$n mapeamento${n == 1 ? '' : 's'} · botão direito: lista' : ''}',
           onPressed: () => toggleMidiLearn(c),
           isSelected: on,
           style: IconButton.styleFrom(foregroundColor: Colors.white70),

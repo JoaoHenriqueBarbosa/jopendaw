@@ -574,8 +574,12 @@ class DawController extends ChangeNotifier {
   String? error;
 
   /// Aviso informativo de uma ação que terminou (não é erro): "2 crossfades aplicados". A tela o
-  /// mostra em destaque até ser dispensado ([clearNotice]).
+  /// mostra em destaque até ser dispensado ([clearNotice]) ou até passar [noticeDuration] (quem some com ele é
+  /// a própria tela, para o controlador não guardar relógio).
   String? notice;
+
+  /// Quanto tempo o aviso informativo fica na tela sozinho.
+  static const noticeDuration = Duration(seconds: 6);
 
   /// Mensagem de trabalho em andamento (importação), na barra do transporte.
   String? status;
@@ -3421,7 +3425,7 @@ class DawController extends ChangeNotifier {
       final m = midiSelection;
       if (m != null) editingClip = m.$2.id;
     }
-    if (d == Dock.effects && dock != Dock.effects && selectedTrack < doc.tracks.length) _effectsId = doc.tracks[selectedTrack].id;
+    if (d == Dock.effects && dock != Dock.effects && dock != Dock.modulation && selectedTrack < doc.tracks.length) _effectsId = doc.tracks[selectedTrack].id;
     dock = d;
     notifyListeners();
   }

@@ -2,6 +2,7 @@
 // agora, duplicar, apagar), as chamadas ao motor (só quando mudam), as operações do controlador, os
 // presets, o intervalo do anel do knob e o painel (360 px sem estouro).
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Curve;
@@ -323,19 +324,29 @@ void main() {
       ModPreset preset(String id) => modPresets.firstWhere((p) => p.id == id);
       expect(c.modApplyPreset(1, preset('wobble')), isNull);
       var s = c.modulation(1).sources.last;
-      expect((s.sync, s.division, s.dests.single.target, s.dests.single.amount), (true, 15, cutoff, 0.4));
+      expect((s.sync, s.division, s.dests.single.target, s.dests.single.amount), (true, 15, cutoff, s.dests.single.amount));
+      expect(s.dests.single.amount, closeTo(1 / (math.log(1000) / math.ln2), 1e-9));
+      // ±1 oitava: com o corte padrão (2400 Hz) o extremo fica em 4800 Hz, longe do teto de 20 kHz
+      const spec = ParamSpec(13, 'Corte', 'Filtro', 20, 20000, 2400, unit: 'Hz', curve: Curve.log);
+      expect(spec.fromNorm(spec.toNorm(2400) + s.dests.single.amount), closeTo(4800, 1));
       expect(c.modApplyPreset(1, preset('tremolo')), isNull);
       s = c.modulation(1).sources.last;
       expect((s.rate, s.sync, s.dests.single.target), (6.0, false, volume));
       expect(c.modApplyPreset(1, preset('autopan')), isNull);
       s = c.modulation(1).sources.last;
       expect((s.sync, s.division, s.dests.single.target), (true, 9, pan));
-      expect(c.modApplyPreset(1, preset('vibrato')), isNull);
-      s = c.modulation(1).sources.last;
-      final target = s.dests.single.target;
-      expect(target.kind, AutoKind.instrument);
-      expect(TrackKind.synth.params.firstWhere((p) => p.id == target.param).unit, 'ct');
+      // vibrato: só o Sampler tem afinação da faixa; no sintetizador o preset é recusado e some do menu
+      expect(c.modApplyPreset(1, preset('vibrato')), contains('não tem o controle'));
+      expect(preset('vibrato').availableFor(ModTrackView(c.doc.tracks[1], const [])), isFalse);
+      final sp = fakeController(
+        FakeEngine(),
+        tracks: [DawTrack(id: 'p', name: 'Sampler', color: 2, kind: TrackKind.sampler)],
+      );
+      expect(sp.modApplyPreset(0, preset('vibrato')), isNull);
+      final vt = sp.modulation(0).sources.single.dests.single.target;
+      expect(TrackKind.sampler.params.firstWhere((p) => p.id == vt.param).name, 'Afinação');
       // a faixa cheia recusa
+      expect(c.modApplyPreset(1, preset('tremolo')), isNull);
       expect(c.modApplyPreset(1, preset('tremolo')), contains('4 moduladores'));
       // faixa de áudio, sem corte nem afinação: o wobble e o vibrato dizem por quê
       expect(c.modApplyPreset(0, preset('wobble')), contains('não tem o controle'));

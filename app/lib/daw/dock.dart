@@ -18,6 +18,7 @@ import 'modulation_ui.dart';
 import 'piano_roll.dart';
 import 'step_sequencer.dart';
 import 'step_sequencer_ui.dart';
+import 'keymap.dart';
 
 /// Abre o painel, ou fecha se ele já está aberto (botões da barra e atalhos).
 void toggleDock(DawController c, Dock d) {
@@ -31,6 +32,12 @@ void toggleDock(DawController c, Dock d) {
 /// Abre o painel. O editor abre no clipe de notas selecionado no arranjo, se houver um; os efeitos,
 /// na faixa selecionada (no master quando não há faixa).
 void showDock(DawController c, Dock d) {
+  // Efeitos e Modulação falam da mesma faixa: ir de uma aba à outra não troca o que está à vista
+  // (o master aberto pelo mixer ou pelo rack, por exemplo)
+  if ((d == Dock.effects || d == Dock.modulation) && (c.dock == Dock.effects || c.dock == Dock.modulation)) {
+    c.setDock(d);
+    return;
+  }
   if (d == Dock.modulation) {
     // a modulação fala da mesma faixa que o rack de efeitos (ou do master)
     c.showEffects(c.selectedTrack < c.doc.tracks.length ? c.selectedTrack : -1);
@@ -171,7 +178,7 @@ class _DockPanelState extends State<DockPanel> {
           _Tab(
             icon: Icons.tune,
             label: 'Mixer',
-            tooltip: 'Mixer (X)',
+            tooltip: 'Mixer${shortcutHint('panel.mixer')}',
             iconOnly: iconsOnly,
             selected: c.dock == Dock.mixer,
             onTap: () => showDock(c, Dock.mixer),
@@ -179,7 +186,7 @@ class _DockPanelState extends State<DockPanel> {
           _Tab(
             icon: Icons.edit_note,
             label: 'Editor',
-            tooltip: 'Editor de notas (E)',
+            tooltip: 'Editor de notas${shortcutHint('panel.editor')}',
             iconOnly: iconsOnly,
             selected: c.dock == Dock.editor,
             onTap: () => showDock(c, Dock.editor),
@@ -196,7 +203,7 @@ class _DockPanelState extends State<DockPanel> {
           _Tab(
             icon: dockInstrumentIcon(c),
             label: 'Instrumento',
-            tooltip: 'Instrumento da faixa (I)',
+            tooltip: 'Instrumento da faixa${shortcutHint('panel.instrument')}',
             iconOnly: iconsOnly,
             selected: c.dock == Dock.instrument,
             onTap: () => showDock(c, Dock.instrument),
@@ -204,7 +211,7 @@ class _DockPanelState extends State<DockPanel> {
           _Tab(
             icon: Icons.auto_fix_high,
             label: 'Efeitos',
-            tooltip: 'Efeitos da faixa (F)',
+            tooltip: 'Efeitos da faixa${shortcutHint('panel.effects')}',
             iconOnly: iconsOnly,
             selected: c.dock == Dock.effects,
             // já aberta, não troca o que está à vista (o master aberto pelo mixer, por exemplo)
@@ -230,7 +237,7 @@ class _DockPanelState extends State<DockPanel> {
               tooltip: _restore == null ? 'Maximizar o painel' : 'Restaurar a altura',
               onTap: _toggleMax,
             ),
-          _BarButton(icon: Icons.close, tooltip: 'Fechar o painel (Esc)', onTap: () => c.setDock(Dock.none)),
+          _BarButton(icon: Icons.close, tooltip: 'Fechar o painel${shortcutHint('panel.close')}', onTap: () => c.setDock(Dock.none)),
           const SizedBox(width: 4),
         ],
       ),

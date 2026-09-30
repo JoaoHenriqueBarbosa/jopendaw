@@ -290,6 +290,14 @@ class _KnobState extends State<Knob> {
     }
   }
 
+  /// O que o botão direito (ou o toque longo) oferece, para a dica: as entradas extras pelo nome
+  /// ("digitar o valor, Aprender MIDI, Modular…").
+  String _menuHint() {
+    final extra = widget.extraActions?.call();
+    if (extra == null || extra.isEmpty) return 'digitar o valor';
+    return 'menu (digitar o valor, ${extra.map((a) => a.label.replaceAll(RegExp(r' \(.*\)$'), '')).join(', ')})';
+  }
+
   /// Um passo para teclado/leitor de tela: uma unidade em inteiros, 5% do curso no resto.
   double _stepped(int dir) {
     if (_spec.curve == Curve.integer) return _spec.clamp(widget.value + dir);
@@ -331,8 +339,7 @@ class _KnobState extends State<Knob> {
       onIncrease: () => _set(_stepped(1)),
       onDecrease: () => _set(_stepped(-1)),
       child: Tooltip(
-        message:
-            '$label: arraste ou use a roda (Shift: ajuste fino)\nDuplo clique: padrão (${_fmt(_spec.def)}) · botão direito: ${widget.extraActions == null ? 'digitar o valor' : 'menu (digitar o valor, Aprender MIDI)'}',
+        message: '$label: arraste ou use a roda (Shift: ajuste fino)\nDuplo clique: padrão (${_fmt(_spec.def)}) · botão direito ou toque longo: ${_menuHint()}',
         waitDuration: const Duration(milliseconds: 900),
         // no toque o toque longo abre o campo de digitar o valor (ou o menu), não a dica
         triggerMode: TooltipTriggerMode.manual,
