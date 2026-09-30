@@ -750,6 +750,14 @@ Cobre: ida e volta exata do documento e dos áudios, dedupe e extensões, projet
 - **`saveFile` cancelado no Android** volta sem erro; a janela `Exportar projeto` então mostra `Pronto: ...`. `FilePicker.saveFile` devolve nulo ao cancelar e o resultado é descartado (`engine_ffi.dart:1276`).
 - **O cabeçalho do código** de `project_file.dart` diz "para abrir sem servidor", mas a importação cadastra o projeto pela API (`createProject`), então exige sessão e rede.
 
+## Presets do usuário (`user_presets.dart`, `user_presets_ui.dart`)
+
+- **Modelo:** `UserPreset {id, family (instrument|effect), kind (TrackKind.name ou EffectKind.name), name, values (id → valor, todos os ids do tipo), created, version}`. `UserPresets` (singleton `UserPresets.instance`, `ChangeNotifier`) guarda tudo num **único** valor de texto na chave `userpresets` do `LocalStore` (JSON `{format: jopendaw-user-presets, version, presets}`); gravações em fila, a última vence. Sem servidor: **não sincroniza com a conta** (ideia futura: uma tabela `user_presets` ou chave por conta; o `.jopreset` cobre o transporte entre aparelhos).
+- **O que entra:** `capture` guarda todos os ids do tipo, limitados à faixa (opções arredondadas). Ficam de fora a nota base e a afinação do sampler (`SamplerId.root/tune`, como em `presets.dart`) e o sidechain do compressor/gate (10/6). O sampler nunca leva áudio nem zonas.
+- **Aplicar/casar:** `paramsFor`/`paramsForEffect` montam o mapa completo (padrão + preset, mantendo o que fica de fora); `matchingTrack`/`matchingEffect` alimentam o rótulo, e o usuário tem prioridade sobre o de fábrica quando os dois batem.
+- **`.jopreset`:** JSON `{format: jopendaw-preset, version, family, kind, name, created, params}`. `importBytes` recusa (com `PresetFormatException`) arquivo de mais de 256 KB, não JSON, formato ou versão errados, tipo desconhecido, sem valor utilizável; ignora ids desconhecidos e valores não numéricos/infinitos; limita fora de faixa; tudo vira aviso. O que o arquivo não diz volta ao padrão.
+- **UI:** `userPresetEntries` acrescenta a seção aos `PopupMenuButton<Object>` do `instrument_panel.dart::_presetControls` e do `effects_panel.dart::_cardMenu`; `handleUserPresetChoice` cuida de salvar/renomear/apagar/exportar/importar (o seletor e o `saveFile` são injetáveis). Erros em diálogo, nunca toast. Testes: `app/test/user_presets_test.dart`.
+
 ## Tabelas espelhadas do motor (`instruments.dart`, `effects.dart`)
 
 - **`TrackKind`** (`instruments.dart:13`): `audio, synth, drums, sampler, bus, fm, wavetable`. `values[i].index` é o código de `track_kind` no motor: **tipo novo só entra no fim** do enum.

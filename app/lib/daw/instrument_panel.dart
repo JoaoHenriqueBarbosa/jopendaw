@@ -24,6 +24,8 @@ import 'model.dart';
 import 'presets.dart';
 import 'sampler_zones.dart' show zoneCoveredNotes;
 import 'sampler_zones_panel.dart';
+import 'user_presets.dart';
+import 'user_presets_ui.dart';
 import 'wavetable_shape.dart';
 
 class InstrumentPanel extends StatefulWidget {
@@ -61,10 +63,25 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
 
   DawController get c => widget.c;
 
+  final _userPresets = UserPresets.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _userPresets
+      ..addListener(_onUserPresets)
+      ..load();
+  }
+
+  void _onUserPresets() {
+    if (mounted) setState(() {});
+  }
+
   ScrollController _scroll(String key) => _scrolls.putIfAbsent(key, ScrollController.new);
 
   @override
   void dispose() {
+    _userPresets.removeListener(_onUserPresets);
     for (final s in _scrolls.values) {
       s.dispose();
     }
@@ -225,11 +242,13 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     final t = x.t;
     final list = presetsFor(t.kind);
     if (list.isEmpty) return const [];
-    final current = matchingPreset(t);
+    final userList = _userPresets.ofTrack(t.kind);
+    final userCurrent = _userPresets.matchingTrack(t);
+    final current = userCurrent == null ? matchingPreset(t) : null;
     final last = _lastPreset[t.id];
     // a faixa recém-criada traz o padrão do tipo, que não é um "personalizado" de ninguém
     final pristine = t.kind.params.every((s) => (t.param(s.id) - s.def).abs() <= 1e-6 * math.max(1, s.def.abs()));
-    final label = current?.name ?? (last != null ? '$last (editado)' : (pristine ? 'Inicial' : 'Personalizado'));
+    final label = current?.name ?? userCurrent?.name ?? (last != null ? '$last (editado)' : (pristine ? 'Inicial' : 'Personalizado'));
     final what = t.kind == TrackKind.drums ? 'kit' : 'preset';
 
     void apply(Preset p) {
@@ -237,20 +256,29 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
       c.applyPreset(x.ti, presetParams(p, t));
     }
 
-    void step(int dir) {
-      var i = current != null ? list.indexOf(current) : list.indexWhere((p) => p.name == last);
-      i = i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir) % list.length;
-      apply(list[i]);
+    void applyUser(UserPreset p) {
+      setState(() => _lastPreset[t.id] = p.name);
+      c.applyPreset(x.ti, UserPresets.paramsFor(p, t));
     }
 
-    final entries = <PopupMenuEntry<Preset>>[];
+    // as setas andam pelos de fábrica e depois pelos do usuário
+    void step(int dir) {
+      final all = <Object>[...list, ...userList];
+      var i = all.indexWhere((p) => identical(p, current) || identical(p, userCurrent));
+      if (i < 0) i = all.indexWhere((p) => (p is Preset ? p.name : (p as UserPreset).name) == last);
+      i = i < 0 ? (dir > 0 ? 0 : all.length - 1) : (i + dir) % all.length;
+      final n = all[i];
+      n is Preset ? apply(n) : applyUser(n as UserPreset);
+    }
+
+    final entries = <PopupMenuEntry<Object>>[];
     String? section;
     for (final p in list) {
       if (p.category != section) {
         if (section != null) entries.add(const PopupMenuDivider(height: 8));
         section = p.category;
         entries.add(
-          PopupMenuItem<Preset>(
+          PopupMenuItem<Object>(
             enabled: false,
             height: 26,
             child: Text(
@@ -261,7 +289,7 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
         );
       }
       entries.add(
-        PopupMenuItem<Preset>(
+        PopupMenuItem<Object>(
           value: p,
           height: 36,
           child: Row(
@@ -274,11 +302,27 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
       );
     }
 
-    final menu = PopupMenuButton<Preset>(
+    entries.addAll(userPresetEntries(presets: userList, current: userCurrent, color: x.color));
+
+    final menu = PopupMenuButton<Object>(
       tooltip: t.kind == TrackKind.drums ? 'Kits de bateria' : 'Presets',
       position: PopupMenuPosition.under,
       constraints: const BoxConstraints(minWidth: 220, maxHeight: 460),
-      onSelected: apply,
+      onSelected: (v) {
+        if (v is Preset) {
+          apply(v);
+        } else if (v is ApplyUserPreset) {
+          applyUser(v.preset);
+        } else if (v is UserPresetChoice) {
+          handleUserPresetChoice(
+            context,
+            v,
+            family: PresetFamily.instrument,
+            kind: t.kind.name,
+            capture: () => UserPresets.capture(PresetFamily.instrument, t.kind.name, t.param),
+          );
+        }
+      },
       itemBuilder: (_) => entries,
       child: Container(
         height: 32,

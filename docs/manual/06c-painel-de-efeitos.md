@@ -84,6 +84,7 @@ Itens do menu de três pontos:
 | Item | O que faz |
 |---|---|
 | `PRESETS` e a lista de presets do tipo | Aplica o preset com **todos** os valores: o que o preset não cita volta ao padrão do efeito. O que bate com os parâmetros atuais leva um visto. Só o `Sidechain` do compressor e do gate é preservado (é roteamento, não timbre). |
+| `MEUS PRESETS`, `Salvar como preset…` e `Importar preset…` | Presets seus para este tipo de efeito (o EQ guarda as 8 bandas; o `Sidechain` do compressor e do gate não entra). O `…` de cada linha renomeia, exporta (`.jopreset`) e apaga. Funciona igual ao do instrumento: ver [Meus presets](04-painel-de-instrumento.md#meus-presets). |
 | `Reiniciar (valores padrão)` | Volta todos os parâmetros ao padrão. Fica apagado se o efeito já está no padrão. |
 | `Desligar (bypass)` / `Ligar` | O mesmo do botão de energia. |
 | `Mover para a esquerda` / `Mover para a direita` (computador); `Mover para cima` / `Mover para baixo` (celular) | Troca de lugar com o vizinho. Apagado na ponta da cadeia. |

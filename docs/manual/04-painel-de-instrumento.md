@@ -160,7 +160,20 @@ As setas percorrem a lista na ordem do menu (as categorias em sequência) e dão
 | FM | Ver o capítulo | [04d](04d-fm.md) |
 | Wavetable | Ver o capítulo | [04e](04e-wavetable.md) |
 
-Não existe, no painel, botão para salvar um timbre próprio como preset: a lista é fixa do app.
+### Meus presets
+
+Abaixo dos presets de fábrica, o menu tem a seção `MEUS PRESETS` (só os do tipo do instrumento: um preset de sintetizador não aparece no FM):
+
+| Item | O que faz |
+|---|---|
+| `Salvar como preset…` | Pede um nome e guarda **todos** os parâmetros atuais do instrumento. Se já existe um preset seu com esse nome (maiúsculas não contam), pergunta `Substituir o preset?`. |
+| Um preset seu | Aplica na faixa, como os de fábrica. Leva o visto e o rótulo do seletor (`Nome`, `Nome (editado)`) quando os valores batem. As setas anterior e próximo passam por eles depois dos de fábrica. |
+| Ícone `…` no fim da linha | Abre `Renomear…`, `Exportar preset…` (gera um arquivo `.jopreset`) e `Apagar…` (com confirmação). |
+| `Importar preset…` | Abre o seletor de arquivos e adiciona um `.jopreset`. Arquivo que não é preset, de tipo desconhecido ou de versão mais nova é recusado com o motivo; ids desconhecidos e valores não numéricos são ignorados e valores fora da faixa são limitados, com um aviso. Nome já usado ganha ` (2)`, ` (3)`… |
+
+Nomes: até 60 caracteres, sem caracteres de controle, únicos por tipo. Os presets ficam **neste aparelho** (no navegador, nos dados do site; no Android, na pasta do app) e **não sincronizam com a conta**: para levar a outro aparelho, exporte e importe o `.jopreset`. Limpar os dados do site apaga os presets.
+
+No **sampler**, o preset do usuário guarda só timbre e envelope; não leva o áudio, as zonas, a nota base nem a afinação (estes ficam como estão na faixa que recebe o preset).
 
 ## Passo a passo
 

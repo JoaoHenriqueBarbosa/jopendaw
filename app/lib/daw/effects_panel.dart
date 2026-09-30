@@ -18,6 +18,8 @@ import 'fx_editors.dart';
 import 'fx_presets.dart';
 import 'instruments.dart';
 import 'model.dart';
+import 'user_presets.dart';
+import 'user_presets_ui.dart';
 
 class EffectsPanel extends StatefulWidget {
   final DawController c;
@@ -59,8 +61,23 @@ class _EffectsPanelState extends State<EffectsPanel> {
     return i >= 0 && i < c.doc.tracks.length ? i : -1;
   }
 
+  final _userPresets = UserPresets.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _userPresets
+      ..addListener(_onUserPresets)
+      ..load();
+  }
+
+  void _onUserPresets() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _userPresets.removeListener(_onUserPresets);
     _scroll.dispose();
     super.dispose();
   }
@@ -138,6 +155,11 @@ class _EffectsPanelState extends State<EffectsPanel> {
     if (sidechain != null) values[sidechain] = s.param(sidechain);
     _lastPreset[s.id] = p.name;
     c.applyEffectPreset(track, s.id, values);
+  }
+
+  void _applyUserPreset(int track, EffectSlot s, UserPreset p) {
+    _lastPreset[s.id] = p.name;
+    c.applyEffectPreset(track, s.id, UserPresets.paramsForEffect(p, s));
   }
 
   void _act(int track, List<EffectSlot> chain, int index, _Action a) {
@@ -409,9 +431,10 @@ class _EffectsPanelState extends State<EffectsPanel> {
 
   Widget _cardHeader(int track, List<EffectSlot> chain, int index, Color color, bool desktop) {
     final s = chain[index];
-    final preset = matchingEffectPreset(s);
+    final userPreset = _userPresets.matchingEffect(s);
+    final preset = userPreset == null ? matchingEffectPreset(s) : null;
     final last = _lastPreset[s.id];
-    final sub = preset?.name ?? (last != null ? '$last (editado)' : null);
+    final sub = preset?.name ?? userPreset?.name ?? (last != null ? '$last (editado)' : null);
     final title = Row(
       children: [
         Icon(s.kind.icon, size: 16, color: s.bypass ? Colors.white38 : color),
@@ -482,7 +505,9 @@ class _EffectsPanelState extends State<EffectsPanel> {
   Widget _cardMenu(int track, List<EffectSlot> chain, int index, Color color, bool desktop) {
     final s = chain[index];
     final presets = effectPresetsFor(s.kind);
-    final current = matchingEffectPreset(s);
+    final userList = _userPresets.ofEffect(s.kind);
+    final userCurrent = _userPresets.matchingEffect(s);
+    final current = userCurrent == null ? matchingEffectPreset(s) : null;
     PopupMenuItem<Object> item(Object value, IconData icon, String text, {bool enabled = true, Color? tint}) => PopupMenuItem<Object>(
       value: value,
       enabled: enabled,
@@ -499,13 +524,23 @@ class _EffectsPanelState extends State<EffectsPanel> {
       tooltip: 'Presets e mais',
       position: PopupMenuPosition.under,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 230, maxHeight: 520),
+      constraints: const BoxConstraints(minWidth: 230, maxHeight: 680),
       icon: const Icon(Icons.more_vert, size: 18),
       iconSize: 18,
       style: IconButton.styleFrom(visualDensity: VisualDensity.compact, minimumSize: const Size(32, 32), padding: EdgeInsets.zero),
       onSelected: (v) {
         if (v is EffectPreset) {
           _applyPreset(track, s, v);
+        } else if (v is ApplyUserPreset) {
+          _applyUserPreset(track, s, v.preset);
+        } else if (v is UserPresetChoice) {
+          handleUserPresetChoice(
+            context,
+            v,
+            family: PresetFamily.effect,
+            kind: s.kind.name,
+            capture: () => UserPresets.capture(PresetFamily.effect, s.kind.name, s.param),
+          );
         } else if (v is _Action) {
           _act(track, chain, index, v);
         }
@@ -531,8 +566,9 @@ class _EffectsPanelState extends State<EffectsPanel> {
                 ],
               ),
             ),
-          const PopupMenuDivider(),
         ],
+        ...userPresetEntries(presets: userList, current: userCurrent, color: color, checkWidth: 30),
+        const PopupMenuDivider(),
         item(_Action.reset, Icons.restart_alt, 'Reiniciar (valores padrão)', enabled: !isDefaultEffect(s)),
         item(_Action.bypass, Icons.power_settings_new, s.bypass ? 'Ligar' : 'Desligar (bypass)'),
         item(_Action.left, desktop ? Icons.arrow_back : Icons.arrow_upward, desktop ? 'Mover para a esquerda' : 'Mover para cima', enabled: index > 0),
