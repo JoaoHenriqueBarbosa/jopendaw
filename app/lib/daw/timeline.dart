@@ -1313,7 +1313,7 @@ class _AddTrackRow extends StatelessWidget {
               c.addTrack();
             case TrackKind.bus:
               c.addBusTrack();
-            case TrackKind.synth || TrackKind.drums || TrackKind.sampler:
+            case TrackKind.synth || TrackKind.drums || TrackKind.sampler || TrackKind.fm || TrackKind.wavetable:
               c.addInstrumentTrack(k);
           }
         },

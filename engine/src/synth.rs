@@ -47,18 +47,18 @@ const RES_LIMIT_TAU: f32 = 0.03;
 /// Faixa, padrão e se o valor é inteiro, na ordem dos ids. Espelho de `synthParams` em
 /// `app/lib/daw/instruments.dart` (um teste confere os dois).
 #[derive(Clone, Copy)]
-struct Spec {
-    min: f32,
-    max: f32,
-    def: f32,
-    discrete: bool,
+pub(crate) struct Spec {
+    pub(crate) min: f32,
+    pub(crate) max: f32,
+    pub(crate) def: f32,
+    pub(crate) discrete: bool,
 }
 
-const fn cont(min: f32, max: f32, def: f32) -> Spec {
+pub(crate) const fn cont(min: f32, max: f32, def: f32) -> Spec {
     Spec { min, max, def, discrete: false }
 }
 
-const fn disc(min: f32, max: f32, def: f32) -> Spec {
+pub(crate) const fn disc(min: f32, max: f32, def: f32) -> Spec {
     Spec { min, max, def, discrete: true }
 }
 
@@ -161,11 +161,11 @@ fn osc(wave: Wave, p: f32, dt: f32, pw: f32) -> f32 {
 }
 
 #[inline(always)]
-fn wrap(p: f32) -> f32 {
+pub(crate) fn wrap(p: f32) -> f32 {
     if p >= 1.0 { p - 1.0 } else { p }
 }
 
-fn lfo_shape(wave: u32, p: f32, hold: f32) -> f32 {
+pub(crate) fn lfo_shape(wave: u32, p: f32, hold: f32) -> f32 {
     match wave {
         0 => sin_turns(p),
         1 => {
@@ -187,18 +187,18 @@ fn lfo_shape(wave: u32, p: f32, hold: f32) -> f32 {
 
 /// Um valor que vai de `from` a `from + step * n` ao longo do bloco.
 #[derive(Clone, Copy, Debug, Default)]
-struct Ramp {
-    from: f32,
-    step: f32,
+pub(crate) struct Ramp {
+    pub(crate) from: f32,
+    pub(crate) step: f32,
 }
 
 impl Ramp {
-    fn advance(s: &mut Smoothed, a: f32, frames: f32) -> Self {
+    pub(crate) fn advance(s: &mut Smoothed, a: f32, frames: f32) -> Self {
         let from = s.value;
         Self { from, step: (s.step(a) - from) / frames }
     }
 
-    fn on(&self) -> bool {
+    pub(crate) fn on(&self) -> bool {
         self.from != 0.0 || self.step != 0.0
     }
 }
@@ -838,7 +838,7 @@ impl Synth {
 }
 
 /// Posição de uma cópia do uníssono em −1..1 (simétrica; uma cópia só fica no centro).
-fn unison_position(u: usize, n: usize) -> f32 {
+pub(crate) fn unison_position(u: usize, n: usize) -> f32 {
     if n > 1 { (u.min(n - 1) as f32 / (n - 1) as f32) * 2.0 - 1.0 } else { 0.0 }
 }
 

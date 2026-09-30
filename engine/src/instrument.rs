@@ -41,6 +41,10 @@ pub mod kind {
     /// Barramento (retorno de envios, grupo): sem instrumento nem clipes, só recebe áudio de
     /// outras faixas (envios e saídas roteadas para ele).
     pub const BUS: u32 = 4;
+    /// Sintetizador FM de 4 operadores.
+    pub const FM: u32 = 5;
+    /// Sintetizador de wavetable (2 osciladores, tabelas em séries de 8).
+    pub const WAVETABLE: u32 = 6;
 }
 
 /// Cria o instrumento de um tipo; `None` para faixa de áudio ou tipo desconhecido.
@@ -49,6 +53,8 @@ pub fn create(kind: u32, rate: f64) -> Option<Box<dyn Instrument>> {
         kind::SYNTH => Some(Box::new(crate::synth::Synth::new(rate))),
         kind::DRUMS => Some(Box::new(crate::drums::Drums::new(rate))),
         kind::SAMPLER => Some(Box::new(crate::sampler::Sampler::new(rate))),
+        kind::FM => Some(Box::new(crate::fm::Fm::new(rate))),
+        kind::WAVETABLE => Some(Box::new(crate::wavetable::Wavetable::new(rate))),
         _ => None,
     }
 }
@@ -189,4 +195,170 @@ pub mod sampler_param {
     pub const TUNE: u32 = 7;
     /// Sensibilidade à velocidade, 0..1.
     pub const VELOCITY: u32 = 8;
+}
+
+/// Sintetizador FM (tipo 5): 4 operadores senoidais, 8 algoritmos, realimentação no operador 1.
+/// Os parâmetros de cada operador ficam em `OP_BASE + operador * OP_STRIDE + k` (operador 0..3).
+pub mod fm_param {
+    /// Roteamento dos operadores, 0..7 (diagramas em `fm.rs`).
+    pub const ALGORITHM: u32 = 0;
+    /// Realimentação do operador 1 nele mesmo, 0..1.
+    pub const FEEDBACK: u32 = 1;
+    /// Primeiro id do operador 1; os do operador `n` começam em `OP_BASE + n * OP_STRIDE`.
+    pub const OP_BASE: u32 = 2;
+    pub const OP_STRIDE: u32 = 8;
+    pub const OPS: u32 = 4;
+    /// k = 0: razão de frequência com a nota, 0,25..16.
+    pub const RATIO: u32 = 0;
+    /// k = 1: ajuste fino da razão, cents −100..100.
+    pub const FINE: u32 = 1;
+    /// k = 2: nível do operador, 0..1 (no modulador, é o índice de modulação).
+    pub const LEVEL: u32 = 2;
+    /// k = 3..6: envelope do operador (segundos, segundos, nível 0..1, segundos).
+    pub const ATTACK: u32 = 3;
+    pub const DECAY: u32 = 4;
+    pub const SUSTAIN: u32 = 5;
+    pub const RELEASE: u32 = 6;
+    /// k = 7: quanto a velocidade da nota move o nível do operador, 0..1.
+    pub const VELOCITY: u32 = 7;
+    /// Id de um parâmetro de operador (`op` 0..3, `k` uma das constantes acima).
+    pub const fn op(op: u32, k: u32) -> u32 {
+        OP_BASE + op * OP_STRIDE + k
+    }
+    /// 0 senoide, 1 triângulo, 2 serra, 3 quadrada, 4 aleatório (sample & hold).
+    pub const LFO_WAVE: u32 = 34;
+    /// Hz, 0,05..30.
+    pub const LFO_RATE: u32 = 35;
+    /// Vibrato, em semitons (0..12).
+    pub const LFO_PITCH: u32 = 36;
+    /// Tremolo, 0..1.
+    pub const LFO_AMP: u32 = 37;
+    /// Quanto o LFO move o índice de modulação (o brilho), 0..1.
+    pub const LFO_INDEX: u32 = 38;
+    /// Polifonia máxima, 1..16 (1 = mono com legato).
+    pub const VOICES: u32 = 39;
+    /// Portamento no modo mono, segundos (0..2).
+    pub const GLIDE: u32 = 40;
+    /// Volume de saída, 0..1,5.
+    pub const LEVEL_OUT: u32 = 41;
+    pub const COUNT: u32 = 42;
+}
+
+/// Sintetizador de wavetable (tipo 6): 2 osciladores de tabela, sub, ruído, uníssono, filtro SVF.
+pub mod wavetable_param {
+    /// Série de tabelas do oscilador 1: 0 clássica, 1 vozes, 2 digital.
+    pub const OSC1_SERIES: u32 = 0;
+    /// Posição na série, 0..1 (0 = 1ª tabela, 1 = 8ª; entre elas as tabelas vizinhas se misturam).
+    pub const OSC1_POS: u32 = 1;
+    pub const OSC1_LEVEL: u32 = 2;
+    /// Semitons, −24..24.
+    pub const OSC1_SEMI: u32 = 3;
+    /// Cents, −100..100.
+    pub const OSC1_DETUNE: u32 = 4;
+    pub const OSC2_SERIES: u32 = 5;
+    pub const OSC2_POS: u32 = 6;
+    pub const OSC2_LEVEL: u32 = 7;
+    pub const OSC2_SEMI: u32 = 8;
+    pub const OSC2_DETUNE: u32 = 9;
+    /// Senoide uma oitava abaixo.
+    pub const SUB_LEVEL: u32 = 10;
+    pub const NOISE_LEVEL: u32 = 11;
+    /// Vozes de uníssono por nota, 1..7.
+    pub const UNISON: u32 = 12;
+    /// Espalhamento de afinação do uníssono, em cents (0..100).
+    pub const UNISON_DETUNE: u32 = 13;
+    /// Abertura estéreo do uníssono, 0..1.
+    pub const UNISON_SPREAD: u32 = 14;
+    /// 0 passa-baixa, 1 passa-alta, 2 passa-banda (12 dB/oit, SVF).
+    pub const FILTER_TYPE: u32 = 15;
+    /// Hz, 20..20000.
+    pub const CUTOFF: u32 = 16;
+    /// 0..1.
+    pub const RESONANCE: u32 = 17;
+    /// Quanto o envelope do filtro move o corte, −1..1 (×6 oitavas).
+    pub const FILTER_ENV: u32 = 18;
+    /// Acompanhamento do teclado, 0..1.
+    pub const KEYTRACK: u32 = 19;
+    /// Envelope de amplitude: segundos, segundos, nível 0..1, segundos.
+    pub const AMP_ATTACK: u32 = 20;
+    pub const AMP_DECAY: u32 = 21;
+    pub const AMP_SUSTAIN: u32 = 22;
+    pub const AMP_RELEASE: u32 = 23;
+    /// Envelope do filtro (que também pode mover a posição da tabela, `ENV_POS`).
+    pub const FLT_ATTACK: u32 = 24;
+    pub const FLT_DECAY: u32 = 25;
+    pub const FLT_SUSTAIN: u32 = 26;
+    pub const FLT_RELEASE: u32 = 27;
+    /// 0 senoide, 1 triângulo, 2 serra, 3 quadrada, 4 aleatório (sample & hold).
+    pub const LFO_WAVE: u32 = 28;
+    /// Hz, 0,05..30.
+    pub const LFO_RATE: u32 = 29;
+    /// Vibrato, em semitons (0..12).
+    pub const LFO_PITCH: u32 = 30;
+    /// Modulação do corte, em oitavas (0..4).
+    pub const LFO_CUTOFF: u32 = 31;
+    /// Tremolo, 0..1.
+    pub const LFO_AMP: u32 = 32;
+    /// Quanto o LFO move a posição da tabela nos dois osciladores, −1..1 (fração do percurso).
+    pub const LFO_POS: u32 = 33;
+    /// Portamento, segundos (0..2).
+    pub const GLIDE: u32 = 34;
+    /// Polifonia máxima, 1..16 (1 = mono com legato).
+    pub const VOICES: u32 = 35;
+    /// Sensibilidade à velocidade, 0..1.
+    pub const VELOCITY: u32 = 36;
+    /// Volume de saída do instrumento, 0..1,5.
+    pub const LEVEL: u32 = 37;
+    /// Quanto o envelope do filtro move a posição da tabela, −1..1 (fração do percurso).
+    pub const ENV_POS: u32 = 38;
+    pub const COUNT: u32 = 39;
+}
+
+/// Conferência das tabelas de parâmetros do motor contra as do app (`instruments.dart`).
+#[cfg(test)]
+pub(crate) mod contract {
+    /// Mínimo, máximo, padrão e se o valor é inteiro de cada id, na ordem dos ids.
+    pub type Row = (f32, f32, f32, bool);
+
+    /// Lê `const <name> = <ParamSpec>[...]` do app e confere cada linha com `rows`.
+    pub fn check(name: &str, rows: &[Row]) {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/lib/daw/instruments.dart");
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("sem {path}: conferência pulada");
+            return;
+        };
+        let start = src.find(&format!("const {name} = <ParamSpec>[")).unwrap_or_else(|| panic!("{name} não está no app"));
+        let body = &src[start..];
+        let body = &body[..body.find("];").unwrap()];
+        let quoted = |s: &str| s.matches('\'').count() / 2;
+        let mut seen = vec![false; rows.len()];
+        for line in body.lines().map(str::trim) {
+            if let Some(rest) = line.strip_prefix("ParamSpec.choice(") {
+                let id: usize = rest.split(',').next().unwrap().trim().parse().unwrap();
+                // as opções vêm numa lista literal ou numa constante (`_waves`)
+                let options = match rest.split(',').nth(3).map(str::trim) {
+                    Some(n) if n.starts_with('_') => {
+                        let n = n.trim_end_matches(')');
+                        let decl = &src[src.find(&format!("const {n} = [")).unwrap()..];
+                        quoted(&decl[..decl.find(']').unwrap()])
+                    }
+                    _ => quoted(rest) - 2,
+                };
+                // o padrão, quando não é a primeira opção, vem em `def: n`
+                let def: f32 = rest.split("def:").nth(1).map_or(0.0, |d| d.trim().trim_end_matches([')', ',']).parse().unwrap());
+                let (min, max, rdef, discrete) = rows[id];
+                assert!(discrete && min == 0.0 && max == (options - 1) as f32 && rdef == def, "{name} id {id}");
+                assert!(!seen[id], "{name}: id {id} repetido");
+                seen[id] = true;
+            } else if let Some(rest) = line.strip_prefix("ParamSpec(") {
+                let fields: Vec<&str> = rest.split(',').map(|f| f.trim().trim_end_matches(')')).collect();
+                let id: usize = fields[0].parse().unwrap();
+                let (min, max, def): (f32, f32, f32) = (fields[3].parse().unwrap(), fields[4].parse().unwrap(), fields[5].parse().unwrap());
+                assert_eq!(rows[id], (min, max, def, line.contains("Curve.integer")), "{name} id {id}");
+                assert!(!seen[id], "{name}: id {id} repetido");
+                seen[id] = true;
+            }
+        }
+        assert!(seen.iter().all(|&s| s), "{name}: ids sem espelho no app: {seen:?}");
+    }
 }

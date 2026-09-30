@@ -930,7 +930,8 @@ class _AddStrip extends StatelessWidget {
         _ => c.addInstrumentTrack(k),
       },
       itemBuilder: (_) => [
-        for (final k in TrackKind.values)
+        // o barramento fecha a lista (é o único que não é faixa de som), como no menu do arranjo
+        for (final k in [...TrackKind.values.where((k) => k != TrackKind.bus), TrackKind.bus])
           PopupMenuItem(
             value: k,
             child: Row(children: [Icon(k.icon, size: 18), const SizedBox(width: 12), Text(k.label)]),

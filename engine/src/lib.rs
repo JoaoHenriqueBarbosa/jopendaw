@@ -68,6 +68,7 @@ pub mod api;
 pub mod drums;
 pub mod dsp;
 pub mod effect;
+pub mod fm;
 pub mod fx;
 pub mod instrument;
 mod limiter;
@@ -77,6 +78,9 @@ pub mod record;
 pub mod sampler;
 pub mod stretch;
 pub mod synth;
+#[cfg(test)]
+mod testalloc;
+pub mod wavetable;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -2329,6 +2333,24 @@ mod tests {
         assert!((l[14_000] - g).abs() < 1e-4, "{}", l[14_000]);
         // o release (0,2 s) passa do fim do bloco, mas o note off veio no quadro 18000
         assert!(l[23_999] < l[17_999]);
+    }
+
+    #[test]
+    fn fm_e_wavetable_tocam_pelo_motor() {
+        for kind in [instrument::kind::FM, instrument::kind::WAVETABLE] {
+            let mut e = engine();
+            e.set_tempo(120.0, 4);
+            e.set_track_count(1);
+            e.set_track_kind(0, kind);
+            assert_eq!(e.track_kind(0), Some(kind));
+            e.add_note(0, 0.0, 1.0, 60, 0.9);
+            e.play();
+            let (l, r) = run(&mut e, 12_000);
+            assert!(l.iter().chain(&r).all(|s| s.is_finite()));
+            assert!(l[2400..].iter().any(|s| s.abs() > 0.01), "tipo {kind} mudo");
+            // os parâmetros chegam pelo mesmo caminho dos outros instrumentos
+            e.set_param(0, 0, 1.0);
+        }
     }
 
     #[test]

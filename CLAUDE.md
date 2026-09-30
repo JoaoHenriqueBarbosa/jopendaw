@@ -54,6 +54,13 @@ sem trava, decodificação com symphonia, render offline) e `lib/audio/engine_ff
 se o `apply` for novo). Emulador: `flutter test integration_test -d emulator-5554`; o app aponta
 para o servidor local com `--dart-define=API_BASE=http://10.0.2.2:8080`.
 
+Instrumentos do motor (`engine/src/`): sintetizador subtrativo (`synth.rs`, tipo 1), bateria (2), sampler (3),
+FM de 4 operadores e 8 algoritmos (`fm.rs`, tipo 5) e wavetable (`wavetable.rs`, tipo 6; tabelas por soma de
+harmônicos com mip-map, iguais em todas as instâncias). Ids em `instrument.rs` (`*_param`), espelhados em
+`app/lib/daw/instruments.dart` (o índice de `TrackKind` é o código do motor, então tipo novo só entra no fim);
+um teste Rust de cada instrumento lê o `instruments.dart` e confere faixas e padrões. O desenho das tabelas no
+painel (`wavetable_shape.dart`) é um espelho em Dart das definições de `wavetable.rs::harmonic`.
+
 Lado Flutter em `lib/daw/`: `model.dart` (documento: faixas, clipes em batidas/segundos),
 `controller.dart` (edição, desfazer, sync com o motor a cada mudança, importação com sha-256),
 `timeline.dart`, `transport_bar.dart`, `mixer_panel.dart`, `meter.dart`. Plugins próprios (sem

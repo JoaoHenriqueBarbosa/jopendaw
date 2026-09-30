@@ -20,6 +20,7 @@ import 'instruments.dart';
 import 'knob.dart';
 import 'model.dart';
 import 'presets.dart';
+import 'wavetable_shape.dart';
 
 class InstrumentPanel extends StatefulWidget {
   final DawController c;
@@ -40,7 +41,7 @@ const _keyCount = 25;
 class _InstrumentPanelState extends State<InstrumentPanel> {
   /// Oitava do teclado da tela por tipo: a bateria começa no C2 (36), onde o General MIDI põe as
   /// peças; os outros no C3.
-  final _octave = <TrackKind, int>{TrackKind.synth: 3, TrackKind.drums: 2, TrackKind.sampler: 3};
+  final _octave = <TrackKind, int>{TrackKind.synth: 3, TrackKind.drums: 2, TrackKind.sampler: 3, TrackKind.fm: 3, TrackKind.wavetable: 3};
 
   /// Último preset aplicado em cada faixa (pelo id), para o menu dizer "Pad quente (editado)".
   final _lastPreset = <String, String>{};
@@ -128,7 +129,7 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   }
 
   List<Widget> _createButtons() => [
-    for (final k in [TrackKind.synth, TrackKind.drums, TrackKind.sampler])
+    for (final k in [TrackKind.synth, TrackKind.drums, TrackKind.sampler, TrackKind.fm, TrackKind.wavetable])
       FilledButton.tonalIcon(onPressed: () => c.addInstrumentTrack(k), icon: Icon(k.icon, size: 18), label: Text(k.label)),
   ];
 
@@ -375,6 +376,8 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     TrackKind.synth => _layout(x, 'synth', _synthSections(x), width),
     TrackKind.drums => x.desktop ? _drumsDesktop(x) : _layout(x, 'drums', _drumSectionsMobile(x), width),
     TrackKind.sampler => _layout(x, 'sampler', _samplerSections(x), width),
+    TrackKind.fm => _layout(x, 'fm', _fmSections(x), width),
+    TrackKind.wavetable => _layout(x, 'wavetable', _wavetableSections(x), width),
   };
 
   /// Cartões numa fileira com rolagem horizontal (computador) ou quebrando em linhas com rolagem
@@ -496,6 +499,163 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
               lines: [
                 v(SynthId.voices) <= 1 ? 'Mono · legato' : 'Poli · ${v(SynthId.voices).round()} vozes',
                 v(SynthId.glide) > 0 ? 'Glide ${fmt(SynthId.glide)}' : 'Sem glide',
+              ],
+              color: x.color,
+            ),
+            _ => null,
+          },
+          controls: [for (final p in params) x.knob(p, dimmed: dim(p.id))],
+        ),
+    ];
+  }
+
+  // ---------------------------------------------------------------------- FM
+
+  /// Valores de razão que mais se usa: oitavas, quinta, terça maior e as razões de sino.
+  static const _ratioChips = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.0];
+
+  List<_Section> _fmSections(_Ctx x) {
+    double v(int id) => x.t.param(id);
+    final alg = v(FmId.algorithm).round().clamp(0, 7);
+    final carriers = fmAlgorithmCarriers[alg];
+    final lfoOff = v(FmId.lfoPitch) == 0 && v(FmId.lfoAmp) == 0 && v(FmId.lfoIndex) == 0;
+    final groups = <String, List<ParamSpec>>{};
+    for (final p in fmParams) {
+      (groups[p.group] ??= []).add(p);
+    }
+    String fmt(int id) => _formatValue(x.spec(id), v(id));
+    final tileHeight = math.max(x.graph, 46.0);
+    return [
+      _Section(
+        'Algoritmo',
+        width: 400,
+        fullWidth: true,
+        body: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _AlgorithmPicker(
+            selected: alg,
+            feedback: v(FmId.feedback),
+            color: x.color,
+            height: tileHeight,
+            onPick: (i) => c.setParam(x.ti, FmId.algorithm, i.toDouble(), undoable: true),
+          ),
+        ),
+        controls: [x.knob(x.spec(FmId.feedback))],
+      ),
+      for (var n = 0; n < 4; n++)
+        _Section(
+          'Operador ${n + 1}',
+          dimmed: v(FmId.op(n, FmId.opLevel)) == 0,
+          trailing: Text(
+            carriers >> n & 1 == 1 ? 'PORTADOR' : 'MODULADOR',
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.7, color: carriers >> n & 1 == 1 ? x.color : Colors.white38),
+          ),
+          display: _Display(
+            painter: _EnvelopePainter(
+              v(FmId.op(n, FmId.attack)),
+              v(FmId.op(n, FmId.decay)),
+              v(FmId.op(n, FmId.sustain)),
+              v(FmId.op(n, FmId.release)),
+              carriers >> n & 1 == 1 ? x.color : x.color.withValues(alpha: 0.6),
+            ),
+            caption: '${fmt(FmId.op(n, FmId.ratio))}  nível ${fmt(FmId.op(n, FmId.opLevel))}',
+          ),
+          controls: [for (final p in groups['Operador ${n + 1}']!) x.knob(p)],
+          footer: _RatioChips(
+            values: _ratioChips,
+            current: v(FmId.op(n, FmId.ratio)),
+            color: x.color,
+            onPick: (r) => c.setParam(x.ti, FmId.op(n, FmId.ratio), r, undoable: true),
+          ),
+        ),
+      _Section(
+        'LFO',
+        dimmed: lfoOff,
+        display: _Display(
+          painter: _LfoPainter(wave: v(FmId.lfoWave).round(), rate: v(FmId.lfoRate), color: x.color),
+          caption: lfoOff ? 'sem efeito: vibrato, tremolo e brilho em 0' : null,
+        ),
+        controls: [for (final p in groups['LFO']!) x.knob(p, dimmed: (p.id == FmId.lfoWave || p.id == FmId.lfoRate) && lfoOff)],
+      ),
+      _Section(
+        'Geral',
+        display: _Readout(
+          lines: [
+            v(FmId.voices) <= 1 ? 'Mono · legato' : 'Poli · ${v(FmId.voices).round()} vozes',
+            v(FmId.glide) > 0 && v(FmId.voices) <= 1 ? 'Glide ${fmt(FmId.glide)}' : 'Algoritmo ${alg + 1}',
+          ],
+          color: x.color,
+        ),
+        controls: [for (final p in groups['Geral']!) x.knob(p, dimmed: p.id == FmId.glide && v(FmId.voices) > 1)],
+      ),
+    ];
+  }
+
+  // ---------------------------------------------------------------------- wavetable
+
+  List<_Section> _wavetableSections(_Ctx x) {
+    double v(int id) => x.t.param(id);
+    String fmt(int id) => _formatValue(x.spec(id), v(id));
+    final lfoOff = v(WtId.lfoPitch) == 0 && v(WtId.lfoCutoff) == 0 && v(WtId.lfoAmp) == 0 && v(WtId.lfoPos) == 0;
+    final filterEnvOff = v(WtId.filterEnv) == 0 && v(WtId.envPos) == 0;
+    bool dim(int id) => switch (id) {
+      WtId.osc2Series || WtId.osc2Pos || WtId.osc2Semi || WtId.osc2Detune => v(WtId.osc2Level) == 0,
+      WtId.unisonDetune || WtId.unisonSpread => v(WtId.unison) <= 1,
+      WtId.lfoWave || WtId.lfoRate => lfoOff,
+      WtId.fltAttack || WtId.fltDecay || WtId.fltSustain || WtId.fltRelease => filterEnvOff,
+      _ => false,
+    };
+    // o LFO e o envelope do filtro deslocam a posição: o gráfico mostra a posição base e a faixa
+    // que eles varrem
+    _Display scope(int series, int pos, int level) => _Display(
+      painter: _TablePainter(
+        series: v(series).round().clamp(0, 2),
+        pos: v(pos),
+        level: v(level),
+        sweep: math.max(v(WtId.lfoPos).abs(), v(WtId.envPos).abs()),
+        color: x.color,
+      ),
+      caption: wavetableLabel(v(series).round().clamp(0, 2), v(pos)),
+    );
+    final groups = <String, List<ParamSpec>>{};
+    for (final p in wavetableParams) {
+      (groups[p.group] ??= []).add(p);
+    }
+    return [
+      for (final MapEntry(key: group, value: params) in groups.entries)
+        _Section(
+          group,
+          dimmed: (group == 'Envelope do filtro' && filterEnvOff) || (group == 'LFO' && lfoOff) || (group == 'Oscilador 2' && v(WtId.osc2Level) == 0),
+          display: switch (group) {
+            'Oscilador 1' => scope(WtId.osc1Series, WtId.osc1Pos, WtId.osc1Level),
+            'Oscilador 2' => scope(WtId.osc2Series, WtId.osc2Pos, WtId.osc2Level),
+            'Mistura' => _MixDisplay(
+              levels: [('Osc 1', v(WtId.osc1Level)), ('Osc 2', v(WtId.osc2Level)), ('Sub', v(WtId.sub)), ('Ruído', v(WtId.noise))],
+              unison: v(WtId.unison).round(),
+              color: x.color,
+            ),
+            'Filtro' => _Display(
+              painter: _FilterPainter(
+                type: v(WtId.filterType).round(),
+                cutoff: v(WtId.cutoff),
+                resonance: v(WtId.resonance),
+                envelope: v(WtId.filterEnv),
+                color: x.color,
+              ),
+            ),
+            'Amplitude' => _Display(painter: _EnvelopePainter(v(WtId.ampAttack), v(WtId.ampDecay), v(WtId.ampSustain), v(WtId.ampRelease), x.color)),
+            'Envelope do filtro' => _Display(
+              painter: _EnvelopePainter(v(WtId.fltAttack), v(WtId.fltDecay), v(WtId.fltSustain), v(WtId.fltRelease), x.color),
+              caption: filterEnvOff ? 'sem efeito: filtro e posição em 0' : null,
+            ),
+            'LFO' => _Display(
+              painter: _LfoPainter(wave: v(WtId.lfoWave).round(), rate: v(WtId.lfoRate), color: x.color),
+              caption: lfoOff ? 'sem efeito: vibrato, filtro, tremolo e posição em 0' : null,
+            ),
+            'Geral' => _Readout(
+              lines: [
+                v(WtId.voices) <= 1 ? 'Mono · legato' : 'Poli · ${v(WtId.voices).round()} vozes',
+                v(WtId.glide) > 0 ? 'Glide ${fmt(WtId.glide)}' : 'Sem glide',
               ],
               color: x.color,
             ),
@@ -1772,6 +1932,242 @@ class _LfoPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LfoPainter o) => o.wave != wave || o.rate != rate || o.color != color;
+}
+
+// ------------------------------------------------------------------------ FM: algoritmos
+
+/// Posição de cada operador (x, y em 0..1, y = 0 no alto) no mini diagrama de cada algoritmo:
+/// moduladores em cima, portadores embaixo, como nos diagramas dos DX.
+const _algoLayout = <List<Offset>>[
+  [Offset(0.5, 0), Offset(0.5, 0.33), Offset(0.5, 0.66), Offset(0.5, 1)],
+  [Offset(0.28, 0), Offset(0.72, 0), Offset(0.5, 0.5), Offset(0.5, 1)],
+  [Offset(0.25, 0.5), Offset(0.75, 0), Offset(0.75, 0.5), Offset(0.5, 1)],
+  [Offset(0.25, 0), Offset(0.25, 0.5), Offset(0.75, 0.5), Offset(0.5, 1)],
+  [Offset(0.25, 0), Offset(0.25, 1), Offset(0.75, 0), Offset(0.75, 1)],
+  [Offset(0.5, 0), Offset(0.15, 1), Offset(0.5, 1), Offset(0.85, 1)],
+  [Offset(0.15, 0), Offset(0.15, 1), Offset(0.5, 1), Offset(0.85, 1)],
+  [Offset(0.12, 0.5), Offset(0.37, 0.5), Offset(0.63, 0.5), Offset(0.88, 0.5)],
+];
+
+/// Os 8 algoritmos como fileira de mini diagramas clicáveis (duas fileiras de 4 se faltar largura).
+class _AlgorithmPicker extends StatelessWidget {
+  final int selected;
+  final double feedback, height;
+  final Color color;
+  final ValueChanged<int> onPick;
+  const _AlgorithmPicker({required this.selected, required this.feedback, required this.color, required this.height, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final rows = box.maxWidth < 8 * 40 ? 2 : 1;
+      final perRow = 8 ~/ rows;
+      const gap = 4.0;
+      final tileW = (box.maxWidth - gap * (perRow - 1)) / perRow;
+      final tileH = rows == 1 ? height : math.max(40.0, (height - gap) / 2);
+      return Column(
+        children: [
+          for (var r = 0; r < rows; r++) ...[
+            if (r > 0) const SizedBox(height: gap),
+            Row(
+              children: [
+                for (var k = 0; k < perRow; k++) ...[if (k > 0) const SizedBox(width: gap), _tile(r * perRow + k, tileW, tileH)],
+              ],
+            ),
+          ],
+        ],
+      );
+    },
+  );
+
+  Widget _tile(int i, double w, double h) {
+    final on = i == selected;
+    return Tooltip(
+      message: 'Algoritmo ${i + 1}: ${fmAlgorithmNames[i]}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onPick(i),
+        child: Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: on ? color.withValues(alpha: 0.16) : Palette.ink,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: on ? color : Palette.hairline, width: on ? 1.4 : 1),
+          ),
+          child: CustomPaint(
+            painter: _AlgoPainter(algorithm: i, color: on ? color : Colors.white54, feedback: on ? feedback : 0),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Um algoritmo: círculos numerados (cheios = portadores, que vão à saída; vazados = moduladores)
+/// e setas de quem modula quem; um laço no operador 1 quando há realimentação.
+class _AlgoPainter extends CustomPainter {
+  final int algorithm;
+  final Color color;
+  final double feedback;
+  _AlgoPainter({required this.algorithm, required this.color, required this.feedback});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const padX = 11.0, padY = 10.0;
+    final r = math.min(5.2, size.width / 9);
+    Offset at(int n) {
+      final p = _algoLayout[algorithm][n];
+      return Offset(padX + p.dx * (size.width - 2 * padX), padY + p.dy * (size.height - 2 * padY - 5));
+    }
+
+    final line = _stroke(color.withValues(alpha: 0.8), 1.1);
+    final mods = fmAlgorithmMods[algorithm];
+    final carriers = fmAlgorithmCarriers[algorithm];
+    for (var to = 0; to < 4; to++) {
+      for (var from = 0; from < to; from++) {
+        if (mods[to] >> from & 1 == 0) continue;
+        final a = at(from), b = at(to);
+        final d = (b - a);
+        final len = d.distance;
+        if (len < 0.1) continue;
+        final u = d / len;
+        final s = a + u * r, e = b - u * (r + 1.5);
+        canvas.drawLine(s, e, line);
+        // ponta da seta
+        final n = Offset(-u.dy, u.dx);
+        canvas.drawPath(
+          Path()
+            ..moveTo(e.dx, e.dy)
+            ..lineTo(e.dx - u.dx * 3.5 + n.dx * 2.2, e.dy - u.dy * 3.5 + n.dy * 2.2)
+            ..lineTo(e.dx - u.dx * 3.5 - n.dx * 2.2, e.dy - u.dy * 3.5 - n.dy * 2.2)
+            ..close(),
+          Paint()..color = color.withValues(alpha: 0.8),
+        );
+      }
+    }
+    for (var n = 0; n < 4; n++) {
+      final c = at(n);
+      final carrier = carriers >> n & 1 == 1;
+      if (carrier) canvas.drawLine(c + Offset(0, r), c + Offset(0, r + 4), line);
+      canvas.drawCircle(c, r, carrier ? (Paint()..color = color.withValues(alpha: 0.85)) : _stroke(color, 1.2));
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '${n + 1}',
+          style: TextStyle(fontSize: r * 1.45, height: 1, fontWeight: FontWeight.w700, color: carrier ? Palette.ink : color),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+    }
+    if (feedback > 0) {
+      // laço de realimentação sobre o operador 1
+      final c = at(0);
+      final loop = Rect.fromCircle(center: c + Offset(-r * 1.1, -r * 0.9), radius: r * 0.85);
+      canvas.drawArc(loop, 0.6, 4.6, false, _stroke(color.withValues(alpha: 0.4 + 0.6 * feedback.clamp(0.0, 1.0)), 1.1));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AlgoPainter o) => o.algorithm != algorithm || o.color != color || o.feedback != feedback;
+}
+
+/// Atalhos de razão (0,5, 1, 2, 3...): as razões que mais se usa ficam a um toque.
+class _RatioChips extends StatelessWidget {
+  final List<double> values;
+  final double current;
+  final Color color;
+  final ValueChanged<double> onPick;
+  const _RatioChips({required this.values, required this.current, required this.color, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 4,
+    runSpacing: 4,
+    children: [
+      for (final r in values)
+        GestureDetector(
+          onTap: () => onPick(r),
+          child: Container(
+            height: 20,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: (current - r).abs() < 1e-6 ? color.withValues(alpha: 0.22) : Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: (current - r).abs() < 1e-6 ? color : Palette.hairline),
+            ),
+            child: Text(
+              '×${r == r.roundToDouble() ? r.round() : r}',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: (current - r).abs() < 1e-6 ? color : Colors.white60),
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+// ------------------------------------------------------------------------ wavetable
+
+/// Um ciclo da tabela na posição escolhida (a mistura das duas tabelas vizinhas), com o nível do
+/// oscilador como amplitude e uma régua embaixo com as 8 tabelas da série: as duas em jogo acesas
+/// e, se o LFO ou o envelope movem a posição, a faixa que eles varrem.
+class _TablePainter extends CustomPainter {
+  final int series;
+  final double pos, level, sweep;
+  final Color color;
+  _TablePainter({required this.series, required this.pos, required this.level, required this.sweep, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const ruler = 7.0;
+    final mid = (size.height - ruler) / 2;
+    final amp = mid - 5;
+    canvas.drawLine(Offset(0, mid), Offset(size.width, mid), _grid);
+    final n = math.max(64, size.width.ceil());
+    final shape = wavetableShape(series, pos, n);
+    Path trace(double a) {
+      final p = Path();
+      for (var i = 0; i <= n; i++) {
+        final v = shape[i % n].clamp(-1.6, 1.6) / 1.6;
+        final y = mid - v * a;
+        i == 0 ? p.moveTo(0, y) : p.lineTo(i * size.width / n, y);
+      }
+      return p;
+    }
+
+    final path = trace(amp);
+    canvas.drawPath(path, _stroke(color.withValues(alpha: 0.16), 1.2));
+    if (level > 0.001) {
+      final live = trace(amp * level.clamp(0.0, 1.0));
+      canvas.drawPath(
+        Path.from(live)
+          ..lineTo(size.width, mid)
+          ..lineTo(0, mid)
+          ..close(),
+        _fill(color, Offset.zero & size),
+      );
+      canvas.drawPath(live, _stroke(color, 1.6));
+    }
+    // régua: 8 casas; a faixa varrida em tom fraco e as tabelas vizinhas da posição acesas
+    final cell = size.width / wavetableTables;
+    final y0 = size.height - ruler + 1, h = ruler - 3;
+    if (sweep > 0) {
+      final lo = ((pos - sweep).clamp(0.0, 1.0)) * (wavetableTables - 1), hi = ((pos + sweep).clamp(0.0, 1.0)) * (wavetableTables - 1);
+      canvas.drawRect(Rect.fromLTRB((lo + 0.5) * cell, y0, (hi + 0.5) * cell, y0 + h), Paint()..color = color.withValues(alpha: 0.22));
+    }
+    final x = pos.clamp(0.0, 1.0) * (wavetableTables - 1);
+    for (var i = 0; i < wavetableTables; i++) {
+      final near = (x - i).abs() < 1;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(i * cell + 2, y0, cell - 4, h), const Radius.circular(1.5)),
+        Paint()..color = near ? color.withValues(alpha: 0.35 + 0.65 * (1 - (x - i).abs())) : Colors.white.withValues(alpha: 0.1),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TablePainter o) => o.series != series || o.pos != pos || o.level != level || o.sweep != sweep || o.color != color;
 }
 
 /// O áudio do sampler inteiro, normalizado pelo pico para amostras baixas aparecerem.
