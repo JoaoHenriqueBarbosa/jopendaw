@@ -7,6 +7,9 @@ WORKDIR /src
 # As dependências entram numa camada própria, para o cache sobreviver a mudanças no código.
 COPY Cargo.toml Cargo.lock ./
 COPY server/Cargo.toml server/Cargo.toml
+# O workspace lista o motor (e seus alvos wasm e Android): o cargo precisa achar os manifestos e os
+# alvos deles para carregar o workspace, mesmo compilando só o servidor.
+COPY engine engine
 RUN mkdir server/src && echo 'fn main() {}' > server/src/main.rs \
     && cargo build --profile server -p jopendaw-server && rm -rf server/src
 

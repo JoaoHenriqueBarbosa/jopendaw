@@ -4,3 +4,7 @@ app/
 dumps/
 **/.env
 .git/
+.claude/
+docs/
+engine/target/
+node_modules/

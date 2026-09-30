@@ -36,6 +36,9 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 300s;
+    # uploads de áudio (até 512 MB) e o documento do projeto (até 8 MB): o padrão do nginx é 1 MB
+    client_max_body_size 600m;
+    proxy_request_buffering off;
     # a API já manda o nosniff; sem isto sairia repetido
     proxy_hide_header X-Content-Type-Options;
   }
