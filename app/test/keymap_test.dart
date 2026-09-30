@@ -68,6 +68,8 @@ String? legacyGlobal(
   if (!mod && k == LogicalKeyboardKey.keyE) return 'panel.editor';
   if (!mod && k == LogicalKeyboardKey.keyI) return 'panel.instrument';
   if (!mod && k == LogicalKeyboardKey.keyF) return 'panel.effects';
+  // da fase 26 (navegador de áudios): tecla que antes não fazia nada
+  if (!mod && shift && k == LogicalKeyboardKey.keyB) return 'panel.browser';
   if (ch == '?' || (shift && k == LogicalKeyboardKey.slash)) return 'help.shortcuts';
   if (k == LogicalKeyboardKey.escape && learning) return 'midilearn.cancel';
   if (k == LogicalKeyboardKey.escape && dock) return 'panel.close';
@@ -161,7 +163,7 @@ void main() {
         'transport.play', 'transport.stop', 'transport.record', 'transport.loop', 'transport.metronome', 'marker.add', 'marker.rename', //
         'marker.prev', 'marker.next', 'loop.clip', 'view.fitAll', 'view.fitClip', 'view.zoomIn', 'view.zoomOut', 'view.follow', 'edit.undo',
         'edit.redo', 'edit.duplicate', 'edit.split', 'edit.delete', 'edit.import', 'panel.mixer', 'panel.editor', 'panel.instrument',
-        'panel.effects', 'panel.close', 'help.shortcuts', 'midilearn.toggle', 'midilearn.cancel', 'kbd.toggle', 'kbd.octaveDown',
+        'panel.effects', 'panel.browser', 'panel.close', 'help.shortcuts', 'midilearn.toggle', 'midilearn.cancel', 'kbd.toggle', 'kbd.octaveDown',
         'kbd.octaveUp', 'kbd.velocityDown', 'kbd.velocityUp', 'pr.quantize', 'pr.split', 'pr.join', 'pr.humanize', 'pr.legato',
       ]) {
         expect(keyActionById(id), isNotNull, reason: id);

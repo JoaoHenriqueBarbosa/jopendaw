@@ -78,6 +78,7 @@ pub mod loudness;
 mod metronome;
 pub mod mixer;
 pub mod modulation;
+pub mod preview;
 #[cfg(test)]
 mod modulation_tests;
 #[cfg(test)]
@@ -89,6 +90,8 @@ pub mod synth;
 pub mod tempo;
 #[cfg(test)]
 mod tempo_tests;
+#[cfg(test)]
+mod preview_tests;
 #[cfg(test)]
 mod testalloc;
 pub mod wavetable;
@@ -574,6 +577,8 @@ pub struct Engine {
     loop_start: f64,
     loop_end: f64,
     samples: HashMap<u32, Arc<Sample>>,
+    /// A pré-escuta (navegador de áudios): uma voz à parte do transporte, mixada no fim do `process`.
+    preview: preview::Preview,
     clips: Vec<Clip>,
     /// Curva de fade (entrada, saída) de cada clipe de `clips`, em paralelo (ver [`fade_curve`]); zero = padrão.
     clip_shapes: Vec<(u8, u8)>,
@@ -714,6 +719,7 @@ impl Engine {
             loop_start: 0.0,
             loop_end: 0.0,
             samples: HashMap::new(),
+            preview: preview::Preview::default(),
             clips: Vec::new(),
             clip_shapes: Vec::new(),
             tracks: Vec::new(),
@@ -990,6 +996,19 @@ impl Engine {
             inst.zone_sample(id, Some(sample.clone()));
         }
         self.samples.insert(id, sample);
+    }
+
+    /// Pré-escuta: toca o áudio `id` a partir de `offset` segundos, à parte do transporte (ver
+    /// [`preview`]). Áudio que não está carregado não toca nada.
+    pub fn preview_play(&mut self, id: u32, offset: f64, gain: f32) {
+        if let Some(s) = self.samples.get(&id).cloned() {
+            self.preview.play(s, offset, gain, self.rate);
+        }
+    }
+
+    /// Para a pré-escuta (com um fade curto).
+    pub fn preview_stop(&mut self) {
+        self.preview.stop();
     }
 
     /// Esquece um áudio; os instrumentos que o tocavam ficam sem áudio (as vozes que soam
@@ -1987,6 +2006,9 @@ impl Engine {
         let n = left.len().min(right.len());
         self.captures.begin_block(n);
         self.run(&mut left[..n], &mut right[..n]);
+        if self.preview.active() {
+            self.preview.mix(&mut left[..n], &mut right[..n], self.rate);
+        }
         // a entrada valia só para este bloco
         self.input_len = 0;
     }

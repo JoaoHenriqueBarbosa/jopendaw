@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/theme.dart';
+import 'browser_panel.dart';
 import 'controller.dart';
 import 'effects_panel.dart';
 import 'instrument_panel.dart';
@@ -154,6 +155,7 @@ class _DockPanelState extends State<DockPanel> {
                     Dock.effects => EffectsPanel(c: c),
                     Dock.modulation => ModulationPanel(c: c),
                     Dock.steps => StepSequencerPanel(c: c),
+                    Dock.browser => BrowserPanel(c: c),
                     Dock.none => const SizedBox.shrink(),
                   },
                 ),
@@ -169,7 +171,7 @@ class _DockPanelState extends State<DockPanel> {
     final c = widget.c;
     // com a aba Passos (bateria e sampler fatiado) são seis abas: os rótulos só cabem em janela mais larga
     final hasSteps = c.dock == Dock.steps || (c.selectedTrack < c.doc.tracks.length && stepsAvailable(c.doc.tracks[c.selectedTrack]));
-    final iconsOnly = MediaQuery.sizeOf(context).width < (hasSteps ? 760 : 560);
+    final iconsOnly = MediaQuery.sizeOf(context).width < (hasSteps ? 820 : 620);
     final bar = SizedBox(
       height: _barHeight,
       child: Row(
@@ -228,6 +230,14 @@ class _DockPanelState extends State<DockPanel> {
             onTap: () {
               if (c.dock != Dock.modulation) showDock(c, Dock.modulation);
             },
+          ),
+          _Tab(
+            icon: Icons.library_music,
+            label: 'Áudios',
+            tooltip: 'Navegador de áudios: ouvir, buscar e inserir${shortcutHint('panel.browser')}',
+            iconOnly: iconsOnly,
+            selected: c.dock == Dock.browser,
+            onTap: () => showDock(c, Dock.browser),
           ),
           const SizedBox(width: 12),
           Expanded(child: _Subject(c: c)),
@@ -403,6 +413,8 @@ class _Subject extends StatelessWidget {
           text = clip == null || clip.name.isEmpty ? tg.track.name : '${clip.name} · ${tg.track.name}';
           dot = trackColorAt(tg.track.color);
         }
+      case Dock.browser:
+        text = 'Áudios do projeto e da conta';
       case Dock.mixer || Dock.none:
         break;
     }

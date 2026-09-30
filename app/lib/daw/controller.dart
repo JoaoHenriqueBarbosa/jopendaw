@@ -88,7 +88,7 @@ class Waveform {
 }
 
 /// O que ocupa o painel de baixo.
-enum Dock { none, mixer, editor, instrument, effects, modulation, steps }
+enum Dock { none, mixer, editor, instrument, effects, modulation, steps, browser }
 
 /// Grade de encaixe, em batidas (0 = livre).
 enum Snap {
@@ -565,6 +565,11 @@ class DawController extends ChangeNotifier {
 
   /// O guardado local do aparelho (o padrão do MIDI learn para novos projetos mora nele).
   LocalStore get localStore => _store;
+
+  /// O motor e o id que ele guarda para um áudio do projeto (null se não está carregado): o navegador de áudios toca a
+  /// pré-escuta por eles, sem copiar o áudio (ver `browser.dart`).
+  AudioEngine get engine => _engine;
+  int? sampleEngineId(String hash) => _sampleIds[hash];
   final SyncApi _api;
   final bool Function() _canSync;
   final double syncTimeScale;

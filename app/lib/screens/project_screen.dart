@@ -200,6 +200,8 @@ class _DawStudioState extends State<DawStudio> {
         return () => toggleDock(c, Dock.instrument);
       case 'panel.effects':
         return () => toggleDock(c, Dock.effects);
+      case 'panel.browser':
+        return () => toggleDock(c, Dock.browser);
       case 'history.open':
         final ctx = node.context;
         return ctx != null ? () => showHistoryDialog(ctx, c) : null;

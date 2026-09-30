@@ -59,6 +59,8 @@ const SKIP = new Set([
   'live_off',
   'live_bend',
   'live_cc',
+  'preview_play',
+  'preview_stop',
   'watch_fx',
   'watch_analyzer',
   'set_input',

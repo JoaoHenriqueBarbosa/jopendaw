@@ -111,6 +111,7 @@ final List<KeyAction> keyCatalog = [
   KeyAction('panel.editor', 'Editor de notas (piano roll)', KeyCategory.panels, KeyContext.global, ['E']),
   KeyAction('panel.instrument', 'Instrumento da faixa', KeyCategory.panels, KeyContext.global, ['I']),
   KeyAction('panel.effects', 'Efeitos da faixa', KeyCategory.panels, KeyContext.global, ['F']),
+  KeyAction('panel.browser', 'Navegador de áudios', KeyCategory.panels, KeyContext.global, ['Shift+B'], help: 'Ouvir, buscar e inserir os áudios do projeto e da conta'),
   // antes do panel.close: com o modo ligado e um painel aberto, o Esc cancela primeiro o controle armado
   KeyAction(
     'midilearn.cancel',

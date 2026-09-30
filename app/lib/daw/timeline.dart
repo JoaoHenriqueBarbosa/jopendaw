@@ -21,6 +21,7 @@ import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'audio_edit_ui.dart';
 import 'automation_lane.dart';
+import 'browser_panel.dart' show BrowserDropZone;
 import 'clip_gain_dialog.dart';
 import 'comp_ui.dart';
 import 'controller.dart';
@@ -2138,7 +2139,16 @@ class _LanesState extends State<_Lanes> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => BrowserDropZone(
+    c: c,
+    rowAt: (y) {
+      final r = widget.layout.rowAt(y);
+      return r != null && r.kind == _RowKind.track ? (track: r.track, top: r.top, height: r.height) : null;
+    },
+    child: _body(context),
+  );
+
+  Widget _body(BuildContext context) {
     final laneHeight = widget.laneHeight;
     final layout = widget.layout;
     final visibleEnd = c.scrollBeat + widget.width / c.pxPerBeat;

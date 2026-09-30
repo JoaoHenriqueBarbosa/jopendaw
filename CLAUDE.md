@@ -63,7 +63,9 @@ painel (`wavetable_shape.dart`) é um espelho em Dart das definições de `wavet
 
 Lado Flutter em `lib/daw/`: `model.dart` (documento: faixas, clipes em batidas/segundos),
 `controller.dart` (edição, desfazer, sync com o motor a cada mudança, importação com sha-256),
-`timeline.dart`, `transport_bar.dart`, `mixer_panel.dart`, `meter.dart`. Plugins próprios (sem
+`timeline.dart`, `transport_bar.dart`, `mixer_panel.dart`, `meter.dart`. O navegador de áudios (aba Áudios do painel de baixo,
+`browser.dart` + `browser_panel.dart`, atalho Shift+B) ouve pela voz de pré-escuta do motor (`preview.rs`, chamadas `preview_play` /
+`preview_stop`): à parte do transporte, fora do documento, do desfazer e do render. Plugins próprios (sem
 VST/CLAP, que não rodam em web nem Android). Roteiro: MIDI + instrumentos → efeitos e automação →
 gravação e exportação → Android nativo → sincronização e jobs no backend.
 

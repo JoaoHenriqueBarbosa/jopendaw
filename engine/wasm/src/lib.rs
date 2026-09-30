@@ -73,6 +73,16 @@ pub extern "C" fn sample_drop(id: u32) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn preview_play(id: u32, start: f64, gain: f32) {
+    engine().preview_play(id, start, gain);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn preview_stop() {
+    engine().preview_stop();
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn tempo(bpm: f64, beats_per_bar: u32) {
     engine().set_tempo(bpm, beats_per_bar);
 }

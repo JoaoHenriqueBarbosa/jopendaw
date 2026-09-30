@@ -65,6 +65,12 @@ pub enum Call {
     SampleDrop {
         id: u32,
     },
+    PreviewPlay {
+        id: u32,
+        offset: f64,
+        gain: f32,
+    },
+    PreviewStop,
     Tempo {
         bpm: f64,
         beats_per_bar: u32,
@@ -316,6 +322,8 @@ const fn sig(name: &'static str, params: &'static [(&'static str, Ty)], ret: Opt
 /// Todas as chamadas sem ponteiro dos exports do wasm, com os mesmos tipos, na ordem do arquivo.
 const CALLS: &[Signature] = &[
     sig("sample_drop", &[("id", U32)], None),
+    sig("preview_play", &[("id", U32), ("início", F64), ("ganho", F32)], None),
+    sig("preview_stop", &[], None),
     sig("tempo", &[("bpm", F64), ("tempos por compasso", U32)], None),
     sig("tempo_clear", &[], None),
     sig("tempo_point", &[("batida", F64), ("bpm", F64), ("rampa", U32)], None),
@@ -546,6 +554,8 @@ impl Call {
         let a = Args { sig, v: args };
         Ok(match sig.name {
             "sample_drop" => Call::SampleDrop { id: a.u32(0) },
+            "preview_play" => Call::PreviewPlay { id: a.u32(0), offset: a.f64(1), gain: a.f32(2) },
+            "preview_stop" => Call::PreviewStop,
             "tempo" => Call::Tempo { bpm: a.f64(0), beats_per_bar: a.u32(1) },
             "tempo_clear" => Call::TempoClear,
             "tempo_point" => Call::TempoPoint { beat: a.f64(0), bpm: a.f64(1), ramp: a.flag(2) },
@@ -677,6 +687,8 @@ impl Call {
     pub fn apply(self, e: &mut Engine) -> Option<f64> {
         match self {
             Call::SampleDrop { id } => e.drop_sample(id),
+            Call::PreviewPlay { id, offset, gain } => e.preview_play(id, offset, gain),
+            Call::PreviewStop => e.preview_stop(),
             Call::Tempo { bpm, beats_per_bar } => e.set_tempo(bpm, beats_per_bar),
             Call::TempoClear => e.tempo_clear(),
             Call::TempoPoint { beat, bpm, ramp } => e.tempo_point(beat, bpm, ramp),
@@ -815,6 +827,13 @@ mod tests {
         e.add_note(2, 0.0, 4.0, 60, 0.8);
         e.set_track_kind(3, kind::BUS);
         e.track_mut(3).unwrap().gain = 0.5;
+    }
+
+    /// Uma pré-escuta tocando (o transporte parado).
+    fn previewing(e: &mut Engine) {
+        base(e);
+        e.preview_play(1, 0.0, 1.0);
+        run(e, 2);
     }
 
     fn playing(e: &mut Engine) {
@@ -1089,6 +1108,10 @@ mod tests {
         use Effect::{Changes, Query, Same};
         vec![
             case(playing, "sample_drop", &[1.0], |e| e.drop_sample(1), Changes),
+            case(base, "preview_play", &[1.0, 0.1, 1.0], |e| e.preview_play(1, 0.1, 1.0), Changes),
+            // áudio que não está carregado: nada toca
+            case(base, "preview_play", &[9.0, 0.0, 1.0], |_| {}, Same),
+            case(previewing, "preview_stop", &[], |e| e.preview_stop(), Changes),
             case(playing, "tempo", &[140.0, 3.0], |e| e.set_tempo(140.0, 3), Changes),
             // inteiro fora do u32 dá a volta como no JavaScript: −1 é u32::MAX, que o motor limita
             case(playing, "tempo", &[90.0, -1.0], |e| e.set_tempo(90.0, u32::MAX), Changes),
