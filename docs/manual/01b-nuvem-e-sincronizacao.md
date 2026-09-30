@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | Sem sessão | Nada (o botão some) | | Sem usuário autenticado: não há sincronização | Entre na conta |
 | Sincronizado | Nuvem com visto, cinza | `Sincronizado` | A nuvem tem exatamente o que está aqui, com os áudios | Nada |
-| Sincronizando | Nuvem com setas, ciano | `Sincronizando` ou `Sincronizando (3/12 arquivos)` | Há mudança a enviar (espera de 3 s inclusa), ou está baixando/enviando áudios | Espere; a contagem `x/y` só aparece quando há arquivos a mover |
+| Sincronizando | Nuvem com setas, ciano | `Sincronizando` ou `Sincronizando (3/12 arquivos)` (no singular, `Sincronizando (0/1 arquivo)`; desde a fase 22 o total usa o plural do app, com ponto no milhar: `1.025 arquivos`) | Há mudança a enviar (espera de 3 s inclusa), ou está baixando/enviando áudios | Espere; a contagem `x/y` só aparece quando há arquivos a mover |
 | Offline | Nuvem riscada, âmbar | `Offline (tentando de novo em 8 s)` | Sem rede, servidor fora do ar, ou resposta lenta demais. O app tenta de novo sozinho | Pode continuar trabalhando: tudo fica guardado |
 | Conflito | Ícone de sincronização com alerta, vermelho | `Conflito: o projeto mudou em outro aparelho. Toque para resolver` | Os dois lados mudaram. Nada será enviado até você escolher | Toque no ícone e escolha |
 | Erro | Círculo com ponto de exclamação, vermelho | O motivo, ou `Não deu para sincronizar` | Falha que repetir não resolve (áudio recusado, documento grande demais, documento do servidor ilegível) | Veja a tabela de mensagens abaixo |
