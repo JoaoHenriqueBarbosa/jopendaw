@@ -40,7 +40,7 @@ Duas regras de desenho atravessam tudo:
 | `app/lib/api/client.dart` | `ApiClient` (singleton) implementa `SyncApi`; toda chamada leva `Authorization: Bearer` |
 | `app/lib/api/sync_api.dart` | a interface `SyncApi` (documento, samples, jobs), `ServerDoc`, `DocConflict`, `SyncJob`; existe para os testes trocarem o servidor (`app/test/fake_sync_api.dart`) |
 | `app/lib/models/` | `Project` (espelha `server/src/routes/projects.rs`), `User`, `Tokens`, `Me` |
-| `app/lib/screens/` | `login_screen` (magic link, Google, Discord, código de acesso), `link_screen` (`/entrar?token=`), `projects_screen` (lista, criar com modelo, renomear, apagar; apagar também limpa o aparelho com `purgeLocalProject`), `account_screen`, `project_screen` (`DawStudio`; `projectSubtitle` lê o andamento e o compasso do documento vivo) |
+| `app/lib/screens/` | `login_screen` (magic link, Google, Discord, código de acesso), `link_screen` (`/entrar?token=`), `projects_screen` (lista, criar com modelo, renomear, apagar; apagar também limpa o aparelho com `purgeLocalProject`), `account_screen`, `project_screen` (`DawStudio`; `projectSubtitle` lê o andamento e o compasso do documento vivo; o cabeçalho recebe `SyncIndicator(c: daw)` em `actions` quando o estúdio está pronto) |
 
 Rotas (`app/lib/main.dart:27`):
 
@@ -89,6 +89,7 @@ Chaves do `LocalStore` usadas pelo app:
 | `sync:<projectId>` | `{"version": int, "dirty": bool}` | `SyncService._persist` |
 | `template:<projectId>` | nome do modelo escolhido ao criar o projeto (apagada na 1ª abertura) | `projects_screen`, `_fromTemplate` |
 | `rec:input` | id da entrada de áudio escolhida | `_chooseInput` |
+| `userpresets` | JSON com **todos** os presets do usuário (instrumentos e efeitos), ver [Presets do usuário](#presets-do-usuário-user_presetsdart-user_presets_uidart) | `UserPresets._changed` |
 | `warp:<chave>` | WAV 32f do som derivado do warp (cache) | `WarpCache._run` |
 
 ## O documento (`daw/model.dart`)
@@ -123,7 +124,7 @@ Regras gerais de leitura e escrita:
 | Campo | Tipo | Obrigatório? | Padrão (construtor / leitura) | Significado |
 |---|---|---|---|---|
 | `version` | int | escrito, não lido | `1` | versão do esquema |
-| `bpm` | número | sim | (do projeto, só num documento novo) | andamento. **É a fonte de verdade** (desde a fase 9); `projects.bpm` no servidor é um espelho inteiro (20..400) enviado em segundo plano por `_mirrorTempo`. `open()` só parte do projeto quando não há documento local; `_applyRemote` traz o do documento remoto |
+| `bpm` | número | sim | (do projeto, só num documento novo) | andamento. **É a fonte de verdade** (desde a fase 9); `projects.bpm` no servidor é um espelho inteiro (20..999) enviado em segundo plano por `_mirrorTempo`. `open()` só parte do projeto quando não há documento local; `_applyRemote` traz o do documento remoto |
 | `beats_per_bar` | int | sim | (do projeto, só num documento novo) | tempos por compasso. Mesma regra do `bpm` (espelho em `projects.beats_per_bar`). A figura do compasso (`beat_unit`) e a taxa de amostragem não estão no documento |
 | `tempo_map` | lista de ponto de andamento | não | **(omitido sem mudanças)** | mapa de andamento: `[{"beat", "bpm", "ramp"}]`, ordenado, o primeiro na batida 0 (espelha `bpm`). Ver "Mapa de andamento e de compassos no documento" |
 | `meter_map` | lista de mudança de compasso | não | **(omitido sem mudanças)** | mapa de compassos: `[{"bar", "num", "den"}]`, o primeiro no compasso 1. Idem |
@@ -309,7 +310,7 @@ Vivem só no controlador: seleção (`selectedClip`, `selectedTrack`, `selectedM
 
 - `tempo_map[i]`: `beat` (número, batidas do projeto desde 0), `bpm` (número, 20 a 999), `ramp` (escrito como `0` ou `1`; a leitura aceita também `true`/`false`). Rampa: do ponto ao seguinte o BPM anda em reta em função da batida; senão salta no seguinte. O primeiro ponto, na batida 0, espelha `bpm` (o andamento inicial): `DawDoc.tempo` usa o `bpm` da raiz para o ponto 0, e `setTempoMap`/`setTempo` mantêm os dois iguais.
 - `meter_map[i]`: `bar` (inteiro ≥ 1), `num` (1 a 64), `den` (`1`, `2`, `4`, `8`, `16`, `32`; outro valor vira `4`). A batida do documento é a semínima: um compasso dura `num × 4 ÷ den` batidas. `beats_per_bar` continua sendo o campo que a barra e o servidor conhecem: espelha o primeiro compasso (`num` quando `den` é 4; `round(num × 4 ÷ den)`, limitado a 1–32, quando é outra fórmula, então 6/8 é 3 e 7/8 é 4 no campo, embora o mapa guarde 3,5 batidas).
-- **Normalização** (`normalizeTempoPoints`, `normalizeMeterChanges`, chamadas no construtor e em `fromJson`): descarta não finitos, batida negativa vira 0, bpm preso a 20–999, na mesma batida (ou no mesmo compasso) o último vale, ordena, garante o ponto da batida 0 (ou o compasso 1) e limita a `maxTempoPoints = 512` pontos e `maxMeterChanges = 256` mudanças (os de batida ou compasso menores ficam). Um mapa que sobra com **um ponto só** vira `[]` ("sem mapa"); para o compasso, um só `n/4`. Um único compasso `6/8` ou `7/8` **não** é "sem mapa" (`MeterMap.isSingle` exige `den == 4`) e é gravado.
+- **Normalização** (`normalizeTempoPoints`, `normalizeMeterChanges`, chamadas no construtor e em `fromJson`): descarta não finitos, batida negativa vira 0, bpm preso a 20–999, na mesma batida (ou no mesmo compasso) o último vale, ordena, garante o ponto da batida 0 (ou o compasso 1) e limita a `maxTempoPoints = 4096` pontos e `maxMeterChanges = 1024` mudanças (os de batida ou compasso menores ficam; os mesmos valores de `MAX_TEMPO_POINTS`/`MAX_METER_POINTS` do motor, com `minBpm`/`maxBpm` 20 e 999 e `minBpmInt`/`maxBpmInt` para o espelho do servidor, tudo em `tempo_map.dart`; desde `dd4ef07`, antes eram 512 e 256). Passar do limite avisa em `error` (`tempoPointsFullMessage` = `O mapa de andamento chegou ao limite de 4096 pontos.`, `meterChangesFullMessage` = `O mapa de compassos chegou ao limite de 1024 mudanças.`). Um mapa que sobra com **um ponto só** vira `[]` ("sem mapa"); para o compasso, um só `n/4`. Um único compasso `6/8` ou `7/8` **não** é "sem mapa" (`MeterMap.isSingle` exige `den == 4`) e é gravado.
 - **Compatibilidade.** Documento antigo (sem os campos) abre com mapas `[]`: um andamento e um compasso só, e o som é o de antes (`documento antigo abre e salva igual, sem os campos novos` em `app/test/tempo_map_test.dart`). Campos estranhos dentro dos itens não derrubam a leitura. **App velho com documento novo:** o app antigo ignora `tempo_map` e `meter_map` na leitura e **os perde na próxima gravação** (regra geral de campos desconhecidos, ver acima); o projeto passa a tocar no andamento inicial e no compasso `beats_per_bar`/4. O espelho no servidor (`projects.bpm`, `projects.beats_per_bar`) guarda só o inicial; o servidor trata o documento como JSON opaco (nada em `server/src/routes/docs.rs` lê `bpm` ou os mapas).
 
 **Objetos de conta.** `DawDoc.tempo` (`TempoMap`) e `DawDoc.meter` (`MeterMap`) são getters com cache: refazem-se quando a **lista** troca de identidade (`identical`), muda de tamanho ou muda o `bpm`/`beatsPerBar`. Por isso o código troca a lista inteira (`d.tempoMap = [...]`) em vez de mexer num item. `TempoMap` guarda os segundos acumulados por ponto e oferece `secondsAt(batida)`, `beatAt(segundos)`, `bpmAt(batida)`, `indexAt`, `pointAt`; `MeterMap`, `barStart`, `barOf`, `barBeats`, `barBeatsAt`, `changeAt`, `nearestBarStart`. Conversões do documento: `DawDoc.secondsAt`, `beatAtSeconds`, `bpmAt`, `clipEnd`, `clipBeats`, `sourceTempoAt(clip, beat)` (segundos do áudio por batida, para arrastar e desenhar), `sourceSeconds(clip, de, até)` (segundos da origem entre duas batidas, para cortar e aparar), `contentEnd` e `durationSeconds` (pelo mapa). `formatPosition(beat, beatsPerBar, {meter})` conta compassos pelo mapa quando ele existe.
@@ -324,20 +325,20 @@ Vivem só no controlador: seleção (`selectedClip`, `selectedTrack`, `selectedM
 | `moveTempoPoint(i, {beat, bpm, undoable})` | muda BPM e/ou batida; o ponto 0 não sai da batida 0; não passa dos vizinhos (folga de `1e-3`); `undoable: false` é o passo de arraste (quem chama faz `checkpoint()` antes, uma vez) |
 | `removeTempoPoint(i)`, `setTempoPointRamp(i, ramp)` | apaga (menos o 0) / troca salto e rampa |
 | `setMeterAt(bar, num, den)`, `removeMeterChange(bar)` | põe e desfaz mudanças de compasso (mudar para o que já vale ali não faz nada; a do compasso 1 não se remove) |
-| `setTempo(bpm, beatsPerBar)` | mantém o ponto 0 do mapa igual ao `bpm` novo e, se o primeiro compasso do mapa é `n/4`, o iguala a `beatsPerBar`/4 |
+| `setTempo(bpm, beatsPerBar)` | `bpm` é `num` (com decimais, limitado a `minBpm`..`maxBpm`); mantém o ponto 0 do mapa igual ao `bpm` novo e iguala o primeiro compasso do mapa a `beatsPerBar`/4 quando ele já era `n/4` **ou quando `beatsPerBar` mudou** (antes de `dd4ef07` um `6/8` inicial ficava como estava). Pegadinha: `changed` compara com `doc.beatsPerBar`, que num `6/8` vale 3 e num `7/8` vale 4, então pedir `3/4` num `6/8` (ou `4/4` num `7/8`) não muda nada `(lido do código)`. Na `_TempoDialog` o valor `0` em `beatsPerBar` significa "deixar o compasso inicial como está" e o botão passa `c.doc.beatsPerBar` |
 | `tempoLaneVisible`, `toggleTempoLane()` | a faixa `Andamento` à mostra: `_tempoLane ?? !doc.tempo.isSingle` (automática com mapa, manual depois do primeiro clique; **não** vai no documento) |
 | `snapBeat(b)` | com `Snap.bar` e mapa de compassos, encaixa em `meter.nearestBarStart(b)` |
 | `secondsAt`, `bpmAt` | atalhos para o relógio em segundos e o BPM vigente |
 
 **Do documento ao motor.** `_tempoMapCalls(cache)` (chamado por `_docCalls`) compara a assinatura (`jsonEncode` dos pontos) com `_SyncCache.tempoSig`/`meterSig` e só então emite `tempo_clear` + um `tempo_point` por ponto e `meter_clear` + um `meter_point` por mudança; volta ao mapa simples manda o `tempo_clear` seco. Vão logo depois do `tempo`. Ver a tabela em "Como cada mudança vira chamadas ao motor" e [02-pontes-web-e-android.md](02-pontes-web-e-android.md#chamadas-do-mapa-de-andamento-e-de-compassos-tempo_clear-tempo_point-meter_clear-meter_point).
 
-**Consumidores no app** (tudo que antes multiplicava `beat * 60 / bpm` passa pelo mapa): relógio da barra (`_Position`, `secondsAt`), régua e grade (`_RulerPainter`, `_GridPainter` por `MeterMap`; régua em mm:ss por `secondsAt` e `beatAt`), etiqueta do mouse na régua, clipes (largura por `clipBeats`, arrastar e aparar por `sourceTempoAt`, cortar e sobrepor por `sourceSeconds`), estimativa de posição durante o play (`_estimatedBeat`), contagem e passadas da gravação (`_Recording.tempo`, `framesBetween`, `recordingPasses(tempo:)`, `_countFrames`, compasso da contagem por `meter.barBeatsAt`), exportação e congelar (`secondsAt`), render (`renderTempoMap`, `renderFrames`, `prepareRenderCalls` no Dart e o `tempoMapOf` do `render-worker.js`), `DurationLabel`, dialogo de exportação (`_bars`, `_spanSeconds`), e o botão de andamento (`_TempoButton`: `bpmAt` no cursor, `↗` quando o trecho é rampa). O áudio → MIDI usa o BPM vigente na batida do clipe (`notesForClip(r, audio, doc.bpmAt(audio.start))`).
+**Consumidores no app** (tudo que antes multiplicava `beat * 60 / bpm` passa pelo mapa): relógio da barra (`_Position`, `secondsAt`), régua e grade (`_RulerPainter`, `_GridPainter` por `MeterMap`; régua em mm:ss por `secondsAt` e `beatAt`), etiqueta do mouse na régua, clipes (largura por `clipBeats`, arrastar e aparar por `sourceTempoAt`, cortar e sobrepor por `sourceSeconds`), estimativa de posição durante o play (`_estimatedBeat`), contagem e passadas da gravação (`_Recording.tempo`, `framesBetween`, `recordingPasses(tempo:)`, `_countFrames`, compasso da contagem por `meter.barBeatsAt`), exportação e congelar (`secondsAt`), render (`renderTempoMap`, `renderFrames`, `prepareRenderCalls` no Dart e o `tempoMapOf` do `render-worker.js`), `DurationLabel`, dialogo de exportação (`_bars`, `_spanSeconds`), e o botão de andamento (`_TempoButton`: `bpmAt` no cursor, `↗` quando o trecho é uma rampa que sobe e `↘` quando desce, sem seta se os dois BPM são iguais). O áudio → MIDI usa o BPM vigente na batida do clipe (`notesForClip(r, audio, doc.bpmAt(audio.start))`).
 
 **Warp.** Decisão: `WarpSpec.of(c, doc.bpm)` (o inicial) em toda parte (`setClipWarp`, `_clipSound`, congelar). O clipe esticado toca a velocidade constante; se atravessa uma mudança de andamento, sai da grade. O `warp_dialog.dart` avisa: `O projeto tem mudanças de andamento: o warp estica o áudio para o andamento INICIAL (X BPM) e ele toca em velocidade constante, sem acompanhar as mudanças.` Mudar só outros pontos do mapa não refaz o warp.
 
 **Importador de MIDI.** Desde `020003f` (fase 11) o `.mid` leva e traz o mapa: `applyImportedTempo` (`controller.dart:2569`) escreve `d.bpm`/`d.tempoMap` e `d.beatsPerBar`/`d.meterMap` **direto no documento** (dentro do `edit` da importação, um só passo do desfazer), com as listas de `importedTempo`/`importedMeter`; não chama `setTempoMap`/`setMeterMap` (que existiam como ganchos, teste `ganchos do importador de MIDI: setTempoMap e setMeterMap`, e continuam servindo à faixa `Andamento`). O espelho para o servidor e o motor sai por `_mirrorTempo()` e pela sincronização normal (`_tempoMapCalls`). Formatos e limites em "Arquivo MIDI padrão". `(lido do código; testado só por testes automáticos)`
 
-**Não segue o mapa de compassos** (usa `doc.beatsPerBar`, o compasso inicial): o piano roll (linhas de compasso, `Shift`+← →, tamanho de clipe crescido pelas ferramentas), `createMidiClip` sem `length`, o arredondamento em compassos de notas gravadas (`_placeRecordedNotes`), `fitRange`, o tamanho mínimo do minimapa, o passo `Compasso` que limita a duração mínima ao aparar (`_gridBeats`) e a conta de compassos do tooltip de `DurationLabel`.
+**Compassos pelo mapa (desde `dd4ef07`; antes tudo isto usava `doc.beatsPerBar`, o compasso inicial).** O piano roll (`_barsIn` em `piano_roll_paint.dart` desenha compassos e números da grade e da régua a partir de `MeterMap`; sem mapa, `n/4` contado do começo do clipe como a grade de encaixe; `_barLen` e `_ceilBar` em `piano_roll_input.dart` servem a `Shift`+← →, colar, duplicar, o espaço depois do fim e as ferramentas que crescem o clipe; `_formatSpan(..., meter:, from:)`), `createMidiClip` sem `length` (`meter.barBeatsAt(start)`), o arredondamento em compassos de notas gravadas (`_placeRecordedNotes` com `floorBarStart`/`ceilBarStart`), `fitRange`, o tamanho mínimo do minimapa (`meter.barStart(5)`), o passo `Compasso` (`snapBeat` e `_gridBeats(c, at)` com `barBeatsAt`) e a conta de compassos do tooltip de `DurationLabel` (`meter.barOf(contentEnd)`). `MeterMap` ganhou `floorBarStart`, `ceilBarStart` e `spanBars`. Continua com `beatsPerBar` fixo o `Z/4` da pergunta de andamento do `.mid` (`askUseFileTempo`, `midi_file_ui.dart`: um projeto em `6/8` aparece como `3/4`).
 
 ### Duas armadilhas de compatibilidade do esquema
 
@@ -395,7 +396,7 @@ edit(fn, undoable: true)
 ```
 
 - **O histórico guarda documentos inteiros como texto JSON**, não comandos. `undo`/`redo` (`_travel`) reconstroem o `DawDoc` do JSON e depois **restauram do estado atual** o que é preferência do aparelho e não deve ser desfeito: `metronome`, `count_in`, `rec_latency_ms`, `armed`, `monitor` de cada faixa; `loop_on` também fica, a não ser que o passo desfeito tenha mudado a região do loop.
-- **Arraste**: `checkpoint()` no início e `mutate` a cada passo (um passo só no histórico). `edit(..., undoable: false)` para preferências (metrônomo, contagem, latência, armar).
+- **Arraste**: `checkpoint()` no início e `mutate` a cada passo (um passo só no histórico). Com a gravação de automação ligada (`AutoRecorder`), o `checkpoint` do gesto anunciado por `touch` é engolido e a passada inteira entra como um passo só ao parar (seção [Gravação de automação](#gravação-de-automação-automation_recorddart-automation_modedart)). `edit(..., undoable: false)` para preferências (metrônomo, contagem, latência, armar).
 - **Caminhos rápidos** (`setParam` `:2185`, `setEffectParam` `:2487`): mudam o valor, mandam **uma** chamada (`param` ou `fx_param`) e atualizam o cache `_sent`, sem `_sync()` do documento inteiro. Se o motor ainda não tem aquele efeito naquele slot, caem no `_sync()` completo (um `fx_param` solto atingiria outro efeito).
 - `setTempo` (`controller.dart:1565`) edita o documento (entra no desfazer) e chama `_mirrorTempo()`, o `PATCH /api/projects/{id}` de `{bpm, beats_per_bar}` **best-effort**: não lança offline e o valor pendente sai de novo em `_save` (desfazer e refazer incluídos), no fim de `open()` e de `_applyRemote` e quando `sync.phase` vira `synced` (`_onSyncPhase`). Detalhes em [12 Sincronização](12-sincronizacao.md#andamento-e-compasso-documento-é-a-fonte-o-servidor-espelha).
 
@@ -469,27 +470,107 @@ Renderiza a faixa fora de tempo real (instrumento, clipes, inserts e a automaç�
 
 A escala vem de `DawController._warpOf`: `gainToFader`/`faderToGain` (curva cúbica do fader) para volume (`code 0`) e envio (`code 4`); `ParamSpec.toNorm`/`fromNorm` para parâmetros logarítmicos (Hz, segundos); reta para pan e parâmetros lineares. O motor só interpola reto no valor, por isso o Dart discretiza. Teste: `app/test/automation_math_test.dart`.
 
+## Gravação de automação (`automation_record.dart`, `automation_mode.dart`)
+
+> Como o app grava, como pontos de automação, o que a mão faz nos controles com o transporte tocando (modos `Ler`, `Escrever`, `Toque` e `Trava`); para quem mexe no app (controlador, painéis, linha do tempo). O que o usuário vê está em [Automação, Gravar automação](../manual/07-automacao.md#gravar-automação).
+
+### Visão geral
+
+```
+controle (fader, pan, envio, knob, mini fader)
+   │  touch(track, alvo)   ao agarrar        ┐
+   │  value(track, alvo, v) a cada mudança   ├─ AutoRecorder (c.autoRec)
+   │  release(track, alvo) ao soltar         ┘
+   ▼
+_Live por alvo ── _Seg (amostras: batida, valor) ◄── _onBeat (c.beat, uma por atualização)
+   │  Toque: solta → _finish       Escrever/Trava: transporte para → _endSession; loop deu a volta → _apply(wrapped)
+   ▼
+simplifyAutoSamples (RDP na escala do controle)  →  applyAutoTake (encaixe sobre a raia)  →  c.autoApply (mutate, sem checkpoint)
+                                                                                          └─ _endSession: c.autoCommitUndo(snapshot)  = 1 passo
+```
+
+### Peças e responsabilidades
+
+| Arquivo | Papel |
+|---|---|
+| `daw/automation_record.dart` | `simplifyAutoSamples` (afinamento), `applyAutoTake` (encaixe na raia, funções puras) e `AutoRecorder` (estado da gravação; `ChangeNotifier`) |
+| `daw/automation_mode.dart` | `AutoMode` (`read`, `write`, `touch`, `latch`: rótulo, inicial e frase de cada um), `AutoModeMenu` (botão da barra), `AutoLaneModeButton` (seletor `L`/`E`/`T`/`V` do cabeçalho da raia) e `automationRecordColor` (`#F2433A`) |
+| `daw/controller.dart` | `autoRec` (criado no construtor e descartado no `dispose`), `autoInfo`, `autoLaneOf`, `autoSnapshot`, `autoTakeCheckpoint`, `autoCommitUndo`, `autoSyncNow`, `autoApply`; `checkpoint` (consome o "engole"); `_automationCalls` e `liveTargetValue` (a raia gravada sai do motor e do controle); `_onPointer` chama `autoRec.releaseAll()` quando o último ponteiro levanta; `setParam`, `setEffectParam` e `setSend` chamam `autoRec.value` antes de gravar o valor |
+| `daw/mixer_panel.dart` | mixin `_DragValue`: `autoKey` (alvo do controle) e as chamadas de `touch` (na primeira mudança do gesto, antes do `checkpoint`) e `release` (em `end()`, também ao fim da roda: 500 ms parada); `_Fader` e `_PanKnob` chamam `value` em `_set`; `_SendRow` só tem `autoKey` se o envio existe |
+| `daw/instrument_panel.dart`, `daw/fx_editors.dart` | `onChangeStart` chama `touch` antes de `checkpoint`; `onChangeEnd` chama `release` |
+| `daw/timeline.dart` | mini fader do cabeçalho da **faixa** (`_miniStart`, `_miniGain`, `onEnd`; um único `_MiniFader` para tocando e parado, para a árvore não mudar no meio do gesto). O do **master** não foi ligado (ver Armadilhas) |
+| `daw/automation_lane.dart` | monta o `AutoLaneModeButton` no cabeçalho da raia, antes do olho riscado |
+| `test/automation_record_test.dart` | 640 linhas: afinamento, encaixe puro e gravação sobre o controlador com motor de mentira |
+
+### Fluxo de dados / ciclo de vida
+
+1. **Modo.** `AutoRecorder.mode` (barra) e `laneModes` (mapa `id da raia → AutoMode`, só na sessão, não vai para o JSON do documento). `modeFor(track, alvo)` devolve o da raia do alvo, se tem, senão o da barra. `setMode` e `setLaneMode` com o transporte tocando chamam `_endSession()`.
+2. **Agarrar.** `touch` (só se o modo grava e `_canRecord`: transporte tocando e sem gravação de áudio/contagem, senão `notice`) cria o `_Live` do alvo (`_entryFor`: consulta `autoInfo` e `automatable`; alvo sem automação entra em `_rejected` e dá o aviso `Este controle não tem automação.`), tira o `_snapshot` do documento (`autoSnapshot`) e liga `_swallow` por um microtask: o `checkpoint()` que o gesto chama a seguir é **engolido** (`consumeSwallow`), porque o passo de desfazer é o da passada inteira.
+3. **Mexer.** `value` chama-se antes de o valor entrar no documento. Sem `touch` prévio (roda, duplo clique, setters chamados de outros lugares) o alvo abre na hora e o ponto de desfazer que o gesto acabou de guardar é **tirado** do histórico (`autoTakeCheckpoint`, só se foi guardado no mesmo turno: `_ckptTurn`) para servir de `_snapshot`. O valor é preso a `[min, max]`, vira `e.last` e uma amostra em `c.beat.value`; na primeira amostra `autoSyncNow()` reenvia a automação ao motor **sem** a raia deste alvo.
+4. **Amostrar.** `_onBeat` (ouvinte de `c.beat`) acrescenta `(beat, e.last)` a cada alvo aberto, mesmo com a mão parada. Se o cursor voltou (`b < prev - 1e-6`: loop ou salto), a volta que acabou é aplicada (`_apply(wrapped: true)`) e outra começa na batida nova.
+5. **Fechar.** `release` no `Toque` chama `_finish` (aplica e tira o alvo de `_live`). No `Escrever` e na `Trava` o alvo segue até o transporte parar: `_onPlaying(false)` → `_endSession` aplica tudo e, se houve mudança (`_dirty`), `autoCommitUndo(snapshot)` empilha o passo. `_startWrites` (no play) abre, para toda raia com modo próprio `Escrever` que já existe, um trecho com o valor fixo desde o cursor.
+6. **Aplicar.** `_apply` afina as amostras (`simplifyAutoSamples`) e chama `c.autoApply(track, alvo, (existing) => applyAutoTake(...))`, que cria a raia se falta (`AutoLane(open: true)`) e troca os pontos com `mutate` (sem `checkpoint`). Uma volta de loop que continua na seguinte usa `AutoMode.latch` mesmo se o modo era `touch`.
+
+### Contratos
+
+- `typedef AutoInfo = ({double min, double max, double fixed, AutoWarp? warp, bool stepped})` vem de `DawController.autoInfo`: `stepped` é verdadeiro para `Curve.choice` e `Curve.integer`.
+- `autoSimplifyTolerance = 0.008` (fração da faixa, medida em `autoNorm`: a escala do `warp` do alvo, senão linear) e `autoTouchRamp = 0.25` (batidas).
+- `simplifyAutoSamples(samples, {norm, tolerance, stepped})`: descarta não finitos e fora de ordem, na mesma batida fica a última; até 2 amostras, devolve como estão; `stepped` guarda só as trocas (dois pontos na mesma batida); senão Ramer-Douglas-Peucker iterativo (pilha, sem recursão).
+- `applyAutoTake({existing, take, mode, fallback, warp, stepped, ramp, norm})`: região = do primeiro ao último ponto do `take`; antes, um ponto com o valor que a curva antiga tinha (ou `fallback`) se difere do primeiro do `take`; depois, no `touch` um ponto em `e + ramp` (em degrau se `stepped`) com o valor da curva antiga, no `write`/`latch` só se há pontos depois. Um trecho curvo cortado é reamostrado (de 2 a 32 retas, 8 por batida). A entrada `existing` não é alterada.
+- Saída do motor: `_automationCalls` pula raias com `autoRec.isRecording(track, alvo)`; `liveTargetValue` devolve o valor fixo nesse caso.
+- Avisos (`notice`, 5 s): `Este controle não tem automação.` e `A automação não grava junto com a gravação de áudio ou MIDI.`
+
+### Decisões e por quê
+
+- **A raia gravada sai do motor durante o trecho.** Sem isso o motor aplicaria a curva antiga por cima do valor que a mão põe; com o valor fixo indo pelos caminhos rápidos, o que se ouve é o gesto.
+- **Os pontos entram na raia só no fim do trecho.** Uma raia que muda a cada quadro obrigaria a reenviar a automação ao motor e a redesenhar a linha do tempo no meio do gesto; o preço é que a raia não cresce na tela enquanto se grava.
+- **Afinar na escala do controle.** Uma reta na raia é reta na escala do fader ou logarítmica em Hz; afinar em valor bruto guardaria pontos demais onde a curva é forte e perderia detalhe onde ela é fraca.
+- **A passada é um passo só no desfazer.** `touch` engole o `checkpoint` do gesto e `autoCommitUndo` guarda o documento de antes da passada quando o transporte para; o `Ctrl+Z` volta todos os controles e raias criadas de uma vez.
+- **Modo só na sessão.** O modo depende do momento de trabalho, não da música; salvá-lo faria um projeto abrir gravando por cima da curva no primeiro play.
+- **Seletor por raia sobrepõe a barra.** Deixa uma raia gravando sem que os outros controles do mixer o façam.
+
+### Como testar
+
+```bash
+cd app && flutter test test/automation_record_test.dart
+```
+
+Grupos: `afinamento` (senoide de 4 s vira no máximo 90 pontos com erro abaixo de 1%; escala do controle; entradas inválidas; parâmetro em degraus; milhares de amostras), `encaixe na automação (função pura)` (região substituída e vizinhança, trecho curvo, escala do fader, Toque sem automação, `Escrever`/`Trava` sem pontos depois, degraus) e `gravação sobre o controlador` (Ler não grava; parado não grava; Toque, Trava e Escrever pela barra e pela raia; loop; parâmetro logarítmico e inteiro; volume nos extremos; envio; sidechain; gravação de áudio; troca de modo tocando; controle mostra o valor fixo e o motor não recebe a raia gravada; raia criada na hora; passada com vários alvos como um passo). Mais um teste de widget do botão da barra e do seletor da raia. Tudo com motor de mentira; o uso real no Chrome (Toque no fader de uma faixa, com recarregar a página depois) foi feito à mão pela sessão que implementou.
+
+### Armadilhas conhecidas
+
+- **O mini fader do cabeçalho do `Master` (`timeline.dart`, `_MasterHeader`) não foi ligado à gravação:** ele ainda chama `c.checkpoint` e `c.mutate(... masterGain ...)` direto, sem `autoRec.touch/value/release`, e não troca o valor pela curva enquanto grava. O fader do canal `Master` no mixer grava. `(lido do código)`
+- **`releaseAll` corre em todo evento de ponteiro sem botão apertado.** `_onPointer` chama `autoRec.releaseAll()` quando `_pointersDown == 0` e o evento não é `PointerDownEvent`; com mouse isso inclui o movimento sobre a tela. Numa roda do mouse no `Toque`, mexer o mouse fecha o trecho antes dos 500 ms. `(lido do código; não testado)`
+- **O valor fixo do documento acompanha a mão.** `_set`/`setParam` gravam o valor também no documento; depois de um `Toque` a raia volta ao valor antigo, mas o valor fixo (o que se vê parado) fica onde a mão largou. O desfazer o restaura.
+- **`_startWrites` não olha a visibilidade da raia.** Uma raia oculta com modo próprio `Escrever` grava desde o play. O modo de uma raia apagada fica em `laneModes` até o fim da sessão (sem efeito).
+- **`Escrever` pelo seletor grava o valor fixo desde o play e apaga a curva antiga do trecho** que o cursor percorrer, se o controle não for movido.
+- **`setMode`/`setLaneMode` não fazem `_endSession` parado** (só tocando); os `_Live` só existem tocando.
+- **A frase do menu do botão é a mesma do tooltip** (`AutoMode.hint`): mudar o texto de um muda o outro, e os testes de widget procuram o rótulo `Ler`, `Escrever`, `Toque` e `Trava`.
+
 ## Onde está cada tela em `daw/`
 
 | Arquivo | Papel |
 |---|---|
 | `timeline.dart` | régua, cabeçalhos das faixas, raias com clipes, sub-raias de automação, linha do master, cursor |
-| `transport_bar.dart` | barra do transporte e das ferramentas (tocar, gravar, andamento, loop, metrônomo, painéis, teclado, MIDI); o botão de andamento (`_TempoButton`: BPM vigente no cursor, ícone `show_chart` e `↗` com mapa; o texto do BPM vem de `formatBpm` de `warp_dialog.dart`, o mesmo do `projectSubtitle`: inteiro sem casas, senão uma casa com vírgula) e a janela `Andamento e compasso` (`_TempoDialog`, com o atalho para a mudança de compasso) |
+| `transport_bar.dart` | barra do transporte e das ferramentas (tocar, gravar, andamento, loop, metrônomo, edição, grade, o botão `Automação` (`AutoModeMenu`), zoom, painéis, teclado, MIDI, importar, exportar, configurações; divisores de 4 px de cada lado para caber em 1512 px; sem o indicador de nuvem); o botão de andamento (`_TempoButton`: BPM vigente no cursor, ícone `show_chart` e `↗` (rampa que sobe) ou `↘` (rampa que desce) com mapa; o texto do BPM vem de `formatBpm` de `warp_dialog.dart`, o mesmo do `projectSubtitle`: inteiro sem casas, senão uma casa com vírgula) e a janela `Andamento e compasso` (`_TempoDialog`, com o atalho para a mudança de compasso) |
 | `tempo_map.dart` | `TempoPoint`, `MeterChange`, `TempoMap`, `MeterMap`, a normalização dos dois e `tempoMapCalls`; Dart puro, sem `dart:ui`. Espelho de `engine/src/tempo.rs` |
 | `tempo_lane.dart` | a faixa `Andamento` sob a régua (`TempoLane`, `_TempoPainter`, gestos e menus) e o diálogo `Mudar compasso a partir do compasso N` (`showMeterChangeDialog`) |
 | `dock.dart` | painel de baixo em abas (mixer, editor de notas, instrumento, efeitos) |
 | `mixer_panel.dart`, `meter.dart` | canais do mixer, medidor de pico |
 | `piano_roll*.dart`, `midi_tools.dart`, `piano_roll_tools.dart` | editor de notas (partes de `piano_roll.dart`) e a lógica pura das ferramentas de produtor |
 | `instrument_panel.dart`, `knob.dart`, `presets.dart`, `wavetable_shape.dart` | painel do instrumento, controle giratório, presets e ids nomeados, gráfico das tabelas |
+| `sampler_zones.dart`, `sampler_zones_controller.dart`, `sampler_zones_panel.dart`, `slice_dialog.dart` | zonas do sampler no app (o motor está em [01-motor.md](01-motor.md#zonas-do-sampler-e-fatiamento-enginesrcsampler_zonesrs)). `sampler_zones.dart` é Dart puro: `SamplerZone`, `maxZones` 128, `nextZoneRange`, `zoneAddBlocker` (a mensagem única `Não dá para criar outra zona: o limite é de 128 zonas ou o teclado já está todo ocupado por zonas de uma nota só. Apague alguma antes.`), `velocityLayers(n, {lo, hi})` (camadas dentro da faixa atual da zona, no máximo o número de valores dela), `parseNoteInput`, `slicePoints(áudio, {count, sensitivity, limit})` (`limit` padrão `maxSlices` = 96, paridade com o motor; o diálogo passa 100000 para saber quantos ataques há). `sampler_zones_controller.dart` (extensão de `DawController`): `zoneAddBlockerOf`, `addZone` (com o teclado todo coberto divide a zona mais larga e, se a `Nota base` dela ficaria acima da faixa que sobrou, traz-a para a ponta e diz no aviso), `splitZoneLayers`, `addZoneFromFile` (checa o bloqueio antes de abrir o seletor), `createSlices`. `sampler_zones_panel.dart`: cartão `ZONAS`, mapa, editor e o `_Stepper` dos campos digitáveis (texto e erro inline, `Esc` cancela). `slice_dialog.dart`: diálogo `Fatiar sample`, aviso `N fatias achadas; só as 96 primeiras viram nota.` com `Menos sensibilidade` (baixa 0,15 e refaz) e os cortes além do 96º apagados em `_SlicePainter`. O cartão `Envelope` e o visor do cartão `Áudio` com zonas ficam em `instrument_panel.dart` (`_samplerSections`, `_sampleDisplay`). Várias destas regras são de `d196fec` |
 | `effects_panel.dart`, `fx_editors.dart`, `fx_presets.dart` | rack de efeitos, editores (EQ, dinâmica, genérico) e presets |
 | `automation_lane.dart`, `automation_math.dart` | editor de pontos e a conta da curva |
+| `automation_record.dart`, `automation_mode.dart` | gravação de automação ao mexer nos controles e os seletores de modo (seção [Gravação de automação](#gravação-de-automação-automation_recorddart-automation_modedart)) |
 | `marker.dart`, `structure_menu.dart`, `minimap.dart` | marcadores, menus Seções e Visão, minimapa |
 | `export.dart`, `export_options.dart`, `wav.dart` | exportar (janela e opções) e codificação/leitura de WAV |
 | `settings_dialog.dart`, `shortcuts_dialog.dart` | configurações de gravação e janela de atalhos |
 | `warp.dart`, `warp_dialog.dart` | sons derivados do warp e o diálogo |
 | `audio_to_midi.dart`, `midi_convert_dialog.dart` | áudio → MIDI pelo servidor (job `audio_to_midi`) e o diálogo; `notesForClip` segue o warp (`AudioClip.tempoFor`), soma a transposição e espelha no reverso |
 | `clip_gain_dialog.dart` | diálogo `Ganho do clipe` (item `Ganho do clipe…` do menu do clipe de áudio em `timeline.dart`): slider −40 a +12 dB, `clipGainFromDb`/`clipGainToDb`, `setClipGain` |
-| `sync.dart`, `sync_ui.dart` | sincronização (com pull periódico que espera o transporte parar e o gesto acabar) e seu indicador |
+| `sync.dart`, `sync_ui.dart` | sincronização (com pull periódico que espera o transporte parar e o gesto acabar) e seu indicador (`SyncIndicator`, montado no cabeçalho do projeto por `project_screen.dart`, não na `TransportBar`: na barra ele saía da tela em janelas de 1500 px) |
+| `user_presets.dart`, `user_presets_ui.dart` | presets do usuário: modelo, guardado local, arquivo `.jopreset` e a seção `MEUS PRESETS` dos menus (ver [Presets do usuário](#presets-do-usuário-user_presetsdart-user_presets_uidart)) |
 | `local_purge.dart` | `purgeLocalProject`: limpeza local de um projeto apagado (confere todos os `doc:*` do guardado, via `LocalStore.keys`) |
 | `templates.dart` | modelos de projeto (`Vazio`, `Batida eletrônica`, `Gravação de banda`) |
 | `project_file.dart`, `project_file_ui.dart` | o arquivo `.jopendaw`: montar, ler e validar o zip, refazer ids, importar (lógica pura) e a janela `Exportar projeto` com o seletor de arquivo (seção [Arquivo de projeto `.jopendaw`](#arquivo-de-projeto-jopendaw)) |
@@ -504,8 +585,8 @@ As notas dos clipes de notas indo e voltando em arquivo MIDI padrão (SMF): impo
 | Arquivo | Papel |
 |---|---|
 | `daw/midi_file.dart` | tudo o que não é tela: `parseMidiFile` (leitura), `buildMidiFile` (escrita), `midiImportTracks` (arquivo lido → faixas e clipes), `midiFileName`, `appBpmFor`, o mapa da bateria GM (`drumPitchForGm`, `gmDrumName`) e as classes `MidiFileData`, `MidiFileTrack`, `MidiTempoPoint`, `MidiExport`, `MidiImportReport`, `MidiFormatException` (a mensagem já vem em português para a tela); desde a fase 11 também o mapa de andamento e de compassos: `simplifyTempo`, `importedTempo`, `importedMeter`, `midiTempoDiffers` (a decisão de perguntar), `importedMeterBeats` e, na escrita, `_tempoMeterEvents` |
-| `daw/midi_file_ui.dart` | `importFiles` (o seletor único de áudio e MIDI, ligado ao botão `Importar` e ao `Ctrl+I`), `importMidiFlow`, `askUseFileTempo` (a pergunta do andamento, com `_bpmText`), a janela de avisos e `ExportMidiDialog` (chaves `midi-export-clip`, `midi-export-all`, `midi-export-go`) |
-| `daw/controller.dart` | `DawController.importMidiBytes` (bloqueia gravando, chama o leitor, pergunta se `midiTempoDiffers`, cria as faixas num só `edit`, monta os avisos de andamento) e `applyImportedTempo` (grava o mapa de andamento e o de compassos do arquivo no documento) |
+| `daw/midi_file_ui.dart` | `importFiles` (o seletor único de áudio e MIDI, ligado ao botão `Importar` e ao `Ctrl+I`), `importMidiFlow`, `askImportKind` (a janela `Importar como`, chaves `midi-import-<kind>` e `midi-import-go`; `midiImportKinds` = sintetizador, FM, wavetable, sampler), `askUseFileTempo` (a pergunta do andamento, com `_bpmText`), `exportSummary` (o texto de "salvo"), a janela de avisos e `ExportMidiDialog` (chaves `midi-export-clip`, `midi-export-all`, `midi-export-go`; `save` devolve `Future<bool?>`: `false` = cancelou) |
+| `daw/controller.dart` | `DawController.importMidiBytes` (bloqueia gravando, chama o leitor, se há faixa melódica pergunta o tipo por `chooseKind` (ou usa `kind`, ou `midiImportKind`, a última escolha da sessão; `null` cancela tudo), pergunta se `midiTempoDiffers`, cria as faixas num só `edit` e dá ao clipe o nome da trilha, monta os avisos de andamento) e `applyImportedTempo` (grava o mapa de andamento e o de compassos do arquivo no documento) |
 | `daw/export.dart` | `ExportDialog.onMidi` (botão `Notas em MIDI (.mid)…`, chave `export-midi-link`) e `showExportDialog`, que abre `showExportMidiDialog` quando o botão foi tocado |
 | `daw/transport_bar.dart`, `screens/project_screen.dart` | o botão `Importar` (tooltip `Importar áudio ou MIDI (Ctrl+I)`) e o `Ctrl+I` chamam `importFiles`; o `Ctrl+I` cai em `importAudio` se o nó de foco não tem contexto |
 | `test/midi_file_test.dart` | 650 linhas: leitura à mão, arquivos ruins, ida e volta, desempenho e a importação no controlador |
@@ -518,6 +599,7 @@ Importar:  seletor (audioExtensions + mid, midi)
              └─ .mid   → importMidiFlow → importMidiBytes
                           parseMidiFile → MidiFileData (faixas, tempoMap, beatsPerBar, warnings)
                           ├─ falhou → error = 'Não deu para importar <nome>: <mensagem>' (nada muda)
+                          ├─ há faixa melódica → chooseKind (askImportKind: 'Importar como'; cancelar = nada muda)
                           ├─ midiTempoDiffers(data, doc) → confirmTempo (askUseFileTempo)
                           └─ edit(): applyImportedTempo (se aceito: bpm + tempoMap + beatsPerBar + meterMap)
                              + DawTrack por faixa + clipe, num checkpoint
@@ -525,8 +607,8 @@ Importar:  seletor (audioExtensions + mid, midi)
                              → janela de avisos se houve warnings
 
 Exportar:  ExportDialog → 'Notas em MIDI (.mid)…' → ExportMidiDialog
-             → buildMidiFile(doc, [only, onlyTrack], title) → MidiExport(bytes, tracks, notes, skipped)
-             → AudioEngine.saveFile(nome, bytes, 'application/octet-stream')
+             → buildMidiFile(doc, [only, onlyTrack], title) → MidiExport(bytes, tracks, notes, skipped, skippedControls, silenced)
+             → AudioEngine.saveFile(nome, bytes, 'application/octet-stream') → bool (false: cancelou; nada de "salvo")
 ```
 
 O tipo MIME é `application/octet-stream` de propósito (como no `.jopendaw`): com `audio/midi` alguns seletores do Android acrescentam outra extensão ao nome.
@@ -547,8 +629,9 @@ O tipo MIME é `application/octet-stream` de propósito (como no `.jopendaw`): c
 | `Bn` CC 1 | `ccMod`, `valor / 127` |
 | `Bn` CC 64 | `ccSustain`, 1.0 se ≥ 64, senão 0.0 |
 | `Bn` CC ≥ 120 | Descartado sem contar |
+| `Bn` CC 6, 38 e 98 a 101 (RPN/NRPN) | Descartado sem contar: é o alcance do bend que a exportação escreve (`dd4ef07`) |
 | `Bn` outros CC | Ignorado e contado (`Ignorei N eventos de controle…`) |
-| `Cn` e `Dn` | Ignorados sem aviso (um byte de dados) |
+| `Cn` e `Dn` | Ignorados sem aviso (um byte de dados); o `Program Change` do arquivo continua ignorado na importação |
 | `FF 51` (tamanho 3) | Ponto do mapa de andamento: batida e `60000000 / µs` BPM |
 | `FF 58` (≥ 2 bytes) | Fórmula de compasso: numerador e `dd` (denominador = 2^dd). Vira uma `MeterChange` de `MidiFileData.meterMap` (ver "Andamento e compasso do arquivo"); numerador ≤ 0 é ignorado |
 | `FF 03` | Nome da trilha (só o primeiro; UTF-8 tolerante, sem caracteres de controle) |
@@ -560,16 +643,16 @@ Running status vale. Dado sem status anterior, byte de dados ≥ 128 onde deveri
 **Andamento e compasso do arquivo (leitura).** Desde `020003f` o leitor devolve o mapa inteiro nas duas frentes, e a importação o leva para o documento.
 
 - *Andamento.* `MidiFileData.tempoMap` guarda a lista inteira e ordenada (batida = tick/PPQ, BPM real `60000000 / µs`; dois `FF 51` na mesma batida: o último vale); `firstBpm` é o primeiro ponto; `hasTempoChanges` é verdadeiro se algum BPM difere do primeiro por mais de 0,5 (só serve ao aviso de "mantive o do projeto"). `tempoPoints` (`late final`) é o mapa que entra no projeto: `simplifyTempo` (`midi_file.dart:123`) põe um ponto de 120 BPM na batida 0 se o primeiro `Set Tempo` vem depois, prende cada BPM a 20–999, **funde** o ponto que difere menos de `midiTempoEpsilon = 0.05` BPM do último mantido e, se ainda passa de `midiMaxTempoPoints = 256`, dobra o epsilon até caber (ou até passar de 999). O limite é o de pontos que o motor reserva sem realocar. Todos entram como salto (`ramp: false`).
-- *`importedTempo`.* Sem andamento no arquivo: `null` (o do projeto fica). Um ponto só: `bpm` = `appBpmFor(bpm)` (inteiro 20–400, como o app sempre guardou) e mapa `[]`. Vários: `bpm` = o primeiro ponto **sem arredondar** e o mapa passa por `normalizeTempoPoints` (que ainda limita a 512).
+- *`importedTempo`.* Sem andamento no arquivo: `null` (o do projeto fica). Um ponto só: `bpm` = `appBpmFor(bpm)` (inteiro 20–999, como o app sempre guardou; a pergunta mostra o BPM sem arredondar por `_bpmText`, então `97,5` aparece na pergunta e entra como 98) e mapa `[]`. Vários: `bpm` = o primeiro ponto **sem arredondar** e o mapa passa por `normalizeTempoPoints` (que limita a 4096).
 - *Compasso.* `parseMidiFile` junta os `FF 58` numa lista de `MeterChange` (`MidiFileData.meterMap`, compasso 1 = o primeiro): uma fórmula por tick (a última vale); denominador `2^dd` até 32, e acima disso a mesma duração em fusas (`numerador / 2^(dd−5)`, com aviso); numerador acima de 64 vira 64 (com aviso). Se o primeiro `FF 58` vem depois do tick 0, o compasso `4/4` vale até ele. A batida de cada mudança vira número de compasso contando compassos inteiros desde a mudança anterior (`k = round((batida − início) / barBeats)`); fora de 1e-6 de um compasso inteiro, o `misaligned` levanta o aviso e a mudança vai para o compasso mais próximo; `k < 1` (a mudança cai antes do fim do compasso vigente) troca a fórmula vigente em vez de abrir compasso novo. Fórmula igual à vigente é descartada.
 - *`beatsPerBar`.* Sem `meterMap` (arquivo sem `FF 58`) é `null`. Com ele, `importedMeterBeats(primeira)` = `barBeats.round()` limitado a **1–12** (6/8 → 3; 7/8 → 3,5 → 4, **sem** o aviso antigo de aproximação) e vale para o `length` dos clipes criados. Já `importedMeter` (o que vai para `doc.beatsPerBar`) usa `numerador` quando `den == 4` e `barBeats.round()` senão, limitado a **1–32**, e devolve `changes` por `normalizeMeterChanges` (vazio se só sobra um `n/4`; um `6/8` ou `7/8` único **fica** no mapa). Ver "Armadilhas do arquivo MIDI" sobre a diferença 12 × 32.
 - *Perguntar.* `midiTempoDiffers(data, doc)` compara `importedTempo`/`importedMeter` com o documento: BPM arredondado, tamanho do mapa e cada `TempoPoint` (igualdade por batida, BPM e rampa); `beatsPerBar`, tamanho e cada `MeterChange`. Diferiu, `askUseFileTempo` abre a pergunta (títulos e texto em [Áudio e clipes](../manual/03-audio-e-clipes.md#importar-um-arquivo-midi-mid)); recusar não muda nada.
 - *Avisos de andamento* (em `importMidiBytes`): aceito e `tempoPoints.length < tempoMap.length` → `O arquivo tem N mudanças de andamento; fundi as que diferem menos de 0.05 BPM e M ficaram no mapa (o limite é 256 pontos).` (`$midiTempoEpsilon` sai com ponto decimal, e `mudanças` não flexiona no singular); recusado e `hasTempoChanges` → `O arquivo muda de andamento no meio (de X a Y BPM); mantive o do projeto.` Os avisos `o app tem um andamento só…`, `O arquivo muda de compasso no meio…` e `O compasso 7/8 foi aproximado para 4/4…` saíram. Restam os de compasso `Uma fórmula de compasso do arquivo passa dos limites do app (denominador até 32, numerador até 64) e foi aproximada.` e `Uma mudança de compasso caiu no meio de um compasso: alinhei ao compasso mais próximo.`
-- `appBpmFor` arredonda o BPM ao inteiro e limita a 20–400.
+- `appBpmFor` arredonda o BPM ao inteiro e limita a `minBpmInt`..`maxBpmInt` (20–999, como o servidor e o motor; antes de `dd4ef07` era 20–400).
 
 **Bateria GM.** As notas do canal 10 passam por `drumPitchForGm`: se a altura é de uma das 12 peças de `drumPieces` (36, 37, 38, 39, 41, 42, 45, 46, 48, 49, 51, 56) fica; senão vale a tabela de apelidos (`_gmDrumAlias`: 35→36, 40→38, 43→41, 44→42, 47→45, 50→48, 52→49, 53→51, 55→49, 57→49, 59→51, contada no aviso); qualquer outra altura (54, 58, fora de 35–59) **entra no clipe sem mudar** e vai para o aviso `A bateria do app não tem: …` com o nome GM (`gmDrumName`, ou `nota N`).
 
-**Do arquivo lido ao documento** (`midiImportTracks`): uma `DawTrack` por `MidiFileTrack`, tipo `TrackKind.synth` (ou `drums` no canal 10), clipe `MidiClip` com `start` = cursor encaixado na grade (`snapBeat(beat.value)`), notas e controles exatamente como lidos (batidas contadas do instante zero do arquivo) e `length` = `max(bar, ceil(fim / bar) * bar)`, com `bar` = tempos por compasso do projeto (ou do arquivo, se o andamento foi aceito). Nome da faixa: o do arquivo, ou `TrackKind.label N` (o primeiro número livre, `_nextTrackName`). Nada de `Program Change`: instrumento e parâmetros ficam nos padrões da faixa.
+**Do arquivo lido ao documento** (`midiImportTracks`): uma `DawTrack` por `MidiFileTrack`, tipo `melodic` (parâmetro, padrão `TrackKind.synth`; `synth`, `fm`, `wavetable` ou `sampler`) ou `drums` no canal 10, clipe `MidiClip` com `start` = cursor encaixado na grade (`snapBeat(beat.value)`), notas e controles exatamente como lidos (batidas contadas do instante zero do arquivo) e `length` fechado no compasso seguinte ao fim das notas **pelo `meter`** que o projeto terá (`lengthFor`: `meter.ceilBarStart(start + fim) - start`, no mínimo `meter.barBeatsAt(start)`; sem mapa, `max(bar, ceil(fim / bar) * bar)` com `bar` = tempos por compasso do projeto ou do arquivo, se aceito). Nome da faixa: o do arquivo, ou `TrackKind.label N` (o primeiro número livre, `_nextTrackName`); o clipe leva o nome da trilha (o da faixa nova se a trilha não tem nome). Nada de `Program Change`: instrumento e parâmetros ficam nos padrões da faixa.
 
 **Escrita** (`buildMidiFile`). Bytes de saída:
 
@@ -580,12 +663,13 @@ Running status vale. Dado sem status anterior, byte de dados ≥ 128 onde deveri
 | Trilha `i` | `FF 03` com o nome, os eventos ordenados por (tick, ordem, sequência) com delta em VLQ e o status completo em cada evento (**sem** *running status*), `FF 2F` |
 | Ordem no mesmo tick | desligar nota, depois controles, depois ligar nota: uma nota que começa onde outra igual termina não se funde |
 | Canais | `Bateria` no 10 (índice 9); as demais, a k-ésima faixa melódica no canal `k % 15`, pulando o 10 (`k % 15 >= 9` ganha +1): 1–9, 11–16 e a 16ª volta ao 1 |
-| Faixas | `exportableTracks(doc)`: `kind.isInstrument` e pelo menos um clipe com notas ou controles. Mudo e solo não são olhados |
+| Faixas | `exportableTracks(doc)`: `kind.isInstrument` e pelo menos um clipe com notas ou controles; em `Todas as faixas` só as de `audibleExportTracks(doc)` (com alguma em solo, só as em solo; senão todas menos as mudas; as fora vão para `MidiExport.silenced` e se não sobra nenhuma: `As faixas com notas estão mudas (ou há outra em solo): tire o mudo, ou exporte só o clipe selecionado.`). O clipe avulso sai mesmo em faixa muda |
+| Abertura da trilha | Tick 0, antes de tudo (`order: -1`): `_channelSetup(track, canal)`: RPN 0 com o `Alcance do bend` (`bendRangeOf`, 0–24 st: `CC 101`=0, `CC 100`=0, `CC 6`=semitons, `CC 38`=centésimos, `CC 101`=127, `CC 100`=127) e o `Program Change` de `midiProgramFor` (categoria do preset de fábrica mais parecido, `_nearestPreset`, até `_presetMaxDiff = 6` parâmetros diferentes ignorando o alcance do bend e, no sampler, `Nota base` e `Afinação`; `Baixos` 38, `Leads` 80, `Pads` 89, `Teclas` 4, `Vocais` 54, `Efeitos` 98, `Texturas` 88, `Básico` 80, `Plucks…` 45, sem preset 80 ou 0 no sampler; bateria: programa 0 e sem RPN) |
 | Nota | `9n altura vel` / `8n altura 0`. Descartadas (e contadas em `skipped`): altura fora de 0–127, início ou duração não finitos, início < 0 ou ≥ `clip.length` |
-| Controles | Bend: `round(v * 8192) + 8192` limitado a 0–16383 em 2 bytes de 7 bits; CC 1: `round(v * 127)`; CC 64: 127 se `v ≥ 0.5`, senão 0. Fora de 0..`clip.length`: descartados sem contar |
+| Controles | Bend: `round(v * 8192) + 8192` limitado a 0–16383 em 2 bytes de 7 bits; CC 1: `round(v * 127)`; CC 64: 127 se `v ≥ 0.5`, senão 0. Fora de 0..`clip.length`: descartados e contados em `MidiExport.skippedControls` (`exportSummary` avisa) |
 | Sem nada | `MidiFormatException('Não há notas para exportar: desenhe ou grave um clipe de notas primeiro.')` |
 
-Não há `Program Change`, `RPN` (alcance do bend), letras, marcadores nem nome de instrumento.
+Há `Program Change` e `RPN 0` (ver "Abertura da trilha"); não há letras, marcadores nem nome de instrumento.
 
 **Andamento e compasso na escrita** (`_tempoMeterEvents`, `midi_file.dart:722`, desde `020003f`). Lê `doc.tempo` e `doc.meter` (o mapa inteiro; a marca `ramp` decide o degrau):
 
@@ -601,7 +685,7 @@ Sem mapa nenhum sai um `FF 51` e um `FF 58` no tick 0, como antes (mas o `FF 58`
 
 ### Compatibilidade com outros programas
 
-O que o app escreve é o SMF mais comum: tipo 1, 480 PPQ (dentro do que Ableton Live, FL Studio, MuseScore e afins leem), uma trilha de andamento e compasso à parte, uma trilha por faixa com nome e um canal fixo, bateria no canal 10. O que o app lê cobre tipos 0, 1 e 2, qualquer PPQ, *running status*, SysEx e meta desconhecidos. Nada disso foi conferido abrindo um arquivo do jopendaw nesses programas, nem um arquivo deles no jopendaw `(não confirmado; testado só por testes automáticos)`: os testes fabricam os bytes à mão e fazem a ida e volta com o próprio leitor. Consequências previsíveis do que **não** se escreve (pelo padrão MIDI, não por teste): sem `Program Change`, o programa de destino toca cada trilha com o timbre padrão do canal (o piano, no GM); sem `RPN`, o alcance do pitch bend fica no padrão do programa (em geral ±2 semitons), diferente do `Alcance do bend` do instrumento do jopendaw.
+O que o app escreve é o SMF mais comum: tipo 1, 480 PPQ (dentro do que Ableton Live, FL Studio, MuseScore e afins leem), uma trilha de andamento e compasso à parte, uma trilha por faixa com nome e um canal fixo, bateria no canal 10. O que o app lê cobre tipos 0, 1 e 2, qualquer PPQ, *running status*, SysEx e meta desconhecidos. Nada disso foi conferido abrindo um arquivo do jopendaw nesses programas, nem um arquivo deles no jopendaw `(não confirmado; testado só por testes automáticos)`: os testes fabricam os bytes à mão e fazem a ida e volta com o próprio leitor. Desde `dd4ef07` cada trilha abre com o `Program Change` aproximado e o `RPN 0` do alcance do bend; o que **não** se escreve são os parâmetros do timbre (o programa de destino escolhe o som dele) e programas que ignoram o RPN usam o alcance padrão deles (em geral ±2 semitons).
 
 ### Decisões e por quê
 
@@ -611,7 +695,7 @@ O que o app escreve é o SMF mais comum: tipo 1, 480 PPQ (dentro do que Ableton 
 - **Uma faixa por (trilha, canal), não só por trilha.** Um arquivo tipo 0 põe tudo numa trilha, e um canal só pode ser bateria ou não; separar por canal mantém a bateria (canal 10) numa faixa `Bateria` e o resto em `Sintetizador`.
 - **Batidas como estão.** Importar recusando o andamento do arquivo mantém as batidas: só a velocidade muda (o texto da pergunta diz isso).
 - **O mapa do arquivo substitui o do projeto, não se mistura.** A pergunta é tudo ou nada (`Usar o do arquivo` / `Manter o do projeto`), e as notas ficam nas mesmas batidas: o que muda é a velocidade. Misturar pontos de dois mapas não teria significado musical.
-- **Simplificar na importação, não no motor.** Um arquivo com rampa gravada em dezenas de milhares de `Set Tempo` estouraria os 256 pontos que o motor reserva sem realocar (e os 512 do `normalizeTempoPoints`); por isso `simplifyTempo` funde o que difere menos de 0,05 BPM e, se preciso, dobra a tolerância.
+- **Simplificar na importação, não no motor.** Um arquivo com rampa gravada em dezenas de milhares de `Set Tempo` estouraria os 256 pontos que o motor reserva sem realocar (e os 4096 do `normalizeTempoPoints`); por isso `simplifyTempo` funde o que difere menos de 0,05 BPM e, se preciso, dobra a tolerância.
 - **Rampa vira degraus na escrita e não volta como rampa.** O SMF só tem `Set Tempo` em degraus; a marca `ramp` não sobrevive à ida e volta (a importação entra sempre em salto).
 
 ### Como testar
@@ -621,21 +705,18 @@ cd app
 flutter test test/midi_file_test.dart
 ```
 
-Cobertura de `test/midi_file_test.dart`: leitura à mão (tipo 0 com running status e `9n` de velocidade 0, tipo 1 com trilha de andamento, VLQ de 4 bytes, SysEx e mensagens de sistema, bend/modulação/pedal, notas presas, duração zero, bateria GM, vários canais numa trilha, várias mudanças de andamento, 6/8 e 7/8, PPQ 1/96/960/32767); arquivos ruins (vazio, não-MIDI, SMPTE, PPQ 0, tipo desconhecido, cabeçalho cortado, sem faixa, sem nota, truncado, lixo na trilha, 300 arquivos de bytes aleatórios que só podem lançar `MidiFormatException`, RMID); escrita e ida e volta (notas, velocidades, controles, andamento 97, compasso 3, nomes, posição absoluta da bateria; clipe selecionado sai do começo; 15 faixas melódicas pulam o canal 10 e a 16ª volta ao 1; notas fora de 0–127 ou do clipe; notas emendadas; nome do arquivo); desempenho (100 mil notas escritas e lidas em menos de 20 s, com a leitura cedendo o controle); e a importação no controlador com o motor de mentira (faixa de sintetizador e de bateria, andamento aceito e desfeito com `undo`, andamento recusado, pergunta só quando difere, aviso de mudança de andamento, arquivo ruim vira `error` sem mexer no documento). O grupo `mapa de andamento e de compassos` (fase 11) cobre: salto, rampa e compassos que voltam iguais na ida e volta (a rampa de 8 batidas vira mais de 128 degraus e o `secondsAt` do mapa lido bate com o original em até 15 ms); um andamento e um compasso só sem mapa (um evento de cada, como antes); o clipe avulso levando o andamento e o compasso que valiam no começo dele; ausência de deslocamento de bits (dart2js); um `.mid` com mudança de andamento no meio virando o mapa do projeto sem o aviso antigo; recusar avisando `mantive o do projeto`; arquivo com dezenas de milhares de eventos de andamento simplificado para caber; fusão só do que difere menos de 0,05 BPM; compassos `6/8` no compasso 3 e `7/8` depois entrando no mapa; e mudança de compasso no meio de um compasso alinhando e avisando. `6/8` lê `beatsPerBar` 3 e `7/8` lê 4 com `meterMap` exato e sem aviso. Em `test/piano_roll_tools_test.dart`: `dropSnapCollisions` e `keyboardTooltip`. Os testes rodam na VM do Dart, não no dart2js: o cuidado com inteiros de 32 bits vem da leitura do código, não de teste na web `(não confirmado no navegador)`. Não há teste de widget para `importFiles`, `askUseFileTempo` nem `ExportMidiDialog` `(não confirmado em uso)`.
+Cobertura de `test/midi_file_test.dart`: leitura à mão (tipo 0 com running status e `9n` de velocidade 0, tipo 1 com trilha de andamento, VLQ de 4 bytes, SysEx e mensagens de sistema, bend/modulação/pedal, notas presas, duração zero, bateria GM, vários canais numa trilha, várias mudanças de andamento, 6/8 e 7/8, PPQ 1/96/960/32767); arquivos ruins (vazio, não-MIDI, SMPTE, PPQ 0, tipo desconhecido, cabeçalho cortado, sem faixa, sem nota, truncado, lixo na trilha, 300 arquivos de bytes aleatórios que só podem lançar `MidiFormatException`, RMID); escrita e ida e volta (notas, velocidades, controles, andamento 97, compasso 3, nomes, posição absoluta da bateria; clipe selecionado sai do começo; 15 faixas melódicas pulam o canal 10 e a 16ª volta ao 1; notas fora de 0–127 ou do clipe; notas emendadas; nome do arquivo); desempenho (100 mil notas escritas e lidas em menos de 20 s, com a leitura cedendo o controle); e a importação no controlador com o motor de mentira (faixa de sintetizador e de bateria, andamento aceito e desfeito com `undo`, andamento recusado, pergunta só quando difere, aviso de mudança de andamento, arquivo ruim vira `error` sem mexer no documento). O grupo `mapa de andamento e de compassos` (fase 11) cobre: salto, rampa e compassos que voltam iguais na ida e volta (a rampa de 8 batidas vira mais de 128 degraus e o `secondsAt` do mapa lido bate com o original em até 15 ms); um andamento e um compasso só sem mapa (um evento de cada, como antes); o clipe avulso levando o andamento e o compasso que valiam no começo dele; ausência de deslocamento de bits (dart2js); um `.mid` com mudança de andamento no meio virando o mapa do projeto sem o aviso antigo; recusar avisando `mantive o do projeto`; arquivo com dezenas de milhares de eventos de andamento simplificado para caber; fusão só do que difere menos de 0,05 BPM; compassos `6/8` no compasso 3 e `7/8` depois entrando no mapa; e mudança de compasso no meio de um compasso alinhando e avisando. `6/8` lê `beatsPerBar` 3 e `7/8` lê 4 com `meterMap` exato e sem aviso. Em `test/piano_roll_tools_test.dart`: `dropSnapCollisions` e `keyboardTooltip`. Os testes rodam na VM do Dart, não no dart2js: o cuidado com inteiros de 32 bits vem da leitura do código, não de teste na web `(não confirmado no navegador)`. `app/test/fase12c_test.dart` (fase 12, `dd4ef07`, 511 linhas) cobre: `Tempos por compasso` trocando um `6/8` inicial, BPM decimal no documento e no motor, os limites 4096/1024 com aviso, a janela 20–999, compasso pelo mapa (clipe novo, `fitRange`, encaixe, duração), a seta `↘` e o diálogo de andamento (widget), `Program Change` e RPN 0 na exportação, faixa muda e solo, pontos de controle fora do clipe, o `Salvar como` cancelado (widget), `Importar como` (FM, wavetable, sampler; o seletor só abre com faixa melódica, lembra a escolha e cancelar não importa), o nome do clipe, e na expressão a faixa antiga voltando ao repouso, parar zerando pedal, bend e roda, a bateria sem pontos, `cutControls` e o aparo da borda esquerda. Sem teste de widget para `importFiles` nem `askUseFileTempo` `(não confirmado em uso)`; nada disto foi visto no navegador nem no Android `(testado só por testes automáticos)`.
 
 ### Armadilhas do arquivo MIDI
 
 - **Rampa não faz a viagem de volta.** A exportação a escreve em degraus de 1/16 de batida (máximo de 4096 por rampa) e a importação a lê como saltos, fundindo o que difere menos de 0,05 BPM e limitando a 256 pontos; o mapa de ida e volta soa igual (tolerância de 15 ms no teste), mas o desenho da faixa `Andamento` fica cheio de pontos em vez de uma rampa.
-- **O texto do projeto na pergunta ignora o mapa de compassos do projeto.** `askUseFileTempo` escreve `o projeto está em Y BPM[ e N mudanças de andamento], Z/4` com `doc.beatsPerBar`, então um projeto em `6/8` aparece como `3/4`. Já o lado do arquivo mostra a fórmula real (`compasso 6/8`). `(lido do código; não testado em uso)`.
-- **`importedMeter` limita `beatsPerBar` a 1–32 e `importedMeterBeats` a 1–12.** A lista `Tempos por compasso` da `_TempoDialog` (`transport_bar.dart`) só tem `1/4` a `12/4`; um primeiro compasso de arquivo acima de 12 batidas (por exemplo `13/4` ou `4/1`) entra no documento com valor fora da lista, e o `DropdownButtonFormField` (`initialValue: _bpb`) provavelmente falha ao abrir a janela. Antes da fase 11 o valor era limitado a 12. `(lido do código; não testado)`.
+- **O texto do projeto na pergunta ainda ignora o mapa de compassos do projeto** (o BPM agora sai com decimais por `_bpmText`, mas o compasso não).** `askUseFileTempo` escreve `o projeto está em Y BPM[ e N mudanças de andamento], Z/4` com `doc.beatsPerBar`, então um projeto em `6/8` aparece como `3/4`. Já o lado do arquivo mostra a fórmula real (`compasso 6/8`). `(lido do código; não testado em uso)`.
+- **`importedMeter` limita `beatsPerBar` a 1–32 e `importedMeterBeats` a 1–12.** Resolvido em `dd4ef07`: a lista `Tempos por compasso` da `_TempoDialog` vai até `max(12, beatsPerBar)` (e mostra `n/d (atual)` como item `0` quando o compasso inicial não é `n/4`), então um primeiro compasso de arquivo acima de 12 batidas já cabe na lista. Resta que `importedMeterBeats` (usado como `bar` de `midiImportTracks` quando o mapa é de um compasso só) continua limitado a 12 `(lido do código; não testado)`.
 - **Mudança de compasso mais próxima, não a exata.** Uma mudança que cai no meio de um compasso é alinhada ao compasso inteiro mais próximo; as notas ficam onde estavam, então o compasso do projeto pode não coincidir com o que o programa de origem mostrava.
-- **A pergunta olha o mapa inteiro, o clipe criado usa um compasso fixo.** O `length` do clipe é múltiplo do primeiro compasso (`bar`), sem consultar as mudanças do mapa de compassos.
-- **Sem `Program Change` nem `RPN` na escrita.** Ver "Compatibilidade".
-- **Mudo e solo não são consultados na exportação.** Faixa muda sai no arquivo.
-- **O tipo da faixa criada é só `Sintetizador` ou `Bateria`.** Nunca `Sampler`, `FM` ou `Wavetable`.
-- **`saveFile` não avisa cancelamento.** `AudioEngine.saveFile` no Android devolve sem erro se a janela de salvar for cancelada e `ExportMidiDialog` escreve `<nome> salvo` do mesmo jeito `(não confirmado em uso)`.
-- **A janela de atalhos ficou com o texto antigo.** `shortcuts_dialog.dart` ainda diz `Importar áudio` para o `Ctrl+I`.
-- **Pontos de controle descartados na exportação não entram em `skipped`.** Só notas são contadas.
+- **O clipe criado segue o mapa de compassos** (resolvido em `dd4ef07`): `midiImportTracks` recebe o `MeterMap` que o projeto terá e fecha o `length` pelos compassos dele; só sem mapa (ou com um compasso só) vale o `bar` fixo.
+- **Resolvido em `dd4ef07` (antes eram limites listados aqui).** A escrita ganhou `Program Change` e `RPN 0`; mudo e solo valem na exportação de todas as faixas; o tipo da faixa criada na importação vem de `Importar como` (`Sintetizador`, `FM`, `Wavetable` ou `Sampler`; o canal 10 é sempre `Bateria`); `saveFile` devolve `bool` (`false` = cancelou, e `ExportMidiDialog` não escreve `salvo`; a web devolve sempre `true`); a janela de atalhos diz `Importar áudio ou MIDI`; pontos de controle descartados entram em `skippedControls`. `(testado só por testes automáticos; o cancelar do Android não foi visto no aparelho)`
+- **A leitura descarta o alcance do bend do arquivo.** `RPN 0` (CC 6/38/98–101) é ignorado sem aviso e vale o `Alcance do bend` do instrumento da faixa nova; um arquivo com bend de ±12 st toca com o alcance padrão (2 st) até você ajustar o knob.
+- **O `Program Change` do arquivo é ignorado na importação**, e `Importar como` vale para todas as faixas melódicas do arquivo de uma vez (não dá para misturar tipos por trilha).
 - **A ordem de dois pontos de andamento na mesma batida** vem de `List.sort` (não garantida como estável) e o último da batida vence. Caso raro `(lido do código; não testado)`.
 
 ## Arquivo de projeto (`.jopendaw`)
@@ -706,7 +787,7 @@ Cadeia: `projects_screen._importFile` → `pickProjectFile` → `ProjectImporter
 - `ProjectImporter.import`: espera 20 ms para a tela pintar `Conferindo o arquivo…` (a leitura é síncrona e pesada), chama `parseProjectFile` e passa ao `importProjectBundle` com `onProgress` virando `Guardando os áudios: d de t`. Existe como classe para os testes trocarem API e guardado.
 - `parseProjectFile(bytes, {limits})` valida nesta ordem, lançando `ProjectFileException` com a mensagem pronta para a tela: arquivo vazio; tamanho ≤ `maxFileBytes`; zip decodificável; número de entradas ≤ `maxEntries`; **para cada entrada** nome hostil (`_hostileName`: vazio, começa com `/`, contém `\` ou NUL, prefixo de unidade `C:`, segmento `..`), link simbólico, nome repetido e soma dos tamanhos **declarados** ≤ `maxTotalBytes`; `project.json` presente e ≤ `maxJsonBytes`; `format`; `doc` e `doc.version`; `DawDoc.fromJson`; `manifest.json`; para cada áudio do manifesto, formato do hash e do caminho, presença da entrada, `size` ≤ `maxSampleBytes`, **descompressão com teto** (`_inflate`/`_BoundedOutput` para no instante em que passa do limite, mesmo que o cabeçalho do zip minta o tamanho), soma real ≤ `maxTotalBytes`, tamanho igual ao declarado e sha-256 igual ao hash. Tudo o que o zip traz além disso é ignorado. Nada é gravado em disco a partir de um nome de dentro do zip: os áudios são procurados pelo nome exato que o manifesto declara.
 - `ProjectFileLimits` (padrões): arquivo 1 GiB (`1024 * 1024 * 1024`, não `1 << 30`: ver a armadilha dos operadores de bit em 32 bits), soma descomprimida 2 GiB (`2 * 1024 * 1024 * 1024`), um áudio 512 MiB, cada JSON 64 MiB, 20 000 entradas.
-- `importProjectBundle(bundle, ...)`, na ordem que deixa o pior caso inofensivo: `remapDocIds(doc)`; `createProject(importedProjectName(...))` (POST `/api/projects`); se o andamento (`doc.bpm` arredondado e limitado a 20–400) ou o compasso (`beatsPerBar` limitado a 1–32) diferem dos padrões do projeto novo, `patchProject`; copia o andamento e o compasso do projeto para o documento; grava cada `sample:<hash>` **se a chave ainda não existe**; grava `doc:<id>` por último (é o que faz o projeto "existir" para o editor). Qualquer falha depois de criado o projeto chama `deleteProject` (melhor esforço) e relança.
+- `importProjectBundle(bundle, ...)`, na ordem que deixa o pior caso inofensivo: `remapDocIds(doc)`; `createProject(importedProjectName(...))` (POST `/api/projects`); se o andamento (`doc.bpm` arredondado e limitado a 20–999, `minBpmInt`..`maxBpmInt`; o andamento com decimais fica no documento, só o espelho do servidor é inteiro) ou o compasso (`beatsPerBar` limitado a 1–32) diferem dos padrões do projeto novo, `patchProject`; copia o andamento e o compasso do projeto para o documento; grava cada `sample:<hash>` **se a chave ainda não existe**; grava `doc:<id>` por último (é o que faz o projeto "existir" para o editor). Qualquer falha depois de criado o projeto chama `deleteProject` (melhor esforço) e relança.
 - `remapDocIds`: id de faixa, clipe de áudio, clipe MIDI, efeito (faixas e master), marcador e raia de automação fica igual se casa `^[A-Za-z0-9_-]{1,64}$` e ainda não foi usado; senão recebe `newId()`. Depois reaponta: envio para faixa que sumiu é descartado, `output` inexistente vira `null` (master), raia de efeito ou de envio cujo alvo não existe é descartada. Faixas com id repetido: as referências vão para a primeira. Sidechain não precisa de tratamento, é índice de faixa (ver [Duas armadilhas de compatibilidade](#duas-armadilhas-de-compatibilidade-do-esquema)).
 - `importedProjectName(nome, existentes)`: compara sem maiúsculas e sem espaços nas pontas; acrescenta ` (importado)`, ` (importado 2)`...; corta em 120 caracteres.
 
@@ -745,19 +826,139 @@ Cobre: ida e volta exata do documento e dos áudios, dedupe e extensões, projet
 
 - **`app_version` é uma constante** (`'0.1.0'`), não lida do `pubspec.yaml`: não serve para diagnosticar qual build exportou.
 - **Versão do documento e mensagem de erro:** a checagem de `doc.version` só atua se `version` é inteiro; um documento sem `version` passa. Um campo novo lido por `DawDoc.fromJson` sem padrão (ou `AutoKind.byName`, que lança) faz o documento cair em `O arquivo está corrompido: o documento do projeto não pôde ser lido.`, mensagem enganosa para um arquivo que só é de um app mais novo.
-- **Andamento inteiro:** o projeto no servidor guarda `bpm` inteiro; o importador arredonda `doc.bpm` e o limita a 20–400 (o servidor aceita 20–999). Um andamento fracionado ou acima de 400 muda na importação.
+- **Andamento inteiro:** o projeto no servidor guarda `bpm` inteiro; o importador arredonda `doc.bpm` e o limita a 20–999 (a mesma janela do servidor e do motor, desde `dd4ef07`). Um andamento fracionado é arredondado no espelho do servidor, mas o documento importado guarda o valor com decimais.
 - **Preferências e armar/monitorar viajam junto** porque estão no `toJson`; o projeto importado abre com o metrônomo, a contagem, a latência e as faixas armadas do original (e o `open` tenta reabrir a entrada de áudio se há faixa de áudio armada).
 - **Leitura inteira na memória:** `pickProjectFile` faz `readAsBytes` e `parseProjectFile` roda síncrona na thread da interface; um arquivo perto de 1 GiB é pesado para um celular. `(não medido)`
-- **`saveFile` cancelado no Android** volta sem erro; a janela `Exportar projeto` então mostra `Pronto: ...`. `FilePicker.saveFile` devolve nulo ao cancelar e o resultado é descartado (`engine_ffi.dart:1276`).
+- **`saveFile` cancelado no Android** volta sem erro; a janela `Exportar projeto` então mostra `Pronto: ...`. `FilePicker.saveFile` devolve nulo ao cancelar; desde `dd4ef07` o `saveFile` do motor devolve `false` nesse caso, mas só a janela `Exportar MIDI (.mid)` o consulta: a do `.jopendaw` continua descartando o resultado.
 - **O cabeçalho do código** de `project_file.dart` diz "para abrir sem servidor", mas a importação cadastra o projeto pela API (`createProject`), então exige sessão e rede.
 
 ## Presets do usuário (`user_presets.dart`, `user_presets_ui.dart`)
 
-- **Modelo:** `UserPreset {id, family (instrument|effect), kind (TrackKind.name ou EffectKind.name), name, values (id → valor, todos os ids do tipo), created, version}`. `UserPresets` (singleton `UserPresets.instance`, `ChangeNotifier`) guarda tudo num **único** valor de texto na chave `userpresets` do `LocalStore` (JSON `{format: jopendaw-user-presets, version, presets}`); gravações em fila, a última vence. Sem servidor: **não sincroniza com a conta** (ideia futura: uma tabela `user_presets` ou chave por conta; o `.jopreset` cobre o transporte entre aparelhos).
-- **O que entra:** `capture` guarda todos os ids do tipo, limitados à faixa (opções arredondadas). Ficam de fora a nota base e a afinação do sampler (`SamplerId.root/tune`, como em `presets.dart`) e o sidechain do compressor/gate (10/6). O sampler nunca leva áudio nem zonas.
-- **Aplicar/casar:** `paramsFor`/`paramsForEffect` montam o mapa completo (padrão + preset, mantendo o que fica de fora); `matchingTrack`/`matchingEffect` alimentam o rótulo, e o usuário tem prioridade sobre o de fábrica quando os dois batem.
-- **`.jopreset`:** JSON `{format: jopendaw-preset, version, family, kind, name, created, params}`. `importBytes` recusa (com `PresetFormatException`) arquivo de mais de 256 KB, não JSON, formato ou versão errados, tipo desconhecido, sem valor utilizável; ignora ids desconhecidos e valores não numéricos/infinitos; limita fora de faixa; tudo vira aviso. O que o arquivo não diz volta ao padrão.
-- **UI:** `userPresetEntries` acrescenta a seção aos `PopupMenuButton<Object>` do `instrument_panel.dart::_presetControls` e do `effects_panel.dart::_cardMenu`; `handleUserPresetChoice` cuida de salvar/renomear/apagar/exportar/importar (o seletor e o `saveFile` são injetáveis). Erros em diálogo, nunca toast. Testes: `app/test/user_presets_test.dart`.
+> Os presets do usuário (commit `b39d3d4`): o timbre de um instrumento ou de um efeito guardado com nome no aparelho, e o arquivo `.jopreset` para levá-lo a outro. Para quem mexe no app; o uso está em [manual 04, Meus presets](../manual/04-painel-de-instrumento.md#meus-presets) e [manual 06c](../manual/06c-painel-de-efeitos.md#presets-do-usuário).
+
+### Peças
+
+| Arquivo | Símbolos | Papel |
+|---|---|---|
+| `app/lib/daw/user_presets.dart` (522 linhas) | `PresetFamily`, `userPresetFormatVersion` (1), `userPresetExtension` (`jopreset`), `maxUserPresetName` (60), `maxUserPresetsPerKind` (300), `maxUserPresetFileBytes` (256 KB), `presetSpecs`, `presetSkipIds`, `cleanPresetName`, `presetFileName`, `UserPreset`, `PresetFormatException`, `PresetImport`, `UserPresetStorage` (`LocalUserPresetStorage`, `MemoryUserPresetStorage`), `UserPresets` | O modelo, a lógica pura (sem `dart:io`, roda igual no dart2js), o guardado e a validação do arquivo |
+| `app/lib/daw/user_presets_ui.dart` (319 linhas) | `userPresetEntries`, `handleUserPresetChoice`, `askPresetName`, `confirmPresetDialog`, `showPresetMessage`, `pickUserPresetFile`, `UserPresetChoice` (`ApplyUserPreset`, `UserPresetMore`, `SaveUserPreset`, `ImportUserPreset`), `SavePresetFile`, `PickPresetFile` | A seção `MEUS PRESETS` dos menus e as janelas |
+| `app/lib/daw/instrument_panel.dart` | `_presetControls` (o rótulo, as setas `step`, o menu) | Menu do instrumento: `PopupMenuButton<Object>`, `maxHeight` 460 |
+| `app/lib/daw/effects_panel.dart` | `_cardMenu` (`maxHeight` 680), `_cardHeader` (subtítulo), `_applyUserPreset` | Menu do cartão de efeito |
+| `app/lib/daw/presets.dart`, `fx_presets.dart` | `presetParams`, `matchingPreset`, `matchingEffectPreset` | Os de fábrica, dos quais os do usuário copiam a regra de aplicar e de casar |
+| `app/test/user_presets_test.dart` (600 linhas) | 4 grupos | Ver [Como testar](#como-testar-os-presets-do-usuário) |
+
+### Modelo e armazenamento
+
+`UserPreset {id, family, kind, name, values, created, version}`: `family` é `instrument` ou `effect` (o nome do tipo sozinho seria ambíguo no futuro), `kind` é `TrackKind.name` (`synth`, `drums`, `sampler`, `fm`, `wavetable`) ou `EffectKind.name` (`eq`, `compressor`, `gate`, `limiter`, `utility`, `reverb`, `delay`, `chorus`, `phaser`, `tremolo`, `distortion`, `filter`), `values` é `id do ParamSpec → valor` na unidade da tabela. `presetSpecs(family, kind)` devolve a tabela do tipo ou `null` (áudio, barramento e nome desconhecido não têm presets). O id é `u<microssegundos em base 36><sequência em base 36>`.
+
+`UserPresets` (`ChangeNotifier`; singleton `UserPresets.instance`, criado com `LocalUserPresetStorage()`) mantém a lista na memória e grava **tudo num único valor de texto** na chave `userpresets` do `LocalStore`:
+
+```json
+{ "format": "jopendaw-user-presets", "version": 1,
+  "presets": [ { "id": "u...", "family": "instrument", "kind": "synth", "name": "Meu baixo grave",
+                 "version": 1, "created": "2026-09-30T13:04:15.000Z", "params": { "13": 500.0 } } ] }
+```
+
+| Onde | O que é a chave `userpresets` |
+|---|---|
+| Web | Chave `userpresets` do object store `kv` do IndexedDB `jopendaw` (`host.js`), valor texto; por origem do site |
+| Android | `FileStore` em `<documentos do app>/jopendaw/userpresets.txt` (grava em arquivo temporário e troca o nome no fim, então um app morto no meio deixa o valor anterior inteiro) |
+| Outros sistemas | O `LocalStore` de `engine_io.dart` só guarda no Android: `get` devolve `null` e `put` não faz nada; os presets valem só até fechar o app |
+
+Ciclo de vida: cada painel (`InstrumentPanel`, `EffectsPanel`) assina o notificador e chama `load()` no `initState`; `load()` roda uma vez (`_loading ??= _load()`), lê e junta ao que já foi salvo na sessão (`insertAll(0, …)`, sem duplicar por id nem por nome). Cada `save`, `rename`, `delete` e `importBytes` chama `_changed()`: notifica e enfileira a gravação do JSON inteiro (`_writes`, uma por vez, a última vence; `flush()` espera as pendentes, para os testes). Se a gravação falha, `saveError` recebe `Não deu para guardar os presets neste aparelho.` e os presets seguem na memória. Não há servidor: **não sincroniza com a conta** (ideia futura: uma tabela `user_presets` ou uma chave por conta).
+
+### O que entra e o que fica de fora
+
+`UserPresets.capture(family, kind, current)` percorre a tabela do tipo e guarda **todo id**, limitado à faixa do `ParamSpec` (`_fit`: fora da faixa vira o limite; não finito vira o padrão; opção de lista é arredondada), menos os ids de `presetSkipIds`:
+
+| Tipo | Fora do preset | Por quê |
+|---|---|---|
+| `sampler` | `SamplerId.root` (`Nota base`) e `SamplerId.tune` (`Afinação`) | Pertencem ao áudio escolhido (a mesma exceção de `presets.dart`, `_samplerKeeps`) |
+| `compressor` | id 10 (`Sidechain`) | Roteamento do projeto |
+| `gate` | id 6 (`Sidechain`) | Idem |
+| todos | Áudio e zonas do sampler, bypass e posição do efeito, automação | Não são parâmetros da tabela |
+
+Sobram: instrumentos com todos os seus ids (a bateria, 49); o sampler com 9 (`Modo`, `Ataque`, `Decaimento`, `Sustentação`, `Soltura`, `Sens. vel.`, `Volume`, `Alcance do bend`, `Vibrato da roda`); efeitos: EQ 49, compressor 10, gate 6, limitador 5, utilitário 8, reverb 10, delay 12, chorus 7, phaser 7, tremolo 6, distorção 9, filtro 11 (contagens lidas das tabelas de `effects.dart`).
+
+### Aplicar e casar (o rótulo)
+
+`UserPresets.paramsFor(preset, track)` monta o mapa completo `defaultParams(kind)` + valores do preset, mantendo `Nota base` e `Afinação` da faixa no sampler; `paramsForEffect(preset, slot)` monta um mapa com todos os ids do efeito, o `Sidechain` sendo o do slot e o resto `values[id] ?? padrão`. O painel entrega o mapa a `DawController.applyPreset` (instrumento) ou `applyEffectPreset` (efeito): os dois são um passo de `edit()`, então entram no desfazer. Salvar, renomear, apagar e importar **não** passam pelo `DawController`: não entram no desfazer do projeto.
+
+`matchingTrack(track)` e `matchingEffect(slot)` devolvem o primeiro preset do tipo (ordem de criação) cujos valores batem com os da faixa (`|atual − esperado| ≤ 1e-6 · max(1, |esperado|)`, ignorando os ids de fora; o que o preset não cita vale o padrão). Nos painéis, o preset do usuário tem prioridade sobre o de fábrica quando os dois batem (`current = userCurrent == null ? matchingPreset(t) : null`), e só o do usuário leva o visto na linha dele. O rótulo do instrumento é `current?.name ?? userCurrent?.name ?? (last != null ? '$last (editado)' : (pristine ? 'Inicial' : 'Personalizado'))`; o do efeito não tem `Inicial` nem `Personalizado`. `_lastPreset` (nome do último preset aplicado, por id de faixa ou de slot) vive no `State` do painel e não é salvo. As setas do instrumento (`step`) andam por `[...fábrica, ...usuário]` com módulo.
+
+### Formato do arquivo `.jopreset`
+
+JSON UTF-8 com recuo de 2 espaços (`exportBytes`), tipo de mídia `application/octet-stream` (`userPresetMime`, de propósito, como o `.jopendaw`: com um tipo específico o seletor do Android pode acrescentar uma extensão). O nome do arquivo é `presetFileName(nome)`: nome limpo, `\ / : * ? " < > |` viram `_`, pontos do começo saem, vazio vira `preset`, mais `.jopreset`.
+
+| Campo | Tipo | Regra na importação |
+|---|---|---|
+| `format` | texto | Tem de ser `jopendaw-preset`; senão `O arquivo não é um preset do jopendaw.` |
+| `version` | inteiro | `>= 1` e `<= userPresetFormatVersion` (1). Menor que 1 ou não inteiro: `O arquivo tem uma versão de formato inválida.`; maior: `O preset é de uma versão mais nova do jopendaw. Atualize o app para importá-lo.` |
+| `family` | texto | `instrument` ou `effect`; outro valor é tipo desconhecido |
+| `kind` | texto | `TrackKind.name` de instrumento com presets ou `EffectKind.name`; senão `Tipo de preset desconhecido ("família/tipo"). Ele pode ser de uma versão mais nova do jopendaw.` |
+| `name` | texto | Passa por `cleanPresetName` (controle e marcas invisíveis viram espaço, espaços colapsados, sem pontas, no máximo 60 caracteres sem partir par substituto). Vazio ou ausente: `Preset importado` (com aviso). Nome em uso no tipo (sem diferenciar maiúsculas): `Nome (2)`, `(3)`…, cortando o nome para caber em 60 |
+| `created` | texto ISO 8601 | `DateTime.tryParse`; inválido vira agora |
+| `params` | objeto `{"<id>": número}` | Tem de ser objeto (senão `O preset não traz parâmetros.`). Chave que não é inteiro ou id que a tabela do tipo não tem: contada como desconhecida e ignorada. Id de `presetSkipIds`: ignorado sem aviso. Valor que não é número ou não é finito: contado como inválido e ignorado. Valor fora da faixa: limitado (`_fit`), contado. Sem nenhum valor aproveitável: `O preset não tem nenhum valor utilizável para este tipo.` Ids que o arquivo não cita voltam ao padrão |
+
+O arquivo **não leva `id`** (o exportado não o escreve; o importado ganha id novo). Exemplo (montado à mão, com valores plausíveis para o `Gate`, ids 0 a 5):
+
+```json
+{
+  "format": "jopendaw-preset",
+  "version": 1,
+  "family": "effect",
+  "kind": "gate",
+  "name": "Ruído de fundo (meu)",
+  "created": "2026-09-30T13:04:15.000Z",
+  "params": { "0": -55.0, "1": 0.001, "2": 0.05, "3": 0.2, "4": -30.0, "5": 20.0 }
+}
+```
+
+Recusas antes de olhar o conteúdo: mais de 256 KB (`O arquivo é grande demais para ser um preset.`); não é UTF-8/JSON (`O arquivo não é um preset do jopendaw (não é um JSON válido).`); já há 300 presets do tipo (`Limite de 300 presets para este tipo. Apague algum antes.`). Todas lançam `PresetFormatException`, cuja mensagem vai para a janela `Não foi possível importar "arquivo"`. Avisos (`PresetImport.warnings`) usam a concordância certa do plural (`1 parâmetro desconhecido ignorado.`, `2 valores fora da faixa foram limitados.`).
+
+### Versionamento
+
+`userPresetFormatVersion = 1` vale para os dois formatos (o do guardado local, `format: jopendaw-user-presets`, e o do arquivo, `jopendaw-preset`). Uma versão maior que a conhecida é recusada no arquivo; no guardado local o **arquivo inteiro** é ignorado (`parseStored` devolve vazio), sem lançar. Campo novo opcional pode entrar sem subir a versão (o leitor ignora chave desconhecida); mudar o significado de um campo pede versão nova. O campo `version` de cada preset no guardado local é escrito mas não é lido (o preset relido sai sempre com a versão 1).
+
+### Leitura do guardado local
+
+`parseStored` (`@visibleForTesting`) é tolerante: JSON inválido, `format` diferente ou versão futura dão lista vazia; entrada que não é objeto, de tipo desconhecido, sem `params`, ou com id repetido é pulada sem afetar as outras. Diferente da importação, ali nada vira aviso (`strict: false`) e um valor ruim é ajustado em silêncio.
+
+### Interface
+
+`userPresetEntries({presets, current, color, checkWidth})` devolve as entradas que os menus acrescentam depois dos de fábrica: divisor, título `MEUS PRESETS`, `Nenhum ainda` (sem presets), uma linha por preset (`ValueKey('user-preset-<id>')`, valor `ApplyUserPreset`; o `…` tem `ValueKey('user-preset-more-<id>')`, tooltip `Renomear, apagar ou exportar` e valor `UserPresetMore`), divisor, `Salvar como preset…` (`user-preset-save`) e `Importar preset…` (`user-preset-import`). No painel de efeitos, `checkWidth` é 30 (alinha com os de fábrica) e ainda vêm depois as ações do cartão (`Reiniciar…`, bypass, mover, `Remover`). Ambos os menus passam a ser `PopupMenuButton<Object>`, e o `onSelected` despacha por tipo: `Preset`/`EffectPreset` (fábrica), `ApplyUserPreset` (cada painel aplica), `UserPresetChoice` (`handleUserPresetChoice`).
+
+`handleUserPresetChoice(context, choice, {family, kind, capture, presets, save, pick})`: o gerenciador, o `save` (padrão `AudioEngine.instance.saveFile`) e o `pick` (padrão `pickUserPresetFile`) são injetáveis para os testes. Fluxos: `Salvar` chama `askPresetName` (`_NameDialog`: título `Salvar como preset`, campo `Nome` com `maxLength` 60, contador oculto, filtro que nega controle C0/C1 e U+2028/U+2029, botão `Salvar` desabilitado com nome vazio, `Enter` confirma) e `UserPresets.save`; nome em uso devolve `null` e abre `confirmPresetDialog` (`Substituir o preset?`, `Substituir`), que chama `save(..., replace: true)` (mantém id, nome e data). `Renomear…`: `askPresetName(title: 'Renomear preset', confirm: 'Renomear', initial: nome)`; `rename` devolve `false` se **outro** preset do tipo tem o nome (`Nome em uso`). `Apagar…`: `Apagar o preset?` com botão vermelho `Apagar`. `Exportar preset…`: `presetFileName` e `exportBytes` para `save`; exceção vira `Não foi possível exportar`. `Importar preset…`: `FilePicker.pickFiles(dialogTitle: 'Importar preset', type: custom, allowedExtensions: [jopreset, json])`, cancelar não muda nada; `importBytes`; a janela `Preset "nome" importado` só abre se houver avisos ou se o preset for de outro tipo (`O preset é de outro tipo (kind): ele foi guardado, mas só aparece no menu desse tipo.`). Erros em diálogo (`showPresetMessage`, botão `Ok`), nunca toast.
+
+### Decisões e por quê
+
+- **Um valor só no `LocalStore`, não uma chave por preset.** Uma gravação atômica de tudo (a fila garante a ordem) e nenhuma listagem de chaves; o custo é regravar o JSON inteiro a cada mudança (até 300 presets por tipo, com centenas de bytes cada, é pequeno).
+- **Sem áudio nem zonas no preset do sampler.** O áudio é endereçado por SHA-256 e vive no projeto e na nuvem; um preset que o citasse teria de carregar ou referenciar blobs, e teria de sobreviver ao áudio sumir. Por isso o preset do sampler é só timbre e envelope.
+- **`Sidechain` fora.** É o id de uma faixa do projeto atual; em outro projeto apontaria para outra coisa. Igual aos presets de fábrica de efeito.
+- **`family` no arquivo.** Deixa o `kind` (nome de tipo) livre para tipos novos sem colidir entre instrumento e efeito.
+- **Nome único por tipo, sem diferenciar maiúsculas.** Evita duas linhas iguais no menu; salvar sobre um existente pergunta antes de substituir.
+- **Aviso em vez de recusa na importação** quando dá para aproveitar o arquivo: um `.jopreset` de uma versão do app com um parâmetro a mais ainda entra.
+- **Não sincroniza com a conta (por enquanto).** Sem rota nem tabela no servidor; o arquivo cobre o transporte.
+
+### Como testar os presets do usuário
+
+```bash
+cd app && flutter test test/user_presets_test.dart
+```
+
+Grupos: `nomes` (limpeza, 60 caracteres, nome hostil), `guardado` (ida e volta do arquivo local, capturar e aplicar são a identidade em todos os instrumentos e nos 12 efeitos, o EQ leva as 8 bandas, sidechain e `Nota base`/`Afinação` ficam como estão, substituir/renomear/apagar, nome único, limite de 300, arquivo local corrompido ou de versão futura, guardado que falha), `.jopreset` (exportar e importar, sufixo ` (2)`, arquivos ruins, `NaN`, infinito e valores enormes, nome hostil, sampler ignora `Nota base` e `Afinação` do arquivo) e `menu (widget)` (instrumento, efeito, celular estreito com nome comprido, importar pelo menu, exportar pelo `saveFile` injetado; os testes trocam `UserPresets.instance` por um em memória). A sessão de código relatou o uso no Chrome (salvar `Meu baixo grave` e o preset aparecer marcado com o visto), `(não repetido por quem escreveu esta documentação)`; o Android e o seletor de arquivos reais só têm teste automático `(testado só por testes automáticos)`.
+
+### Armadilhas dos presets do usuário
+
+- **`saveError` não aparece em tela nenhuma.** O comentário do campo diz que a tela pode avisar, mas nada em `app/lib/` o lê: se o guardado recusar a gravação (cota do navegador, disco cheio), a pessoa não vê aviso e perde os presets ao fechar o app.
+- **Guardado ilegível ou de versão futura é tratado como vazio, e a próxima gravação o sobrescreve.** Voltar para um app mais antigo (que só conhece a versão 1) e salvar um preset apaga os presets do arquivo mais novo.
+- **`Nome (editado)` fantasma.** O `_lastPreset` do painel não é limpo ao apagar nem ao renomear o preset: aplicar um preset seu, apagá-lo e deixar os valores como estão mostra `Nome (editado)` de um preset que não existe mais; depois de renomear e mexer num knob, o rótulo mostra o nome antigo.
+- **Importar sem ressalvas não avisa.** A janela só abre com avisos: o único sinal de sucesso é a linha nova na seção `MEUS PRESETS` (e no menu de outro tipo, se o arquivo era de outro tipo, a mensagem cita o nome interno do tipo, como `reverb`).
+- **Preset com todos os valores no padrão passa na frente de `Inicial`.** Salvar um instrumento intocado cria um preset que casa com o estado inicial de toda faixa nova daquele tipo, e o rótulo mostra o nome dele em vez de `Inicial`.
+- **O campo de nome não nega marcas invisíveis (largura zero, direção do texto)**: elas são aceitas na digitação e viram espaço em `cleanPresetName` ao guardar, então o nome guardado pode diferir do digitado.
+- **`userpresets` é global do aparelho**: não entra na chave nenhum id de conta e o `purgeLocalProject` e o sair da conta não mexem nele.
+- **Cancelar o "salvar como" do Android volta em silêncio**: o `saveFile` devolve `false` e a interface ignora o resultado, como no projeto.
+- **`UserPresets.instance` é estático**: testes de painel que não o troquem por um `UserPresets(MemoryUserPresetStorage())` leem o `LocalStore` de verdade.
 
 ## Tabelas espelhadas do motor (`instruments.dart`, `effects.dart`)
 

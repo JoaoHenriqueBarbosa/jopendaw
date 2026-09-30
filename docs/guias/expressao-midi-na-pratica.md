@@ -18,7 +18,7 @@ Três coisas para saber antes:
 
 1. **A curva é em degraus.** Cada ponto vale até o próximo; o lápis põe um ponto por passo da grade. Para um bend que soe como deslize, use a grade `1/32` (um ponto a cada 62 ms a 120 bpm).
 2. **O bend é uma fração do alcance.** O ponto vai de -1 a +1 e o valor real é ponto × `Alcance do bend`: com o padrão de 2 st o topo da faixa é +2 st; com 12 st, é uma oitava.
-3. **Os pontos são do clipe.** Movem-se, duplicam-se e são cortados junto com ele na linha do tempo, mas não acompanham notas que você move dentro do editor. Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) levam os pontos do trecho delas, do começo da primeira nota ao fim da última.
+3. **Os pontos são do clipe.** Movem-se, duplicam-se e são cortados junto com ele na linha do tempo, mas não acompanham notas que você move dentro do editor. Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) levam os pontos do trecho delas, do começo da primeira nota ao fim da última (`Ctrl+X` também os tira do clipe de origem, junto das notas).
 
 ## Passo a passo
 
@@ -121,6 +121,7 @@ Resultado: uma frase gravada com bend, modulação e pedal, limpa e pronta para 
 Variações:
 
 - **Sem teclado MIDI:** as duas rodas do teclado da tela (bend com mola e modulação sem mola) gravam do mesmo jeito, em faixa armada, com a mesma resolução do teclado MIDI. Não há pedal na tela.
+- **Parar e trocar de faixa.** Parar (`Enter`) ou pausar (`Espaço`) solta o pedal e leva o bend e a roda ao centro, seja do teclado MIDI ou das rodas da tela (elas voltam ao zero sozinhas). Se você muda de faixa com o pedal embaixo, a faixa antiga volta ao repouso, então um pedal segurado antes da troca não fica preso lá `(testado só por testes automáticos)`.
 - **FM e wavetable:** funcionam igual; no FM o bend afina os quatro operadores juntos.
 - **Em loop:** ligue o loop e grave várias passadas para as notas; só a última passada vale para os controles.
 
@@ -135,5 +136,5 @@ Se der errado:
 ## Se der errado (geral)
 
 - **Nada muda de altura em nenhuma faixa:** confira se a faixa é de instrumento com afinação e não `Bateria`, e o `Alcance do bend` (0 desliga).
-- **Vibrato sem parar depois de tocar com a roda da tela:** a roda de modulação não tem mola: leve-a até embaixo.
+- **Vibrato sem parar depois de tocar com a roda da tela:** a roda de modulação não tem mola: leve-a até embaixo. Parar ou pausar o transporte também a devolve ao zero.
 - **Depois de mover ou dividir notas no editor, a curva ficou no lugar antigo:** os pontos não acompanham notas que mudam de lugar (só `Escalar o tempo`, `Inverter no tempo` e a cópia com `Ctrl+C`/`Ctrl+V`/`Ctrl+D` os levam); mova os pontos também.

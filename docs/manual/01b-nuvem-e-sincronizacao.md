@@ -4,7 +4,7 @@
 
 ## Onde fica
 
-- **Indicador de nuvem:** na barra de transporte do projeto aberto, depois dos botões `Configurações: entrada de áudio, latência e contagem` e `Atalhos do teclado (?)` e antes do texto de trabalho em andamento. No computador a barra está no topo; no celular, embaixo ([capítulo 00](00-visao-geral.md)). Só existe dentro de um projeto e só aparece com sessão iniciada.
+- **Indicador de nuvem:** no **cabeçalho da tela do projeto**, no canto superior direito, à direita do nome e do andamento do projeto ([capítulo 00](00-visao-geral.md)); é o mesmo lugar no computador e no celular. Ele **não está na barra do transporte**: saiu de lá porque a barra passava da largura de uma janela de uns 1500 px e o ícone ficava para fora da tela. Só existe dentro de um projeto, só aparece depois que o estúdio abriu (durante o spinner de abertura ainda não há ícone) e só com sessão iniciada.
 - **Diálogo de conflito:** abre sozinho uma vez quando o conflito aparece; depois, só clicando no ícone vermelho.
 - **Spinner de abertura:** o círculo girando no meio da tela quando você abre, num aparelho novo, um projeto que já existe na nuvem.
 
@@ -17,7 +17,7 @@
 
 ## Controles
 
-### Indicador de nuvem (na barra de transporte)
+### Indicador de nuvem (no cabeçalho do projeto)
 
 É um botão de ícone. Só o estado `Conflito` é clicável; nos outros o toque não faz nada e serve só para ler o tooltip.
 
@@ -107,7 +107,7 @@ Como se comporta:
 O andamento (BPM) e o compasso (tempos por compasso) são **parte do documento do projeto**, como as faixas e os clipes. Isso muda três coisas em relação ao que se poderia esperar:
 
 - **Trocar é sempre possível, com ou sem rede.** Ao tocar em `Salvar` na janela `Andamento e compasso` ([capítulo 02](02-transporte.md)), o valor entra no documento, no desfazer e no envio normal do documento. Nada espera o servidor.
-- **O servidor guarda também um espelho** do andamento e do compasso (é o que a lista `Projetos` mostra). O envio do espelho é em segundo plano e sem alarde: se falhar, não aparece erro; ele fica pendente e sai de novo quando o documento é salvo (inclusive ao desfazer ou refazer), ao abrir o projeto, depois de aplicar uma versão vinda da nuvem e quando o ícone volta a `Sincronizado`. O espelho vai como inteiro entre 20 e 400.
+- **O servidor guarda também um espelho** do andamento e do compasso (é o que a lista `Projetos` mostra). O envio do espelho é em segundo plano e sem alarde: se falhar, não aparece erro; ele fica pendente e sai de novo quando o documento é salvo (inclusive ao desfazer ou refazer), ao abrir o projeto, depois de aplicar uma versão vinda da nuvem e quando o ícone volta a `Sincronizado`. O espelho vai como inteiro entre 20 e 999.
 - **Reabrir ou trocar de aparelho não desfaz o andamento.** O andamento que vale é o do documento local (ou o do documento novo que veio da nuvem), nunca mais o do cadastro do projeto. Só um projeto sem documento ainda (recém-criado) parte do andamento e do compasso do cadastro.
 
 O subtítulo do projeto (`120 BPM · 4/4`) mostra o do documento aberto, e a barra de transporte mostra o mesmo texto: o andamento sai sem casas quando é inteiro e com uma casa e vírgula quando não é (`120,5 BPM · 4/4`), nos dois lugares. `(lido do código e coberto por testes automáticos; não visto no Chrome)`

@@ -21,7 +21,7 @@ O jopendaw guarda o projeto no aparelho (é a cópia que você edita) e sincroni
 
 1. No computador, abra o jopendaw no navegador e entre. No celular, instale o app Android (`tech.johnenrique.jopendaw`, Android 8.0 ou mais novo; instalação em [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md)) ou abra o mesmo endereço no navegador do celular.
 2. Entre com **a mesma conta** nos dois: o mesmo email (link de entrada), ou a mesma conta do Google ou do Discord. Sem senha: a conta é criada na primeira entrada, e uma conta com outro email é uma conta separada, que não enxerga os projetos da primeira.
-3. O indicador de nuvem só existe com sessão iniciada e só dentro de um projeto (barra de transporte, depois dos botões `Configurações: entrada de áudio, latência e contagem` e `Atalhos do teclado (?)`).
+3. O indicador de nuvem só existe com sessão iniciada e só dentro de um projeto (no cabeçalho do projeto, no canto superior direito, à direita do nome e do andamento; não fica na barra de transporte e só aparece depois que o estúdio abriu).
 
 ### 2. Começar no computador
 

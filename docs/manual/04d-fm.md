@@ -173,7 +173,7 @@ Não há filtro, ruído, uníssono, sub ou controle de estéreo no FM. A saída 
 
 ### Presets do FM
 
-O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Próximo (preset)` no computador) lista 15 presets em 7 categorias. Aplicar um preset **substitui todos os parâmetros** do instrumento: o que o preset não cita volta ao padrão (inclusive `Volume`, `Vozes` e o LFO). É um passo só no desfazer. Depois de mexer num knob o seletor mostra o nome do preset seguido de `(editado)`. Não há como guardar presets próprios: o trabalho fica salvo com o projeto, nos knobs.
+O seletor de presets (tooltip `Presets`, com as setas `Anterior (preset)` e `Próximo (preset)` no computador) lista 15 presets em 7 categorias. Aplicar um preset **substitui todos os parâmetros** do instrumento: o que o preset não cita volta ao padrão (inclusive `Volume`, `Vozes` e o LFO). É um passo só no desfazer. Depois de mexer num knob o seletor mostra o nome do preset seguido de `(editado)`. Presets próprios: `Salvar como preset…` (seção `MEUS PRESETS`, no fim do menu) guarda todos os parâmetros do FM (algoritmo, os quatro operadores, LFO e `Geral`) com um nome, para chamar em qualquer faixa FM deste aparelho; ver [Meus presets](04-painel-de-instrumento.md#meus-presets). Sem isso, o trabalho fica salvo com o projeto, nos knobs.
 
 Os números de algoritmo abaixo são os do painel (`Algoritmo 1` a `8`).
 

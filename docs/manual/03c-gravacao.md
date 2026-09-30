@@ -73,6 +73,8 @@ Seja qual for a origem (controlador MIDI, rodas da tela ou os pontos desenhados 
 
 As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrumento.md#rodas-de-pitch-bend-e-de-modulação)) tocam a faixa do painel, não a regra acima; se essa faixa está armada, também são gravadas. O app lembra separadamente onde o controlador MIDI e as rodas da tela deixaram cada controle fora do repouso: trocar a faixa de entrada num deles não devolve ao repouso o que o outro deixou.
 
+**Parar zera o que se tocou ao vivo.** Parar (`Enter`, `Home`) e pausar (`Espaço`, com a música tocando) soltam o pedal e levam o pitch bend e a roda de modulação ao centro, seja o que vier do controlador MIDI ou das rodas da tela (elas voltam ao zero sozinhas). Antes o motor só zerava o que o clipe dirigia, então um pedal seguro no controlador na hora de parar continuava valendo. Se a entrada troca de faixa (por exemplo, você seleciona outra faixa com o pedal embaixo), a faixa antiga volta ao repouso mesmo quando o valor novo é o de repouso: soltar o pedal já na faixa nova não deixa a antiga presa. Encerrar uma gravação em andamento não passa por esse caminho: o repouso do fim da gravação é o descrito em "Gravar bend, modulação e pedal". `(testado só por testes automáticos; não visto com um controlador de verdade)`
+
 ## Passo a passo
 
 **Gravar voz ou instrumento no microfone**
@@ -137,7 +139,7 @@ As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrument
 - Ao parar, o app espera uma fração de segundo (a latência total mais 20 ms) para a entrada terminar de chegar, antes de encerrar.
 
 **Contagem**
-- Um compasso (`beatsPerBar` batidas, de acordo com o compasso do projeto). Só quando o transporte estava parado: gravando com play rodando não há contagem.
+- Um compasso, o do mapa de compassos no ponto onde a gravação começa (4 batidas em 4/4, 3 em 3/4 ou 6/8, 3,5 em 7/8). Só quando o transporte estava parado: gravando com play rodando não há contagem.
 - Notas de instrumento tocadas **durante a contagem** são aproveitadas só se estiverem até 1/4 de batida antes do primeiro tempo (entram no primeiro tempo); a nota ainda segurando no primeiro tempo começa nele; o resto some.
 - Quando o cursor está antes do fim do primeiro compasso, a contagem é feita numa região vazia longe do fim do projeto e volta (o cursor mostra os tempos negativos). Não muda nada do que você grava.
 
@@ -153,7 +155,7 @@ As rodas do teclado da tela (ver [Painel de instrumento](04-painel-de-instrument
 - Grava as notas tocadas **ao vivo** (teclado do computador ou MIDI) enquanto o transporte toca, com a batida exata em que o motor as aplicou. O motor guarda até **16.384 notas** por gravação; passou disso, as novas são descartadas. A mesma tecla apertada de novo sem soltar termina a anterior. Nota segurada quando você para termina no ponto de parada.
 - Nota com velocidade 0 não é nota. Nota mais curta que 1/64 de batida é esticada até isso.
 - A nota segurada na volta do loop vira duas (até o fim do loop, e do começo dele até a soltura). Em loop, as notas de todas as passadas ficam **no mesmo clipe** (não há tomadas de MIDI).
-- O clipe novo cobre compassos inteiros e tem no mínimo um compasso, com o nome da faixa.
+- O clipe novo cobre compassos inteiros e tem no mínimo um compasso, com o nome da faixa. Os compassos são os do mapa de compassos (num projeto em 7/8 o clipe cresce em blocos de 3,5 batidas); antes a conta usava só os tempos por compasso do compasso inicial.
 - Tocar notas clicando no teclado do piano roll também é "ao vivo" e pode ser gravado (não confirmado).
 - `jopendawEngine.injectMidi(status, d1, d2)` (no console do navegador, só na web) injeta uma mensagem MIDI pelo mesmo caminho de um aparelho: por exemplo `jopendawEngine.injectMidi(0x90, 60, 100)` liga o dó central e `jopendawEngine.injectMidi(0x80, 60, 0)` desliga. **É só para teste e depuração**, sem hardware. Só chega depois de ligar o MIDI (ícone do cabo) (não confirmado sem isso).
 

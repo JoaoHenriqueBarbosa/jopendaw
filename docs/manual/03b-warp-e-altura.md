@@ -83,7 +83,7 @@ O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao and
 - Transposição e esticamento **juntos** duplicam o trabalho (transpor é esticar e depois reamostrar).
 
 **Faixa de valores**
-- Razão de duração (BPM do áudio ÷ BPM do projeto): **0,25 a 4**, arredondada a 4 casas. Fora disso o valor é apertado nos limites (BPM do áudio 20 a 999, do projeto 20 a 400).
+- Razão de duração (BPM do áudio ÷ BPM do projeto): **0,25 a 4**, arredondada a 4 casas. Fora disso o valor é apertado nos limites (BPM do áudio 20 a 999; o BPM do projeto também vai de 20 a 999).
 - Transposição: **−24 a +24 semitons**, arredondada a 2 casas.
 - Com warp ligado, um segundo do áudio original passa a ocupar sempre a mesma fração de batida (a do andamento do próprio áudio), então **a largura do clipe na linha do tempo não muda** quando você muda o andamento do projeto; o som é que é refeito para caber. Isso vale para um projeto de **um andamento só**.
 - **Com mapa de andamento (faixa `Andamento`), o warp só conhece o andamento inicial.** A razão é (BPM do áudio ÷ BPM **inicial**): o áudio é esticado uma vez para o andamento de partida e toca em velocidade constante, como qualquer áudio. Se o clipe cruza um ponto onde o andamento muda, ele **não acompanha** a grade dali em diante (fica adiantado ou atrasado em relação às notas e à bateria), e a largura dele na linha do tempo muda quando o mapa muda por baixo dele. Mudar só os outros pontos do mapa não refaz o warp; mudar o andamento inicial (janela **Andamento e compasso** ou o primeiro ponto) refaz. Para encaixar um loop numa parte com outro andamento, veja a receita em [Mapa de andamento e de compassos na prática](../guias/mapa-de-andamento-e-compasso.md).

@@ -295,7 +295,7 @@ Enquanto roda, o botão `Cancelar` fica desligado: não dá para interromper a m
 
 ### O que o arquivo NÃO contém
 
-- **Andamento e compasso do projeto como campos do servidor:** o arquivo guarda os do documento e, ao importar, eles são aplicados ao projeto novo (o andamento vira número inteiro entre 20 e 400; o compasso, entre 1 e 32). Um andamento com casas decimais é arredondado.
+- **Andamento e compasso do projeto como campos do servidor:** o arquivo guarda os do documento e, ao importar, eles são aplicados ao projeto novo (o andamento do espelho do servidor vira número inteiro entre 20 e 999, e o do documento importado mantém as casas decimais; o compasso, entre 1 e 32). No espelho do servidor um andamento com casas decimais é arredondado; no documento importado ele fica como estava.
 - **O histórico de desfazer:** o projeto importado abre com o desfazer vazio.
 - **Os sons derivados do warp** (esticados, transpostos, invertidos): cada aparelho os refaz a partir do original, como na sincronização.
 - **Preferências do aparelho:** zoom e rolagem, altura das faixas, seleção, entrada de áudio escolhida, teclado e MIDI ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).

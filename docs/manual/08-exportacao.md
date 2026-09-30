@@ -186,23 +186,23 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 
 ## Notas em MIDI (.mid)
 
-O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir a melodia em outro programa ou guardá-la como texto musical. Vem do botão `Notas em MIDI (.mid)…` da janela **Exportar áudio**. Para o caminho de volta (importar um `.mid`), veja [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid).
+O WAV leva o som; o `.mid` leva só as **notas** (e três controles, mais o programa e o alcance do bend de cada faixa), para abrir a melodia em outro programa ou guardá-la como texto musical. Vem do botão `Notas em MIDI (.mid)…` da janela **Exportar áudio**. Para o caminho de volta (importar um `.mid`), veja [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid).
 
 ![Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. Captura anterior à fase 11: o texto pequeno ainda diz que leva só o andamento inicial (120 BPM), mesmo com o ponto de 88 BPM no mapa.](../img/exportar-midi.jpg)
 
-*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. A captura é anterior à fase 11: o texto pequeno aparece com a frase antiga (`Leva o andamento (120 BPM) e o compasso (4/4)…`, só o inicial). Hoje o texto é `Leva os andamentos e compassos do projeto, as notas e o pitch bend, a modulação e o pedal.`, e o arquivo leva o mapa de andamento e o de compassos inteiros.*
+*Diálogo Exportar MIDI (.mid): Clipe selecionado ou Todas as faixas de notas. A captura é anterior à fase 11: o texto pequeno aparece com a frase antiga (`Leva o andamento (120 BPM) e o compasso (4/4)…`, só o inicial). Hoje o texto é `Leva os andamentos e compassos do projeto, as notas, o pitch bend, a modulação e o pedal, o programa de cada faixa e o alcance do bend.`, e o arquivo leva o mapa de andamento e o de compassos inteiros.*
 
 ### Janela Exportar MIDI (.mid)
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | **Clipe selecionado** (opção) | Escreve só o clipe de notas selecionado na linha do tempo. O clipe **sai do começo do arquivo** (o início dele vira o instante zero), qualquer que seja a posição dele no projeto. Legenda: `<nome do clipe>, começa no início do arquivo.` (ou só `Começa no início do arquivo.` se o clipe não tem nome) | Padrão quando há um clipe de notas selecionado. Sem clipe de notas selecionado a opção fica desligada com a legenda `Selecione um clipe de notas na linha do tempo.` | Um clipe de áudio selecionado não conta: a opção continua desligada |
-| **Todas as faixas de notas** (opção) | Escreve todas as faixas de instrumento que têm notas ou controles, cada uma na **posição em que está no projeto** (o compasso 1 do projeto é o começo do arquivo). Legenda: `N faixa(s), uma por canal (bateria no canal 10), nas posições do projeto.` | Padrão quando não há clipe de notas selecionado. Sem nenhuma faixa com notas: desligada, legenda `Não há faixas com notas.` | Faixas de áudio e barramentos não entram |
-| Texto pequeno | `Leva os andamentos e compassos do projeto, as notas e o pitch bend, a modulação e o pedal.` | Texto fixo (não muda com o projeto) | O arquivo leva o mapa de andamento e o de compassos, ver "O que fica no arquivo". Antes da fase 11 o texto trazia `Leva o andamento (X BPM) e o compasso (N/4)…` e só o inicial ia |
+| **Todas as faixas de notas** (opção) | Escreve todas as faixas de instrumento que têm notas ou controles, cada uma na **posição em que está no projeto** (o compasso 1 do projeto é o começo do arquivo). Legenda: `N faixa(s), uma por canal (bateria no canal 10), nas posições do projeto.` | Padrão quando não há clipe de notas selecionado. Sem nenhuma faixa com notas: desligada, legenda `Não há faixas com notas.` Com faixas mudas (ou fora do solo) a legenda acrescenta ` N muda(s) (ou fora do solo) não entra(m).`; se **todas** as faixas com notas estão mudas, a opção fica desligada com `As faixas com notas estão mudas (ou há outra em solo).` | Faixas de áudio e barramentos não entram; faixas mudas também não (ver "O que não entra") |
+| Texto pequeno | `Leva os andamentos e compassos do projeto, as notas, o pitch bend, a modulação e o pedal, o programa de cada faixa e o alcance do bend.` | Texto fixo (não muda com o projeto) | O arquivo leva o mapa de andamento e o de compassos, ver "O que fica no arquivo". Antes da fase 11 o texto trazia `Leva o andamento (X BPM) e o compasso (N/4)…` e só o inicial ia |
 | **Exportar** (com ícone de salvar) | Monta o arquivo e o entrega. Na web, baixa o arquivo (download do navegador, na pasta de downloads); no Android, abre a janela `Salvar <nome>` (se ela não estiver disponível, o app oferece o arquivo pelo compartilhar do sistema). Depois de salvar, o botão vira **Exportar de novo** e a janela continua aberta | Desligado enquanto trabalha, ou se não há faixa com notas nem clipe selecionado | |
 | **Cancelar** / **Fechar** | Fecha a janela (o texto vira **Fechar** depois de exportar) | | |
-| Resultado (texto abaixo dos botões) | `<nome>.mid salvo: N faixa(s), M nota(s).` e, se houve descarte, `K nota(s) fora do clipe ou de 0–127 ficaram de fora.` | | As contas são das notas; os controles descartados não entram na contagem |
-| Erro (texto vermelho) | `Não há notas para exportar: desenhe ou grave um clipe de notas primeiro.` ou `Não deu para salvar o arquivo MIDI.` | | |
+| Resultado (texto abaixo dos botões) | `<nome>.mid salvo: N faixa(s), M nota(s).` e, se houve descarte, `K nota(s) fora do clipe ou de 0–127 ficaram de fora.`, `K ponto(s) de controle (bend, modulação ou pedal) fora do clipe ficaram de fora.` e `Faixas mudas não entraram: A, B.` | Cada frase só aparece quando há o que dizer | Notas e pontos de controle têm contagens separadas |
+| Erro (texto vermelho) | `Não há notas para exportar: desenhe ou grave um clipe de notas primeiro.`, `As faixas com notas estão mudas (ou há outra em solo): tire o mudo, ou exporte só o clipe selecionado.` ou `Não deu para salvar o arquivo MIDI.` | | |
 
 **Nome do arquivo.** Em `Todas as faixas de notas`, o nome do projeto; em `Clipe selecionado`, o nome do clipe (o do projeto se o clipe não tem nome), mais `.mid`. Caracteres que os sistemas de arquivo recusam (`/ \ : * ? " < > |` e os de controle) viram `_`; pontos no começo saem; o nome tem no máximo 80 caracteres; nome vazio vira `notas.mid`.
 
@@ -214,13 +214,15 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir
 | Trilha 1 (andamento e compasso) | Nome do projeto e **todo** o mapa de andamento (`Set Tempo`, um por ponto) e o de compassos (`Time Signature`, um por mudança de fórmula) | Sem mapa: um `Set Tempo` (o andamento do projeto) e um `Time Signature` (a fórmula do projeto, ex.: `N/4`, `6/8`), como antes. Com mapa: um evento por ponto ou mudança, no tick da batida dele (480 por batida). Ver "Andamento e compasso no arquivo" |
 | Uma trilha por faixa | Nome da faixa, e as notas e os controles de **todos os clipes dela**, cada clipe na sua posição | Em `Clipe selecionado`, uma trilha só, com o nome do clipe (ou da faixa, se o clipe não tem nome) |
 | Canal | `Bateria` sempre no canal 10; as outras faixas em ordem nos canais 1 a 9 e 11 a 16 (o 10 é pulado) | A 16ª faixa melódica em diante volta ao canal 1 e divide o canal com a primeira. Em `Clipe selecionado`: canal 10 se a faixa é `Bateria`, canal 1 nas outras |
-| Faixas que entram | `Sintetizador`, `Bateria`, `Sampler`, `FM` e `Wavetable` com pelo menos um clipe com notas ou controles | Na ordem da mesa; faixa vazia fica de fora. Mudo e solo **não são consultados**: faixa muda também sai `(lido do código; não testado em uso)` |
+| Faixas que entram | `Sintetizador`, `Bateria`, `Sampler`, `FM` e `Wavetable` com pelo menos um clipe com notas ou controles | Na ordem da mesa; faixa vazia fica de fora. Em `Todas as faixas de notas` valem mudo e solo como no render de áudio: com alguma faixa em **solo** só as em solo entram, senão entram todas menos as **mudas**; em `Clipe selecionado` a faixa sai mesmo se estiver muda |
 | Notas | Altura como está no app (0–127), início, duração e velocidade | Velocidade do app (0–1) × 127, arredondada, entre 1 e 127. Um clipe de bateria já leva as alturas das peças do app (36, 37, 38, 39, 41, 42, 45, 46, 48, 49, 51, 56) |
+| Programa (Program Change) | Um por trilha de faixa, no tick 0: o programa GM da categoria do preset de fábrica mais parecido com o timbre da faixa (ver "O que não entra" para a tabela) | Bateria: programa 0 no canal 10 |
+| Alcance do bend (RPN 0) | No tick 0 de cada trilha melódica, antes do programa: `CC 101` 0, `CC 100` 0, `CC 6` com os semitons, `CC 38` com os centésimos, e o RPN nulo (`CC 101` e `CC 100` em 127) para os controles seguintes não mexerem nele | O `Alcance do bend` do instrumento (0 a 24 st, inteiro no app: os centésimos saem 0). A bateria não leva RPN |
 | Pitch bend | Mensagem de pitch bend de 14 bits | −1 a 1 do app vira 0 a 16383 (centro 8192) |
 | Modulação | Controle 1 | 0–1 vira 0–127 |
 | Sustain (pedal) | Controle 64 | Vale 127 a partir de 0,5; senão 0 |
 
-**Notas que ficam de fora** (e a janela conta): altura fora de 0–127, início negativo, início no fim do clipe ou depois dele, ou valores inválidos. Uma nota que começa dentro do clipe mas passa do fim dele sai com a duração inteira (o arquivo não corta no fim do clipe). Pontos de controle fora do trecho do clipe (antes do começo ou depois do fim) também não saem, mas **sem** entrar na contagem.
+**Notas que ficam de fora** (e a janela conta): altura fora de 0–127, início negativo, início no fim do clipe ou depois dele, ou valores inválidos. Uma nota que começa dentro do clipe mas passa do fim dele sai com a duração inteira (o arquivo não corta no fim do clipe). Pontos de controle fora do trecho do clipe (antes do começo ou depois do fim) também não saem, e a janela os conta à parte (`K ponto(s) de controle ... fora do clipe ficaram de fora.`).
 
 ### O que não entra
 
@@ -231,7 +233,6 @@ O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir
 - **Cancelar o `Salvar como` no Android** não mostra `salvo`: a janela só confirma quando o arquivo foi gravado ou entregue a outro app.
 - **Efeitos, mixer e envios.** Volume, pan, mudo, solo, envios, barramentos, efeitos e o master não saem.
 - **Automação.** As curvas de automação do mixer e dos efeitos não saem. Só os três controles do clipe (pitch bend, modulação e sustain) saem.
-- **Alcance do bend.** O `Alcance do bend` do instrumento não é escrito (nenhum `RPN`), então outro programa usa o alcance padrão dele para o mesmo pitch bend.
 - **Só o que o MIDI padrão tem para andamento.** O arquivo não guarda a rampa como rampa, só degraus (ver abaixo); a marca de rampa de cada ponto e a visibilidade da faixa de andamento não saem.
 - **Escala do clipe, marcadores, loop, seções.** Não saem.
 
@@ -254,7 +255,7 @@ Limites e pegadinhas do `.mid`:
 - A abertura em programas externos (Ableton Live, FL Studio, MuseScore, Logic etc.) `(testado só por testes automáticos)`: os testes escrevem o arquivo e o leem de volta com o leitor do próprio app (notas, velocidades, controles, andamento, compasso e nomes voltam iguais); nenhum programa externo abriu um arquivo do jopendaw.
 - Notas de mesma altura emendadas (o fim de uma no início da outra) não se fundem: o `Note Off` vem antes do `Note On` no mesmo instante.
 - Nada é gravado no projeto ao exportar; é só um arquivo no seu aparelho.
-- No Android, se a janela `Salvar <nome>` for cancelada, o app pode mostrar `<nome>.mid salvo` mesmo assim `(não confirmado em uso)`: o código não checa o retorno do seletor de arquivo. Na web não há o que cancelar (é um download).
+- No Android, cancelar a janela `Salvar <nome>` (ou dispensar a folha de compartilhar) não mostra `salvo`: o app checa o retorno do seletor e deixa a janela como estava `(testado só por testes automáticos)`. Na web não há o que cancelar (é um download).
 
 ## Passo a passo
 

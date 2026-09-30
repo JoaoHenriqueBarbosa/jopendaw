@@ -73,7 +73,9 @@ Menu de um lugar vazio da faixa:
 | **Adicionar ponto aqui** | Cria um ponto na batida do clique (com encaixe), no BPM que já vale ali, em salto. | sempre |
 | **Apagar todas as mudanças de andamento** | Remove todos os pontos menos o inicial; o andamento inicial fica. | só com mais de um ponto |
 
-Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer no andamento alteraria a gravação em andamento. Cada projeto guarda até 4096 pontos de andamento e 1024 mudanças de compasso (os mesmos limites do motor); o ponto ou a mudança que passaria disso não entra e o app avisa (`O mapa de andamento chegou ao limite de 4096 pontos.`). Uma importação de MIDI com mais do que cabe avisa que o excedente foi ignorado.
+Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer no andamento alteraria a gravação em andamento. Cada projeto guarda até 4096 pontos de andamento e 1024 mudanças de compasso (os mesmos limites do motor); o ponto ou a mudança que passaria disso não entra e o app avisa (`O mapa de andamento chegou ao limite de 4096 pontos.`). O limite vale para o app, o motor, o espelho do servidor (o andamento inicial, de 20 a 999) e a importação de um `.jopendaw`. Uma importação de `.mid` tem o limite próprio de 256 pontos de andamento: pontos que diferem menos de 0,05 BPM são fundidos e, se sobrarem menos que o arquivo trazia, sai o aviso `O arquivo tem N mudanças de andamento; fundi as que diferem menos de 0.05 BPM e M ficaram no mapa (o limite é 256 pontos).` (mudanças de compasso do `.mid` acima de 1024 são cortadas em silêncio `(lido do código)`).
+
+**No botão de andamento da barra.** Com o cursor num trecho em rampa, o número do BPM ganha `↗` quando a rampa sobe (o ponto seguinte é mais rápido) e `↘` quando desce (o seguinte é mais lento); uma rampa entre dois pontos de mesmo BPM não mostra seta. Ver [Transporte](02-transporte.md).
 
 **Rampa: o que acontece com o tempo.** O BPM muda em reta em função da batida, e o tempo real do trecho sai da conta exata (integral): `segundos = 60 × L ÷ (B − A) × ln(B ÷ A)` para `L` batidas indo de `A` a `B` BPM. Exemplo: 4 batidas indo de 60 a 120 BPM levam 4 × ln 2 ≈ 2,77 s (a 90 BPM constante levariam 2,67 s). `(testado só por testes automáticos)`
 
@@ -83,7 +85,7 @@ Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer
 
 **O que segue o mapa e o que não.**
 
-| Recurso | Segue o mapa de andamento? |
+| Recurso | Segue o mapa (de andamento ou de compassos)? |
 |---|---|
 | Notas e clipes de notas, automação, marcadores, loop, cursor, contador de posição, `Duração do projeto` | Sim (a posição é em batidas; o tempo real sai do mapa) |
 | Metrônomo | Sim (intervalo pelo andamento; fórmula e tempo forte pelo mapa de compassos) |
@@ -91,7 +93,7 @@ Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer
 | Clipes de áudio **com warp** | Não: o áudio é esticado para o andamento **inicial** e toca a velocidade constante; se o clipe atravessa uma mudança, deixa de acompanhar a grade (o diálogo de warp avisa) |
 | Delay, tremolo e filtro em modo `Andamento` | Não: usam só o andamento inicial |
 | Gravação (áudio e notas), exportação, congelar faixa | Sim: a gravação usa o mapa que valia quando começou; exportar e congelar contam o tempo pelo mapa |
-| Editor de notas (linhas de compasso, `Shift`+← →) e a conta de compassos do tooltip de `Duração do projeto` | Não: usam os tempos por compasso do compasso inicial, sem as mudanças de compasso |
+| Editor de notas (linhas e números de compasso da grade e da régua, `Shift`+← →, colar e duplicar), clipe de notas novo, gravação de notas (clipe que fecha em compasso), `Enquadrar`, escala do minimapa, encaixe `Compasso` e a conta de compassos do tooltip de `Duração do projeto` | Seguem o **mapa de compassos** (fase 12): compassos de 3 batidas em 3/4 e 6/8, de 3,5 em 7/8, mudanças no meio. O clipe já criado não muda de tamanho quando o mapa muda |
 
 
 ### Cabeçalho de faixa
@@ -108,7 +110,7 @@ O cabeçalho tem uma faixa de cor de 4 px na esquerda (a cor da faixa) e o medid
 | Bolinha de gravar (tooltips abaixo) | Arma a faixa para gravar. Contornada em vermelho quando armada; cheia enquanto grava de fato (depois da contagem). Barramento não tem o botão (fica um vão no lugar). | Desarmada. Não entra no desfazer. | Bloqueada durante a gravação (`Pare a gravação para armar esta faixa`). |
 | **A** (tooltip `Automação` ou `Automação (N)`) | Abre o menu dos parâmetros automatizáveis da faixa; escolher um mostra a sub-raia dele embaixo da faixa (escolher um já aberto oculta). Aceso quando há sub-raia aberta; contornado quando há automação, mas oculta. O menu ainda tem `Mostrar as ocultas (N)` e `Ocultar todas`, e `Nada para automatizar aqui` quando não há alvo. | | Ver [Automação](07-automacao.md). |
 | **FX** (tooltip `Efeitos` ou `Efeitos (N)`; aberto: `Fechar os efeitos`) | Abre e fecha o rack de efeitos da faixa. Aceso enquanto aberto; contornado quando a cadeia tem efeitos. | | Ver [Painel de efeitos](06c-painel-de-efeitos.md). |
-| Mini fader (controle deslizante fino) | Volume da faixa. O tooltip mostra o valor em dB. Tocando com automação de volume, mostra o valor ao vivo na cor da automação. | −∞ a +6 dB (ganho 0 a 2, curva cúbica). | Um arraste é um passo do desfazer. |
+| Mini fader (controle deslizante fino) | Volume da faixa. O tooltip mostra o valor em dB. Tocando com automação de volume, mostra o valor ao vivo na cor da automação. | −∞ a +6 dB (ganho 0 a 2, curva cúbica). | Um arraste é um passo do desfazer. Só no computador (com a janela abaixo de 800 px o cabeçalho não tem mini fader nem `FX`). **Grava automação de volume** como o fader do mixer, conforme o modo do botão `Automação` da barra (ou do seletor da raia `Volume`): em `Escrever`, `Toque` e `Trava`, arrastá-lo com a música tocando grava pontos na raia `Volume` da faixa (ver [07 Automação, Gravar automação](07-automacao.md#gravar-automação)); em `Ler`, muda só o valor fixo. |
 | Barra fina no rodapé do cabeçalho | Nível da entrada, só na faixa de áudio armada. Sobe na hora, cai devagar; a ponta fica vermelha por 1,5 s se saturar. | Escala de −48 a 0 dB. | Ajuste o ganho do microfone por ele antes de gravar. |
 
 No celular (barra de 132 px) o cabeçalho tem duas linhas: nome e três pontos em cima; ícone do tipo, M, S, gravar e A embaixo (botões de 20 px). O **FX** e o mini fader saem do cabeçalho: use o item **Efeitos** do menu ou o mixer.
@@ -226,7 +228,7 @@ A linha **Master** (ícone de alto-falante) fica no fim da lista, depois da linh
 |---|---|---|---|
 | **A** (`Automação`) | Automação do master (volume, pan e parâmetros dos efeitos dele). | | Ver [Automação](07-automacao.md). |
 | **FX** (`Efeitos`) | Abre a cadeia de efeitos do master. | | Ver [Painel de efeitos](06c-painel-de-efeitos.md). |
-| Mini fader (só no computador) | Volume do master; o tooltip mostra os dB. | −∞ a +6 dB | |
+| Mini fader (só no computador) | Volume do master; o tooltip mostra os dB. | −∞ a +6 dB | Este, ao contrário do mini fader das faixas, **não grava automação** em nenhum modo: para gravar o volume do master use o fader do canal `Master` no mixer ([06](06-mixer.md#master)). |
 | Medidor de 6 px | Pico do master. | | |
 
 O Master não tem M, S nem bolinha de gravar, e a raia dele não recebe clipes.
@@ -240,7 +242,7 @@ Uma faixa fina de 28 px embaixo da lista, com o rótulo `Visão geral` à esquer
 | Clicar | Leva a janela: o ponto clicado vira o centro do que você vê. | Não muda o zoom nem o cursor. |
 | Arrastar na horizontal | Rola continuamente. | |
 
-A escala do minimapa é o fim do arranjo mais 5% (no mínimo 4 compassos), para dar para arrastar um pouco além do último clipe.
+A escala do minimapa é o fim do arranjo mais 5% (no mínimo 4 compassos, contados pelo mapa de compassos), para dar para arrastar um pouco além do último clipe.
 
 ### Marcadores e seções
 

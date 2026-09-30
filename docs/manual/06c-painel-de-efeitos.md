@@ -74,7 +74,7 @@ Cada efeito é um cartão com cabeçalho e o editor dele. No computador os cart�
 |---|---|---|---|
 | Alça de seis pontos (tooltip `Arraste para mudar a ordem`) | Arrastar muda o cartão de posição na cadeia. | Computador: começa a arrastar na hora. Celular: alça de 34 px. | O título do cartão também arrasta (no celular, com toque longo, para não brigar com a rolagem). |
 | Título (ícone e nome do tipo) | Nome do efeito. Fica cinza com bypass. | `EQ`, `Compressor`... | |
-| Subtítulo cinza | `Sala`: os parâmetros batem exatamente com esse preset. `Sala (editado)`: você aplicou o preset nesta sessão e depois mexeu. Vazio: nem uma coisa nem outra. | | O `(editado)` não é salvo: depois de recarregar o projeto só aparece o nome se os valores ainda forem idênticos aos do preset. |
+| Subtítulo cinza | `Sala`: os parâmetros batem exatamente com esse preset (de fábrica ou seu). `Sala (editado)`: você aplicou o preset nesta sessão e depois mexeu. Vazio: nem uma coisa nem outra. | | O `(editado)` não é salvo: depois de recarregar o projeto só aparece o nome se os valores ainda forem idênticos aos do preset. |
 | Rótulo `desligado` | Aparece ao lado do título quando o efeito está em bypass. O cartão inteiro fica a 42% de opacidade. | | |
 | Botão liga/desliga (ícone de energia; tooltip `Desligar o efeito (bypass)` ou `Ligar o efeito`) | Liga e desliga o efeito sem perder os ajustes. Aceso na cor da faixa = ligado. | Padrão: ligado | Alterna em um crossfade de 10 ms, sem estalo. |
 | Menu de três pontos (tooltip `Presets e mais`) | Abre o menu abaixo. | | |
@@ -84,13 +84,46 @@ Itens do menu de três pontos:
 | Item | O que faz |
 |---|---|
 | `PRESETS` e a lista de presets do tipo | Aplica o preset com **todos** os valores: o que o preset não cita volta ao padrão do efeito. O que bate com os parâmetros atuais leva um visto. Só o `Sidechain` do compressor e do gate é preservado (é roteamento, não timbre). |
-| `MEUS PRESETS`, `Salvar como preset…` e `Importar preset…` | Presets seus para este tipo de efeito (o EQ guarda as 8 bandas; o `Sidechain` do compressor e do gate não entra). O `…` de cada linha renomeia, exporta (`.jopreset`) e apaga. Funciona igual ao do instrumento: ver [Meus presets](04-painel-de-instrumento.md#meus-presets). |
+| `MEUS PRESETS`, `Nenhum ainda`, a lista dos seus, `Salvar como preset…` e `Importar preset…` | Logo abaixo dos presets de fábrica: presets seus para este tipo de efeito (o EQ guarda as 8 bandas; o `Sidechain` do compressor e do gate não entra). O `…` de cada linha renomeia, exporta (`.jopreset`) e apaga. Detalhes em [Presets do usuário](#presets-do-usuário). |
 | `Reiniciar (valores padrão)` | Volta todos os parâmetros ao padrão. Fica apagado se o efeito já está no padrão. |
 | `Desligar (bypass)` / `Ligar` | O mesmo do botão de energia. |
 | `Mover para a esquerda` / `Mover para a direita` (computador); `Mover para cima` / `Mover para baixo` (celular) | Troca de lugar com o vizinho. Apagado na ponta da cadeia. |
 | `Remover` (vermelho) | Tira o efeito da cadeia **e apaga a automação** que apontava para ele. |
 
-Todas essas ações entram no histórico de desfazer.
+Todas essas ações entram no histórico de desfazer (aplicar um preset seu também; salvar, renomear, apagar e importar presets não, porque são do aparelho e não do projeto).
+
+### Presets do usuário
+
+Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do instrumento (a mesma janela de nome, as mesmas regras de nome, a mesma exportação em `.jopreset`): o passo a passo de cada janela e os textos de erro estão em [04 Painel de instrumento, Meus presets](04-painel-de-instrumento.md#meus-presets). Aqui vai só o que muda para efeitos. Receita completa, com a cadeia vocal: [Presets do usuário](../guias/presets-do-usuario.md).
+
+**Onde.** Menu de três pontos do cartão (tooltip `Presets e mais`), que abre com altura máxima de 680 px. A ordem é: `PRESETS` (de fábrica), `MEUS PRESETS`, `Salvar como preset…`, `Importar preset…`, e só depois `Reiniciar (valores padrão)`, `Desligar (bypass)`, `Mover...` e `Remover`. `MEUS PRESETS` fica no fim da parte de presets, mas antes das ações do cartão. O menu é o mesmo nos cartões do rack do master e no de barramentos.
+
+**O que cada preset guarda, por tipo.** Todos os parâmetros do tipo, na unidade da tabela do efeito ([06d](06d-efeitos-referencia.md)), menos o `Sidechain`:
+
+| Tipo | Parâmetros guardados |
+|---|---|
+| `EQ` | 49: as 8 bandas (`Ligada`, `Tipo`, `Frequência`, `Ganho`, `Q`, `Inclinação` de cada uma) e a `Saída` |
+| `Compressor` | 10 de 11: tudo, menos o `Sidechain` |
+| `Gate` | 6 de 7: tudo, menos o `Sidechain` |
+| `Limitador` | 5 |
+| `Utilitário` | 8 (`Ganho`, `Pan`, `Largura`, `Mono`, `Inverter esq.`, `Inverter dir.`, `Trocar E/D`, `Tirar DC`) |
+| `Reverb` | 10 |
+| `Delay` | 12 |
+| `Chorus` | 7 |
+| `Phaser` | 7 |
+| `Tremolo` | 6 |
+| `Distorção` | 9 |
+| `Filtro` | 11 |
+
+**O que não é guardado:** a escolha do `Sidechain` (é roteamento do projeto: a faixa-chave não faz sentido em outro projeto; ao aplicar, o `Sidechain` do cartão continua como está), o estado ligado ou desligado (bypass), a posição do cartão na cadeia e a automação do efeito.
+
+**Aplicar.** Escolher um preset seu põe todos os valores do preset no cartão (nada do que estava antes sobra, exceto o `Sidechain`), num passo do desfazer. O preset de um tipo só aparece no menu desse tipo: um preset de `Reverb` não aparece no `Delay`. Dois cartões do mesmo tipo (dois `EQ`) enxergam a mesma lista.
+
+**Subtítulo do cartão.** Quando os valores do cartão batem com um preset seu, o subtítulo cinza mostra o nome dele e o menu o marca com um visto; se também batem com um de fábrica, vale o seu. Depois de aplicar e mexer, aparece `Nome (editado)` (só nesta sessão do painel). Os cartões de efeito não têm rótulos `Inicial` nem `Personalizado`: sem correspondência e sem preset aplicado, o subtítulo fica vazio.
+
+**Ao importar.** Um arquivo `.jopreset` de outro tipo entra no tipo dele, não no do cartão onde você importou; a janela avisa `O preset é de outro tipo (reverb): ele foi guardado, mas só aparece no menu desse tipo.` Os nomes de tipo nessa mensagem são os internos: `eq`, `compressor`, `gate`, `limiter`, `utility`, `reverb`, `delay`, `chorus`, `phaser`, `tremolo`, `distortion`, `filter`.
+
+**Onde ficam.** No aparelho (mesmo registro `userpresets` dos presets de instrumento), sem sincronizar com a conta e fora do `.jopendaw` do projeto; para levar a outro aparelho, `Exportar preset…` e `Importar preset…`. Um preset por cartão e por tipo: **não existe preset da cadeia inteira**, então uma cadeia favorita são vários presets (um por efeito) que você recoloca na ordem à mão.
 
 ### Os editores dos efeitos
 
@@ -111,7 +144,7 @@ Três tipos de editor cobrem os 12 efeitos:
 | Pílula liga/desliga (`Não`/`Sim` em cima, nome embaixo) | Toque ou clique alterna. | Vale para todo parâmetro de duas opções `Não`/`Sim` (`Ping-pong`, `Congelar`, `Mono`...). |
 | Seletor de opções (caixa com seta) | Abre um menu com as opções. | Tipos, ondas, notas, `Tempo` (`Livre`/`Andamento`) e `Sidechain`. |
 | Controle **apagado** (texto mais escuro) | O parâmetro não tem efeito com os ajustes de agora, mas continua mexível. Ex.: `Decaimento` do reverb com `Congelar` ligado; `Bits`, `Reduzir taxa` e `Dither` fora do tipo `Bitcrusher` (e `Sobreamostragem` **dentro** dele). O `Ganho` do compressor **não** fica apagado com o `Ganho automático` ligado (os dois somam). A lista completa está em cada efeito na referência. | |
-| Knob laranja | O parâmetro tem automação e o projeto está tocando: o knob segue a curva. Ver [07 Automação](07-automacao.md). | Todo parâmetro de efeito é automatizável, menos a faixa-chave do `Sidechain`. |
+| Knob laranja | O parâmetro tem automação e o projeto está tocando: o knob segue a curva. Ver [07 Automação](07-automacao.md). | Todo parâmetro de efeito é automatizável, menos a faixa-chave do `Sidechain`. Os knobs também **gravam automação** com o projeto tocando, conforme o modo do botão `Automação` da barra (`Escrever`, `Toque` ou `Trava`; em `Ler` só mudam o valor fixo): ver [07 Automação, Gravar automação](07-automacao.md#gravar-automação). |
 
 Os controles de **tempo** mostram ou a figura ou o tempo, conforme a chave: no `Delay` e no `Filtro`/`Tremolo`, com `Tempo` em `Livre` aparece o valor em segundos ou Hz; em `Andamento` aparece `Nota`.
 
@@ -205,13 +238,14 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): espectro e níveis para julgar o que o EQ e o compressor fizeram.
 - [07 Automação](07-automacao.md): mover qualquer parâmetro de efeito ao longo da música (filtro abrindo, mistura de reverb subindo).
 - [Efeitos em combinação](../guias/efeitos-em-combinacao.md): cadeia vocal, compressão paralela, sidechain, delay em ping-pong, pad largo, baixo distorcido.
+- [Presets do usuário](../guias/presets-do-usuario.md): guardar os ajustes de cada efeito com nome (a cadeia vocal favorita, por exemplo) e levá-los a outro aparelho.
 
 ## Limites e pegadinhas
 
 - **Máximo de 16 efeitos por cadeia** (faixa ou master), o que o motor comporta. Com 16 efeitos, o botão `Adicionar efeito` (computador), o botão `Efeito` (celular), o bloco `Adicionar efeito` no fim da fileira e a linha `Efeito` do mixer ficam desabilitados, e o tooltip diz `Limite de 16 efeitos por faixa`. Remova um efeito para liberar lugar (testado só por testes automáticos).
 - **Latência dos efeitos é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo, e o motor atrasa as outras faixas, barramentos, envios (pré e pós-fader) e a chave do sidechain para tudo chegar alinhado ao master, com o efeito ligado ou em bypass (a luz do efeito não muda o alinhamento). Ficam de fora: a gravação do app, que só compensa a latência do aparelho, e a automação, que age alguns ms adiantada numa faixa com efeito de latência. Para tirar a latência de um `Limitador`, ponha o `Lookahead` em 0 ou remova o efeito. Capítulo [06e](06e-compensacao-de-latencia.md); tabela em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito) `(testado só por testes automáticos)`.
 - **Trocar a ordem, ligar, desligar, adicionar e remover** fazem crossfade de 10 ms: sem estalo. Mudar a ordem recria, no motor, os efeitos dos lugares que trocaram de tipo (pelo que o código de sincronização faz): o estado interno deles, como a cauda de um reverb ou os ecos de um delay, recomeça do zero. Trocar o **tipo** de efeito num slot não existe no painel: remova e adicione.
-- **Sidechain** só existe no `Compressor` e no `Gate`; não é automatizável; presets não o alteram; a faixa apagada aparece como `Faixa N (removida)` e o efeito volta a usar a própria entrada.
+- **Sidechain** só existe no `Compressor` e no `Gate`; não é automatizável; presets, de fábrica ou seus, não o alteram (o preset seu nem o guarda); a faixa apagada aparece como `Faixa N (removida)` e o efeito volta a usar a própria entrada.
 - **Cauda:** com a entrada calada a cadeia continua rodando enquanto o efeito tem o que devolver (eco do delay de até 4 s, cauda do reverb). Parar o transporte não corta a cauda de imediato.
 - O subtítulo `(editado)` e a escolha de qual dinâmica é medida **não são salvos** com o projeto. Efeitos, parâmetros, ordem e bypass são.
 - O medidor do gate satura em 60 dB de redução, mesmo que o `Alcance` chegue a −80 dB.

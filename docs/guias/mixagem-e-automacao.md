@@ -1,6 +1,6 @@
 # Mixagem e automação
 
-> Montar um mix do zero (níveis, pan, envios, master), com um retorno de reverb compartilhado, uma subida de filtro e um fade de volume, em cerca de 30 a 40 minutos para uma música de 8 a 10 faixas.
+> Montar um mix do zero (níveis, pan, envios, master), com um retorno de reverb compartilhado, uma subida de filtro e um fade de volume, desenhados ou gravados com o mouse, em cerca de 30 a 40 minutos para uma música de 8 a 10 faixas.
 
 ## Ingredientes
 
@@ -10,7 +10,8 @@
 | Envios e barramentos | Um reverb (e um delay) compartilhados por várias faixas | [06 Mixer](../manual/06-mixer.md) |
 | Medidores | Ver o pico de cada faixa e do master, e a folga que sobra | [06b Analisador e medidores](../manual/06b-analisador-e-medidores.md) |
 | Efeitos `Reverb`, `Compressor`, `Filtro`, `EQ`, `Limitador` | Espaço, ducking, varredura e acabamento | [06c Painel de efeitos](../manual/06c-painel-de-efeitos.md), [06d Referência dos efeitos](../manual/06d-efeitos-referencia.md) |
-| Automação (botão `A`, raias, curva) | Fade e subida de filtro | [07 Automação](../manual/07-automacao.md) |
+| Automação (botão `A`, raias, curva) | Fade e subida de filtro, desenhados na raia | [07 Automação](../manual/07-automacao.md) |
+| Gravar automação (botão `Automação` da barra: `Toque`, `Trava`, `Escrever`) | Fade e varredura de filtro feitos mexendo no fader e no knob com a música tocando | [07 Automação, Gravar automação](../manual/07-automacao.md#gravar-automação) · [02 Transporte](../manual/02-transporte.md#botão-automação) |
 | Loop (`L`) e grade de encaixe | Repetir o trecho enquanto se mexe | [02 Transporte](../manual/02-transporte.md) |
 | Exportação | Conferir o resultado no arquivo | [08 Exportação](../manual/08-exportacao.md) |
 
@@ -107,7 +108,34 @@ O resultado: a música some nos últimos 4 compassos, em uma linha só.
 5. Se o começo do fade parece rápido demais, puxe a alça do meio para cima: a curva fica positiva, o volume segura por mais tempo e cai mais no fim. Se parece arrastado, puxe para baixo.
 6. Deixe a raia como está para exportar: a automação entra no arquivo. Parado, o fader volta a mostrar 0 dB (o valor fixo); isso é normal e não desfaz o fade.
 
+Prefere gravar o fade com o mouse em vez de desenhar os pontos? Veja a receita 5, logo abaixo.
+
 Um fade de volume no `Master` funciona depois dos efeitos do master (o compressor não desfaz o fade). Para fazer o fade só numa faixa ou num grupo, use a raia `Volume` dela (ou do barramento do grupo).
+
+### 5. Gravar um fade e uma varredura de filtro com o mouse
+
+O resultado: as mesmas duas automações das receitas 3 e 4, mas feitas de ouvido, mexendo no fader e no knob com a música tocando, sem clicar em pontos. Leva uns 5 minutos por gesto.
+
+Sobre o que foi conferido: o `Toque` com o fader de uma faixa no mixer foi usado no Chrome pela sessão que implementou a gravação (tocando e arrastando devagar, a raia `Volume` ganhou 10 pontos com a curva do gesto e voltou ao valor original; recarregar a página manteve os pontos). A `Trava` e o knob `Corte` seguem a mesma via e estão `(testado só por testes automáticos)`.
+
+**Fade de volume com o fader (`Trava`)**
+
+1. Na barra, toque em `Automação` (o ícone de gráfico, sem nome enquanto está em `Ler`) e escolha `Trava`: `Grava enquanto você segura o controle e mantém o último valor até parar.` O botão passa a mostrar `Trava` em vermelho.
+2. Abra o mixer (`X`). Ponha o cursor uns dois compassos antes de onde o fade deve começar e aperte Espaço.
+3. Quando chegar a hora, segure o fader (o da faixa ou o do canal `Master`) e desça-o devagar, num movimento só, até o fundo (`−∞ dB`), e solte. A `Trava` mantém o valor em que você soltou até o transporte parar.
+4. Espaço para parar. A raia `Volume` existe, aberta, com poucos pontos (o movimento é afinado, com no máximo 0,8% da faixa de erro na escala do fader). Como não havia pontos depois, ela fica no último valor gravado até o fim da música. `Ctrl+Z` desfaz a passada inteira.
+
+Variação: no modo `Toque` o fader volta sozinho ao valor de antes (numa rampa de 1/4 de batida) assim que você solta. Serve para "dar uma abaixadinha" numa passagem, não para um fade que deve ficar.
+
+**Varredura de filtro com o knob (`Trava`)**
+
+1. Ponha o efeito `Filtro` na faixa, `Presets e mais` e `Passa-alta de transição` (como na receita 3), e abra o painel `Efeitos` (`F`). Na barra, deixe `Trava`.
+2. Ponha o cursor no primeiro compasso da subida e aperte Espaço.
+3. Segure o knob `Corte` e gire-o devagar, de 250 Hz até uns 60 Hz, ao longo dos 8 compassos, e solte; ele mantém esse valor, gravando, até o transporte parar.
+4. Espaço para parar. A raia `Filtro · Corte` foi criada, aberta, com os pontos do gesto. Como o knob anda em escala logarítmica e a gravação mede o erro na mesma escala, o desenho reproduz o que a sua mão fez. Para refazer, `Ctrl+Z` e grave de novo; para ajeitar um ponto, arraste-o na raia.
+5. Volte o botão `Automação` para `Ler` quando terminar, para o mixer e os knobs não gravarem sem querer.
+
+Se preferir uma raia só gravando, escolha o modo no seletor `L` do cabeçalho dela (`T`, `V` ou `E`): a barra pode ficar em `Ler` e só aquele alvo grava.
 
 ## Por que funciona
 
@@ -117,6 +145,7 @@ Um fade de volume no `Master` funciona depois dos efeitos do master (o compresso
 - **Pré e pós.** Pós-fader (o padrão) é o reverb que acompanha a faixa; pré-fader é o que continua depois de você mexer no fader.
 - **A raia de automação não desenha em ganho nem em Hz.** O volume e o nível dos envios seguem a curva do fader (ganho = 2 × posição³) e os parâmetros em Hz seguem a escala logarítmica do knob. Uma reta na tela vira um fade parelho (−7,5 dB, −18 dB e −36 dB em 25%, 50% e 75% do trecho) e uma varredura constante em oitavas; a mesma reta em ganho linear despencaria no fim (−2,5, −6 e −12 dB) e em Hz linear acabaria a maior parte da abertura na primeira metade.
 - **Valor fixo por baixo.** A automação sobrepõe o fader ou o knob sem apagá-lo; parado, vale o valor fixo. É por isso que a raia continua no lugar ao parar.
+- **Gravar é desenhar por outro caminho.** O movimento da mão vira pontos na mesma raia, na mesma escala do controle, e depois você edita como qualquer raia (mover pontos, entortar a curva). O `Toque` só sobrescreve onde você segurou o controle; o resto da curva antiga fica.
 
 ## Se der errado
 
@@ -130,7 +159,9 @@ Um fade de volume no `Master` funciona depois dos efeitos do master (o compresso
 | A mistura ficou "lavada" | Envio alto, cauda longa, grave no reverb | Baixe os envios, `Decaimento` menor, `Cortar graves` maior, ducking |
 | O medidor do master vive no topo e o som achatou | Limitador de segurança trabalhando | Baixe os faders das faixas mais altas até o pico ficar entre −12 e −6 dB |
 | A automação não soa com o transporte parado | Parado vale o valor fixo | Toque para ouvir; a leitura no cabeçalho da raia mostra o valor da curva no cursor mesmo parado |
-| Arrasto o fader durante o play e nada muda | A curva passa por cima do valor fixo | Arrastar muda o valor fixo (que volta ao parar). Edite os pontos ou remova a raia (`X` no cabeçalho) |
+| Arrasto o fader durante o play e nada muda | O botão `Automação` está em `Ler` e a curva passa por cima do valor fixo | Em `Ler` arrastar muda só o valor fixo (que volta ao parar). Para gravar, escolha `Toque`, `Trava` ou `Escrever` (receita 5); para mudar a curva, edite os pontos ou remova a raia (`X` no cabeçalho) |
+| Mexo no controle com o modo em `Toque` e nenhum ponto novo aparece | O transporte estava parado, ou há gravação de áudio/MIDI em curso (aviso vermelho ao lado do botão `Automação`), ou você soltou o controle antes de ele mudar de valor | Aperte Espaço antes de mexer; os pontos aparecem na raia ao soltar (`Toque`) ou ao parar (`Trava`, `Escrever`) |
+| Regravei uma raia e a curva antiga sumiu no trecho | `Escrever` (principalmente com o seletor `E` da raia, que grava desde o play) sobrescreve a região inteira | Use `Toque` para trocar só o trecho; `Ctrl+Z` desfaz a passada |
 | O knob do envio não anda com a automação do envio | O knob de envio não segue a automação | Olhe o valor na raia (cabeçalho) |
 | O filtro "pula" no começo do play | Antes do primeiro ponto vale o valor do primeiro ponto | Ponha o primeiro ponto no início do trecho, no valor de partida |
 | A raia sumiu | Ela foi ocultada (o olho riscado): continua valendo | `A` no cabeçalho, `Mostrar as ocultas` |

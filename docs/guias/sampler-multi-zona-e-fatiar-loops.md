@@ -59,7 +59,7 @@ O objetivo é: suaves cobrem as velocidades 1 a 83; fortes cobrem de 81 a 127 (u
 3. Faça o mesmo para a outra região.
 4. Confira o mapa: dois andares de blocos em cada região, o de baixo (suave) e o de cima (forte), sem vão entre eles.
 
-**Atalho: camadas iguais sem conta.** Nos passos 4 e 5 você pode trocar o `Duplicar a zona` e os arrastes por `Camadas de velocidade`. Com a zona suave selecionada, `Camadas de velocidade` > `Dividir em 2 camadas iguais`: a zona fica com as velocidades 1 a 63 e uma cópia logo depois, com 64 a 127 (o aviso `1 cópia criada logo depois desta zona...` confirma). A seleção continua na zona original: selecione a cópia (toque na metade de cima do bloco, onde ficam as velocidades 64 a 127) e troque o áudio por `piano_C3_forte`. A divisão é sem lacuna e sem sobreposição, e sempre refaz a faixa de velocidade de 1 a 127, então faça-a antes de mexer nas faixas de velocidade à mão.
+**Atalho: camadas iguais sem conta.** Nos passos 4 e 5 você pode trocar o `Duplicar a zona` e os arrastes por `Camadas de velocidade`. Com a zona suave selecionada, `Camadas de velocidade` > `Dividir em 2 camadas iguais`: a zona fica com as velocidades 1 a 63 e uma cópia logo depois, com 64 a 127 (o aviso `1 cópia criada logo depois desta zona...` confirma). A seleção continua na zona original: selecione a cópia (toque na metade de cima do bloco, onde ficam as velocidades 64 a 127) e troque o áudio por `piano_C3_forte`. A divisão é sem lacuna e sem sobreposição e parte a faixa de velocidade **atual** da zona (uma zona que já está de 1 a 83, dividida em 2, vira 1–42 e 43–83; numa faixa estreita saem menos camadas que o pedido e o aviso diz `a faixa só comporta N camadas`), então dá para dividir também depois de mexer nas faixas à mão.
 
 **5b. Igualar os volumes**
 
@@ -101,7 +101,8 @@ O mapa é um quadro de notas por força: cada arquivo ocupa um retângulo, e a n
 | As duas camadas soam iguais | As duas zonas apontam para o mesmo áudio | Selecione a zona e troque o áudio (`Trocar o áudio da zona`) |
 | Notas altas soam finas ou curtas | Zona esticada demais a partir da nota base | Acrescente mais gravações e encurte as regiões |
 | A região aguda sai muito acima ou abaixo da nota certa | `Nota base` errada (a nova zona nasce com a base em `C4`, ou na nota da faixa mais perto dele) | Digite a `Nota base` certa (`C5`, `A#3` ou o número) |
-| A primeira zona ficou mais curta sozinha e apareceu o aviso `O teclado já estava coberto: ...` | Você acrescentou uma zona com o teclado todo coberto: o app divide ao meio a zona mais larga | Encurte as zonas antes de acrescentar a próxima (passo 2.3) ou ajuste as faixas no mapa |
+| A primeira zona ficou mais curta sozinha e apareceu o aviso `O teclado já estava coberto: ...` | Você acrescentou uma zona com o teclado todo coberto: o app divide ao meio a zona mais larga (e, se a `Nota base` dela ficaria acima da faixa que sobrou, leva-a para a ponta e o aviso diz `A nota base dela passou de X para Y`) | Encurte as zonas antes de acrescentar a próxima (passo 2.3) ou ajuste as faixas e a `Nota base` no mapa |
+| `Não dá para criar outra zona: o limite é de 128 zonas ou o teclado já está todo ocupado por zonas de uma nota só...` e o botão `Adicionar sample como zona` desabilitado | Já há 128 zonas, ou o teclado está todo coberto por zonas de uma nota só (como depois de `Fatiar sample…`), sem zona mais larga para dividir | Apague alguma zona; nada é criado nem importado enquanto o aviso vale |
 | Acorde longo com camadas corta notas | Cada nota usa uma voz por camada e o limite é 16 | Use uma camada por região, ou toque menos notas juntas |
 
 ## Receita 2: kit de bateria a partir de um loop fatiado

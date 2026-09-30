@@ -63,6 +63,8 @@ Quais barramentos aparecem na lista: uma faixa comum lista todos os barramentos.
 
 Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo ao fim do arraste). Tudo é salvo com o projeto.
 
+**Fader, pan e nível de envio gravam automação.** Com o botão `Automação` da barra em `Escrever`, `Toque` ou `Trava` (ou com o seletor da raia num desses modos) e a música **tocando**, arrastar o fader, o knob de pan ou o knob de envio (ou usar a roda do mouse sobre eles) grava o movimento como pontos na raia do alvo (`Volume`, `Pan` ou `Envio → nome`), criando a raia se ela não existe. Em `Ler` (o padrão) o gesto muda só o valor fixo, como antes. Enquanto grava, o controle mostra o que a sua mão põe; os pontos aparecem na raia quando o trecho acaba (ao soltar, no `Toque`; ao parar, em `Escrever` e `Trava`). Uma passada inteira vira **um passo só** no desfazer. O mesmo vale para o fader e o pan do `Master`. O envio só grava se ele já existe; criar o envio (tocar no knob vazio) não grava. Modos, valores e passo a passo em [07 Automação, Gravar automação](07-automacao.md#gravar-automação). O mini fader do cabeçalho da faixa grava igual ([02b](02b-timeline-e-clipes.md)).
+
 ### Gravação, mudo e solo
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
@@ -94,7 +96,7 @@ Fader, pan e envios entram no desfazer como **um passo por gesto** (do começo a
 |---|---|---|---|
 | Lista de efeitos do master (`Efeito`, tooltip `Adicionar efeito no master`) | Efeitos que processam a mistura inteira, em série, **antes** do volume do master e do limitador de segurança. | Mesmo menu e mesmas ações de uma faixa. | Sugestão do próprio app para o master vazio: `EQ`, `Compressor`, `Limitador`. |
 | Pan do master | **Balanço**, não pan: só atenua o lado oposto; o centro fica em 0 dB. | Mesma leitura `C`, `E..`, `D..`. Padrão `C`. | |
-| Fader do master e leitura em dB | Volume final da mistura. | −∞ a +6 dB, padrão 0 dB. Automatizável. | |
+| Fader do master e leitura em dB | Volume final da mistura. | −∞ a +6 dB, padrão 0 dB. Automatizável e grava automação como o das faixas (`Master` > `A` > `Volume`; ver [07](07-automacao.md#gravar-automação)). | |
 | Medidor do master | Pico esquerdo e direito **depois do limitador**. | Nunca passa de −0,3 dB quando o limitador age. | |
 | Leitura de loudness do master: `M`, `S`, `I`, `TP` | Volume percebido da mistura (norma BS.1770-4 / EBU R128), medido depois do limitador. `M` = momentâneo (últimos 400 ms), `S` = curto prazo (3 s), `I` = integrado desde o último `Zerar` (em negrito), `TP` = true peak máximo. Tooltip: `Loudness do master (EBU R128)`. | `M`, `S` e `I` em LUFS (`−14,2`); `TP` em dBTP. `—` sem medida. `TP` acima de −1 dBTP fica vermelho. No canal do Master (92 px de largura) as leituras ficam em duas linhas, `M` `S` em cima e `I` `TP` embaixo, com `Zerar` à direita, logo abaixo; o texto encolhe para caber. | Detalhes, janelas, gates e valores de referência em [06b](06b-analisador-e-medidores.md). O `I` de referência para streaming é −14 LUFS. |
 | `Zerar` (tooltip `Zerar a medida de loudness`) | Apaga o integrado, os máximos e o true peak; a medição recomeça. | Não é salvo com o projeto. | Toque antes de tocar a música do começo ao fim para conferir. |
@@ -164,7 +166,7 @@ O sidechain existe no `Compressor` e no `Gate`, no parâmetro `Sidechain` (grupo
 
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): como ler os medidores, o loudness do master (`M`, `S`, `I`, `TP`) e o espectro.
 - [06c Painel de efeitos](06c-painel-de-efeitos.md) e [06d Referência dos efeitos](06d-efeitos-referencia.md): o que colocar nos inserts, nos barramentos e no master.
-- [07 Automação](07-automacao.md): mover volume, pan, envios e parâmetros no tempo; fader, pan e knobs seguem a automação enquanto toca.
+- [07 Automação](07-automacao.md): mover volume, pan, envios e parâmetros no tempo (desenhando na raia ou gravando com o fader, o pan e os knobs); fader, pan e knobs seguem a automação enquanto toca.
 - [08 Exportação](08-exportacao.md): o arquivo sai depois do limitador do master (`Normalizar o loudness` leva a mixagem ao alvo de LUFS); "Congelar em áudio" leva volume, pan, saída e envios para a faixa nova.
 - [03c Gravação](03c-gravacao.md): armar e monitorar.
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): como o motor alinha faixas, envios e sidechain quando há `Limitador` ou `Distorção`.

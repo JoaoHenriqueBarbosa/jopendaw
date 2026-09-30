@@ -6,7 +6,7 @@
 
 - **Computador (tela de 800 px ou mais):** uma barra horizontal no topo do projeto, acima da régua. Ela rola na horizontal quando a janela é estreita.
 - **Celular ou janela abaixo de 800 px:** a mesma barra, mas embaixo da tela, perto do polegar, também com rolagem horizontal.
-- Os botões aparecem nesta ordem, da esquerda para a direita. Linhas finas separam os quatro primeiros grupos: **transporte** | **edição e visão** | **painéis** | **entradas de notas**; depois vêm, só com um espaço maior no lugar da linha, **importar e exportar** e, em seguida, **configurações, atalhos, sincronização e status**. Não há botão do arquivo de projeto na barra: `Projeto inteiro (.jopendaw)…` fica dentro da janela **Exportar áudio**.
+- Os botões aparecem nesta ordem, da esquerda para a direita. Linhas finas separam os quatro primeiros grupos: **transporte** | **edição e visão** | **painéis** | **entradas de notas**; depois vêm, só com um espaço maior no lugar da linha, **importar e exportar** e, em seguida, **configurações, atalhos e status**. As linhas são estreitas de propósito (4 px de cada lado): com folga maior a barra não cabia em uma janela de 1512 px. O **indicador de nuvem não fica na barra**: ele está no cabeçalho do projeto, no canto superior direito (ver [Indicador de nuvem](#indicador-de-nuvem-no-cabeçalho-do-projeto)). O botão **Automação** (gravação de automação) fica no grupo de edição e visão, entre a grade de encaixe e o **Afastar**; ele mostra só o ícone no modo Ler e, nos outros modos, fica em vermelho com o nome do modo (o menu de modos está em [Automação](07-automacao.md)). Não há botão do arquivo de projeto na barra: `Projeto inteiro (.jopendaw)…` fica dentro da janela **Exportar áudio**.
 - Importar e Exportar mostram o nome ao lado do ícone só quando a barra tem 1540 px ou mais de largura (e no computador). Abaixo disso, ou no celular, ficam só os ícones, cada um com o tooltip abaixo. Com o nome à mostra, o **Exportar** mantém o tooltip e o **Importar** fica sem tooltip.
 - Quando o app está ocupado (importando, exportando, congelando, processando o warp), aparece no fim da barra um círculo girando com o texto do que está acontecendo (por exemplo `Importando nome.wav…`, `Lendo nome.mid…`, `Exportando…`, `Congelando Áudio 1…`, `Processando o warp…`). Enquanto esse texto está na barra, Importar e Exportar ficam desligados.
 
@@ -25,7 +25,7 @@ Os rótulos abaixo são os tooltips exatos (passe o mouse ou segure o dedo). Ond
 | **Gravar** (círculo vermelho) | Liga e desliga a gravação nas faixas armadas. Aceso em vermelho gravando; durante a contagem pisca uma vez por batida, no andamento do projeto. O tooltip diz o estado (ver tabela abaixo). | Atalho: R (funciona mesmo com o teclado musical ligado). | Antes de gravar, arme uma faixa no botão de bolinha do cabeçalho dela. |
 | **Opções de gravação** (seta ao lado do Gravar) | Abre um menu com dois itens: **Contagem de um compasso** (marcado quando ligada) e **Configurações de gravação…** (abre a janela Configurações). | Contagem ligada por padrão. | A contagem só toca quando a gravação começa parada; se já está tocando, grava na hora. |
 | **Posição** (caixa escura, dois números) | Em cima, a posição em `compasso.tempo.dezesseis-avos` (começa em `1.1.1`, cor da marca); embaixo, o tempo `m:ss.cc` (minutos, segundos e centésimos). Só mostra; não dá para digitar nela. | Ex.: `2.3.1` e `0:03.00`. Com mapa de compassos, o compasso e o tempo são contados pela fórmula de cada trecho (em 6/8 o segundo número vai de 1 a 6, uma colcheia por número); com mapa de andamento, o tempo em segundos é o real, somando os trechos. | Na contagem antes do zero, mostra em vermelho as batidas que faltam (`−4`, `−3`…) e o tempo negativo. |
-| **`120 BPM · 4/4`** (botão de texto) | Abre a janela **Andamento e compasso** (ver abaixo). Desligado durante a gravação. | Sem mapa de andamento nem de compassos: o andamento inicial e os tempos por compasso, fixos; o andamento sai sem casas quando é inteiro e com **uma casa e vírgula** quando não é (`120,5 BPM · 4/4`), o mesmo texto do subtítulo do projeto. Com mapa, o texto é o **andamento vigente no cursor** (uma casa decimal, com vírgula, quando não é inteiro; `↗` depois do número quando o cursor está num trecho em rampa) e o compasso do cursor (`3/4`, `6/8`…); com mapa de andamento aparece antes um ícone de linha quebrada na cor da marca, e o texto acompanha o cursor enquanto toca. Ver [Faixa Andamento e mapa de compassos](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos). | Com mapa o botão ganha tooltip: `Andamento no cursor (mapa com N pontos, inicial X BPM). Clique para editar o inicial ou mudar o compasso.`; só com mapa de compassos, `Compasso no cursor. Clique para editar o andamento ou mudar o compasso.` |
+| **`120 BPM · 4/4`** (botão de texto) | Abre a janela **Andamento e compasso** (ver abaixo). Desligado durante a gravação. | Sem mapa de andamento nem de compassos: o andamento inicial e os tempos por compasso, fixos; o andamento sai sem casas quando é inteiro e com **uma casa e vírgula** quando não é (`120,5 BPM · 4/4`), o mesmo texto do subtítulo do projeto. Com mapa, o texto é o **andamento vigente no cursor** (uma casa decimal, com vírgula, quando não é inteiro; `↗` depois do número quando o cursor está num trecho em rampa que sobe e `↘` quando a rampa desce) e o compasso do cursor (`3/4`, `6/8`…); com mapa de andamento aparece antes um ícone de linha quebrada na cor da marca, e o texto acompanha o cursor enquanto toca. Ver [Faixa Andamento e mapa de compassos](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos). | Com mapa o botão ganha tooltip: `Andamento no cursor (mapa com N pontos, inicial X BPM). Clique para editar o inicial ou mudar o compasso.`; só com mapa de compassos, `Compasso no cursor. Clique para editar o andamento ou mudar o compasso.` |
 | **Loop (L) · arraste na régua para marcar** (ícone de repetição) | Liga e desliga o loop. Aceso na cor da marca quando ligado. Quando ligado, ao chegar ao fim da região o cursor volta ao começo dela. | Desligado por padrão. Um projeto novo já traz a região do compasso 1 ao 4 (4 compassos), ainda desligada. | Não entra no desfazer. Não dá para ligar ou desligar gravando (aparece `Pare a gravação para ligar ou desligar o loop.`). |
 | **Metrônomo (C)** (ícone de cronômetro) | Liga e desliga o clique. | Clique de 30 ms: 1600 Hz no primeiro tempo do compasso, 1000 Hz nos outros. Desligado por padrão. Segue o mapa de compassos (em 3/4 o tempo forte volta a cada 3 cliques; em 6/8 há um clique por colcheia, seis por compasso) e o mapa de andamento (o intervalo entre cliques muda com o andamento). | Não entra no desfazer nem na exportação. |
 
@@ -45,8 +45,8 @@ Abre ao tocar no botão `120 BPM · 4/4`.
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| **BPM** (campo de número; **BPM inicial** quando o projeto tem mapa de andamento) | Andamento do projeto (com mapa, o do ponto da batida 0, o andamento de partida). Só aceita dígitos; vem com o valor atual arredondado e selecionado, então digitar substitui. | 20 a 400, inteiro. Fora disso: `Entre 20 e 400.` | Enter confirma. Os pontos da faixa `Andamento` aceitam 20 a 999 e casas decimais (ver [Faixa Andamento](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos)). |
-| **Tempos por compasso** (lista) | Numerador do compasso inicial, sobre semínima. | `1/4` a `12/4`. | Serve para o compasso do começo da música. Para 3/4 no meio, 6/8, 7/8 e outras fórmulas, use o botão logo abaixo. Se o compasso inicial já é de outra fórmula (por exemplo `6/8`), este campo não muda o compasso mostrado `(não confirmado no navegador; lido do código)`. |
+| **BPM** (campo de número; **BPM inicial** quando o projeto tem mapa de andamento) | Andamento do projeto (com mapa, o do ponto da batida 0, o andamento de partida). Só aceita dígitos, ponto e vírgula; vem com o valor atual e selecionado, então digitar substitui. | 20 a 999, com decimais (`120,5` ou `120.5`; o valor é arredondado a uma casa). Fora disso ou ilegível: `Entre 20 e 999 (aceita decimais, como 120,5).` | Enter confirma. Os pontos da faixa `Andamento` têm a mesma faixa (ver [Faixa Andamento](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos)). |
+| **Tempos por compasso** (lista) | Numerador do compasso inicial, sobre semínima. | `1/4` a `12/4` (vai além de 12 se o compasso atual tem mais tempos, até 32). Se o compasso inicial não é `n/4` (por exemplo `6/8`), a lista abre com o item `6/8 (atual)` selecionado: **Salvar** com ele deixa o compasso como está e só troca o BPM. | Serve para o compasso do começo da música. Escolher um `n/4` **troca** o compasso inicial por ele, mesmo que antes fosse `6/8` ou `7/8` (resolvido na fase 12; antes o campo não mudava o compasso). Para 3/4 no meio, 6/8, 7/8 e outras fórmulas, use o botão logo abaixo. Pegadinha `(lido do código; não visto no navegador)`: a troca só acontece se o `n` escolhido for diferente das batidas arredondadas do compasso atual, então num `6/8` (3 batidas) escolher `3/4`, e num `7/8` (3,5 batidas, contadas como 4) escolher `4/4`, não muda nada; use **Mudar compasso a partir de um compasso…** no compasso 1. |
 | **Mudar compasso a partir de um compasso…** (botão de texto) | Fecha esta janela e abre **Mudar compasso a partir do compasso N** (ver abaixo). | | |
 | **Cancelar** | Fecha sem mudar nada. | | |
 | **Salvar** | Aplica o andamento e o compasso ao documento do projeto. Entra no desfazer. O servidor recebe uma cópia depois, sem travar nada (ver "O andamento e o servidor" abaixo). | | Fica valendo na hora, com ou sem rede |
@@ -71,7 +71,7 @@ O andamento e o compasso são **do documento do projeto**, como as faixas e os c
 
 - Sem rede, com o servidor fora, ou sem sessão, **salvar não falha nem avisa erro**: o valor novo vale no aparelho e o envio do espelho fica pendente.
 - O espelho é reenviado quando o documento é salvo de novo (0,4 s depois de qualquer edição, e também depois de **desfazer** e **refazer** um andamento), ao abrir o projeto, depois de aplicar uma versão vinda do servidor e quando a sincronização volta a ficar `Sincronizado`.
-- Só é enviado o que difere do último valor que o servidor confirmou; o andamento vai arredondado ao inteiro, entre 20 e 400.
+- Só é enviado o que difere do último valor que o servidor confirmou; o andamento vai arredondado ao inteiro, entre 20 e 999.
 - O andamento e o compasso também viajam dentro do documento sincronizado: um outro aparelho que baixa a versão nova do projeto traz o andamento e o compasso dela (não ficam mais os do cadastro do projeto). Ver [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md).
 - Os mapas de andamento e de compassos (pontos da faixa `Andamento` e mudanças de compasso) **só existem dentro do documento**: o espelho do servidor guarda apenas o andamento inicial e os tempos por compasso do compasso 1. Um outro aparelho que baixa o documento traz os mapas junto; o cartão da lista de projetos mostra só o andamento inicial.
 - O subtítulo do projeto (`120 BPM · 4/4`, embaixo do nome, no cabeçalho da tela) lê o documento aberto e acompanha o botão da barra, inclusive ao desfazer. Antes de o estúdio abrir, mostra o valor do servidor. Se o andamento do documento não for inteiro (por exemplo, um ponto inicial `120,5` editado na faixa `Andamento`), o subtítulo e o botão da barra mostram o **mesmo texto**, com uma casa decimal e vírgula (`120,5 BPM · 4/4`). `(coberto por teste automático do subtítulo; não visto no Chrome)` O cartão do projeto na lista `Projetos` lê o espelho do servidor e pode ficar para trás enquanto o envio estiver pendente.
@@ -84,18 +84,19 @@ Com um mapa de andamento, este botão mexe só no **andamento inicial** (o ponto
 
 | Controle (tooltip) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| **Desfazer (Ctrl+Z)** (seta para trás) | Volta um passo. | Guarda até 200 passos. Desligado sem passos ou gravando. | Um arraste inteiro (mover, aparar, desenhar loop) é um passo só. |
+| **Desfazer (Ctrl+Z)** (seta para trás) | Volta um passo. | Guarda até 200 passos. Desligado sem passos ou gravando. | Um arraste inteiro (mover, aparar, desenhar loop) é um passo só; uma passada de gravação de automação (do play ao stop, com todos os controles) também. |
 | **Refazer (Ctrl+Shift+Z)** (seta para frente) | Refaz o passo desfeito. | Também Ctrl+Y. | Fazer uma edição nova apaga o que dava para refazer. |
 | **Cortar no cursor (S)** (tesoura) | Divide no cursor o clipe selecionado. Sem clipe selecionado, divide todos os clipes que o cursor cruza na faixa selecionada. Só corta se o cursor está estritamente dentro do clipe. | Áudio e notas; uma nota que cruza o corte vira duas. | Sem efeito se nenhum clipe cruza o cursor. |
 | **Duplicar (Ctrl+D)** (ícone de cópia) | Copia o clipe selecionado para logo depois dele e seleciona a cópia. O que a cópia cobrir é aparado (ver [sobreposição de clipes](02b-timeline-e-clipes.md)). | Desligado sem clipe selecionado. | Com o editor de notas aberto, ele passa para a cópia. |
 | **Apagar o clipe (Delete)** (lixeira) | Apaga o clipe selecionado, sem fechar o vão. | Desligado sem clipe selecionado. | Backspace também apaga. |
 | **Grade de encaixe (Alt ao arrastar: livre)** (menu, ícone de grade + valor atual) | Escolhe o passo de encaixe de tudo que se posiciona com o mouse. | `Livre`, `Compasso`, `1/4`, `1/8`, `1/16`. Padrão: `1/4`. | Veja a tabela da grade abaixo. |
+| **Automação: Ler…** (menu; só o ícone de gráfico em `Ler`, ícone e nome em vermelho nos outros modos) | Escolhe como mexer nos controles enquanto toca grava a automação: `Ler`, `Escrever`, `Toque` ou `Trava`. Fica entre a grade e o `Afastar`. | Padrão `Ler` (não grava). Não é salvo com o projeto. | Detalhes na seção `Botão Automação`, logo abaixo da grade. |
 | **Afastar** (lupa com menos) | Reduz o zoom em 1,5 vez, mantendo o cursor no mesmo ponto da tela. | Faixa: 4 a 800 px por batida; padrão 48. | |
 | **Aproximar** (lupa com mais) | Aumenta o zoom em 1,5 vez, também ancorado no cursor. | | As teclas + e − mexem em passos menores (1,25 vez). |
 | **Seguir o cursor na reprodução** (ícone de alvo) | Liga e desliga o acompanhamento. Ligado e tocando, quando o cursor passa de 92% da largura visível (ou sai pela esquerda), a janela salta e deixa o cursor a 5% da borda esquerda. | Ligado por padrão. | Desligue para editar em outro ponto enquanto a música toca. |
 | **Visão: enquadrar, altura das faixas, seguir o cursor** (ícone de zoom em expansão) | Menu de visão (tabela abaixo). O ícone fica esmaecido quando Seguir o cursor está desligado. | | |
 | **Seções e marcadores (M cria um no cursor)** (ícone de bandeira) | Menu dos marcadores (tabela abaixo). A bandeira fica na cor da marca quando há marcadores. | | |
-| **Duração do projeto: m:ss (N compassos)** (texto cinza discreto) | Mostra a duração até o fim do último clipe, no andamento atual (com mapa de andamento, somando os trechos em tempo real). O texto é só o tempo (`1:24`); o tooltip acrescenta os compassos (contados sempre pelos `tempos por compasso` do compasso inicial, mesmo com mapa de compassos: a conta não usa as mudanças). | | Marcadores e loop não contam. |
+| **Duração do projeto: m:ss (N compassos)** (texto cinza discreto) | Mostra a duração até o fim do último clipe, no andamento atual (com mapa de andamento, somando os trechos em tempo real). O texto é só o tempo (`1:24`); o tooltip acrescenta os compassos (`Duração do projeto: 1:24 (N compassos)`), contados pelo mapa de compassos: um projeto que termina no meio de um compasso conta esse compasso; um que termina exatamente na barra não conta o seguinte. Projeto vazio: `0 compassos`. | | Marcadores e loop não contam. |
 
 #### Grade de encaixe
 
@@ -109,11 +110,27 @@ Com um mapa de andamento, este botão mexe só no **andamento inicial** (o ponto
 
 O encaixe vale para: clicar ou arrastar na régua, clicar numa raia para posicionar o cursor, mover e aparar clipes (começo e fim), arrastar marcadores e a posição onde a importação coloca o áudio. Segurar **Alt** ao arrastar desliga o encaixe naquele arraste. Um clipe de notas não fica menor que um passo da grade ao aparar (1/16 de batida se a grade está em `Livre` ou com Alt). A grade não é salva com o projeto: volta a `1/4` ao reabrir.
 
+#### Botão Automação
+
+O botão fica entre a **Grade de encaixe** e o **Afastar**. Ele diz o que acontece quando você mexe no fader, no pan, no nível de envio ou num knob de instrumento ou de efeito **com a música tocando**. O passo a passo e o comportamento de cada modo estão em [Gravar automação](07-automacao.md#gravar-automação).
+
+| Como aparece | Quando | Tooltip (texto exato) |
+|---|---|---|
+| Só o ícone de gráfico (`show_chart`), em cinza-claro, sem nome | Modo `Ler` (o padrão): o rótulo foi tirado para a barra caber em janela de 1512 px | `Automação: Ler. Só toca a automação; mexer no controle não grava.` |
+| Ícone e nome em **vermelho** (`#F2433A`), com fundo vermelho leve: `Escrever`, `Toque` ou `Trava` | Modo que grava | `Automação: Escrever. Grava o tempo todo enquanto toca, sobrescrevendo o que já havia.` / `Automação: Toque. Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.` / `Automação: Trava. Grava enquanto você segura o controle e mantém o último valor até parar.` |
+| Ícone e só a **inicial** em vermelho: `E`, `T` ou `V` | Modo que grava, com a janela abaixo de 800 px (celular) | O mesmo tooltip (no celular, aparece com toque longo no botão) |
+
+Tocar no botão abre o menu com quatro itens, cada um com o nome e, embaixo, uma frase em letra pequena (a mesma do tooltip, sem o `Automação: Modo.`): `Ler`, `Escrever`, `Toque`, `Trava`. O modo atual vem marcado. Mudar de modo com a música tocando fecha o que estava sendo gravado (a passada vira um passo do desfazer) e o modo novo vale dali em diante.
+
+Ao lado do botão pode aparecer, em vermelho-salmão e numa linha só, um **aviso** que some sozinho em 5 segundos: `Este controle não tem automação.` (você mexeu num controle que não se automatiza, como o `Sidechain`) ou `A automação não grava junto com a gravação de áudio ou MIDI.` (mexeu num controle durante a gravação, ou na contagem).
+
+Cada raia de automação tem ainda um seletor pequeno `L`, `E`, `T` ou `V` no cabeçalho, que vale só para ela e sobrepõe a barra (ver [Automação, seletor da raia](07-automacao.md#seletor-da-raia)).
+
 #### Menu Visão
 
 | Item | O que faz | Atalho |
 |---|---|---|
-| **Enquadrar tudo (Z)** | Ajusta zoom e rolagem para caber o projeto inteiro (até o último clipe, marcador ou o fim do loop ligado), com 4% de folga; no mínimo um compasso de largura. | Z |
+| **Enquadrar tudo (Z)** | Ajusta zoom e rolagem para caber o projeto inteiro (até o último clipe, marcador ou o fim do loop ligado), com 4% de folga; no mínimo um compasso de largura (o compasso do mapa onde o trecho começa: 3,5 batidas num `7/8`). | Z |
 | **Enquadrar a seleção (Shift+Z)** | Faz o mesmo com o clipe selecionado; sem clipe, enquadra tudo. | Shift+Z |
 | **Faixas pequenas**, **Faixas médias**, **Faixas grandes** | Altura das faixas: 70%, 100% (padrão) e 150% da altura normal. Um item fica marcado. | sem atalho |
 | **Seguir o cursor** (marcável) | O mesmo que o botão de alvo. | |
@@ -153,7 +170,7 @@ O painel também tem abas e botões próprios (maximizar, fechar, redimensionar)
 | **Tocar com o teclado do computador (Ctrl+K)** (ícone de teclado) | Liga o teclado musical. Ligado, o botão mostra a oitava (`C4`) e o tooltip vira `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga` (o mesmo texto na barra e no painel do instrumento; no Mac o `Ctrl` vira `⌘`). | Desligado; oitava 4; intensidade 80%. | Com o teclado ligado, as letras dele têm prioridade sobre os atalhos (o Z deixa de enquadrar e o C, de ligar o metrônomo). O R continua gravando. |
 | **Entrada MIDI: ligar teclado ou controlador** (ícone de cabo) | Liga a entrada MIDI. Ligado, mostra a quantidade de aparelhos conectados; com zero, o tooltip diz `MIDI ligado, nenhum aparelho conectado: conecte e ele aparece aqui sozinho`; com aparelhos, `Entrada MIDI: nomes`. | Desligado. | No Chrome o MIDI pede permissão. Detalhes em [Gravação](03c-gravacao.md) e [Configurações, atalhos e Android](09-configuracoes-atalhos-android.md). |
 
-### Arquivos, configurações e sincronização
+### Arquivos e configurações
 
 | Controle (rótulo ou tooltip) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
@@ -161,7 +178,12 @@ O painel também tem abas e botões próprios (maximizar, fechar, redimensionar)
 | **Exportar** (tooltip **Exportar a música (e as faixas separadas) em WAV**) | Abre a janela **Exportar áudio**. Gravando, o tooltip é `Pare a gravação para exportar` e o botão fica desligado. | Ver [Exportação](08-exportacao.md). | No rodapé da janela, `Projeto inteiro (.jopendaw)…` leva ao arquivo do projeto ([capítulo 01](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw)). |
 | **Configurações: entrada de áudio, latência e contagem** (engrenagem) | Abre a janela **Configurações** (tabela abaixo). | | |
 | **Atalhos do teclado (?)** (ícone de tecla de comando) | Abre a janela **Atalhos do teclado** com a lista completa, em grupos, e o botão **Fechar**. | Tecla `?`. | |
-| Indicador de sincronização (nuvem, sem texto) | Mostra o estado da sincronização pelo ícone; o tooltip diz o texto. Some por inteiro quando a sincronização está desligada. Só é clicável no conflito. | Ver tabela abaixo. | Detalhes em [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md). |
+
+Depois de **Atalhos do teclado (?)** só aparece, quando há trabalho em andamento, o círculo girando com o texto (ver "Onde fica"). O indicador de nuvem não está mais na barra: mudou para o cabeçalho do projeto.
+
+### Indicador de nuvem (no cabeçalho do projeto)
+
+Fica no **cabeçalho da tela do projeto**, no canto superior direito (à direita do nome e do andamento do projeto), tanto no computador quanto no celular. Foi tirado da barra porque ela saía da tela em janelas de uns 1500 px. Só aparece com o projeto aberto e sessão iniciada (some por inteiro quando a sincronização está desligada). É um botão de ícone sem texto: o tooltip diz o estado e só é clicável no conflito. Detalhes em [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md).
 
 Estados do indicador:
 
@@ -170,10 +192,10 @@ Estados do indicador:
 | Nuvem com visto (cinza) | `Sincronizado` |
 | Nuvem com setas (cor da marca) | `Sincronizando` ou `Sincronizando (N/M arquivos)` |
 | Nuvem cortada (âmbar) | `Offline (tentando de novo em N s)` |
-| Nuvem com alerta (vermelho) | A mensagem do conflito, ou `Conflito: o projeto mudou em outro aparelho. Toque para resolver` |
+| Ícone de sincronização com alerta (vermelho) | A mensagem do conflito, ou `Conflito: o projeto mudou em outro aparelho. Toque para resolver` |
 | Círculo com ponto de exclamação (vermelho) | A mensagem do erro, ou `Não deu para sincronizar` |
 
-No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez, com três botões: **Decidir depois** (o ícone reabre a janela), **Usar a versão do servidor** (descarta as mudanças deste aparelho, sem desfazer) e **Manter esta e enviar** (a versão do servidor é substituída pela daqui). Nada é sobrescrito antes da escolha.
+No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez, com três botões: **Decidir depois** (o ícone do cabeçalho reabre a janela), **Usar a versão do servidor** (descarta as mudanças deste aparelho, sem desfazer) e **Manter esta e enviar** (a versão do servidor é substituída pela daqui). Nada é sobrescrito antes da escolha.
 
 #### Janela Configurações
 
@@ -195,7 +217,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 
 **Mudar o andamento e o compasso**
 1. Toque no botão de texto (`120 BPM · 4/4`).
-2. Digite o novo valor em **BPM** (20 a 400) e escolha os **Tempos por compasso**.
+2. Digite o novo valor em **BPM** (20 a 999) e escolha os **Tempos por compasso**.
 3. **Salvar**. Se errar, Ctrl+Z desfaz.
 
 **Mudar o andamento no meio da música ou trocar o compasso**
@@ -232,11 +254,12 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 
 - **Gravando, a barra trava o que mudaria a gravação:** desfazer, refazer, andamento, compasso, loop (ligar, desenhar, seções), importar, exportar, congelar e trocar de entrada ficam desligados ou avisam `Pare a gravação para…`. O cursor também não pula (clicar na régua, numa raia ou num marcador não move o cursor).
 - **O que não entra no desfazer:** ligar o loop, o metrônomo, a contagem, a compensação de latência, armar e monitorar faixas. Desfazer uma nota nunca mexe neles. Desenhar a região do loop na régua entra, e desfazer volta o loop junto.
-- **O que não é salvo com o projeto:** grade, zoom, rolagem, seguir o cursor, altura das faixas, modo da régua, teclado musical (oitava e intensidade), altura do painel de baixo e a última escolha da janela de exportação (dura só a sessão). O que fica no projeto: andamento, compasso, loop (região e liga/desliga), metrônomo, contagem, compensação de latência e marcadores.
+- **O que não é salvo com o projeto:** o modo de automação (o da barra e o de cada raia: volta a `Ler` ao reabrir), grade, zoom, rolagem, seguir o cursor, altura das faixas, modo da régua, teclado musical (oitava e intensidade), altura do painel de baixo e a última escolha da janela de exportação (dura só a sessão). O que fica no projeto: andamento, compasso, loop (região e liga/desliga), metrônomo, contagem, compensação de latência e marcadores.
 - **Metrônomo e loop não vão para a exportação.** O arquivo sai linear, do começo ao fim, sem cliques.
 - **Web e Android:** os botões são os mesmos; no celular Importar e Exportar mostram só o ícone, a barra fica embaixo e o painel de baixo ocupa 60% da altura livre.
 - **Teclas com o teclado musical ligado:** as teclas dele (A W S E D F T G Y H U J K O L P para notas, Z e X para a oitava, C e V para a intensidade) passam na frente dos atalhos, com ou sem Shift. Ou seja, S (cortar), L e Shift+L (loop), E, F, Z (enquadrar), X (mixer) e C (metrônomo) deixam de funcionar como atalho. Continuam valendo Espaço, Enter, R, I, M, `[`, `]`, + e −, ?, Esc, Delete e tudo com Ctrl (o Ctrl+K desliga o teclado musical).
-- O andamento digitado nesta janela é sempre inteiro (20 a 400); sem mapa, o botão da barra mostra o valor arredondado. Já os pontos da faixa `Andamento` aceitam 20 a 999 e decimais (`92,5`); o servidor só recebe o inicial, arredondado e limitado a 20 a 400.
+- **Parar e pausar devolvem ao repouso o que se tocou ao vivo.** Espaço (pausando a música) e Enter ou Home (parar) soltam o pedal e levam o pitch bend e a roda de modulação ao centro, também nas rodas da tela, que voltam ao zero. Antes só o que o clipe dirigia era zerado, e um pedal seguro no controlador ficava preso ao trocar de faixa ou parar. `(testado só por testes automáticos)`
+- O andamento digitado nesta janela aceita decimais (20 a 999, uma casa: `92,5`), e o botão da barra mostra o mesmo texto (`92,5 BPM · 4/4`); o servidor só recebe o inicial, arredondado ao inteiro e limitado a 20 a 999.
 - **Não acompanham o mapa de andamento:** o warp dos clipes de áudio (usa só o andamento inicial) e o tempo sincronizado do delay, do tremolo e do filtro (também só o inicial). Ver o guia [Mapa de andamento e de compassos na prática](../guias/mapa-de-andamento-e-compasso.md).
 - **Offline:** mudar o andamento ou o compasso funciona sem rede e o valor fica no projeto (reabrir o projeto não o desfaz). Só a cópia no servidor, usada pela lista de projetos, espera a rede voltar. `(lido do código e coberto por testes automáticos; não visto no Chrome)`
 

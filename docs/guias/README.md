@@ -11,7 +11,7 @@
 - **Links.** `../manual/...` são capítulos; os nomes sem pasta são guias desta mesma pasta. Rótulos em `crase` são os do app.
 - **Deduções.** Quando uma célula junta dois fatos dos capítulos sem que haja receita testada, ela diz `(dedução)`.
 
-Guias desta pasta, por ordem de uso comum: [Primeira batida do zero](primeira-batida-do-zero.md) · [Gravar uma banda e mixar](gravar-uma-banda-e-mixar.md) · [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md) · [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [Sampler multi-zona e fatiar loops](sampler-multi-zona-e-fatiar-loops.md) · [Expressão MIDI na prática](expressao-midi-na-pratica.md) · [Efeitos em combinação](efeitos-em-combinacao.md) · [Mixagem e automação](mixagem-e-automacao.md) · [Loudness e master](loudness-e-master.md) · [Remix com warp e altura](remix-com-warp-e-altura.md) · [Trabalhar em dois aparelhos](trabalhar-em-dois-aparelhos.md) · [Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) · [Mapa de andamento e compasso](mapa-de-andamento-e-compasso.md) · [MIDI de e para outros programas](midi-de-e-para-outros-programas.md) · [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md).
+Guias desta pasta, por ordem de uso comum: [Primeira batida do zero](primeira-batida-do-zero.md) · [Gravar uma banda e mixar](gravar-uma-banda-e-mixar.md) · [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md) · [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [Sampler multi-zona e fatiar loops](sampler-multi-zona-e-fatiar-loops.md) · [Expressão MIDI na prática](expressao-midi-na-pratica.md) · [Efeitos em combinação](efeitos-em-combinacao.md) · [Mixagem e automação](mixagem-e-automacao.md) · [Loudness e master](loudness-e-master.md) · [Remix com warp e altura](remix-com-warp-e-altura.md) · [Trabalhar em dois aparelhos](trabalhar-em-dois-aparelhos.md) · [Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) · [Mapa de andamento e compasso](mapa-de-andamento-e-compasso.md) · [MIDI de e para outros programas](midi-de-e-para-outros-programas.md) · [Presets do usuário](presets-do-usuario.md) · [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md).
 
 ---
 
@@ -58,6 +58,7 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Ouvir só uma faixa com o reverb dela | [06 Mixer, solo e mudo](../manual/06-mixer.md#solo-e-mudo) |
 | Fazer uma subida de filtro até o refrão | [Mixagem e automação, passo 3](mixagem-e-automacao.md#3-automatizar-um-filtro-para-a-subida-da-música) · [07 Automação](../manual/07-automacao.md) |
 | Fazer um fade-out da música | [Mixagem e automação, passo 4](mixagem-e-automacao.md#4-fazer-um-fade-de-volume-por-automação) · [07 Automação](../manual/07-automacao.md) |
+| Gravar um fade ou uma varredura de filtro mexendo no fader ou no knob, sem desenhar pontos | [Mixagem e automação, passo 5](mixagem-e-automacao.md#5-gravar-um-fade-e-uma-varredura-de-filtro-com-o-mouse) · [07 Automação, Gravar automação](../manual/07-automacao.md#gravar-automação) · [02 Transporte, botão Automação](../manual/02-transporte.md#botão-automação) |
 
 ### Instrumentos e expressão
 
@@ -72,6 +73,8 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Sustentar uma nota curta de sample além do arquivo | [04c, sustentar uma nota curta com loop](../manual/04c-sampler.md#sustentar-uma-nota-curta-com-loop) · [04c Loop da zona](../manual/04c-sampler.md#loop-da-zona) |
 | Criar sino, baixo, pad, lead ou coro com FM e wavetable | [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [04d FM](../manual/04d-fm.md) · [04e Wavetable](../manual/04e-wavetable.md) |
 | Fazer o timbre mudar durante a música (morfar) | [FM e wavetable, automatizando a posição](fm-e-wavetable-na-pratica.md#automatizando-a-posição-da-wavetable) · [07 Automação](../manual/07-automacao.md) |
+| Guardar o timbre que ajustei para usar em outra faixa ou projeto | [Presets do usuário, receita 1](presets-do-usuario.md#receita-1-salvar-o-som-de-um-baixo-que-você-ajustou) · [04 Meus presets](../manual/04-painel-de-instrumento.md#meus-presets) |
+| Guardar os ajustes de um efeito (a cadeia vocal favorita, por exemplo) | [Presets do usuário, receita 2](presets-do-usuario.md#receita-2-montar-uma-cadeia-vocal-favorita-efeitos-por-tipo) · [06c Presets do usuário](../manual/06c-painel-de-efeitos.md#presets-do-usuário) |
 
 ### Áudio: warp, altura e remix
 
@@ -106,6 +109,7 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Liberar cota de armazenamento (4 GB) | [01 Armazenamento de áudios](../manual/01-projetos-modelos-conta.md#armazenamento-de-áudios-na-tela-conta) · [Trabalhar em dois aparelhos, passo 7](trabalhar-em-dois-aparelhos.md#7-cota-de-armazenamento) · [01b Cotas](../manual/01b-nuvem-e-sincronizacao.md#cotas-e-limites) |
 | Trabalhar sem tirar as mãos do teclado | [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md) · [09 Atalhos](../manual/09-configuracoes-atalhos-android.md) |
 | Configurar microfone, MIDI e permissões, ou instalar no Android | [09 Configurações, atalhos e Android](../manual/09-configuracoes-atalhos-android.md) |
+| Levar meus presets de timbre e de efeito para outro aparelho ou para um colega | [Presets do usuário, receita 3](presets-do-usuario.md#receita-3-levar-presets-para-outro-aparelho-ou-para-um-colega) · [04 Importar](../manual/04-painel-de-instrumento.md#importar) |
 
 ---
 
@@ -159,7 +163,7 @@ As linhas são os cinco instrumentos; as colunas, os doze efeitos, repartidos em
 
 ### 2.2 Instrumentos × automação
 
-A raia de automação abre pelo botão `A` da faixa ([07 Automação](../manual/07-automacao.md)). Tocando, o knob segue a curva em laranja; parado, vale o valor fixo.
+A raia de automação abre pelo botão `A` da faixa ([07 Automação](../manual/07-automacao.md)). Tocando, o knob segue a curva em laranja; parado, vale o valor fixo. Os knobs do instrumento e dos efeitos também **gravam** a automação com a música tocando, conforme o modo do botão `Automação` da barra (`Escrever`, `Toque`, `Trava`; em `Ler`, só mudam o valor fixo): [07, Gravar automação](../manual/07-automacao.md#gravar-automação).
 
 | Instrumento | `Volume` e `Pan` da faixa | Parâmetro do próprio instrumento | Parâmetro de um efeito da cadeia |
 |---|---|---|---|
@@ -184,10 +188,10 @@ Todo parâmetro de efeito é automatizável, **menos** o `Sidechain` ([07 Automa
 
 | Alvo | Mixer | Exportar e congelar | Barramentos e mover faixas |
 |---|---|---|---|
-| **`Volume` da faixa** | Fader e leitura em dB andam em laranja; arrastar o fader muda só o valor fixo, sem efeito enquanto a curva toca ([06](../manual/06-mixer.md), [07](../manual/07-automacao.md)). O desenho segue a curva do fader: uma reta na tela é um fade parelho (−7,5 dB, −18 dB e −36 dB em 25%, 50% e 75%) | Entra no arquivo. Ao congelar, o volume e o pan **com as automações deles** passam para a faixa nova; a automação de instrumento e de efeito vira som ([08](../manual/08-exportacao.md#congelar-uma-faixa)) | Raia de volume no barramento do grupo faz o fade só do grupo |
+| **`Volume` da faixa** | Fader e leitura em dB andam em laranja; em `Ler`, arrastar o fader muda só o valor fixo, sem efeito enquanto a curva toca; em `Escrever`, `Toque` ou `Trava`, o arraste com a música tocando **grava** pontos na raia ([06](../manual/06-mixer.md), [07](../manual/07-automacao.md#gravar-automação)). O desenho segue a curva do fader: uma reta na tela é um fade parelho (−7,5 dB, −18 dB e −36 dB em 25%, 50% e 75%) | Entra no arquivo. Ao congelar, o volume e o pan **com as automações deles** passam para a faixa nova; a automação de instrumento e de efeito vira som ([08](../manual/08-exportacao.md#congelar-uma-faixa)) | Raia de volume no barramento do grupo faz o fade só do grupo |
 | **`Volume` do master** | Fader do master anda em laranja | Fade-out em 4 compassos: ponto em 0 dB no compasso 33 e em −∞ dB no 37, com a grade em `Compasso`; o `Compressor` do master não desfaz o fade ([mixagem, passo 4](mixagem-e-automacao.md#4-fazer-um-fade-de-volume-por-automação)) | |
 | **`Pan`** | O `Pan` do master é balanço (o centro fica em 0 dB); o da faixa tem lei de potência constante, com −3 dB no centro ([06](../manual/06-mixer.md)) | Vai para a faixa nova ao congelar | |
-| **Nível de `Envio`** | O knob de envio do mixer **não** anda com a automação; quem mostra o valor é a raia | Vai para a faixa nova ao congelar (com os envios pós-fader) | Remover o envio ou o barramento apaga a raia; mover faixa contra a ordem dos barramentos desfaz o envio e a automação dele, depois de perguntar ([06](../manual/06-mixer.md#como-o-som-corre-ordem-de-processamento)) |
+| **Nível de `Envio`** | O knob de envio do mixer **não** anda com a automação; quem mostra o valor é a raia. Ele grava como o fader (só se o envio já existe) | Vai para a faixa nova ao congelar (com os envios pós-fader) | Remover o envio ou o barramento apaga a raia; mover faixa contra a ordem dos barramentos desfaz o envio e a automação dele, depois de perguntar ([06](../manual/06-mixer.md#como-o-som-corre-ordem-de-processamento)) |
 
 ### 2.5 Instrumentos × ferramentas MIDI
 
@@ -305,7 +309,9 @@ O que evitar juntos, por quê, o que fazer no lugar e onde está registrado. Tud
 
 | Evite juntar | Por quê | Em vez disso | Ver |
 |---|---|---|---|
-| Automação de volume e arrastar o fader durante o play | Arrastar muda só o **valor fixo**, que a curva cobre; nada se ouve até parar | Editar os pontos ou remover a raia (`X` no cabeçalho dela) | [07, limites](../manual/07-automacao.md#limites-e-pegadinhas) · [mixagem, se der errado](mixagem-e-automacao.md#se-der-errado) |
+| Automação de volume e arrastar o fader durante o play com o botão `Automação` em `Ler` | Arrastar muda só o **valor fixo**, que a curva cobre; nada se ouve até parar | Escolher `Toque`, `Trava` ou `Escrever` para gravar por cima, ou editar os pontos, ou remover a raia (`X` no cabeçalho dela) | [07, limites](../manual/07-automacao.md#limites-e-pegadinhas) · [mixagem, se der errado](mixagem-e-automacao.md#se-der-errado) |
+| Gravar automação no modo `Escrever` (principalmente pelo seletor `E` da raia) sobre uma curva que se quer manter | Grava o tempo todo e substitui a curva antiga de onde passa (o seletor `E` começa no play, com o valor fixo do controle) | `Toque` para trocar só o trecho segurado; `Ctrl+Z` desfaz a passada | [07, Gravar automação](../manual/07-automacao.md#gravar-automação) |
+| Gravar automação junto com a gravação de áudio ou MIDI | Não grava: aviso vermelho ao lado do botão `Automação` | Gravar o áudio primeiro e a automação numa passada só de reprodução | [07](../manual/07-automacao.md#limites-da-gravação) |
 | Esperar a curva com o transporte parado ou tocando notas ao vivo | Parado, o motor não aplica a curva: o som usa o valor fixo. A leitura no cabeçalho da raia mostra o valor da curva no cursor | Tocar o projeto para ouvir | [07](../manual/07-automacao.md#limites-e-pegadinhas) |
 | Automação de nível de envio e o knob do mixer | O knob de envio **não** anda com a automação | Ler o valor na raia | [06](../manual/06-mixer.md#limites-e-pegadinhas) |
 | Automatizar `Afinação`, `Decaimento` ou `Timbre` de uma peça da `Bateria` | Só valem no próximo golpe (o `Volume` vale na hora) | Automatizar o `Volume` da peça, ou aceitar o golpe seguinte | [04b](../manual/04b-bateria.md#limites-e-pegadinhas) |
@@ -321,6 +327,8 @@ O que evitar juntos, por quê, o que fazer no lugar e onde está registrado. Tud
 | Evite juntar | Por quê | Em vez disso | Ver |
 |---|---|---|---|
 | Aplicar um preset depois de ajustar knobs | O preset aplica **todos** os valores; o que ele não cita volta ao padrão (no FM e no wavetable inclusive `Volume`, `Vozes` e o LFO). Nos efeitos só o `Sidechain` é preservado | Preset primeiro, ajuste depois; `Ctrl+Z` desfaz | [04](../manual/04-painel-de-instrumento.md#presets) · [06c](../manual/06c-painel-de-efeitos.md) |
+| Contar com os presets seus em outro aparelho, na conta ou no `.jopendaw` | Ficam só no aparelho (IndexedDB do site na web, arquivo do app no Android): não sincronizam e não vão no arquivo do projeto; limpar os dados do site apaga; se a gravação falhar, o app não avisa | `Exportar preset…` dos que importam e `Importar preset…` no outro aparelho; o projeto leva os valores dos knobs, então soa igual sem o preset | [Presets do usuário, limitações](presets-do-usuario.md#limitações-reais) · [04](../manual/04-painel-de-instrumento.md#onde-os-presets-ficam-guardados) |
+| Esperar que o preset do `Sampler` leve o áudio ou as zonas | Leva só o timbre (`Modo`, envelope, `Sens. vel.`, `Volume`, bend e vibrato); `Nota base`, `Afinação`, áudio e zonas ficam como estão | Montar as zonas na faixa; guardar só o envelope como preset | [04c, Presets](../manual/04c-sampler.md#presets) |
 | `Sampler` com zonas e o cartão `ÁUDIO` (áudio único, `Nota base`, `Modo`) | Com ao menos uma zona esses três deixam de valer; só a `Afinação` do cartão soma. O `Modo` do cartão ainda apaga a `Soltura` e desenha o envelope curto, mesmo com as zonas em outro modo (inconsistência da interface) | Ajustar `Nota base` e modo em cada zona | [04c](../manual/04c-sampler.md#limites-e-pegadinhas) |
 | Acordes e camadas no `Sampler` | Cada zona que dispara consome uma voz (16 no total): 3 camadas por nota gastam 3 vozes por nota | Uma camada por região, ou menos notas juntas | [sampler, se der errado](sampler-multi-zona-e-fatiar-loops.md#se-der-errado) |
 | Camadas de velocidade com um valor sem zona | A força que cai no vão fica muda | Sobrepor de 2 a 3 valores (suaves 1 a 83, fortes 81 a 127) | [sampler, receita 1](sampler-multi-zona-e-fatiar-loops.md#receita-1-piano-multi-sample-com-camadas-de-velocidade) |
@@ -450,6 +458,9 @@ Formato: "faça X → use Y com Z=valor". Os números são pontos de partida; o 
 | Subida de filtro de 8 compassos | `Filtro` `Passa-alta de transição`, raia `Corte` de 60 Hz a 3 kHz (reta na tela vira reta em oitavas) | [mixagem, passo 3](mixagem-e-automacao.md#3-automatizar-um-filtro-para-a-subida-da-música) |
 | Fade-out da música | Raia `Volume` do `Master`: 0 dB no compasso 33, −∞ dB no 37, grade `Compasso` | [mixagem, passo 4](mixagem-e-automacao.md#4-fazer-um-fade-de-volume-por-automação) |
 | Fade parelho de ouvido | Reta na raia de volume: −7,5 dB, −18 dB e −36 dB em 25%, 50% e 75% do trecho (a escala é a do fader) | [07, escala](../manual/07-automacao.md) |
+| Gravar um fade-out com o fader | Botão `Automação` da barra em `Trava`, play, segurar o fader do canal e descer até `−∞ dB`, soltar, parar (o valor fica) | [mixagem, passo 5](mixagem-e-automacao.md#5-gravar-um-fade-e-uma-varredura-de-filtro-com-o-mouse) |
+| Gravar uma varredura de filtro com o knob | `Trava`, painel `Efeitos` (`F`), segurar `Corte` e girar devagar de 250 Hz a 60 Hz, soltar, parar; a raia `Filtro · Corte` nasce sozinha | [mixagem, passo 5](mixagem-e-automacao.md#5-gravar-um-fade-e-uma-varredura-de-filtro-com-o-mouse) |
+| Refazer só um trecho de uma automação | `Toque` (e loop `L` no trecho): segure o controle só onde quer trocar; ao soltar, volta à curva antiga em 1/4 de batida; `Ctrl+Z` desfaz | [07, regravar um trecho](../manual/07-automacao.md#passo-a-passo) |
 | Salto seco no refrão | Dois pontos na mesma batida formam um degrau; arraste um até a batida do outro | [07](../manual/07-automacao.md#curva-entre-pontos-curve) |
 | Timbre morfando ao longo da música | Raia `Posição` do `Oscilador 1` da wavetable, de 0% no compasso 1 a 100% no 9; `Posição` do LFO em 0% se só a automação deve mandar | [FM e wavetable](fm-e-wavetable-na-pratica.md#automatizando-a-posição-da-wavetable) |
 
@@ -470,6 +481,9 @@ Formato: "faça X → use Y com Z=valor". Os números são pontos de partida; o 
 | Golpe que não repete o mesmo áudio | Três zonas com o mesmo `Round-robin` `grupo 1` e variações de `Ganho`, `Afinação` e `Pan` | [sampler, receita 3](sampler-multi-zona-e-fatiar-loops.md#receita-3-round-robin-para-o-mesmo-golpe-não-soar-mecânico) |
 | Sustentar uma nota curta de sample | Zona `Sustentado` com `Loop enquanto a nota está presa` (nasce em 25% a 75% do trecho) | [04c](../manual/04c-sampler.md#sustentar-uma-nota-curta-com-loop) |
 | Tocar a bateria no teclado do computador | `Ctrl+K` com a oitava em `C2`: `A` Bumbo, `S` Caixa, `T` Chimbal fechado, `U` Chimbal aberto, `E` Palmas | [04b](../manual/04b-bateria.md#tocar-a-bateria-no-computador) |
+| Guardar um baixo que ajustei | Seletor de presets, role até o fim do menu, `MEUS PRESETS`, `Salvar como preset…`, nome `Meu baixo grave`, `Salvar`; em outra faixa, escolha o nome na mesma seção (leva todos os parâmetros; o sampler não leva áudio nem zonas) | [Presets do usuário, receita 1](presets-do-usuario.md#receita-1-salvar-o-som-de-um-baixo-que-você-ajustou) |
+| Reaproveitar a cadeia vocal em outro projeto | Um preset por efeito: no menu de três pontos de `Gate`, `EQ`, `Compressor` e do `Reverb` do retorno, `Salvar como preset…` com o nome `Minha voz`; no outro projeto, monte na mesma ordem e escolha `Minha voz` em cada um (`Sidechain`, ordem e envios não entram) | [Presets do usuário, receita 2](presets-do-usuario.md#receita-2-montar-uma-cadeia-vocal-favorita-efeitos-por-tipo) |
+| Mandar um preset para outro aparelho | `…` da linha do preset, `Exportar preset…` (gera `Nome.jopreset`); no outro aparelho, `Importar preset…` no menu do mesmo tipo (um arquivo por vez; não há sincronização com a conta) | [Presets do usuário, receita 3](presets-do-usuario.md#receita-3-levar-presets-para-outro-aparelho-ou-para-um-colega) |
 
 ### Notas e edição MIDI
 

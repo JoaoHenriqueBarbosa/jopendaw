@@ -33,7 +33,7 @@ Princípios (de `app/lib/daw/sync.dart:1`):
 | `app/lib/screens/project_screen.dart` | `projectSubtitle`: o subtítulo `120 BPM · 4/4` lido do documento vivo |
 | `app/lib/api/sync_api.dart` | interface `SyncApi`, `ServerDoc`, `DocConflict` |
 | `app/lib/api/client.dart` | implementação HTTP (`projectDoc`, `putProjectDoc`, `missingSamples`, `putSample`, `getSample`) |
-| `app/lib/daw/sync_ui.dart` | `SyncIndicator` (ícone de nuvem na barra do transporte) e `showSyncConflictDialog` |
+| `app/lib/daw/sync_ui.dart` | `SyncIndicator` (ícone de nuvem no cabeçalho do projeto, montado por `project_screen.dart` em `actions` do `PageScaffold` quando `daw != null && daw.ready`) e `showSyncConflictDialog` |
 | `server/src/routes/docs.rs` | `GET`/`PUT /api/projects/{id}/doc` |
 | `server/src/routes/samples.rs`, `storage.rs` | `POST /api/samples/missing`, `PUT`/`GET /api/samples/{hash}`, cota |
 | `app/test/sync_test.dart`, `app/test/phase9c_test.dart`, `app/test/fake_sync_api.dart` | testes com servidor de mentira (a `phase9c` cobre o espelho do andamento, o `409` silencioso, o pull periódico, o purge e o ganho do clipe) |
@@ -92,7 +92,7 @@ Sobrevive a fechar o app no meio. Sem estado guardado (primeira abertura) vale `
 - Só roda com `ready`, sem `_disposed` e com `_canSync()`. Falha do `PATCH` é engolida (fica pendente, `tempoPending` verdadeiro nos testes).
 - Não reentra: uma chamada durante um envio só liga `_mirrorAgain` e o laço repete com o valor mais novo.
 - Quem chama: `setTempo` (depois do `edit`, sem lançar offline), `_save` (a cada documento que mudou, o que cobre **desfazer e refazer**), o fim de `open()`, o fim de `_applyRemote` e `_onSyncPhase` (quando `sync.phase` vira `synced`).
-- O servidor valida `bpm` de 20 a 999 (`valid_bpm` em `routes/projects.rs`); o app manda 20 a 400.
+- O servidor valida `bpm` de 20 a 999 (`valid_bpm` em `routes/projects.rs`); o app manda o BPM arredondado ao inteiro dentro de 20 a 999 (`minBpmInt`..`maxBpmInt`); os decimais ficam só no documento.
 - O subtítulo da tela do projeto (`projectSubtitle`, `project_screen.dart`) lê `daw.doc` quando o estúdio está pronto; antes disso, o do projeto. Usa `formatBpm` (`warp_dialog.dart`), a mesma função do botão de andamento da barra (`transport_bar.dart`): inteiro sem casas, senão uma casa com vírgula (`120,5 BPM · 4/4`); barra e subtítulo mostram o mesmo texto (antes o subtítulo usava ponto e a barra arredondava). O sufixo do compasso do subtítulo é `beatsPerBar/` + `beatUnit` do cadastro do projeto (`p.beatUnit`), enquanto a barra escreve `/4` fixo.
 
 ## A máquina de estados do `SyncService`

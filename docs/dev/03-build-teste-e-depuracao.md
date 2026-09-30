@@ -301,7 +301,7 @@ adb shell dumpsys package tech.johnenrique.jopendaw | grep -E "lastUpdateTime|ve
 
   (O `app_flutter` é o diretório de documentos padrão do plugin `path_provider` em debug; não confirmado neste repositório além do uso nas anotações.)
 - **Conflito de sincronização "legítimo":** duas abas do Chrome, ou Chrome e Android, mexendo no mesmo projeto geram o diálogo "mudou em outro aparelho". É o comportamento esperado, não um bug.
-- Ao testar sincronização Chrome ↔ Android, a ordem importa: espere o indicador de nuvem ficar em "sincronizado" antes de abrir o outro lado.
+- Ao testar sincronização Chrome ↔ Android, a ordem importa: espere o indicador de nuvem (no cabeçalho do projeto) ficar em "sincronizado" antes de abrir o outro lado.
 
 ## Contratos
 

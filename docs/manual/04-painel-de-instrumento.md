@@ -30,7 +30,7 @@ Os instrumentos também nascem pelo botão `Nova faixa` da coluna de faixas do a
 | Barra colorida e ícone do tipo | Cor da faixa e tipo do instrumento | A cor é a da faixa; ela também pinta os knobs e as teclas acesas | Serve para ver a qual faixa o painel pertence |
 | Nome da faixa e, embaixo, o tipo (`Sintetizador`, `Bateria`, `Sampler`, `FM`, `Wavetable`) | Identifica a faixa | Até 220 px, com reticências | Para renomear use o menu `Opções da faixa` |
 | Seta esquerda, tooltip `Anterior (preset)` (na bateria, `Anterior (kit)`) | Aplica o preset anterior da lista, dando a volta do primeiro para o último | Sem preset atual, parte do fim da lista | Percorra timbres com o teclado da tela tocando |
-| Seletor de presets, tooltip `Presets` (na bateria, `Kits de bateria`) | Abre o menu de presets agrupado por categoria, com um visto no preset que bate com os valores atuais | Largura fixa de 200 px; ver [Presets](#presets) | O rótulo mostra o nome do preset ou `Inicial`, `Personalizado`, `Nome (editado)` |
+| Seletor de presets, tooltip `Presets` (na bateria, `Kits de bateria`) | Abre o menu de presets agrupado por categoria, com um visto no preset que bate com os valores atuais | Largura fixa de 200 px; ver [Presets](#presets). No fim do menu, a seção `MEUS PRESETS` ([Meus presets](#meus-presets)) | O rótulo mostra o nome do preset ou `Inicial`, `Personalizado`, `Nome (editado)` |
 | Seta direita, tooltip `Próximo (preset)` (na bateria, `Próximo (kit)`) | Aplica o próximo preset, dando a volta do último para o primeiro | Sem preset atual, parte do começo | A largura do seletor é fixa para o botão não andar a cada nome |
 | Ícone de teclado, tooltip `Tocar com o teclado do computador (Ctrl+K)` (ligado: `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga`, com a oitava e a intensidade de agora no lugar de `C4` e `80%`) | Liga e desliga o teclado do computador | Desligado ao abrir | É o mesmo interruptor do botão da barra superior e de `Ctrl+K`, e o tooltip é o **mesmo texto** nos dois (vem de uma função só, `keyboardTooltip`; antes o do painel era uma versão curta); no Mac o tooltip mostra `⌘+K` no lugar de `Ctrl+K`. Ligado, os atalhos de letra do estúdio ficam suspensos (ver [Limites e pegadinhas](#limites-e-pegadinhas)) |
 | Ícone USB, tooltip `Tocar com um teclado MIDI` (conectado: `MIDI: nome do aparelho`) | Pede acesso ao MIDI do aparelho e liga a entrada | Fica colorido quando há aparelho conectado | O navegador pede permissão na primeira vez |
@@ -123,13 +123,13 @@ Acessibilidade: cada knob se apresenta a leitores de tela como controle deslizan
 
 ### Knobs que seguem a automação (laranja)
 
-Se o parâmetro tem uma raia de automação com pontos (ver [07 Automação](07-automacao.md)), o knob passa a acompanhar a curva enquanto o projeto toca: o valor e o arco andam sozinhos e o knob fica na cor de automação (laranja, `#F08A5D`) em vez da cor da faixa. Parado, o knob mostra o valor fixo e volta à cor normal. Mexer num knob automatizado muda o valor fixo (o que vale quando a automação não manda, por exemplo com o projeto parado), não a curva; para mudar a curva, edite a raia.
+Se o parâmetro tem uma raia de automação com pontos (ver [07 Automação](07-automacao.md)), o knob passa a acompanhar a curva enquanto o projeto toca: o valor e o arco andam sozinhos e o knob fica na cor de automação (laranja, `#F08A5D`) em vez da cor da faixa. Parado, o knob mostra o valor fixo e volta à cor normal. Com o botão `Automação` da barra em `Ler` (o padrão), mexer num knob automatizado muda o valor fixo (o que vale quando a automação não manda, por exemplo com o projeto parado), não a curva; para mudar a curva, edite a raia. Em `Escrever`, `Toque` ou `Trava`, os knobs do painel **gravam automação** enquanto o projeto toca: o movimento vira pontos na raia do parâmetro (criada na hora, se não existe). Modos e passo a passo em [07 Automação, Gravar automação](07-automacao.md#gravar-automação).
 
 ## Presets
 
 ### O que é um preset
 
-Um preset é um conjunto de valores de parâmetros. Cada preset guarda só o que difere do padrão do instrumento. Ao escolher um, o painel aplica o padrão do tipo e, por cima, os valores do preset. Consequência prática: um preset soa igual não importa em que estado o instrumento estava antes, porque todo parâmetro que o preset não cita volta ao padrão. Escolher um preset sobrescreve o timbre inteiro, e vale um passo no desfazer (`Ctrl+Z` traz o timbre anterior de volta).
+Um preset é um conjunto de valores de parâmetros. Cada preset de fábrica guarda só o que difere do padrão do instrumento (os seus, salvos por você, guardam todos os parâmetros do tipo). Ao escolher um, o painel aplica o padrão do tipo e, por cima, os valores do preset. Consequência prática: um preset soa igual não importa em que estado o instrumento estava antes, porque todo parâmetro que o preset não cita volta ao padrão. Escolher um preset sobrescreve o timbre inteiro, e vale um passo no desfazer (`Ctrl+Z` traz o timbre anterior de volta).
 
 Exceção no sampler: a `Nota base`, a `Afinação` e o áudio escolhido pertencem ao áudio, não ao timbre, e nenhum preset os altera (ver [04c Sampler](04c-sampler.md)).
 
@@ -139,7 +139,7 @@ O rótulo mostra em que pé o timbre está:
 
 | Rótulo | Quando aparece |
 |---|---|
-| Nome do preset (ex.: `Pad quente`) | Todos os parâmetros batem com os de um preset da lista (com tolerância ínfima de arredondamento). O menu marca esse preset com um visto |
+| Nome do preset (ex.: `Pad quente`) | Todos os parâmetros batem com os de um preset da lista, de fábrica ou seu (com tolerância ínfima de arredondamento). O menu marca esse preset com um visto |
 | `Nome (editado)` (ex.: `Pad quente (editado)`) | Você aplicou um preset nesta sessão do painel e depois mexeu em algum parâmetro |
 | `Inicial` | Faixa recém-criada, com todos os parâmetros ainda no padrão do tipo e sem nenhum preset da lista igual a esse estado: é o caso de FM e wavetable. No sintetizador o mesmo estado bate com o preset chamado `Inicial` (categoria `BÁSICO`); na bateria (categoria `KITS`) e no sampler (categoria `SAMPLER`) também existe um preset `Inicial`, sem valores, que bate com o estado de fábrica |
 | `Personalizado` | Os valores não batem com nenhum preset e nenhum foi aplicado nesta sessão do painel (por exemplo, ao reabrir o projeto com um timbre ajustado à mão) |
@@ -148,7 +148,7 @@ O nome `(editado)` é lembrado só enquanto o painel está aberto: fechar o pain
 
 ### Setas anterior e próximo
 
-As setas percorrem a lista na ordem do menu (as categorias em sequência) e dão a volta nas pontas. Partindo de `Personalizado` sem preset lembrado, `Próximo` vai para o primeiro da lista e `Anterior` para o último. Como cada passo aplica o preset inteiro, dá para "folhear" timbres com o teclado da tela ou o teclado do computador tocando.
+As setas percorrem a lista na ordem do menu (as categorias em sequência) e dão a volta nas pontas. Partindo de `Personalizado` sem preset lembrado, `Próximo` vai para o primeiro da lista e `Anterior` para o último. Depois do último de fábrica as setas seguem pelos seus (`MEUS PRESETS`, na ordem em que foram criados) e só então dão a volta. Como cada passo aplica o preset inteiro, dá para "folhear" timbres com o teclado da tela ou o teclado do computador tocando.
 
 ### Listas por tipo
 
@@ -162,18 +162,105 @@ As setas percorrem a lista na ordem do menu (as categorias em sequência) e dão
 
 ### Meus presets
 
-Abaixo dos presets de fábrica, o menu tem a seção `MEUS PRESETS` (só os do tipo do instrumento: um preset de sintetizador não aparece no FM):
+Você pode guardar o timbre de um instrumento com um nome e chamá-lo depois em qualquer faixa do mesmo tipo, em qualquer projeto deste aparelho. Passo a passo em [Presets do usuário](../guias/presets-do-usuario.md).
 
-| Item | O que faz |
+#### Onde fica o menu
+
+O seletor de presets do cabeçalho do painel (tooltip `Presets`; na bateria, `Kits de bateria`) abre o menu dos presets de fábrica e, **no fim dele**, depois de todas as categorias, a seção `MEUS PRESETS`. O menu do sintetizador tem 22 presets em 7 categorias e rola (altura máxima de 460 px): para chegar em `MEUS PRESETS` role até o fim do menu. A seção só lista os presets do **tipo** do instrumento (um preset de sintetizador não aparece no FM); um instrumento sem presets de fábrica (`Áudio`, `Barramento`) não tem o seletor, e por isso não tem presets do usuário. O menu é o mesmo no computador e no celular; só as setas anterior e próximo faltam no celular.
+
+| Item do menu | O que faz |
 |---|---|
-| `Salvar como preset…` | Pede um nome e guarda **todos** os parâmetros atuais do instrumento. Se já existe um preset seu com esse nome (maiúsculas não contam), pergunta `Substituir o preset?`. |
-| Um preset seu | Aplica na faixa, como os de fábrica. Leva o visto e o rótulo do seletor (`Nome`, `Nome (editado)`) quando os valores batem. As setas anterior e próximo passam por eles depois dos de fábrica. |
-| Ícone `…` no fim da linha | Abre `Renomear…`, `Exportar preset…` (gera um arquivo `.jopreset`) e `Apagar…` (com confirmação). |
-| `Importar preset…` | Abre o seletor de arquivos e adiciona um `.jopreset`. Arquivo que não é preset, de tipo desconhecido ou de versão mais nova é recusado com o motivo; ids desconhecidos e valores não numéricos são ignorados e valores fora da faixa são limitados, com um aviso. Nome já usado ganha ` (2)`, ` (3)`… |
+| `MEUS PRESETS` (título cinza, sem clique) | Abre a seção. |
+| `Nenhum ainda` (cinza) | Aparece no lugar da lista enquanto você não tem nenhum preset deste tipo. |
+| Um preset seu (o nome, cortado com reticências se for longo) | Aplica na faixa, como os de fábrica. Leva o visto quando os valores da faixa batem com ele. |
+| Ícone `…` no fim da linha (tooltip `Renomear, apagar ou exportar`) | Fecha o menu e abre uma janela com o nome do preset no título e três opções: `Renomear…`, `Exportar preset…` e `Apagar…` (em vermelho). |
+| `Salvar como preset…` (ícone de marcador com `+`) | Pede um nome e guarda os parâmetros atuais do instrumento. |
+| `Importar preset…` (ícone de arquivo) | Abre o seletor de arquivos e adiciona um preset `.jopreset`. |
 
-Nomes: até 60 caracteres, sem caracteres de controle, únicos por tipo. Os presets ficam **neste aparelho** (no navegador, nos dados do site; no Android, na pasta do app) e **não sincronizam com a conta**: para levar a outro aparelho, exporte e importe o `.jopreset`. Limpar os dados do site apaga os presets.
+#### Salvar
 
-No **sampler**, o preset do usuário guarda só timbre e envelope; não leva o áudio, as zonas, a nota base nem a afinação (estes ficam como estão na faixa que recebe o preset).
+1. Ajuste o instrumento até gostar.
+2. Abra o seletor de presets, role até o fim e escolha `Salvar como preset…`.
+3. Na janela `Salvar como preset`, digite o nome no campo `Nome` e toque em `Salvar` (ou `Enter`). `Cancelar` fecha sem guardar.
+4. O preset entra na lista da seção e, como os valores da faixa são os dele, já aparece marcado com o visto e o nome dele no seletor.
+
+Regras do nome:
+
+| Regra | Valor |
+|---|---|
+| Tamanho | Até 60 caracteres (o campo para de aceitar no 60). |
+| Limpeza | O campo não aceita caracteres de controle nem separadores de linha ou de parágrafo (nem digitados nem colados). Ao guardar, esses caracteres e as marcas invisíveis (largura zero, direção do texto) viram espaço; espaços seguidos viram um só; espaços nas pontas somem. |
+| Vazio | O botão `Salvar` fica desabilitado enquanto o nome, depois da limpeza, estiver vazio. |
+| Repetido | Único **por tipo de instrumento**, sem diferenciar maiúsculas de minúsculas (`Baixo` e `baixo` são o mesmo nome). Nome já usado abre o diálogo `Substituir o preset?` com o texto `Já existe um preset chamado "Nome". Substituir pelos valores atuais?` e os botões `Cancelar` e `Substituir`. Substituir troca só os valores; o nome (com as maiúsculas de antes) e a data de criação do preset antigo ficam. |
+| Quantidade | No máximo 300 presets por tipo. No 301º, a janela `Não foi possível salvar` diz `Limite de 300 presets para este tipo. Apague algum antes.` |
+
+#### O que o preset guarda e o que não guarda
+
+| Tipo | Guarda | Não guarda |
+|---|---|---|
+| Sintetizador, FM, Wavetable | Todos os parâmetros do painel (todos os cartões, `Volume`, `Vozes`, `Glide`, LFO etc.). | O nome do preset ligado à faixa (o projeto guarda só os valores), as notas e a automação. |
+| Bateria | Os 49 valores: `Volume`, `Afinação`, `Decaimento` e `Timbre` de cada uma das 12 peças, mais o `Volume` geral. | As notas do piano roll e a automação. |
+| Sampler | Só o timbre: `Modo`, os quatro knobs do envelope (`Ataque`, `Decaimento`, `Sustentação`, `Soltura`), `Sens. vel.`, `Volume`, `Alcance do bend` e `Vibrato da roda`. | O **áudio** escolhido, as **zonas** (mapa, notas, velocidades, loops, round-robin), a `Nota base` e a `Afinação`, que continuam como estão na faixa que recebe o preset. |
+
+A automação (as curvas das raias) nunca entra no preset: ele guarda só o valor fixo de cada knob no momento de salvar. Para uma faixa com o knob automatizado, o valor guardado é o fixo, não o da curva (ver [07 Automação](07-automacao.md)).
+
+#### Aplicar
+
+Escolher um preset seu faz o mesmo que escolher um de fábrica: aplica o padrão do tipo e, por cima, os valores do preset (no sampler, mantém a `Nota base` e a `Afinação` da faixa), e vale um passo no desfazer. Como o preset seu guarda todos os parâmetros, não sobra nada "do estado anterior". As setas anterior e próximo (só no computador) andam pelos presets de fábrica e, depois deles, pelos seus, e dão a volta no fim.
+
+O rótulo do seletor segue a tabela de [O rótulo do seletor](#o-rótulo-do-seletor), com estas particularidades:
+
+| Situação | Rótulo |
+|---|---|
+| Os valores da faixa batem com um preset seu | O nome dele, sem `(editado)`, e o visto na linha dele. Se batem com um preset seu **e** com um de fábrica, vale o seu. Se dois presets seus têm valores idênticos, o primeiro criado. |
+| Você aplicou um preset seu e depois mexeu em algum parâmetro | `Nome (editado)` (só até fechar o painel ou trocar de aba; depois volta a `Personalizado`, como nos de fábrica) `(não confirmado em uso)`. |
+| Faixa recém-criada, sem nenhum parâmetro mexido | `Inicial`, a não ser que você tenha salvo um preset com todos os valores no padrão: aí aparece o nome dele. |
+| Faixa com valores que não batem com nada e nenhum preset aplicado nesta sessão do painel | `Personalizado`. |
+
+#### Renomear, exportar e apagar
+
+Toque no `…` da linha do preset.
+
+| Opção | O que faz |
+|---|---|
+| `Renomear…` | Janela `Renomear preset` com o nome atual preenchido; o botão é `Renomear`. Nome já usado por **outro** preset do tipo abre `Nome em uso` (`Já existe outro preset chamado "Nome".`) e nada muda; trocar só as maiúsculas do próprio nome é permitido. |
+| `Exportar preset…` | Gera um arquivo `.jopreset` com esse preset. No navegador o arquivo é baixado direto (pasta de downloads); no Android abre o seletor de "salvar como" e cancelar volta sem mensagem. Se o sistema não sabe salvar arquivo, a janela `Não foi possível exportar` mostra o motivo. |
+| `Apagar…` | Janela `Apagar o preset?` com `O preset "Nome" será apagado deste aparelho. Isso não pode ser desfeito.`, botões `Cancelar` e `Apagar` (vermelho). Faixas que já usam o timbre não mudam: o projeto guarda valores, não uma ligação com o preset. |
+
+O nome do arquivo exportado é o nome do preset mais `.jopreset`; os caracteres `\ / : * ? " < > |` viram `_` e pontos no começo saem (um nome que fica vazio vira `preset.jopreset`).
+
+Renomear, apagar e salvar presets **não entram no desfazer** do projeto (`Ctrl+Z` não traz de volta um preset apagado): eles são do aparelho, não do projeto.
+
+#### Importar
+
+`Importar preset…` abre o seletor de arquivos (título `Importar preset`; aceita `.jopreset` e `.json`) e adiciona o preset ao tipo que o arquivo declara.
+
+| Situação | O que acontece |
+|---|---|
+| Arquivo bom, sem ressalvas | Entra na lista **sem nenhuma janela**: confira na seção `MEUS PRESETS`. |
+| Nome já usado no tipo | Entra como `Nome (2)` (depois `(3)`…) e a janela `Preset "Nome (2)" importado` avisa `Já havia um preset chamado "Nome": este entrou como "Nome (2)".` |
+| Parâmetros que o tipo não tem, valores que não são número ou são infinitos | Ignorados, com aviso na mesma janela (`N parâmetros desconhecidos ignorados.`, `N valores inválidos (não numérico ou infinito) ignorados.`). |
+| Valores fora da faixa | Limitados à faixa do parâmetro, com aviso (`N valores fora da faixa foram limitados.`). |
+| Parâmetros que o arquivo não cita | Voltam ao padrão do tipo. |
+| Nome ausente, vazio ou com caracteres estranhos | Entra como `Preset importado`, ou com o nome limpo, com aviso. |
+| Arquivo de outro tipo (por exemplo um preset de `reverb` importado pelo menu do sintetizador) | É guardado no tipo dele e só aparece no menu desse tipo; a janela avisa `O preset é de outro tipo (reverb): ele foi guardado, mas só aparece no menu desse tipo.` |
+| Arquivo recusado | A janela `Não foi possível importar "arquivo"` mostra o motivo: `O arquivo é grande demais para ser um preset.` (mais de 256 KB), `O arquivo não é um preset do jopendaw (não é um JSON válido).`, `O arquivo não é um preset do jopendaw.`, `O arquivo tem uma versão de formato inválida.`, `O preset é de uma versão mais nova do jopendaw. Atualize o app para importá-lo.`, `Tipo de preset desconhecido ("família/tipo"). Ele pode ser de uma versão mais nova do jopendaw.`, `O preset não traz parâmetros.`, `O preset não tem nenhum valor utilizável para este tipo.` ou o limite de 300 por tipo. Nada é adicionado. |
+
+O formato do arquivo está em [dev 10, Presets do usuário](../dev/10-app-flutter.md#presets-do-usuário-user_presetsdart-user_presets_uidart).
+
+#### Onde os presets ficam guardados
+
+Ficam **neste aparelho**, num único registro chamado `userpresets` no guardado local do app (o mesmo que guarda o projeto e os áudios):
+
+| Onde | Como |
+|---|---|
+| Navegador (web) | No IndexedDB do site (banco `jopendaw`, chave `userpresets`), separado por endereço do site. Limpar os dados do site apaga os presets; outro navegador, outro perfil ou uma janela anônima começam sem nenhum. |
+| Android | Num arquivo de texto (`userpresets.txt`) na pasta `jopendaw` dos documentos do app. Desinstalar o app ou limpar os dados dele apaga. |
+| Outros sistemas de computador | Nada é guardado: os presets valem só até fechar o app (o app é feito para o navegador e o Android). |
+
+Eles **não sincronizam com a conta**: não vão para a nuvem, não aparecem no outro aparelho e não vão dentro do `.jopendaw` do projeto (o projeto leva os valores dos knobs, não a lista de presets). Não são separados por conta: quem entrar com outra conta neste mesmo navegador vê os mesmos presets `(não confirmado em uso; vem da leitura do código, que não usa a conta na chave)`. Para levar a outro aparelho, exporte cada preset e importe no outro. Se a gravação no guardado falhar, os presets seguem na memória até fechar o app, mas o app **não mostra aviso** disso (o erro fica guardado internamente e nenhuma tela o lê): faça uma exportação dos presets importantes como cópia.
+
+No Android, `Exportar preset…` e `Importar preset…` dependem do seletor de arquivos do sistema `(não confirmado no aparelho; testado só por testes automáticos com o seletor e o salvar simulados)`.
 
 ## Passo a passo
 
@@ -183,6 +270,13 @@ No **sampler**, o preset do usuário guarda só timbre e envelope; não leva o �
 2. Toque no teclado da tela (ou ligue o teclado do computador com `Ctrl+K`).
 3. Com uma nota sustentada, clique na seta `Próximo (preset)` algumas vezes, ou abra o seletor e escolha pelo nome.
 4. Quando achar o mais próximo, ajuste os knobs; o rótulo passa a `Nome (editado)`.
+
+### Guardar o timbre como preset seu
+
+1. Deixe o instrumento no timbre que quer guardar.
+2. Abra o seletor de presets, role o menu até o fim e escolha `Salvar como preset…`.
+3. Digite o nome (até 60 caracteres) e toque em `Salvar`.
+4. Em outra faixa do mesmo tipo, abra o seletor e escolha o nome na seção `MEUS PRESETS`. Receita completa: [Presets do usuário](../guias/presets-do-usuario.md).
 
 ### Ajustar um valor com precisão
 
@@ -210,14 +304,17 @@ No **sampler**, o preset do usuário guarda só timbre e envelope; não leva o �
 - [03c Gravação](03c-gravacao.md): gravar notas ao vivo com o teclado da tela, o do computador ou o MIDI, junto de bend, modulação e pedal.
 - [05 Piano roll, faixa de controle](05-piano-roll.md#faixa-de-controle): editar depois os pontos de bend, modulação e sustain gravados (ou desenhá-los).
 - [Expressão MIDI na prática](../guias/expressao-midi-na-pratica.md): receitas com as rodas, o alcance do bend e o pedal.
-- [06c Painel de efeitos](06c-painel-de-efeitos.md): os efeitos da faixa ficam na aba `Efeitos`, não neste painel.
+- [06c Painel de efeitos](06c-painel-de-efeitos.md): os efeitos da faixa ficam na aba `Efeitos`, não neste painel; lá os efeitos também têm `MEUS PRESETS`.
+- [Presets do usuário](../guias/presets-do-usuario.md): salvar o som que você ajustou, montar a cadeia de efeitos favorita e levar os presets a outro aparelho.
 - [07 Automação](07-automacao.md): qualquer knob do painel pode ser automatizado; os knobs laranja mostram a curva tocando.
 - [06 Mixer](06-mixer.md): volume, pan e envios da faixa; o `Volume` do instrumento é outro controle, dentro do instrumento.
 
 ## Limites e pegadinhas
 
 - **Uma faixa por vez.** O painel só mostra a faixa selecionada; para comparar dois timbres, troque a seleção.
-- **Preset apaga o que não é dele.** Aplicar um preset devolve ao padrão todo parâmetro que ele não cita. Se você ajustou um knob e quer guardá-lo, não troque de preset sem antes anotar (ou use `Ctrl+Z`).
+- **Preset apaga o que não é dele.** Aplicar um preset devolve ao padrão todo parâmetro que ele não cita. Se você ajustou um knob e quer guardá-lo, não troque de preset sem antes salvar o timbre com `Salvar como preset…` (ver [Meus presets](#meus-presets)) ou usar `Ctrl+Z` depois.
+- **`MEUS PRESETS` fica no fim do menu.** No sintetizador, o menu tem cerca de 30 linhas (22 presets e 7 títulos de categoria) e rola: `Salvar como preset…` e `Importar preset…` ficam abaixo de tudo, então é preciso rolar o menu até o fim para achá-los.
+- **Presets seus são do aparelho, não do projeto nem da conta.** Não sincronizam, não vão no `.jopendaw` e não aparecem em outro navegador; para levá-los, `Exportar preset…` e `Importar preset…` (ver [Onde os presets ficam guardados](#onde-os-presets-ficam-guardados)). O projeto guarda os valores dos knobs, então um projeto aberto em outro aparelho soa igual mesmo sem o preset lá.
 - **Teclado do computador e MIDI tocam a faixa armada.** Eles tocam a faixa selecionada, a não ser que exista uma faixa de instrumento armada para gravar e a selecionada não seja uma delas; aí tocam a primeira armada. O teclado da tela sempre toca a faixa selecionada na hora do toque.
 - **A oitava do teclado do computador é uma por tipo de faixa**, como a do teclado da tela: sintetizador, sampler, FM e wavetable abrem em C4; a bateria abre em C2 (nota 36), onde ficam as peças, então `A` a `P` já tocam a bateria sem mexer na oitava (ver [04b](04b-bateria.md)). A oitava vale para o tipo da faixa que está tocando (a selecionada ou a armada) e é lembrada só na memória do controlador do projeto aberto, não vai para o arquivo do projeto (não confirmado em uso); o botão do teclado na barra superior mostra a oitava atual (por exemplo `C4 · sem atalhos`, ou `C2 · sem atalhos` numa bateria).
 - **Teclado do computador ligado suspende atalhos de letra.** O botão da barra superior mostra `C4 · sem atalhos` para avisar: `C`, `L`, `S`, `X`, `Z`, `E`, `F`, `K`, `J` e `Shift+H`/`Shift+L` viram nota, oitava ou intensidade até você desligar com `Ctrl+K`. Os atalhos com `Ctrl`/`Cmd` continuam valendo.

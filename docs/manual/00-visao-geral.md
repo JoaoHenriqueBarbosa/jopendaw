@@ -30,7 +30,9 @@ Aparece em `Projetos`, `Conta` e também ao redor do projeto aberto.
 
 ### Cabeçalho da página do projeto
 
-Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 BPM · 4/4` (andamento e fórmula de compasso guardados no servidor). O nome só se muda na lista de projetos (menu `Renomear` do card), não aqui.
+Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 BPM · 4/4` (o andamento e a fórmula de compasso do documento aberto; antes de o estúdio abrir, os do servidor). O nome só se muda na lista de projetos (menu `Renomear` do card), não aqui.
+
+No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem texto, o tooltip diz o estado; estados no [capítulo 01b](01b-nuvem-e-sincronizacao.md)). Ele só aparece com o estúdio aberto e sessão iniciada, e só é clicável no conflito. Não está na barra de transporte: ela passava da largura de uma janela de uns 1500 px e empurrava o ícone para fora da tela.
 
 ### Barra de transporte
 
@@ -45,7 +47,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | Gravar (círculo vermelho, `R`) | Liga e desliga a gravação nas faixas armadas. Na contagem pisca no andamento do projeto; gravando fica cheio | Tooltip diz quantas faixas estão armadas | Sem faixa armada o tooltip avisa `nenhuma faixa armada; arme no mixer (●)` |
 | Seta ao lado do gravar (`Opções de gravação`) | Menu com `Contagem de um compasso` (marcável) e `Configurações de gravação…` | | Abre a janela do [capítulo 09](09-configuracoes-atalhos-android.md) |
 | Posição | Mostra `compasso.tempo.semicolcheia` (ex.: `1.1.1`) e, embaixo, `m:ss.cc` | Antes do zero (contagem) mostra `−N` em vermelho | |
-| `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM de 20 a 999, com uma casa decimal; `Tempos por compasso` de `1/4` a `12/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. O andamento é salvo no servidor: precisa de rede |
+| `120 BPM · 4/4` | Abre `Andamento e compasso` | BPM de 20 a 999, com uma casa decimal; `Tempos por compasso` de `1/4` a `12/4`; botões `Cancelar` e `Salvar` | Desligado durante a gravação. Vale na hora, com ou sem rede; o servidor recebe um espelho depois |
 | `Loop (L) · arraste na régua para marcar` | Liga e desliga o loop | | |
 | `Metrônomo (C)` | Liga e desliga o clique | | |
 
@@ -59,6 +61,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | `Duplicar (Ctrl+D)` | Duplica o clipe selecionado | Desligado sem clipe selecionado | |
 | `Apagar o clipe (Delete)` | Apaga o clipe selecionado | Desligado sem clipe selecionado | |
 | `Grade de encaixe (Alt ao arrastar: livre)` | Menu da grade (snap) | `Livre`, `Compasso`, `1/4`, `1/8`, `1/16`; padrão `1/4` | Mostra o valor atual ao lado do ícone |
+| Botão `Automação` (ícone de linha quebrada; tooltip `Automação: <modo>. <dica>`) | Escolhe o modo de gravação da automação; fica entre a grade e o `Afastar` | Em `Ler` (padrão) só o ícone; nos outros modos aparece em vermelho com o nome do modo | Modos em [Capítulo 07](07-automacao.md) |
 | `Afastar` / `Aproximar` | Zoom horizontal | Passo de 1,5x | Também `−` e `+` |
 | `Seguir o cursor na reprodução` | A janela rola atrás do cursor tocando | Ligado por padrão | Também no menu `Visão` |
 | Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequenas`, `Faixas médias`, `Faixas grandes`, `Seguir o cursor`, `Régua em minutos e segundos` | Altura padrão: média | |
@@ -81,7 +84,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | Teclado (`Tocar com o teclado do computador (Ctrl+K)`) | Transforma as letras em teclas de piano na faixa selecionada | Ligado, mostra a oitava e o aviso: `C4 · sem atalhos` (`C2 · sem atalhos` numa bateria); o tooltip vira `Teclado tocando: atalhos suspensos (C L S X Z E F K J e Shift+H/L). A a P tocam a partir do C4, Z/X mudam a oitava, C/V a intensidade (80%). Ctrl+K desliga` | As letras deixam de ser atalhos enquanto estiver ligado; a lista está na janela de atalhos ([capítulo 09](09-configuracoes-atalhos-android.md)) |
 | Cabo (`Entrada MIDI: ligar teclado ou controlador`) | Liga o MIDI e mostra quantos aparelhos estão conectados | `0` quando ligado sem aparelho | Pede permissão no navegador |
 
-**Grupo 5: arquivos, ajustes e nuvem**
+**Grupo 5: arquivos e ajustes**
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
@@ -89,8 +92,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 | `Exportar a música (e as faixas separadas) em WAV` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
 | `Configurações: entrada de áudio, latência e contagem` | Abre `Configurações` | | [Capítulo 09](09-configuracoes-atalhos-android.md) |
 | `Atalhos do teclado (?)` | Abre `Atalhos do teclado` | | Também a tecla `?` |
-| Nuvem | Indicador de sincronização | Estados no [capítulo 01b](01b-nuvem-e-sincronizacao.md) | Some se não houver sessão |
-| Texto com roda girando | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
+| Texto com roda girando (por último na barra) | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
 
 O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones.
 
@@ -197,7 +199,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 |---|---|
 | Andamento / BPM | Batidas por minuto. Faixa de 20 a 999 no diálogo da barra, com decimais. |
 | Armar | Deixar uma faixa pronta para receber a gravação (áudio da entrada, ou notas do teclado/MIDI). |
-| Automação | Curva que move um parâmetro (volume, pan, envio, instrumento, efeito) ao longo do tempo. |
+| Automação | Curva que move um parâmetro (volume, pan, envio, instrumento, efeito) ao longo do tempo. Desenha-se na raia ou grava-se mexendo no controle com a música tocando (`Escrever`, `Toque`, `Trava`). |
 | Barramento (bus) | Faixa sem clipes que soma o áudio mandado por outras faixas, para tratá-las juntas (ex.: um reverb comum). |
 | Bounce / Congelar em áudio | Transforma uma faixa (com instrumento e efeitos) em áudio numa faixa nova; a original fica muda. |
 | Clipe | Trecho de áudio ou de notas numa faixa. |
