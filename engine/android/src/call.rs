@@ -12,8 +12,8 @@ use serde::de::{self, Deserializer, SeqAccess, Visitor};
 /// Maior nome de chamada (o maior de hoje, `instrument_sample`, tem 17).
 pub const NAME_MAX: usize = 32;
 
-/// Mais argumentos numa chamada (o `clip_add` tem 8).
-pub const ARGS_MAX: usize = 12;
+/// Mais argumentos numa chamada (o `zone_add` tem 16; o `clip_add`, 8).
+pub const ARGS_MAX: usize = 16;
 
 /// Uma chamada pronta para a thread de áudio.
 #[derive(Clone, Copy)]
@@ -151,13 +151,22 @@ mod tests {
     }
 
     #[test]
+    fn zone_add_cabe_com_os_16_argumentos() {
+        let args = (0..16).map(|i| i.to_string()).collect::<Vec<_>>().join(",");
+        let calls = parse_calls(format!(r#"[["zone_add", {args}]]"#).as_bytes()).unwrap();
+        assert_eq!(calls[0].args().len(), 16);
+        assert!(parse_calls(format!(r#"[["zone_add", {args}, 16]]"#).as_bytes()).is_err(), "17 já é demais");
+        assert!(Call::new("zones_clear", &[0.0]).is_some());
+    }
+
+    #[test]
     fn rejects_what_is_not_a_call_list() {
         for bad in [
             &br#"{"a": 1}"#[..],
             br#"[["tempo", "120"]]"#,
             br#"[[]]"#,
             br#"[[1, 2]]"#,
-            br#"[["x", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]]"#,
+            br#"[["x", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]]"#,
             br#"[["um_nome_de_chamada_comprido_demais_para_caber", 1]]"#,
             br#"[["tempo", null]]"#,
             b"[[\"tempo\", 1]",

@@ -775,3 +775,18 @@ fn zonas_nao_alocam_na_thread_de_audio() {
     });
     assert_eq!(allocs, 0);
 }
+
+#[test]
+fn trocar_o_audio_unico_nao_mexe_nas_vozes_de_zona() {
+    let mut s = sampler();
+    add(&mut s, 1, &constant(0.5, 48_000), zone(0, 127));
+    s.note_on(60, 1.0);
+    render(&mut s, 300);
+    // três trocas seguidas do áudio único (o que mataria uma voz que lesse o penúltimo)
+    s.set_sample(Some(constant(0.1, 100)));
+    s.set_sample(Some(constant(0.2, 100)));
+    s.set_sample(None);
+    let (l, _) = render(&mut s, 300);
+    assert!((l[299] - 0.5).abs() < 1e-3, "{}", l[299]);
+    assert_eq!(voices(&s), 1);
+}

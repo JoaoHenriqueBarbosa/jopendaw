@@ -505,11 +505,12 @@ impl Instrument for Sampler {
         }
         // só há lugar para um áudio anterior: quem ainda lia o penúltimo para agora (raro: duas
         // trocas dentro de uma cauda)
-        for v in self.voices.iter_mut().filter(|v| v.on && v.old) {
+        // (as vozes de zona guardam o próprio áudio e não dependem desta troca)
+        for v in self.voices.iter_mut().filter(|v| v.on && v.old && !v.span.zone) {
             v.kill();
         }
         let mut sounding = false;
-        for v in self.voices.iter_mut().filter(|v| v.on) {
+        for v in self.voices.iter_mut().filter(|v| v.on && !v.span.zone) {
             v.old = true;
             sounding = true;
         }
