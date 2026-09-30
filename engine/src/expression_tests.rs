@@ -411,6 +411,23 @@ fn sampler_tambem_faz_vibrato_com_a_roda() {
 }
 
 #[test]
+fn sampler_tem_knob_de_alcance_do_vibrato() {
+    let spread_with = |range: f32| {
+        let mut e = sampler_engine();
+        e.set_param(0, sampler_param::VIBRATO_RANGE, range);
+        e.live_on(0, 81, 1.0);
+        e.live_cc(0, 1, 1.0);
+        render(&mut e, 12_000);
+        spread(&track_freq(&mut e, 40))
+    };
+    assert!(spread_with(0.0) < 1.01, "alcance 0 não faz vibrato");
+    let one = spread_with(1.0);
+    let two = spread_with(2.0);
+    assert!(two > one + 0.05, "alcance 2 é mais fundo que 1: {one} {two}");
+    assert!((1.09..1.15).contains(&one), "{one}");
+}
+
+#[test]
 fn vibrato_roda_a_5_5_hz_e_nao_muda_o_volume() {
     let mut e = engine(kind::SYNTH);
     e.live_on(0, 84, 1.0);

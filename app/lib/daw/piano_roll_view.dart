@@ -86,6 +86,9 @@ abstract final class _Prefs {
 
   /// Notas copiadas, com o início contado da primeira; serve para colar em qualquer clipe.
   static var clipboard = const <MidiNote>[];
+
+  /// Os controles (bend, modulação, pedal) do trecho copiado, com as batidas contadas do começo dele.
+  static var clipboardCc = const <MidiCc>[];
 }
 
 /// Um acorde para carimbar no clique: o tipo (id de `chordTypes` ou diatônico) e a inversão.

@@ -477,6 +477,7 @@ impl Instrument for Sampler {
         }
         match id {
             param::BEND_RANGE => self.expr.set_range(value),
+            param::VIBRATO_RANGE => self.expr.set_vibrato(value),
             param::ROOT => {
                 self.root = value.round().clamp(0.0, 127.0);
                 self.retune();
@@ -871,14 +872,18 @@ mod tests {
         };
         let rows = contract::rows(&src, "samplerParams");
         let ids: Vec<usize> = rows.iter().map(|r| r.0).collect();
-        assert_eq!(ids.len(), 10, "os ids do sampler: {ids:?}");
-        for id in 0..=param::BEND_RANGE {
+        assert_eq!(ids.len(), 11, "os ids do sampler: {ids:?}");
+        for id in 0..=param::VIBRATO_RANGE {
             assert!(ids.contains(&(id as usize)), "id {id} do sampler sem linha no app");
         }
         for (id, (min, max, def, _)) in rows {
             let id = id as u32;
             if id == param::BEND_RANGE {
                 assert_eq!((min, max, def), (0.0, crate::expression::MAX_BEND_RANGE, crate::expression::DEFAULT_BEND_RANGE), "alcance do bend");
+                continue;
+            }
+            if id == param::VIBRATO_RANGE {
+                assert_eq!((min, max, def), (0.0, crate::expression::MAX_VIBRATO, crate::expression::DEFAULT_VIBRATO), "alcance do vibrato");
                 continue;
             }
             let mut s = Sampler::new(RATE);
@@ -900,6 +905,7 @@ mod tests {
             ("TUNE", param::TUNE),
             ("VELOCITY", param::VELOCITY),
             ("BEND_RANGE", param::BEND_RANGE),
+            ("VIBRATO_RANGE", param::VIBRATO_RANGE),
         ];
         for (name, value) in contract::dart_ids("SamplerId") {
             let name = contract::screaming(&name);

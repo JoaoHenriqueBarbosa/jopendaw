@@ -32,7 +32,7 @@ bool _active(int cc, double value) => cc == ccSustain ? pedalDown(value) : value
 /// pedal embaixo no último evento) volta ao repouso no fim do clipe: sem isso o pedal de um clipe
 /// seguraria as notas do resto do projeto.
 List<EngineCc> flattenControls(List<DawTrack> tracks) {
-  final out = <({EngineCc e, int order, int index})>[];
+  final out = <({EngineCc e, int order, int index, double? was})>[];
   var index = 0;
   for (var i = 0; i < tracks.length; i++) {
     final t = tracks[i];
@@ -43,20 +43,36 @@ List<EngineCc> flattenControls(List<DawTrack> tracks) {
           for (final e in c.controls)
             if (e.cc == cc && e.beat.isFinite && e.value.isFinite && e.beat >= -_eps && e.beat <= c.length + _eps) e,
         ];
+        // o clipe aparado na esquerda (ou coberto por outro) guarda os pontos de antes do começo, mudos:
+        // o valor em vigor no começo vale ali, como no corte, senão o pedal seguro sumiria no meio do gesto
+        final carried = _valueInForce(c.controls, cc, 0);
+        if (carried != null && _active(cc, carried) && !list.any((e) => e.beat <= _eps)) list.insert(0, MidiCc(cc: cc, beat: 0, value: carried));
         if (list.isEmpty) continue;
         // ordem estável: no mesmo instante vale a ordem da lista
         final sorted = [for (var k = 0; k < list.length; k++) (k, list[k])]
           ..sort((a, b) => a.$2.beat.compareTo(b.$2.beat) != 0 ? a.$2.beat.compareTo(b.$2.beat) : a.$1.compareTo(b.$1));
         for (final (_, e) in sorted) {
-          out.add((e: (track: i, cc: cc, beat: c.start + math.max(0.0, e.beat), value: MidiCc.clampValue(cc, e.value)), order: 1, index: index++));
+          out.add((e: (track: i, cc: cc, beat: c.start + math.max(0.0, e.beat), value: MidiCc.clampValue(cc, e.value)), order: 1, index: index++, was: null));
         }
         final last = sorted.last.$2;
         if (_active(cc, last.value) && last.beat < c.length - _eps) {
-          out.add((e: (track: i, cc: cc, beat: c.start + c.length, value: MidiCc.neutral), order: 0, index: index++));
+          out.add((e: (track: i, cc: cc, beat: c.start + c.length, value: MidiCc.neutral), order: 0, index: index++, was: MidiCc.clampValue(cc, last.value)));
         }
       }
     }
   }
+  // o repouso do fim de um clipe não vale se o clipe seguinte, colado nele, segue no mesmo estado: o
+  // pedal de um clipe cortado em dois não sobe e desce na batida do corte (as notas que ele segura
+  // sairiam ali)
+  final redundant = {
+    for (final r in out)
+      if (r.was != null &&
+          out.any(
+            (o) => o.order == 1 && o.e.track == r.e.track && o.e.cc == r.e.cc && (o.e.beat - r.e.beat).abs() <= _eps && _sameState(r.e.cc, o.e.value, r.was!),
+          ))
+        r.index,
+  };
+  out.removeWhere((r) => redundant.contains(r.index));
   out.sort((a, b) {
     final s = a.e.beat.compareTo(b.e.beat);
     if (s != 0) return s;
@@ -64,6 +80,20 @@ List<EngineCc> flattenControls(List<DawTrack> tracks) {
   });
   return [for (final o in out) o.e];
 }
+
+/// Dois valores contam como o mesmo estado do controle (o pedal só tem embaixo e solto).
+bool _sameState(int cc, double a, double b) => cc == ccSustain ? pedalDown(a) == pedalDown(b) : a == b;
+
+/// O valor do controle [cc] em [beat] contando os eventos de antes do começo (batidas negativas),
+/// ou null se não há nenhum até ali.
+double? _valueInForce(List<MidiCc> events, int cc, double beat) => controlValueAt(
+  [
+    for (final e in events)
+      if (e.value.isFinite && e.beat.isFinite) e,
+  ],
+  cc,
+  beat,
+);
 
 /// O valor do controle [cc] em [beat] (batidas do clipe): o do último evento até ali, ou null se
 /// nenhum evento daquele controle veio antes.
@@ -101,6 +131,53 @@ double? controlValueAt(List<MidiCc> events, int cc, double beat) {
     right.insert(0, MidiCc(cc: cc, beat: 0, value: before));
   }
   return (left, right);
+}
+
+/// Os controles do trecho [lo]..[hi) (batidas do clipe), com as batidas contadas de [lo], para copiar
+/// junto das notas. Por controle: os eventos do trecho; o valor que já valia em [lo], se está fora do
+/// repouso e nenhum evento cai ali; e o retorno ao repouso em [hi], se o controle termina fora dele
+/// (a região colada sozinha não segura o pedal do resto do clipe).
+List<MidiCc> copyControls(List<MidiCc> events, double lo, double hi) {
+  final out = <MidiCc>[];
+  for (final cc in ccKinds) {
+    final mine = [
+      for (final e in events)
+        if (e.cc == cc && e.beat.isFinite && e.value.isFinite && e.beat >= lo - _eps && e.beat < hi - _eps) e,
+    ]..sort((a, b) => a.beat.compareTo(b.beat));
+    final before = _valueInForce(
+      [
+        for (final e in events)
+          if (e.beat < lo - _eps) e,
+      ],
+      cc,
+      lo,
+    );
+    final region = <MidiCc>[
+      if (before != null && _active(cc, before) && !mine.any((e) => e.beat <= lo + _eps)) MidiCc(cc: cc, beat: 0, value: MidiCc.clampValue(cc, before)),
+      for (final e in mine) MidiCc(cc: cc, beat: math.max(0.0, _tidy(e.beat - lo)), value: MidiCc.clampValue(cc, e.value)),
+    ];
+    if (region.isEmpty) continue;
+    if (_active(cc, region.last.value) && hi - lo > _eps) region.add(MidiCc(cc: cc, beat: _tidy(hi - lo), value: MidiCc.neutral));
+    out.addAll(region);
+  }
+  return out;
+}
+
+/// Cola [region] (de [copyControls], batidas contadas do começo do trecho) em [at]: por controle, o
+/// que a região traz substitui o que havia entre o primeiro e o último evento colados.
+List<MidiCc> pasteControls(List<MidiCc> events, List<MidiCc> region, double at) {
+  final out = [for (final e in events) e.copy()];
+  for (final cc in ccKinds) {
+    final mine = [
+      for (final e in region)
+        if (e.cc == cc) MidiCc(cc: cc, beat: _tidy(at + e.beat), value: e.value),
+    ];
+    if (mine.isEmpty) continue;
+    final lo = mine.map((e) => e.beat).reduce(math.min), hi = mine.map((e) => e.beat).reduce(math.max);
+    out.removeWhere((e) => e.cc == cc && e.beat >= lo - _eps && e.beat <= hi + _eps);
+    out.addAll(mine);
+  }
+  return out;
 }
 
 /// Desloca os eventos em [delta] batidas (negativo aproxima do começo do clipe).
@@ -171,14 +248,42 @@ List<MidiCc> thinControls(List<MidiCc> events, {double gap = recordedControlGap}
   return out;
 }
 
-/// Acrescenta o valor de repouso ao pedal que ficou embaixo e ao bend/roda que ficaram fora do
-/// centro no fim de uma gravação: a mão soltou, mas o controlador pode não ter mandado o último
-/// evento. Só para o pedal (o resto continua onde a mão parou, como no MIDI).
-List<MidiCc> closePedal(List<MidiCc> events, double end) {
+/// Acrescenta o valor de repouso, em [end], ao pedal que ficou embaixo e ao bend e à roda que ficaram
+/// fora do centro no fim de uma gravação: a mão soltou (o app devolve tudo ao repouso ao parar), mas o
+/// controlador pode não ter mandado o último evento, e sem isso o clipe tocaria o resto dele com o
+/// pedal preso ou a nota dobrada.
+List<MidiCc> closeControls(List<MidiCc> events, double end) {
   final out = [for (final e in events) e.copy()];
-  final last = controlValueAt(out, ccSustain, end);
-  if (last != null && pedalDown(last)) out.add(MidiCc(cc: ccSustain, beat: end, value: 0));
+  for (final cc in ccKinds) {
+    final last = controlValueAt(out, cc, end);
+    if (last != null && _active(cc, last)) out.add(MidiCc(cc: cc, beat: end, value: MidiCc.neutral));
+  }
   return out;
+}
+
+/// Resolução única dos controles ao vivo, qualquer que seja a origem (roda da tela, faixa de controle,
+/// controlador MIDI): o bend em 14 bits normalizados (múltiplos de 1/8192, o centro exato), a
+/// modulação em 7 bits (1/127) e o pedal em dois estados.
+double quantizeControl(int cc, double v) {
+  if (!v.isFinite) return MidiCc.neutral;
+  final c = MidiCc.clampValue(cc, v);
+  return switch (cc) {
+    ccBend => (c * 8192).round() / 8192,
+    ccSustain => pedalDown(c) ? 1.0 : 0.0,
+    _ => (c * 127).round() / 127,
+  };
+}
+
+/// Garante que o controle em vigor em [at] esteja escrito num evento em [at]: para cada controle fora
+/// do repouso ali (por eventos de antes ou de [at]) sem evento exatamente em [at], insere um com esse
+/// valor. Usada quando o começo de um clipe anda (o estado do que ficou para trás segue valendo).
+void carryControls(List<MidiCc> events, double at) {
+  for (final cc in ccKinds) {
+    final v = _valueInForce(events, cc, at);
+    if (v == null || !_active(cc, v)) continue;
+    if (events.any((e) => e.cc == cc && (e.beat - at).abs() <= _eps)) continue;
+    events.insert(0, MidiCc(cc: cc, beat: at, value: v));
+  }
 }
 
 /// Substitui, no trecho [from]..[to] (batidas do clipe), os eventos do controle [cc] por uma linha

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/daw/model.dart';
 
-import 'piano_roll_test.dart' show G, TestDaw, click, drag, geoFor, host, mac, mouseDown, riff, settle;
+import 'piano_roll_test.dart' show G, TestDaw, click, drag, geoFor, host, key, mac, mouseDown, riff, settle;
 
 MidiCc cc(int id, double beat, double value) => MidiCc(cc: id, beat: beat, value: value);
 
@@ -110,8 +110,8 @@ void main() {
   mac('arrastar um ponto o move na batida e no valor; um gesto que volta ao lugar não deixa histórico', (t) async {
     await sized(t);
     final c = TestDaw(notes: riff());
-    // 64/127: um valor que a faixa alcança exatamente (ela anda nos 127 degraus do MIDI)
-    const v = 64 / 127;
+    // um valor que a faixa alcança exatamente (o bend anda nos 8192 degraus de cada lado, como o MIDI de 14 bits)
+    const v = 0.5;
     c.clip.controls.add(cc(ccBend, 1, v));
     await t.pumpWidget(host(c, height: 420));
     final g = geoFor(c);
@@ -288,6 +288,54 @@ void main() {
     c.undo();
     await drag(t, bend(g, 1, 0), Offset(laneX(g, -3), bendY(g, 1)), steps: 6);
     expect(c.clip.controls.every((e) => e.beat >= 0 && e.beat <= 8), isTrue);
+    await settle(t);
+  });
+
+  mac('no sustain o menu não oferece "Linha reta" (lá o gesto é sempre pintura); no bend ele continua', (t) async {
+    await sized(t);
+    final c = TestDaw(notes: riff());
+    await t.pumpWidget(host(c, height: 420));
+    final g = geoFor(c);
+    await pick(t, g, 'Sustain');
+    await t.tapAt(Offset(25, top(g) + 36));
+    await t.pumpAndSettle();
+    expect(find.text('Linha reta (ou Shift)'), findsNothing);
+    expect(find.text('Limpar sustain'), findsOneWidget);
+    await t.tapAt(const Offset(5, 5));
+    await t.pumpAndSettle();
+    await pick(t, g, 'Pitch bend');
+    await t.tapAt(Offset(25, top(g) + 36));
+    await t.pumpAndSettle();
+    expect(find.text('Linha reta (ou Shift)'), findsOneWidget);
+    await t.tapAt(const Offset(5, 5));
+    await settle(t);
+  });
+
+  mac('Ctrl+D e Ctrl+C/V levam os pontos de controle do trecho das notas', (t) async {
+    await sized(t);
+    final c = TestDaw(notes: riff().take(3).toList());
+    c.clip.controls.addAll([cc(ccSustain, 0.5, 1), cc(ccSustain, 1.5, 0), cc(ccBend, 1, 0.5), cc(ccMod, 6, 0.9)]);
+    await t.pumpWidget(host(c));
+    await key(t, LogicalKeyboardKey.keyA, ctrl: true);
+    await key(t, LogicalKeyboardKey.keyD, ctrl: true);
+    // as três notas ocupam 0..2: a cópia vai 2 tempos adiante e leva pedal e bend do trecho
+    final sustain = [
+      for (final e in c.clip.controls)
+        if (e.cc == ccSustain) (e.beat, e.value),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    expect(sustain, [(0.5, 1.0), (1.5, 0.0), (2.5, 1.0), (3.5, 0.0)]);
+    expect(events(c).where((e) => e.$1 == ccBend).map((e) => (e.$2, e.$3)), containsAll([(1.0, 0.5), (3.0, 0.5), (4.0, 0.0)]));
+    expect(events(c).where((e) => e.$1 == ccMod), [(ccMod, 6.0, 0.9)], reason: 'fora do trecho: fica onde está');
+    // copiar e colar mais adiante
+    await key(t, LogicalKeyboardKey.keyA, ctrl: true);
+    await key(t, LogicalKeyboardKey.keyC, ctrl: true);
+    c.seek(c.clip.start + 6);
+    final before = c.clip.controls.length;
+    await key(t, LogicalKeyboardKey.keyV, ctrl: true);
+    expect(c.clip.controls.length, greaterThan(before));
+    expect(events(c).where((e) => e.$1 == ccSustain && e.$2 >= 6.5).isNotEmpty, isTrue);
+    c.undo();
+    expect(c.clip.controls.length, before, reason: 'colar é uma edição só, com as notas e os pontos');
     await settle(t);
   });
 }

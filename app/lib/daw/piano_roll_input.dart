@@ -1204,6 +1204,8 @@ extension _Input on _PianoRollState {
     final start = _sel.map((n) => n.start).reduce(math.min);
     final list = _sel.toList()..sort((a, b) => a.start.compareTo(b.start));
     _Prefs.clipboard = [for (final n in list) n.copy()..start = _tidy(n.start - start)];
+    // os pontos de bend, modulação e pedal do trecho das notas vão junto
+    _Prefs.clipboardCc = copyControls(_clip?.controls ?? const [], start, _sel.map((n) => n.end).reduce(math.max));
     _pasteBase = null;
   }
 
@@ -1232,7 +1234,7 @@ extension _Input on _PianoRollState {
 
   /// Põe notas novas no clipe numa edição só; se alguma começa depois do fim, o clipe cresce até
   /// o compasso que a contém (duplicar e colar são para continuar a música, não para notas mudas).
-  void _addNotes(List<MidiNote> notes) {
+  void _addNotes(List<MidiNote> notes, {List<MidiCc> region = const [], double regionAt = 0}) {
     final clip = _clip!;
     final lastStart = notes.map((n) => n.start).reduce(math.max);
     final bar = c.doc.beatsPerBar;
@@ -1241,6 +1243,7 @@ extension _Input on _PianoRollState {
     final grow = target > clip.length + 1e-9 && lastStart < clip.length + bar * 8;
     c.edit((_) {
       clip.notes.addAll(notes);
+      if (region.isNotEmpty) clip.controls = pasteControls(clip.controls, region, regionAt);
       if (grow) clip.length = target;
     });
     _sel
@@ -1268,18 +1271,23 @@ extension _Input on _PianoRollState {
     }
     _pasteBase = base;
     _pasteNext = at + step;
-    _addNotes([
-      for (final n in board)
-        n.copy()
-          ..start = _tidy(n.start + at)
-          ..pitch = _snapPitch(n.pitch),
-    ]);
+    _addNotes(
+      [
+        for (final n in board)
+          n.copy()
+            ..start = _tidy(n.start + at)
+            ..pitch = _snapPitch(n.pitch),
+      ],
+      region: _Prefs.clipboardCc,
+      regionAt: at,
+    );
   }
 
   void _duplicate() {
     if (_clip == null || _sel.isEmpty) return;
     final offset = _spanStep(_sel);
-    _addNotes([for (final n in _sel) n.copy()..start = _tidy(n.start + offset)]);
+    final lo = _sel.map((n) => n.start).reduce(math.min), hi = _sel.map((n) => n.end).reduce(math.max);
+    _addNotes([for (final n in _sel) n.copy()..start = _tidy(n.start + offset)], region: copyControls(_clip!.controls, lo, hi), regionAt: _tidy(lo + offset));
   }
 
   void _transpose(int up, {required bool repeat}) {

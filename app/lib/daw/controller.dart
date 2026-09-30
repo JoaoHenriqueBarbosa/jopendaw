@@ -620,8 +620,9 @@ class DawController extends ChangeNotifier {
   final _midiNotes = <int, int>{};
   bool _sustain = false;
 
-  /// Faixa que recebeu o último valor de cada controle ao vivo (controle → faixa): se a entrada
-  /// muda de faixa com a roda ou o pedal fora do repouso, a antiga volta ao repouso.
+  /// Faixa que recebeu o último valor de cada controle ao vivo, por (controle, origem) com a chave
+  /// `controle << 1 | (roda da tela ? 1 : 0)`: se a entrada muda de faixa com a roda ou o pedal fora
+  /// do repouso, a antiga volta ao repouso, sem tocar no que a outra origem deixou.
   final _ccTrack = <int, int>{};
 
   String get _docKey => 'doc:${project.id}';
@@ -2115,7 +2116,7 @@ class DawController extends ChangeNotifier {
             ..start = e
             ..length = o.end - e
             ..notes = [for (final n in o.notes) n.copy()..start = n.start - d]
-            ..controls = [for (final e in o.controls) e.copy()..beat -= d],
+            ..controls = splitControls(o.controls, d).$2,
         );
         o.length = s - o.start;
       } else if (o.start < s) {
@@ -2130,6 +2131,8 @@ class DawController extends ChangeNotifier {
           n.start -= d;
         }
         shiftControls(o.controls, -d);
+        // o pedal (bend, roda) que valia no novo começo segue valendo
+        carryControls(o.controls, 0);
       }
     }
     if (editingClip == null && dock == Dock.editor) dock = Dock.none;
@@ -2449,7 +2452,7 @@ class DawController extends ChangeNotifier {
   List<List<Object>> _releaseControls() {
     final calls = <List<Object>>[
       for (final e in _ccTrack.entries)
-        if (_isInstrument(e.value)) _liveControlCall(e.value, e.key, MidiCc.neutral),
+        if (_isInstrument(e.value)) _liveControlCall(e.value, e.key >> 1, MidiCc.neutral),
     ];
     _ccTrack.clear();
     _sustain = false;
@@ -2460,29 +2463,36 @@ class DawController extends ChangeNotifier {
 
   /// Manda um valor de controle ao vivo (bend −1..1, modulação e pedal 0..1) para a faixa de
   /// entrada (ou [track]). O motor grava o que chega junto das notas quando está gravando.
-  void liveControl(int cc, double value, {int? track}) {
+  ///
+  /// O valor tem a mesma resolução seja qual for a origem ([quantizeControl]). O que está fora do
+  /// repouso é rastreado por (controle, origem): o controlador MIDI segue a faixa de entrada e volta
+  /// ao repouso na faixa que deixou; a roda da tela ([screen]) tem a sua própria, e as duas não
+  /// devolvem ao repouso o valor uma da outra. Bateria ignora (não há o que soar nem gravar).
+  void liveControl(int cc, double value, {int? track, bool screen = false}) {
     if (!ready || !ccKinds.contains(cc) || !value.isFinite) return;
     final t = track ?? _inputTrack;
-    if (!_isInstrument(t)) return;
-    final v = MidiCc.clampValue(cc, value);
+    if (!_isInstrument(t) || doc.tracks[t].kind == TrackKind.drums) return;
+    final v = quantizeControl(cc, value);
+    final key = cc << 1 | (screen ? 1 : 0);
     final calls = <List<Object>>[];
-    final before = _ccTrack[cc];
-    if (before != null && before != t && _isInstrument(before)) calls.add(_liveControlCall(before, cc, MidiCc.neutral));
+    final before = _ccTrack[key];
+    if (v != MidiCc.neutral && before != null && before != t && _isInstrument(before)) calls.add(_liveControlCall(before, cc, MidiCc.neutral));
     calls.add(_liveControlCall(t, cc, v));
     if (v == MidiCc.neutral) {
-      _ccTrack.remove(cc);
+      // só esquece se o registro era desta faixa (a roda de outra faixa pode ter o dela)
+      if (before == null || before == t) _ccTrack.remove(key);
     } else {
-      _ccTrack[cc] = t;
+      _ccTrack[key] = t;
     }
     _wake();
     _engine.calls(calls);
   }
 
   /// Pitch bend ao vivo, −1..1 (a roda do teclado da tela, o controlador MIDI).
-  void pitchBend(double value, {int? track}) => liveControl(ccBend, value, track: track);
+  void pitchBend(double value, {int? track, bool screen = false}) => liveControl(ccBend, value, track: track, screen: screen);
 
   /// Roda de modulação ao vivo, 0..1.
-  void modWheel(double value, {int? track}) => liveControl(ccMod, value, track: track);
+  void modWheel(double value, {int? track, bool screen = false}) => liveControl(ccMod, value, track: track, screen: screen);
 
   void _publishLive() {
     final pitches = {for (final (_, p) in _live) p};
@@ -3900,6 +3910,8 @@ class DawController extends ChangeNotifier {
       if (e.key < 0 || e.key >= r.trackIds.length) continue;
       final id = r.trackIds[e.key];
       if (!r.midiIds.contains(id)) continue;
+      // a bateria ignora bend, modulação e pedal: gravar pontos nela seria só lixo no clipe
+      if (doc.tracks.where((t) => t.id == id).firstOrNull?.kind == TrackKind.drums) continue;
       var list = e.value;
       if (wrapped) {
         // a batida volta para trás na volta do loop: a última passada começa no último recuo
@@ -3930,7 +3942,7 @@ class DawController extends ChangeNotifier {
     final last = rel.map((e) => e.beat).reduce(math.max);
     // o pedal ainda embaixo quando a gravação parou sobe ali (nunca antes de uma pausa mínima: um
     // pedal de duração zero não segura nada)
-    final fresh = thinControls(closePedal(rel, math.max(last + 1 / 16, stopBeat - origin)));
+    final fresh = thinControls(closeControls(rel, math.max(last + 1 / 16, stopBeat - origin)));
     for (final cc in ccKinds) {
       final mine = fresh.where((e) => e.cc == cc).toList();
       if (mine.isEmpty) continue;
@@ -3966,21 +3978,13 @@ class DawController extends ChangeNotifier {
     final bar = doc.beatsPerBar.toDouble();
     double floorBar(double b) => math.max(0.0, (b / bar + 1e-9).floor() * bar);
     double ceilBar(double b) => (b / bar - 1e-9).ceil() * bar;
-    // só controles, sem nota nenhuma: entram no clipe que estava sob o cursor (overdub do pedal ou
-    // do bend); sem clipe ali não há onde pôr
-    if (notes.isEmpty) {
-      final under = t.midi.where((c) => c.start <= r.start + 1e-9 && c.end > r.start + 1e-9).firstOrNull;
-      if (under != null) {
-        final inside = [
-          for (final e in ccs)
-            if (e.beat <= under.end + 1e-9 && e.beat >= under.start - 1e-9) e,
-        ];
-        _mergeControls(under, inside, under.start, r.stopBeat);
-      }
-      return;
-    }
-    final minStart = math.min(notes.map((n) => n.start).reduce(math.min), ccs.isEmpty ? double.infinity : ccs.map((e) => e.beat).reduce(math.min));
-    final maxEnd = math.max(notes.map((n) => n.end).reduce(math.max), ccs.isEmpty ? 0.0 : ccs.map((e) => e.beat).reduce(math.max));
+    // só controles, sem nota nenhuma (overdub do pedal ou do bend): entram no clipe que estava sob o
+    // cursor, ou criam um clipe vazio que cobre o que foi gravado, como a gravação de notas faz
+    final starts = [...notes.map((n) => n.start), ...ccs.map((e) => e.beat)];
+    final ends = [...notes.map((n) => n.end), ...ccs.map((e) => e.beat)];
+    if (starts.isEmpty) return;
+    final minStart = starts.reduce(math.min);
+    final maxEnd = ends.reduce(math.max);
     MidiNote rel(_RecNote n, double origin) => MidiNote(pitch: n.pitch, start: n.start - origin, length: n.end - n.start, velocity: n.velocity);
     final target = t.midi.where((c) => c.start <= r.start + 1e-9 && c.end > r.start + 1e-9).firstOrNull;
     if (target != null) {

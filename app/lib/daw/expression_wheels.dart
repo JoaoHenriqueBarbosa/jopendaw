@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 
 import '../widgets/theme.dart';
 import 'controller.dart';
+import 'midi_cc.dart';
+import 'model.dart';
 
 /// Par de rodas (bend e modulação) para a faixa [track].
 class ExpressionWheels extends StatelessWidget {
@@ -28,7 +30,7 @@ class ExpressionWheels extends StatelessWidget {
         height: height,
         color: color,
         springBack: true,
-        onChanged: (v) => c.pitchBend(v, track: track),
+        onChanged: (v) => c.pitchBend(v, track: track, screen: true),
       ),
       const SizedBox(width: 4),
       ExpressionWheel(
@@ -37,7 +39,7 @@ class ExpressionWheels extends StatelessWidget {
         height: height,
         color: color,
         springBack: false,
-        onChanged: (v) => c.modWheel(v, track: track),
+        onChanged: (v) => c.modWheel(v, track: track, screen: true),
       ),
     ],
   );
@@ -81,8 +83,8 @@ class _ExpressionWheelState extends State<ExpressionWheel> with SingleTickerProv
 
   void _set(double v, {bool send = true}) {
     v = v.clamp(_lo, 1.0).toDouble();
-    // 127 degraus (a resolução do MIDI); o centro é exato
-    v = widget.springBack ? (v * 64).round() / 64 : (v * 127).round() / 127;
+    // a resolução única dos controles (bend em 14 bits, modulação em 7); o centro é exato
+    v = quantizeControl(widget.springBack ? ccBend : ccMod, v);
     if (v == _value) return;
     setState(() => _value = v);
     if (send) widget.onChanged(v);

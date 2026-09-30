@@ -226,6 +226,7 @@ const samplerParams = <ParamSpec>[
   ParamSpec(8, 'Sens. vel.', 'Geral', 0, 1, 0.7, unit: '%'),
   ParamSpec(5, 'Volume', 'Geral', 0, 1.5, 0.8, unit: '%'),
   ParamSpec(9, 'Alcance do bend', 'Geral', 0, 24, 2, unit: 'st', curve: Curve.integer),
+  ParamSpec(10, 'Vibrato da roda', 'Geral', 0, 2, 1, unit: 'st'),
 ];
 
 /// Algoritmos do FM, na ordem dos ids do motor (`fm.rs`). O nome é o roteamento: `a→b` = `a` modula `b`.

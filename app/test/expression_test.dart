@@ -113,13 +113,43 @@ void main() {
       expect(flat([t]), hasLength(6));
     });
 
-    test('clipes vizinhos: o repouso do fim de um vem antes do primeiro evento do seguinte', () {
+    test('clipes vizinhos no mesmo estado: o pedal segue embaixo na emenda, sem subir e descer', () {
       final t = synthTrack([
         clipWith([cc(ccSustain, 0, 1)], start: 0, length: 4, id: 'a'),
         clipWith([cc(ccSustain, 0, 1)], start: 4, length: 4, id: 'b'),
       ]);
-      // desce em 0, sobe em 4 (fim de a) e desce de novo em 4 (começo de b): nessa ordem
-      expect(flat([t]), [(0, ccSustain, 0.0, 1.0), (0, ccSustain, 4.0, 0.0), (0, ccSustain, 4.0, 1.0), (0, ccSustain, 8.0, 0.0)]);
+      expect(flat([t]), [(0, ccSustain, 0.0, 1.0), (0, ccSustain, 4.0, 1.0), (0, ccSustain, 8.0, 0.0)]);
+    });
+
+    test('clipes vizinhos em estados diferentes: o repouso do fim de um vem antes do primeiro evento do seguinte', () {
+      final t = synthTrack([
+        clipWith([cc(ccSustain, 0, 1)], start: 0, length: 4, id: 'a'),
+        clipWith([cc(ccBend, 0, 0.5), cc(ccSustain, 0, 0), cc(ccSustain, 1, 1)], start: 4, length: 4, id: 'b'),
+      ]);
+      expect(flat([t]).where((x) => x.$2 == ccSustain).toList(), [
+        (0, ccSustain, 0.0, 1.0),
+        (0, ccSustain, 4.0, 0.0),
+        (0, ccSustain, 4.0, 0.0),
+        (0, ccSustain, 5.0, 1.0),
+        (0, ccSustain, 8.0, 0.0),
+      ]);
+      // o bend do segundo clipe também não ganha repouso onde não havia nada
+      expect(flat([t]).where((x) => x.$2 == ccBend).first, (0, ccBend, 4.0, 0.5));
+    });
+
+    test('clipe aparado na esquerda: o pedal que valia no novo começo segue valendo (pontos de antes ficam mudos)', () {
+      // o clipe começava em 0 com o pedal descendo em 1; aparou-se até 2 (pontos deslocados: -1 e 1)
+      final t = synthTrack([
+        clipWith([cc(ccSustain, -1, 1), cc(ccSustain, 1, 0), cc(ccBend, -1, 0.5)], start: 2, length: 4),
+      ]);
+      expect(flat([t]), [(0, ccBend, 2.0, 0.5), (0, ccSustain, 2.0, 1.0), (0, ccSustain, 3.0, 0.0), (0, ccBend, 6.0, 0.0)]);
+    });
+
+    test('clipe aparado com o pedal já solto antes do começo não ganha evento', () {
+      final t = synthTrack([
+        clipWith([cc(ccSustain, -2, 1), cc(ccSustain, -1, 0), cc(ccSustain, 1, 1)], start: 2, length: 4),
+      ]);
+      expect(flat([t]).first, (0, ccSustain, 3.0, 1.0));
     });
 
     test('a ordem da lista vale no mesmo instante', () {
@@ -297,10 +327,14 @@ void main() {
 
     test('lista vazia', () => expect(thinControls(const []), isEmpty));
 
-    test('closePedal solta o pedal que ficou embaixo, e só ele', () {
-      final down = closePedal([cc(ccSustain, 1, 1), cc(ccBend, 1, 0.5)], 3);
-      expect([for (final x in down) (x.cc, x.beat, x.value)], [(ccSustain, 1.0, 1.0), (ccBend, 1.0, 0.5), (ccSustain, 3.0, 0.0)]);
-      expect(closePedal([cc(ccSustain, 1, 1), cc(ccSustain, 2, 0)], 3), hasLength(2));
+    test('closeControls devolve ao repouso o pedal, o bend e a roda que ficaram fora dele', () {
+      final down = closeControls([cc(ccSustain, 1, 1), cc(ccBend, 1, 0.5), cc(ccMod, 1, 0.3)], 3);
+      expect(
+        [for (final x in down) (x.cc, x.beat, x.value)],
+        [(ccSustain, 1.0, 1.0), (ccBend, 1.0, 0.5), (ccMod, 1.0, 0.3), (ccBend, 3.0, 0.0), (ccMod, 3.0, 0.0), (ccSustain, 3.0, 0.0)],
+      );
+      // o que já voltou ao repouso não ganha evento
+      expect(closeControls([cc(ccSustain, 1, 1), cc(ccSustain, 2, 0), cc(ccBend, 1, 0.5), cc(ccBend, 2, 0)], 3), hasLength(4));
     });
 
     test('drawControlLine: reta com um ponto por passo, substituindo o trecho e mantendo o resto', () {
@@ -655,7 +689,9 @@ void main() {
       final c = await record(burst);
       final bends = c.doc.tracks[1].midi.single.controls.where((x) => x.cc == ccBend).toList();
       expect(bends.length, lessThan(30));
-      expect(bends.last.value, closeTo(1, 0.03));
+      // onde a roda parou (1) fica, e a gravação fecha o bend no centro ao parar
+      expect(bends[bends.length - 2].value, closeTo(1, 0.03));
+      expect(bends.last.value, 0);
     });
 
     test('só controles, sem nota nenhuma, entram no clipe que estava sob o cursor (overdub do pedal)', () async {
@@ -669,9 +705,40 @@ void main() {
       expect(ccs(clip), [(ccSustain, 1.0, 1.0), (ccSustain, 2.0, 0.0)]);
     });
 
-    test('só controles e nenhum clipe sob o cursor: nada é criado', () async {
-      final c = await record([1, 384, 5, 5, 0.5]);
+    test('só controles e nenhum clipe sob o cursor: cria o clipe (vazio de notas) com os pontos e o repouso no fim', () async {
+      final c = await record([1, 384, 5, 5, 0.5, 1, 320, 6, 6, 1]);
+      final clip = c.doc.tracks[1].midi.single;
+      expect(clip.notes, isEmpty);
+      expect(clip.start, 4);
+      final got = ccs(clip);
+      expect(got, containsAll([(ccBend, 1.0, 0.5), (ccSustain, 2.0, 1.0)]));
+      expect(got.where((x) => x.$3 == 0).map((x) => x.$1).toSet(), {ccBend, ccSustain}, reason: 'bend e pedal soltos ao parar');
+      expect(c.error, isNull);
+      c.undo();
       expect(c.doc.tracks[1].midi, isEmpty);
+    });
+
+    test('bateria não recebe controle ao vivo nem grava ponto nenhum', () async {
+      final c = fakeController(e);
+      c.addInstrumentTrack(TrackKind.drums);
+      c.doc.countIn = false;
+      c.setArmed(1, true);
+      await c.enableMidiInput();
+      e.log = [];
+      c.pitchBend(0.5);
+      c.modWheel(0.5);
+      e.onMidi!(0xB0, 64, 127);
+      expect(e.sent('live_bend'), isEmpty);
+      expect(e.sent('live_cc'), isEmpty);
+      c.beat.value = 4;
+      await c.toggleRecord();
+      // um motor mais velho (ou outra origem) ainda devolve eventos para a faixa da bateria
+      e.notes = Float32List.fromList([1, 60, 4.5, 5, 0.8, 1, 384, 5, 5, 0.5, 1, 320, 5, 5, 1]);
+      c.debugRecordingElapsed(const Duration(seconds: 2));
+      await c.toggleRecord();
+      final clip = c.doc.tracks[1].midi.single;
+      expect(clip.notes, hasLength(1));
+      expect(clip.controls, isEmpty);
     });
 
     test('o que foi tocado substitui, no trecho, o que o clipe já tinha do mesmo controle', () async {
@@ -716,7 +783,8 @@ void main() {
     test('o que se tocou na contagem fica de fora', () async {
       final c = await record([1, 60, 4.5, 5, 0.8, 1, 384, 2, 2, 0.9, 1, 384, 5, 5, 0.3], countIn: true);
       final got = ccs(c.doc.tracks[1].midi.single);
-      expect(got, [(ccBend, 1.0, 0.3)]);
+      expect(got.first, (ccBend, 1.0, 0.3));
+      expect(got, hasLength(2), reason: 'o segundo é o retorno ao centro ao parar');
     });
 
     test('evento de faixa desarmada ou que não existe é ignorado; controle desconhecido também', () async {
@@ -790,6 +858,139 @@ void main() {
       await tester.pumpAndSettle();
       expect(e.sent('live_cc').last[3] as double, closeTo(1, 0.05));
       expect(sent, isEmpty);
+    });
+  });
+
+  group('polimento: corte, aparo, cópia e origens', () {
+    List<(int, double, double)> pts(MidiClip c) => [for (final x in c.controls) (x.cc, x.beat, x.value)];
+
+    test('corte de clipe (K na linha do tempo): a direita começa com o pedal em vigor e a emenda não solta as notas', () {
+      final clip = MidiClip(
+        id: 'a',
+        start: 0,
+        length: 8,
+        notes: [MidiNote(pitch: 60, start: 0, length: 6)],
+        controls: [cc(ccSustain, 1, 1), cc(ccSustain, 7, 0), cc(ccBend, 3, 0.4)],
+      );
+      final right = splitMidiClip(clip, 4)!;
+      expect(pts(right), [(ccSustain, 0.0, 1.0), (ccBend, 0.0, 0.4), (ccSustain, 3.0, 0.0)]);
+      final t = synthTrack([clip, right]);
+      final sustain = flat([t]).where((x) => x.$2 == ccSustain).toList();
+      expect(sustain, [(0, ccSustain, 1.0, 1.0), (0, ccSustain, 4.0, 1.0), (0, ccSustain, 7.0, 0.0)], reason: 'o pedal não sobe e desce na batida do corte');
+      // o bend, que ficou fora do centro, também emenda; o único retorno ao repouso é o do fim do clipe da direita
+      expect(flat([t]).where((x) => x.$2 == ccBend).toList(), [(0, ccBend, 3.0, 0.4), (0, ccBend, 4.0, 0.4), (0, ccBend, 8.0, 0.0)]);
+    });
+
+    test('empilhar um clipe no meio de outro: a parte que sobra à direita começa com o estado que valia ali', () async {
+      final c = fakeController(e);
+      c.addInstrumentTrack(TrackKind.synth);
+      final t = c.doc.tracks[1];
+      t.midi.addAll([
+        MidiClip(id: 'o', start: 0, length: 12, controls: [cc(ccSustain, 1, 1), cc(ccSustain, 11, 0)]),
+        MidiClip(id: 'top', start: 4, length: 4),
+      ]);
+      c.placeOnTop('top');
+      final parts = t.midi.where((m) => m.id != 'top' && m.id != 'o').single;
+      expect(parts.start, 8);
+      expect(pts(parts), [(ccSustain, 0.0, 1.0), (ccSustain, 3.0, 0.0)]);
+      final sustain = flat(c.doc.tracks).where((x) => x.$2 == ccSustain).toList();
+      expect(sustain.where((x) => x.$3 == 8.0), [(1, ccSustain, 8.0, 1.0)], reason: 'o "solta" do fim do clipe cortado não vem antes do "desce" da direita');
+    });
+
+    test('empilhar por cima do começo de outro (aparo): o pedal em vigor no novo começo é escrito no clipe', () async {
+      final c = fakeController(e);
+      c.addInstrumentTrack(TrackKind.synth);
+      final t = c.doc.tracks[1];
+      t.midi.addAll([
+        MidiClip(id: 'o', start: 4, length: 8, controls: [cc(ccSustain, 1, 1), cc(ccSustain, 7, 0)]),
+        MidiClip(id: 'top', start: 0, length: 6),
+      ]);
+      c.placeOnTop('top');
+      final o = t.midi.firstWhere((m) => m.id == 'o');
+      expect(o.start, 6);
+      expect(o.controls.first.beat, 0);
+      expect(o.controls.first.value, 1);
+      expect(flat([t]).where((x) => x.$2 == ccSustain).first, (0, ccSustain, 6.0, 1.0));
+    });
+
+    test('copiar e colar controles do trecho: pontos, valor que já valia e repouso no fim', () {
+      final ev = [cc(ccSustain, 0.5, 1), cc(ccSustain, 3, 0), cc(ccBend, 1.5, 0.5), cc(ccBend, 2, 0), cc(ccMod, 5, 0.9)];
+      final region = copyControls(ev, 1, 3.5);
+      expect(
+        [for (final x in region) (x.cc, x.beat, x.value)],
+        [(ccBend, 0.5, 0.5), (ccBend, 1.0, 0.0), (ccSustain, 0.0, 1.0), (ccSustain, 2.0, 0.0)],
+        reason: 'o pedal já embaixo em 1 entra; o mod de 5 fica de fora',
+      );
+      final pasted = pasteControls(ev, region, 6);
+      expect([
+        for (final x in pasted.where((x) => x.beat >= 6)) (x.cc, x.beat, x.value),
+      ], containsAll([(ccBend, 6.5, 0.5), (ccBend, 7.0, 0.0), (ccSustain, 6.0, 1.0), (ccSustain, 8.0, 0.0)]));
+      expect(pasted.length, ev.length + 4, reason: 'nada do que já havia fora do trecho sumiu');
+      // o pedal que termina fora do repouso ganha o retorno no fim do trecho
+      expect(copyControls([cc(ccSustain, 1, 1)], 0, 4).map((x) => (x.beat, x.value)), [(1.0, 1.0), (4.0, 0.0)]);
+      expect(copyControls([cc(ccSustain, 9, 1)], 0, 4), isEmpty);
+    });
+
+    test('roda da tela numa faixa e MIDI noutra não devolvem o valor um do outro ao repouso', () async {
+      final c = fakeController(
+        e,
+        tracks: [DawTrack(id: 'a', name: 'Áudio', color: 0)],
+      );
+      c.addInstrumentTrack(TrackKind.synth); // 1
+      c.addInstrumentTrack(TrackKind.synth); // 2
+      await c.enableMidiInput();
+      c.pitchBend(0.5, track: 1, screen: true);
+      c.selectedTrack = 2;
+      e.log = [];
+      e.onMidi!(0xE0, 0, 96); // MIDI: bend 0.5 na faixa de entrada (2)
+      expect(e.sent('live_bend'), [
+        ['live_bend', 2, 0.5],
+      ], reason: 'a faixa 1 (roda da tela) fica como está');
+      // mudar a entrada do MIDI de faixa solta só o que era do MIDI
+      c.selectedTrack = 1;
+      e.log = [];
+      e.onMidi!(0xE0, 0, 96);
+      expect(e.sent('live_bend'), [
+        ['live_bend', 2, 0.0],
+        ['live_bend', 1, 0.5],
+      ]);
+      // soltar a roda da tela numa faixa não esquece o registro da roda de outra
+      e.log = [];
+      c.pitchBend(0.0, track: 1, screen: true);
+      expect(e.sent('live_bend'), [
+        ['live_bend', 1, 0.0],
+      ]);
+    });
+
+    test('a resolução do bend é a mesma em qualquer origem (14 bits) e a da roda é 1/127', () async {
+      final c = fakeController(e);
+      c.addInstrumentTrack(TrackKind.synth);
+      e.log = [];
+      c.pitchBend(0.30001, track: 1, screen: true);
+      c.pitchBend(4097 / 8192, track: 1);
+      c.modWheel(0.5, track: 1, screen: true);
+      expect(e.sent('live_bend').map((x) => x[2] as double), [(0.30001 * 8192).round() / 8192, 4097 / 8192]);
+      expect(e.sent('live_cc').single[3], 64 / 127);
+      expect(quantizeControl(ccBend, -1), -1);
+      expect(quantizeControl(ccBend, 0.00001), 0);
+      expect(quantizeControl(ccSustain, 0.6), 1);
+      expect(quantizeControl(ccMod, double.nan), 0);
+    });
+
+    test('quantizar as notas não mexe nos pontos de controle', () async {
+      final c = fakeController(e);
+      c.addInstrumentTrack(TrackKind.synth);
+      final clip = MidiClip(
+        id: 'q',
+        start: 0,
+        length: 4,
+        notes: [MidiNote(pitch: 60, start: 0.13, length: 1)],
+        controls: [cc(ccSustain, 0.13, 1), cc(ccSustain, 2.07, 0)],
+      );
+      c.doc.tracks[1].midi.add(clip);
+      c.quantizeNotes(clip, clip.notes, 0.25);
+      expect(clip.notes.single.start, 0.25);
+      expect([for (final x in clip.controls) x.beat], [0.13, 2.07]);
     });
   });
 }

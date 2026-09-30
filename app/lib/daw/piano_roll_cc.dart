@@ -91,7 +91,8 @@ extension _ControlLanes on _PianoRollState {
         for (final id in const [0, ccBend, ccMod, ccSustain]) CheckedPopupMenuItem(value: '$id', checked: lane == id, child: Text(_laneNames[id]!)),
         if (lane != 0) ...[
           const PopupMenuDivider(),
-          CheckedPopupMenuItem(value: 'line', checked: _CcPrefs.line, child: const Text('Linha reta (ou Shift)')),
+          // o pedal é degrau: lá o gesto é sempre pintura, então a reta não existe
+          if (lane != ccSustain) CheckedPopupMenuItem(value: 'line', checked: _CcPrefs.line, child: const Text('Linha reta (ou Shift)')),
           PopupMenuItem(value: 'clear', enabled: n > 0, child: Text('Limpar ${_laneNames[lane]!.toLowerCase()}')),
         ],
       ],
@@ -191,7 +192,7 @@ class _CcLaneState extends State<_CcLane> {
     var v = widget.cc == ccBend ? up * 2 - 1 : up;
     // o centro do bend atrai: voltar ao zero exato tem de ser fácil
     if (widget.cc == ccBend && v.abs() < .03) v = 0;
-    return MidiCc.clampValue(widget.cc, (v * 127).round() / 127);
+    return quantizeControl(widget.cc, v);
   }
 
   /// A batida do ponteiro, encaixada na grade e dentro do clipe.
@@ -423,7 +424,8 @@ class _CcPainter extends CustomPainter {
     final xEnd = g.x(clip.length);
     // a curva é em degraus: cada evento vale até o seguinte (é assim que o motor toca)
     var x = g.x(0);
-    var y = yOf(0);
+    // o valor que já vale no começo do clipe (pontos de antes dele, de um clipe aparado à esquerda)
+    var y = yOf(controlValueAt(events, cc, 0) ?? 0);
     final path = Path()..moveTo(x, y);
     final area = Path()..moveTo(x, base);
     area.lineTo(x, y);

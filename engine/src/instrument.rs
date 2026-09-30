@@ -212,6 +212,8 @@ pub mod sampler_param {
     pub const VELOCITY: u32 = 8;
     /// Alcance do pitch bend, semitons (0..24, padrão 2).
     pub const BEND_RANGE: u32 = 9;
+    /// Vibrato da roda de modulação com a roda toda, semitons (0..2, padrão 1).
+    pub const VIBRATO_RANGE: u32 = 10;
 }
 
 /// Sintetizador FM (tipo 5): 4 operadores senoidais, 8 algoritmos, realimentação no operador 1.
