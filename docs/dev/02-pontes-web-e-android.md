@@ -263,7 +263,7 @@ Levam memória por ponteiro; cada hospedeiro tem função própria.
 | `stretchAudio(job, onProgress)`, `detectBpm(job)` | Warp e detecção num Worker |
 | `saveFile(name, bytes, mime)` | Download por link temporário (vive 60 s) |
 | `sha256(bytes)` | WebCrypto, em hexa |
-| `probe()` | Diagnóstico: posição, tocando, estado do contexto, picos, `fxMeter`, espectro, `loudness` (os cinco valores com uma casa), pico da entrada; **zera** picos e `fxMeter` ao ler (ver [`03-build-teste-e-depuracao.md`](03-build-teste-e-depuracao.md)) |
+| `probe()` | Diagnóstico: posição, tocando, estado do contexto, picos, `fxMeter` (o último indicador) e `fxMeterMax` (o maior desde a leitura, só para as dinâmicas simples), espectro, `loudness` (os cinco valores com uma casa), pico da entrada; **zera** picos e `fxMeterMax` ao ler (ver [`03-build-teste-e-depuracao.md`](03-build-teste-e-depuracao.md)) |
 
 ### Superfície C do Android (`jd_*`)
 

@@ -75,6 +75,14 @@ enum Mp3Quality {
 /// O servidor recusa mais que isto por arquivo (`ENCODE_MAX_SECONDS`).
 const kEncodeMaxSeconds = 1800.0;
 
+/// O servidor recusa um áudio enviado com mais que isto (`MAX_SAMPLE_BYTES`): o WAV renderizado sobe inteiro, então em
+/// taxas e profundidades altas o teto de bytes chega antes dos 30 minutos (cerca de 15 min a 96 kHz e 24 bits).
+const kEncodeMaxUploadBytes = 512 * 1024 * 1024;
+
+/// Tamanho do WAV estéreo que o render entrega: cabeçalho de 44 bytes mais os quadros de [seconds] a [rate] Hz com [bits]
+/// bits por amostra.
+int estimatedWavBytes(double seconds, int rate, int bits) => 44 + (seconds * rate).ceil() * 2 * (bits ~/ 8);
+
 enum ExportRange {
   /// Do começo até o fim do último clipe (mais a cauda).
   song('Música inteira'),
@@ -121,6 +129,9 @@ class ExportOptions {
   /// MP3: taxa constante ou variável.
   final Mp3Quality mp3Quality;
 
+  /// FLAC e MP3: artista nos metadados do arquivo (vazio: sem artista).
+  final String artist;
+
   const ExportOptions({
     this.format = ExportFormat.wav24,
     this.range = ExportRange.song,
@@ -134,6 +145,7 @@ class ExportOptions {
     this.flacBits = 24,
     this.flacLevel = FlacLevel.standard,
     this.mp3Quality = Mp3Quality.cbr192,
+    this.artist = '',
   });
 
   /// O formato do WAV que o render entrega: o próprio [format] nos WAV; nos compactados, o que vai ao servidor (16

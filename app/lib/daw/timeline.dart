@@ -35,6 +35,7 @@ import 'tempo_map.dart';
 import 'warp_dialog.dart';
 import 'model.dart';
 import 'structure_menu.dart';
+import 'tempo_format.dart' show formatPitch;
 import 'track_groups.dart';
 import 'track_groups_ui.dart';
 
@@ -2730,7 +2731,7 @@ class _WarpBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final parts = [
       if (clip.stretches) 'W',
-      if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${clip.pitch % 1 == 0 ? clip.pitch.toStringAsFixed(0) : clip.pitch.toStringAsFixed(1)}st',
+      if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st',
       if (clip.reverse) 'R',
     ];
     final label = pending ? 'processando…' : parts.join(' ');

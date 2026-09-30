@@ -148,7 +148,9 @@ class _VizEditorState extends State<_VizEditor> implements _MeterHost {
           meter = SizedBox(
             width: _VizEditor._meterW,
             child: Tooltip(
-              message: live ? 'Redução de ganho agora (o traço segura o pico)' : 'O medidor mostra um efeito por vez: toque neste para medir',
+              message: widget.slot.bypass
+                  ? 'Efeito desligado: nada a medir'
+                  : (live ? 'Redução de ganho agora (o traço segura o pico)' : 'O medidor mostra um efeito por vez: toque neste para medir'),
               waitDuration: const Duration(milliseconds: 600),
               child: _GrMeter(source: live ? x.c.fxMeter : null, max: 24, color: x.color, fontFamily: font),
             ),
@@ -246,7 +248,8 @@ class _VizPainter extends CustomPainter {
 
   void _multiband(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    final x1 = _freqToX(_v(0), w), x2 = _freqToX(_v(1), w);
+    final (lowHz, highHz) = effectiveCrossovers(_v(0), _v(1));
+    final x1 = _freqToX(lowHz, w), x2 = _freqToX(highHz, w);
     final edges = [0.0, x1, x2, w];
     final gr = live ? unpackMultibandMeter(meter) : const [0.0, 0.0, 0.0];
     for (var b = 0; b < 3; b++) {
@@ -291,8 +294,8 @@ class _VizPainter extends CustomPainter {
           ..strokeWidth = 1.5,
       );
     }
-    _text(canvas, _hz(_v(0)), Offset(x1 + 3, h - 14), c: Colors.white54);
-    _text(canvas, _hz(_v(1)), Offset(x2 + 3, h - 14), c: Colors.white54);
+    _text(canvas, _hz(lowHz), Offset(x1 + 3, h - 14), c: Colors.white54);
+    _text(canvas, _hz(highHz), Offset(x2 + 3, h - 14), c: Colors.white54);
   }
 
   void _deesser(Canvas canvas, Size size) {

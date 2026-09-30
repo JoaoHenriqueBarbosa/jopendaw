@@ -30,7 +30,10 @@ pub trait Effect: Send {
     fn latency(&self) -> usize {
         0
     }
-    /// Um indicador para a interface: redução de ganho em dB (≥ 0) nos de dinâmica, 0 nos outros.
+    /// Um indicador para a interface; a convenção é de cada efeito: compressor, gate, limitador e
+    /// de-esser devolvem a redução de ganho em dB (≥ 0); o multibanda, as reduções das 3 bandas em
+    /// décimos de dB empacotadas num inteiro (8 bits por banda, ver `multiband::pack_meter`); a
+    /// imagem estéreo, a correlação de fase entre −1 (oposição) e 1 (mono); os demais, 0.
     fn meter(&self) -> f32 {
         0.0
     }
@@ -325,6 +328,7 @@ pub mod multiband_param {
     pub const XOVER_HIGH: u32 = 1;
     /// Ganho de saída conjunto, dB −24..24.
     pub const OUTPUT: u32 = 2;
+    /// Id 3: reservado, sem uso (o motor o ignora e o app não o mostra); os das bandas começam em 4.
     /// Id do primeiro controle da banda 0.
     pub const BAND_BASE: u32 = 4;
     /// Ids por banda.

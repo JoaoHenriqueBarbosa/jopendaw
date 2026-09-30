@@ -91,7 +91,7 @@ A aba `Modulação` do mesmo painel (tooltip `Modulação da faixa: LFO, seguido
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | `Importar áudio ou MIDI (Ctrl+I)` (rótulo `Importar` quando há largura) | Abre o seletor de arquivos de áudio ou MIDI | áudio: `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff`; MIDI: `mid`, `midi` | Desligado gravando ou com trabalho em andamento |
-| `Exportar a música (e as faixas separadas) em WAV` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
+| `Exportar áudio (WAV, FLAC ou MP3)` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
 | `Configurações: entrada de áudio, latência e contagem` | Abre `Configurações` | | [Capítulo 09](09-configuracoes-atalhos-android.md) |
 | `Atalhos do teclado (?)` | Abre `Atalhos do teclado`, com a lista das teclas de agora e, no rodapé, o botão `Personalizar` (só na web e no computador) | | Também a tecla `?`. Personalização: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
 | Texto com roda girando (por último na barra) | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
@@ -237,7 +237,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 | Seguidor de envelope | Modulador que mede o nível do som da própria faixa e o transforma num valor que sobe e desce com ele. Ver [06g](06g-modulacao.md). |
 | Semitom (`st`) | O menor passo entre notas do piano; unidade de afinação e transposição. |
 | Snap | Encaixe na grade ao arrastar. |
-| Stem | Cada faixa exportada separadamente (`Exportar a música (e as faixas separadas) em WAV`). |
+| Stem | Cada faixa exportada separadamente (opção **Stems** da janela de `Exportar áudio`). |
 | Tomada (take) | Cada gravação feita sobre a mesma região de uma faixa de áudio; fica no clipe (menu `Tomadas`). |
 | Velocidade (velocity) | Quão forte uma nota é tocada, de 0 a 1 (mostrada em %). |
 | Warp | Esticar o áudio para seguir o andamento do projeto, e transpor sem mudar a duração. |

@@ -39,7 +39,10 @@ enum JobStatus {
   static JobStatus parse(Object? s) => JobStatus.values.firstWhere((v) => v.name == s, orElse: () => JobStatus.running);
 }
 
-/// Uma tarefa pesada do servidor (`flac`, `audio_to_midi`).
+/// Uma tarefa pesada do servidor (`flac`, `audio_to_midi` e `encode_audio`). O [result] depende do tipo:
+/// `audio_to_midi` leva `notes`, `duration` e `start`; `flac` e `encode_audio` levam `sample` (o hash do arquivo gerado
+/// na conta) e `bytes`, e `encode_audio` ainda `format`, `mime`, `filename` (nome sugerido, com artista e título),
+/// `duration`, `rate`, `channels` e `warnings` (perdas na conversão, em português).
 class SyncJob {
   final String id;
   final JobStatus status;

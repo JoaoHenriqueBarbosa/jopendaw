@@ -136,6 +136,12 @@ struct Band {
     bypassed: bool,
 }
 
+/// Padrões de cada banda (baixa, média, aguda): os mesmos de `multibandParams` em `app/lib/daw/effects.dart`.
+const DEFAULT_THRESHOLD_DB: [f32; BANDS] = [-24.0, -22.0, -20.0];
+const DEFAULT_RATIO: f32 = 3.0;
+const DEFAULT_ATTACK_SECS: [f32; BANDS] = [0.02, 0.01, 0.004];
+const DEFAULT_RELEASE_SECS: [f32; BANDS] = [0.25, 0.15, 0.08];
+
 fn time_coef(secs: f32, rate: f32) -> f32 {
     (-1.0 / (secs * rate)).exp()
 }
@@ -143,14 +149,14 @@ fn time_coef(secs: f32, rate: f32) -> f32 {
 impl Band {
     fn new(index: usize, rate: f32) -> Self {
         Self {
-            threshold: Smoothed::new(-24.0),
-            slope: Smoothed::new(0.75),
+            threshold: Smoothed::new(DEFAULT_THRESHOLD_DB[index]),
+            slope: Smoothed::new(1.0 - 1.0 / DEFAULT_RATIO),
             knee: Smoothed::new(6.0),
             makeup: Glide::new(0.0),
             bypass: Glide::new(0.0),
             audible: Glide::new(1.0),
-            attack: time_coef(0.01, rate),
-            release: time_coef(0.15, rate),
+            attack: time_coef(DEFAULT_ATTACK_SECS[index], rate),
+            release: time_coef(DEFAULT_RELEASE_SECS[index], rate),
             peak: 0.0,
             hold: time_coef(HOLD_SECS[index], rate),
             env: 0.0,
@@ -392,6 +398,20 @@ mod tests {
     use std::f32::consts::TAU;
 
     const RATE: f64 = 48_000.0;
+
+    /// Os padrões do motor são os do app (`multibandParams`): o texto do Dart é a fonte.
+    #[test]
+    fn padroes_iguais_aos_do_app() {
+        let src = include_str!("../../../app/lib/daw/effects.dart");
+        assert!(src.contains("const _multibandThresholds = [-24.0, -22.0, -20.0];"));
+        assert!(src.contains("'Razão', _multibandBandNames[b], 1, 20, 3,"));
+        assert!(src.contains("b == 0 ? 0.02 : (b == 1 ? 0.01 : 0.004)"));
+        assert!(src.contains("b == 0 ? 0.25 : (b == 1 ? 0.15 : 0.08)"));
+        assert_eq!(
+            (DEFAULT_THRESHOLD_DB, DEFAULT_RATIO, DEFAULT_ATTACK_SECS, DEFAULT_RELEASE_SECS),
+            ([-24.0, -22.0, -20.0], 3.0, [0.02, 0.01, 0.004], [0.25, 0.15, 0.08])
+        );
+    }
 
     fn id(band: usize, k: u32) -> u32 {
         p::BAND_BASE + band as u32 * p::BAND_STRIDE + k

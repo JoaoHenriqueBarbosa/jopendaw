@@ -3,9 +3,10 @@
 //! em `spawn_blocking` (no máximo `MAX_CONCURRENT` ao mesmo tempo) e grava progresso e resultado.
 
 use std::{
+    collections::HashMap,
     sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
+        Arc, LazyLock, Mutex,
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -219,8 +220,13 @@ pub async fn get(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>) ->
     Job::find_by_id(id).filter(job::Column::OwnerId.eq(auth.user_id)).one(&s.db).await?.map(Json).ok_or_else(ApiError::not_found)
 }
 
-/// Tira uma tarefa do histórico da conta (a espera do app foi cancelada, ou ele já baixou o resultado). Tarefa
-/// rodando não se interrompe: 409, e o resultado dela fica como áudio sem uso para a limpeza da conta.
+/// Tarefas que este processo está rodando, com a bandeira de cancelamento de cada uma (cooperativa: o trabalho a
+/// olha entre uma etapa e outra e o resultado de uma tarefa cancelada nunca é gravado).
+static RUNNING: LazyLock<Mutex<HashMap<Uuid, Arc<AtomicBool>>>> = LazyLock::new(Mutex::default);
+
+/// Tira uma tarefa do histórico da conta (a espera do app foi cancelada, ou ele já baixou o resultado). Uma tarefa
+/// rodando neste processo é cancelada: a bandeira dela sobe, a linha some na hora (o áudio deixa de estar "em uso") e
+/// o resultado, quando o trabalho parar, é jogado fora. Rodando em outra instância, não dá para interromper: 409.
 pub async fn delete(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>) -> Result<StatusCode, ApiError> {
     let r = sqlx::query("DELETE FROM jobs WHERE id = $1 AND owner_id = $2 AND status <> 'running'").bind(id).bind(auth.user_id).execute(&s.pool).await?;
     if r.rows_affected() > 0 {
@@ -228,9 +234,17 @@ pub async fn delete(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>)
     }
     let exists: Option<(i32,)> =
         sqlx::query_as("SELECT 1 FROM jobs WHERE id = $1 AND owner_id = $2").bind(id).bind(auth.user_id).fetch_optional(&s.pool).await?;
-    match exists {
-        Some(_) => Err(err(StatusCode::CONFLICT, "a tarefa está em andamento e não pode ser cancelada agora")),
-        None => Err(ApiError::not_found()),
+    if exists.is_none() {
+        return Err(ApiError::not_found());
+    }
+    let flag = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).get(&id).cloned();
+    match flag {
+        Some(flag) => {
+            flag.store(true, Ordering::Relaxed);
+            sqlx::query("DELETE FROM jobs WHERE id = $1 AND owner_id = $2").bind(id).bind(auth.user_id).execute(&s.pool).await?;
+            Ok(StatusCode::NO_CONTENT)
+        }
+        None => Err(err(StatusCode::CONFLICT, "a tarefa está em andamento e não pode ser cancelada agora")),
     }
 }
 
@@ -267,15 +281,23 @@ struct Claimed {
     params: Option<sqlx::types::Json<Value>>,
 }
 
-async fn claim(pool: &PgPool) -> Result<Option<Claimed>, sqlx::Error> {
+/// Pega a tarefa mais antiga da fila. Sem `allow_encode` (a vez das exportações está ocupada), pula as `encode_audio`:
+/// elas esperam `queued`, sem `running` falso, e não seguram uma das vagas de quem pode andar.
+async fn claim(pool: &PgPool, allow_encode: bool) -> Result<Option<Claimed>, sqlx::Error> {
     sqlx::query_as(
         "UPDATE jobs SET status = 'running', progress = 0, updated_at = now()
-         WHERE id = (SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+         WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND ($1 OR kind <> 'encode_audio') ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
          RETURNING id, owner_id, kind, sample_hash, params",
     )
+    .bind(allow_encode)
     .fetch_optional(pool)
     .await
 }
+
+/// A vez das exportações compactadas: uma por vez no processo. O WAV decodificado (até 30 min) ocupa centenas de MB, e
+/// duas juntas (mais a cópia do arquivo lido) passariam do que uma instância pequena aguenta. Tomada ANTES de a
+/// tarefa virar `running`, então uma segunda exportação espera na fila, e sobra vaga para `audio_to_midi`.
+static ENCODE_TURN: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
 
 /// O laço do worker, criado uma vez no `setup` (frio). Acorda na hora com um `POST /api/jobs`
 /// e, por garantia, a cada 2 s (jobs recolocados na fila, outra instância).
@@ -283,15 +305,26 @@ pub async fn worker(s: AppState) {
     let slots = Arc::new(Semaphore::new(MAX_CONCURRENT));
     loop {
         let permit = slots.clone().acquire_owned().await.expect("semáforo aberto");
-        match claim(&s.pool).await {
+        let turn = ENCODE_TURN.try_acquire().ok();
+        match claim(&s.pool, turn.is_some()).await {
             Ok(Some(job)) => {
                 let s = s.clone();
+                // a vez só fica com quem é exportação; as outras a devolvem já
+                let turn = turn.filter(|_| job.kind == "encode_audio");
+                let cancel = Arc::new(AtomicBool::new(false));
+                RUNNING.lock().unwrap_or_else(|e| e.into_inner()).insert(job.id, cancel.clone());
                 tokio::spawn(async move {
-                    run(&s, job).await;
+                    let id = job.id;
+                    run(&s, job, cancel).await;
+                    RUNNING.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+                    drop(turn);
                     drop(permit);
+                    // quem esperava a vez (ou a vaga) não precisa esperar o relógio
+                    s.job_wake.notify_one();
                 });
             }
             Ok(None) => {
+                drop(turn);
                 drop(permit);
                 tokio::select! {
                     _ = s.job_wake.notified() => {}
@@ -299,6 +332,7 @@ pub async fn worker(s: AppState) {
                 }
             }
             Err(e) => {
+                drop(turn);
                 drop(permit);
                 tracing::warn!(error = %e, "worker não conseguiu pegar tarefa");
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -314,12 +348,7 @@ enum Output {
     Result(Value),
 }
 
-/// Uma exportação por vez no processo: o WAV decodificado (até 30 min) ocupa centenas de MB, e duas juntas
-/// (mais a cópia do arquivo lido) passariam do que uma instância pequena aguenta.
-static ENCODE_ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn compute_encode(bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
-    let _turn = ENCODE_ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+fn compute_encode(bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32, cancel: &AtomicBool) -> Result<Output, String> {
     let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
     let params = params.ok_or("parâmetros ausentes")?;
     let format = encode::Format::from_params(params);
@@ -328,7 +357,7 @@ fn compute_encode(bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) 
     drop(bytes);
     set(0.05);
     let duration = wav.pcm.data.len() as f64 / wav.pcm.channels as f64 / wav.pcm.rate as f64;
-    let done = encode::encode(&wav, format, &meta, &|f| set(0.05 + 0.95 * f))?;
+    let done = encode::encode_cancelable(&wav, format, &meta, &|f| set(0.05 + 0.95 * f), &|| cancel.load(Ordering::Relaxed))?;
     let info = json!({
         "format": format.extension(),
         "mime": format.mime(),
@@ -342,9 +371,9 @@ fn compute_encode(bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) 
 }
 
 /// O trabalho pesado, síncrono: decodificar e processar o áudio já lido do armazenamento. Roda em `spawn_blocking`.
-fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
+fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32, cancel: &AtomicBool) -> Result<Output, String> {
     if kind == "encode_audio" {
-        return compute_encode(bytes, params, progress);
+        return compute_encode(bytes, params, progress, cancel);
     }
     let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
     let span = audio::Span {
@@ -396,7 +425,7 @@ async fn finish(pool: &PgPool, id: Uuid, outcome: Result<Value, String>) {
     }
 }
 
-async fn run(s: &AppState, job: Claimed) {
+async fn run(s: &AppState, job: Claimed, cancel: Arc<AtomicBool>) {
     let progress = Arc::new(AtomicU32::new(0f32.to_bits()));
     // o áudio vem do armazenamento (disco ou S3) antes da thread de cálculo, que é síncrona
     let bytes = match s.store.read(&job.sample_hash).await {
@@ -409,7 +438,8 @@ async fn run(s: &AppState, job: Claimed) {
         }
     };
     let (kind, params, prog) = (job.kind.clone(), job.params.map(|p| p.0), progress.clone());
-    let mut handle = tokio::task::spawn_blocking(move || compute(&kind, bytes, params.as_ref(), &prog));
+    let flag = cancel.clone();
+    let mut handle = tokio::task::spawn_blocking(move || compute(&kind, bytes, params.as_ref(), &prog, &flag));
 
     // enquanto a thread trabalha, o progresso dela vai para o banco duas vezes por segundo
     let mut tick = tokio::time::interval(Duration::from_millis(500));
@@ -417,11 +447,18 @@ async fn run(s: &AppState, job: Claimed) {
         tokio::select! {
             r = &mut handle => break r,
             _ = tick.tick() => {
+                if cancel.load(Ordering::Relaxed) {
+                    continue;
+                }
                 let p = f32::from_bits(progress.load(Ordering::Relaxed));
                 let _ = sqlx::query("UPDATE jobs SET progress = $2, updated_at = now() WHERE id = $1").bind(job.id).bind(p).execute(&s.pool).await;
             }
         }
     };
+    // cancelada (a linha já foi apagada): o resultado, se houve, é jogado fora
+    if cancel.load(Ordering::Relaxed) {
+        return;
+    }
     let outcome = match joined {
         Err(e) => {
             tracing::error!(job = %job.id, error = %e, "a tarefa entrou em pânico");

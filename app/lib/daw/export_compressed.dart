@@ -52,6 +52,9 @@ class CompressedExport extends ChangeNotifier {
   final Duration pollEvery;
   final Duration maxWait;
 
+  /// As esperas entre as tentativas de apagar o que a limpeza não conseguiu (tarefa ainda rodando no servidor).
+  final List<Duration> retryDelays;
+
   CompressedExport({
     required this.api,
     required this.options,
@@ -62,6 +65,7 @@ class CompressedExport extends ChangeNotifier {
     this.delay = _sleep,
     this.pollEvery = const Duration(milliseconds: 800),
     this.maxWait = const Duration(minutes: 20),
+    this.retryDelays = const [Duration(seconds: 3), Duration(seconds: 10), Duration(seconds: 30)],
   });
 
   static Future<void> _sleep(Duration d) => Future<void>.delayed(d);
@@ -78,6 +82,11 @@ class CompressedExport extends ChangeNotifier {
   /// Arquivos já salvos compactados.
   int compressed = 0;
 
+  /// A pessoa fechou a janela "Salvar" do aparelho sem escolher onde: não conta como salvo, e a exportação para ali
+  /// (não abre outra janela por stem). [canceledName] é o arquivo que ficou sem salvar.
+  bool saveCanceled = false;
+  String? canceledName;
+
   /// Etapa em andamento, para a janela ("Enviando…", "Compactando 40%…"); null fora de um arquivo.
   String? stage;
 
@@ -87,8 +96,8 @@ class CompressedExport extends ChangeNotifier {
   bool _canceled = false;
   int _index = 0;
 
-  /// Interrompe: o que estiver esperando o servidor larga a espera (a tarefa em andamento não se interrompe lá, e o
-  /// resultado dela fica como áudio sem uso, que a limpeza da conta apaga).
+  /// Interrompe: o que estiver esperando o servidor larga a espera, e a limpeza pede ao servidor que cancele a tarefa
+  /// (ele a interrompe e não guarda o resultado; um servidor antigo responde 409, e a limpeza tenta de novo aos poucos).
   void cancel() {
     _canceled = true;
   }
@@ -119,6 +128,7 @@ class CompressedExport extends ChangeNotifier {
     }
     try {
       await _compress(wavName, wav);
+      if (saveCanceled) throw const RenderCanceled();
       compressed++;
     } on RenderCanceled {
       rethrow;
@@ -152,7 +162,13 @@ class CompressedExport extends ChangeNotifier {
       if (uploaded) await api.putSample(hash, wav);
       _checkCanceled();
       final title = wavName.toLowerCase().endsWith('.wav') ? wavName.substring(0, wavName.length - 4) : wavName;
-      var job = await api.createJob('encode_audio', hash, {...options.encodeParams, 'title': title, if (album.isNotEmpty) 'album': album});
+      final artist = options.artist.trim();
+      var job = await api.createJob('encode_audio', hash, {
+        ...options.encodeParams,
+        'title': title,
+        if (artist.isNotEmpty) 'artist': artist,
+        if (album.isNotEmpty) 'album': album,
+      });
       jobId = job.id;
       final deadline = DateTime.now().add(maxWait);
       var failedPolls = 0;
@@ -188,38 +204,77 @@ class CompressedExport extends ChangeNotifier {
         if (w is String && !warnings.contains(w)) warnings.add(w);
       }
       _progress('Salvando…', 0.98);
-      await save(compressedName(wavName, options.format), bytes, options.format.mime);
+      final name = _savedName(result, wavName);
+      if (!await save(name, bytes, options.format.mime)) {
+        // a janela "Salvar" foi fechada: nada foi salvo, e dizer que sim apagaria o resultado por nada
+        saveCanceled = true;
+        canceledName = name;
+      }
     } finally {
-      // limpeza silenciosa: o WAV temporário, o resultado e a tarefa saem da conta; se falhar (ou a tarefa ainda roda),
-      // ficam como áudio sem uso para a limpeza da tela Conta
-      await _quiet(() async {
-        if (out != null) await api.deleteSample(out, force: true);
-      });
-      await _quiet(() async {
+      // limpeza silenciosa: a tarefa (uma em andamento é cancelada lá), o resultado e o WAV temporário saem da conta. O
+      // que falhar com 409 (a tarefa ainda roda, num servidor que não a cancela) é tentado de novo aos poucos, sem
+      // segurar a janela; o que sobrar fica como áudio sem uso para a limpeza da tela Conta
+      final retry = <Future<void> Function()>[];
+      Future<void> tidy(Future<void> Function() f) async {
+        try {
+          await f();
+        } on ApiException catch (e) {
+          if (e.status == 409) retry.add(f);
+        } catch (_) {}
+      }
+
+      await tidy(() async {
         if (jobId != null) await api.deleteJob(jobId);
       });
-      await _quiet(() async {
+      await tidy(() async {
+        if (out != null) await api.deleteSample(out, force: true);
+      });
+      await tidy(() async {
         if (uploaded) await api.deleteSample(hash, force: true);
       });
+      if (retry.isNotEmpty) unawaited(_retryTidy(retry, jobId));
     }
   }
 
-  Future<void> _quiet(Future<void> Function() f) async {
-    try {
-      await f();
-    } catch (_) {}
+  /// Nome do arquivo: o que o servidor sugere (artista e título) quando vem com a extensão do formato; senão, o do WAV.
+  String _savedName(Map<String, dynamic> result, String wavName) {
+    final suggested = result['filename'];
+    if (suggested is String && suggested.toLowerCase().endsWith('.${options.format.extension}') && suggested.length > options.format.extension.length + 1) {
+      return suggested;
+    }
+    return compressedName(wavName, options.format);
+  }
+
+  /// Insiste na limpeza que deu 409, em [retryDelays]: a tarefa (se ainda roda) é apagada primeiro, e só então o WAV.
+  Future<void> _retryTidy(List<Future<void> Function()> pending, String? jobId) async {
+    for (final wait in retryDelays) {
+      await delay(wait);
+      final still = <Future<void> Function()>[];
+      for (final f in pending) {
+        try {
+          await f();
+        } on ApiException catch (e) {
+          if (e.status == 409) still.add(f);
+        } catch (_) {}
+      }
+      pending = still;
+      if (pending.isEmpty) return;
+    }
   }
 
   String _mb(int bytes) => bytes < 1 << 20 ? '${(bytes / 1024).ceil()} KB' : '${(bytes / (1 << 20)).toStringAsFixed(1).replaceAll('.', ',')} MB';
 
-  /// "Exportar em WAV mesmo assim": salva os WAV já renderizados que não foram compactados. Devolve quantos.
+  /// "Exportar em WAV mesmo assim": salva os WAV já renderizados que não foram compactados. Devolve quantos foram
+  /// salvos e para no primeiro que a pessoa deixou sem salvar (fechou a janela "Salvar"): os outros continuam em
+  /// [fallbacks].
   Future<int> saveWavs() async {
-    final pending = List<PendingWav>.of(fallbacks);
-    for (final p in pending) {
-      await save(p.name, p.bytes, 'audio/wav');
+    var saved = 0;
+    for (final p in List<PendingWav>.of(fallbacks)) {
+      if (!await save(p.name, p.bytes, 'audio/wav')) break;
       fallbacks.remove(p);
+      saved++;
     }
     notifyListeners();
-    return pending.length;
+    return saved;
   }
 }

@@ -8,6 +8,7 @@ import 'package:jopendaw_app/api/client.dart' show ApiException, Unauthenticated
 import 'package:jopendaw_app/api/export_api.dart';
 import 'package:jopendaw_app/api/sync_api.dart';
 import 'package:jopendaw_app/audio/engine.dart' show RenderCanceled;
+import 'package:jopendaw_app/daw/effects.dart' show EffectKind, multibandBase;
 import 'package:jopendaw_app/daw/export.dart';
 import 'package:jopendaw_app/daw/export_compressed.dart';
 import 'package:jopendaw_app/daw/export_options.dart';
@@ -101,7 +102,10 @@ CompressedExport make(FakeExportApi api, List<(String, Uint8List, String)> saved
 
 Uint8List wav([int n = 200]) => encodeWav([filled(n, 0.25)], 100, ExportFormat.wav16);
 
+int createCalls = 0;
+
 void main() {
+  setUp(() => createCalls = 0);
   group('opções', () {
     test('o WAV renderizado acompanha o formato compactado', () {
       expect(const ExportOptions().renderFormat, ExportFormat.wav24);
@@ -122,6 +126,15 @@ void main() {
       expect(const ExportOptions(format: ExportFormat.mp3, mp3Quality: Mp3Quality.vbr0).encodeParams, {'format': 'mp3', 'vbr': 0});
       expect([for (final q in Mp3Quality.values.where((q) => q.vbr != null)) q.vbr], [0, 1, 2, 3, 4]);
       expect([for (final q in Mp3Quality.values.where((q) => q.bitrate != null)) q.bitrate], [128, 192, 256, 320]);
+    });
+
+    test('o WAV que sobe ao servidor passa dos 512 MB antes dos 30 minutos em taxa alta', () {
+      // 96 kHz, 24 bits, estéreo: 576 000 bytes por segundo, então cerca de 15,5 minutos
+      expect(estimatedWavBytes(15 * 60, 96000, 24), lessThan(kEncodeMaxUploadBytes));
+      expect(estimatedWavBytes(16 * 60, 96000, 24), greaterThan(kEncodeMaxUploadBytes));
+      expect(estimatedWavBytes(kEncodeMaxSeconds, 44100, 16), lessThan(kEncodeMaxUploadBytes));
+      expect(estimatedWavBytes(kEncodeMaxSeconds, 44100, 24), lessThan(kEncodeMaxUploadBytes));
+      expect(estimatedWavBytes(kEncodeMaxSeconds, 48000, 24), lessThan(kEncodeMaxUploadBytes));
     });
 
     test('extensão e MIME de cada formato', () {
@@ -166,7 +179,7 @@ void main() {
       expect(cx.fallbacks, isEmpty);
       expect(cx.failure, isNull);
       expect(cx.warnings, ['aviso de perda']);
-      expect(api.calls.where((c) => c.startsWith('delete')), ['delete_sample:result:true', 'delete_job', 'delete_sample:wav:true']);
+      expect(api.calls.where((c) => c.startsWith('delete')), ['delete_job', 'delete_sample:result:true', 'delete_sample:wav:true']);
       expect(api.samples, isEmpty, reason: 'o WAV temporário saiu do servidor');
     });
 
@@ -259,6 +272,95 @@ void main() {
       expect(cx.failure, contains('sessão terminou'));
     });
 
+    test('artista vai aos metadados e o nome sugerido pelo servidor é o do arquivo', () async {
+      final api = FakeExportApi()
+        ..script = [
+          SyncJob('j1', JobStatus.done, progress: 1, result: {'sample': FakeExportApi.outHash, 'filename': 'Eu - Projeto.mp3'}),
+        ];
+      final saved = <(String, Uint8List, String)>[];
+      final cx = make(
+        api,
+        saved,
+        options: const ExportOptions(format: ExportFormat.mp3, artist: '  Eu '),
+      );
+      await cx.deliver('Projeto.wav', wav());
+      expect(api.created.single.$2['artist'], 'Eu');
+      expect(saved.single.$1, 'Eu - Projeto.mp3');
+      // nome sem a extensão do formato: cai no do WAV
+      final api2 = FakeExportApi()
+        ..script = [
+          SyncJob('j1', JobStatus.done, progress: 1, result: {'sample': FakeExportApi.outHash, 'filename': 'x.flac'}),
+        ];
+      final saved2 = <(String, Uint8List, String)>[];
+      await make(api2, saved2, options: const ExportOptions(format: ExportFormat.mp3)).deliver('P.wav', wav());
+      expect(saved2.single.$1, 'P.mp3');
+      expect(api2.created.single.$2.containsKey('artist'), isFalse);
+    });
+
+    test('a janela "Salvar" fechada não conta como salvo: para a exportação e não dá o arquivo como entregue', () async {
+      final api = FakeExportApi();
+      final saved = <String>[];
+      final cx = CompressedExport(
+        api: api,
+        options: const ExportOptions(format: ExportFormat.flac),
+        album: '',
+        expectedFiles: 2,
+        save: (n, b, m) async {
+          saved.add(n);
+          return false;
+        },
+        signedIn: () => true,
+        delay: (_) async {},
+      );
+      await expectLater(cx.deliver('P.wav', wav()), throwsA(isA<RenderCanceled>()));
+      expect(cx.saveCanceled, isTrue);
+      expect(cx.canceledName, 'P.flac');
+      expect(cx.compressed, 0);
+      expect(cx.fallbacks, isEmpty);
+      expect(cx.failure, isNull);
+    });
+
+    test('"WAV mesmo assim" para no primeiro arquivo que a janela "Salvar" deixou sem salvar', () async {
+      final api = FakeExportApi();
+      var answers = [true, false];
+      final cx = CompressedExport(
+        api: api,
+        options: const ExportOptions(format: ExportFormat.flac),
+        album: '',
+        save: (n, b, m) async => answers.removeAt(0),
+        signedIn: () => false,
+        delay: (_) async {},
+      );
+      await cx.deliver('A.wav', wav());
+      await cx.deliver('B.wav', wav());
+      await cx.deliver('C.wav', wav());
+      expect(cx.fallbacks.length, 3);
+      expect(await cx.saveWavs(), 1);
+      expect([for (final f in cx.fallbacks) f.name], ['B.wav', 'C.wav']);
+    });
+
+    test('cancelar: a tarefa que responde 409 é apagada de novo aos poucos, sem segurar a saída', () async {
+      final api = _Busy409(FakeExportApi()..script = [SyncJob('j1', JobStatus.running, progress: 0.2)]);
+      late CompressedExport cx;
+      final waits = <Duration>[];
+      cx = CompressedExport(
+        api: api,
+        options: const ExportOptions(format: ExportFormat.flac),
+        album: '',
+        save: (n, b, m) async => true,
+        signedIn: () => true,
+        delay: (d) async {
+          waits.add(d);
+          if (waits.length == 1) cx.cancel();
+        },
+      );
+      await expectLater(cx.deliver('P.wav', wav()), throwsA(isA<RenderCanceled>()));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.jobDeletes, greaterThanOrEqualTo(2), reason: 'a primeira deu 409 e a segunda passou');
+      expect(api.wavDeletes, greaterThanOrEqualTo(2));
+    });
+
     test('a falha ao apagar é silenciosa', () async {
       final api = FakeExportApi()..fail = (c) => null;
       final saved = <(String, Uint8List, String)>[];
@@ -329,8 +431,14 @@ void main() {
   });
 
   group('janela de exportação', () {
-    Future<(FakeEngine, FakeExportApi, dynamic)> open(WidgetTester tester, {ExportOptions? options, FakeExportApi? api, bool signedIn = true}) async {
-      final e = FakeEngine();
+    Future<(FakeEngine, FakeExportApi, dynamic)> open(
+      WidgetTester tester, {
+      ExportOptions? options,
+      FakeExportApi? api,
+      bool signedIn = true,
+      bool saveResult = true,
+    }) async {
+      final e = FakeEngine()..saveResult = saveResult;
       final c = (await tester.runAsync(() => project(e)))!;
       e.renderResult = (outputs) => [
         for (final _ in outputs) [filled(300, 0.5), filled(300, -0.25)],
@@ -400,6 +508,108 @@ void main() {
       expect(e.saved.length, greaterThan(1));
     });
 
+    testWidgets('a janela "Salvar" fechada: "Exportação cancelada", nada dado como salvo', (tester) async {
+      final api = FakeExportApi();
+      final (e, _, _) = await open(
+        tester,
+        api: api,
+        options: const ExportOptions(format: ExportFormat.flac, stems: true),
+        saveResult: false,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('Exportação cancelada'), findsOneWidget);
+      expect(find.byKey(const Key('export-save-canceled')), findsOneWidget);
+      expect(find.text('Exportação concluída'), findsNothing);
+      // parou no primeiro arquivo: uma só janela "Salvar", não uma por stem
+      expect(e.saved.length, 1);
+      expect(api.calls.where((c) => c == 'delete_job').length, 1);
+    });
+
+    testWidgets('depois do "WAV mesmo assim" a mensagem diz o que saiu de cada formato', (tester) async {
+      final api = FakeExportApi()..fail = (c) => c == 'create' && createCalls++ >= 1 ? http.ClientException('sem rede') : null;
+      final (e, _, _) = await open(
+        tester,
+        api: api,
+        options: const ExportOptions(format: ExportFormat.flac, stems: true),
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('Não deu para compactar'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('export-wav-anyway')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('(1 em FLAC, '), findsOneWidget);
+      expect(find.textContaining(' em WAV)'), findsOneWidget);
+      expect(e.saved.first.$1.endsWith('.flac'), isTrue);
+    });
+
+    testWidgets('a barra de FLAC e MP3 nunca recua e não passa de 100% antes do fim', (tester) async {
+      final api = FakeExportApi()
+        ..script = [
+          SyncJob('j1', JobStatus.running, progress: 0.9),
+          SyncJob('j1', JobStatus.running, progress: 0.1),
+          SyncJob('j1', JobStatus.done, progress: 1, result: {'sample': FakeExportApi.outHash}),
+        ];
+      await open(
+        tester,
+        api: api,
+        options: const ExportOptions(format: ExportFormat.flac),
+      );
+      final seen = <double>[];
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(seconds: 1));
+        final bar = find.byType(LinearProgressIndicator);
+        if (bar.evaluate().isEmpty) break;
+        final v = tester.widget<LinearProgressIndicator>(bar).value;
+        if (v != null) seen.add(v);
+      }
+      expect(seen, isNotEmpty);
+      for (var i = 1; i < seen.length; i++) {
+        expect(seen[i], greaterThanOrEqualTo(seen[i - 1]), reason: '$seen');
+      }
+      expect(seen.every((v) => v < 1), isTrue);
+    });
+
+    testWidgets('uma opção do diálogo: efeito em solo avisa que a exportação sai assim; artista vai nas opções', (tester) async {
+      final c = await tester.runAsync(() => project(FakeEngine()));
+      c!.addEffect(0, EffectKind.multiband);
+      final slot = c.doc.tracks[0].effects.last;
+      ExportOptions? chosen;
+      tester.view.physicalSize = const Size(900, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async => chosen = await showDialog<ExportOptions>(
+                context: context,
+                builder: (_) => ExportDialog(
+                  c: c,
+                  initial: const ExportOptions(format: ExportFormat.mp3),
+                ),
+              ),
+              child: const Text('abrir'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('abrir'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('export-monitoring-warning')), findsNothing);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      c.setEffectParam(0, slot.id, multibandBase + 5, 1);
+      await tester.tap(find.text('abrir'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('export-monitoring-warning')), findsOneWidget);
+      expect(find.textContaining('a exportação sairá assim'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('export-artist')), ' Eu ');
+      await tester.tap(find.text('Exportar'));
+      await tester.pumpAndSettle();
+      expect(chosen!.artist, 'Eu');
+    });
+
     testWidgets('cancelar durante a espera do servidor fecha sem salvar', (tester) async {
       final api = FakeExportApi()..script = [SyncJob('j1', JobStatus.running, progress: 0.3)];
       final (e, _, _) = await open(tester, api: api);
@@ -432,4 +642,34 @@ class _NoDelete implements ExportApi {
   Future<int> deleteSample(String hash, {bool force = false}) => throw http.ClientException('sem rede');
   @override
   Future<void> deleteJob(String id) => throw http.ClientException('sem rede');
+}
+
+/// Um servidor antigo: a tarefa em andamento não se apaga (409) na primeira vez, e o WAV dela fica preso até lá.
+class _Busy409 implements ExportApi {
+  final FakeExportApi inner;
+  int jobDeletes = 0, wavDeletes = 0;
+  bool _jobGone = false;
+  _Busy409(this.inner);
+  @override
+  Future<Set<String>> missingSamples(List<String> h) => inner.missingSamples(h);
+  @override
+  Future<void> putSample(String h, Uint8List b) => inner.putSample(h, b);
+  @override
+  Future<Uint8List?> getSample(String h) => inner.getSample(h);
+  @override
+  Future<SyncJob> createJob(String k, String s, [Map<String, dynamic> p = const {}]) => inner.createJob(k, s, p);
+  @override
+  Future<SyncJob> job(String id) => inner.job(id);
+  @override
+  Future<int> deleteSample(String hash, {bool force = false}) async {
+    wavDeletes++;
+    if (!_jobGone) throw ApiException(409, 'há uma tarefa em andamento com este áudio');
+    return 1;
+  }
+
+  @override
+  Future<void> deleteJob(String id) async {
+    if (jobDeletes++ == 0) throw ApiException(409, 'a tarefa está em andamento');
+    _jobGone = true;
+  }
 }

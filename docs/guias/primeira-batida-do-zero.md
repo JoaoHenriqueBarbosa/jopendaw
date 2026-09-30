@@ -114,7 +114,7 @@ O modelo usa `C/G` (G3 C4 E4) no terceiro compasso; aqui o `C` fica na fundament
 
 ### 6. Exportar
 
-1. Pare (`Enter`). Toque em `Exportar` (tooltip `Exportar a música (e as faixas separadas) em WAV`).
+1. Pare (`Enter`). Toque em `Exportar` (tooltip `Exportar áudio (WAV, FLAC ou MP3)`).
 2. Deixe `Música inteira`, `WAV 24 bits`, taxa `A do aparelho` e `Cauda` em 2 s. `Stems` e `Normalizar` desligados. O resumo da janela deve dizer `Compassos 1 a 4 · 0:08 + 2 s de cauda` (o tempo exato depende do andamento).
 3. `Exportar`. Espere `Renderizando N%` e abra o arquivo `Minha primeira batida.wav` nos downloads (no Android, escolha onde salvar). Cerca de 10 s de áudio a 24 bits e 48 kHz dá uns 2,8 MB.
 4. O arquivo sai linear: sem metrônomo e sem repetição do loop. Se quiser a batida mais longa, duplique os clipes (`Ctrl+D` no arranjo) antes de exportar.

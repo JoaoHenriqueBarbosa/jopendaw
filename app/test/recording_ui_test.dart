@@ -308,7 +308,7 @@ void main() {
   testWidgets('exportar: loop desligado sem região, progresso, concluído; erro volta às opções com as mesmas escolhas', (t) async {
     final c = FakeDaw();
     await mount(t, c, const Size(1400, 900));
-    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await tapVisible(t, find.byTooltip('Exportar áudio (WAV, FLAC ou MP3)'));
     await t.pumpAndSettle();
     expect(find.text('Exportar áudio'), findsOneWidget);
     // compassos 1 a 4 (16 batidas a 120 BPM = 8 s) mais a cauda padrão
@@ -337,7 +337,7 @@ void main() {
     // sem região de loop, a opção fica desligada e volta para a música inteira
     c.mutate((d) => d.loopEnd = d.loopStart);
     c.exportError = Exception('Sem espaço para o arquivo');
-    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await tapVisible(t, find.byTooltip('Exportar áudio (WAV, FLAC ou MP3)'));
     await t.pumpAndSettle();
     final loop = t.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Região do loop'));
     expect(loop.onSelected, isNull);
@@ -359,7 +359,7 @@ void main() {
     final c = FakeDaw();
     await mount(t, c, const Size(1400, 900));
     c.exportFailure = 'A exportação não terminou: sem memória.';
-    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await tapVisible(t, find.byTooltip('Exportar áudio (WAV, FLAC ou MP3)'));
     await t.pumpAndSettle();
     await t.tap(find.widgetWithText(FilledButton, 'Exportar').last);
     await t.pumpAndSettle();
@@ -371,7 +371,7 @@ void main() {
 
     c.exportFailure = null;
     c.exportGate = Completer();
-    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await tapVisible(t, find.byTooltip('Exportar áudio (WAV, FLAC ou MP3)'));
     await t.pumpAndSettle();
     await t.tap(find.widgetWithText(FilledButton, 'Exportar').last);
     await t.pump();
@@ -391,7 +391,7 @@ void main() {
     final c = FakeDaw();
     c.doc.tracks[1].midi.clear();
     await mount(t, c, const Size(360, 740));
-    await tapVisible(t, find.byTooltip('Exportar a música (e as faixas separadas) em WAV'));
+    await tapVisible(t, find.byTooltip('Exportar áudio (WAV, FLAC ou MP3)'));
     await t.pumpAndSettle();
     expect(find.textContaining('Não há o que exportar'), findsOneWidget);
     expect(t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Exportar')).onPressed, isNull);

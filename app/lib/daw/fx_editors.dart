@@ -2079,9 +2079,9 @@ class _DynamicsEditorState extends State<_DynamicsEditor> implements _MeterHost 
         final meter = SizedBox(
           width: _DynamicsEditor._meterW,
           child: Tooltip(
-            message: live
-                ? (widget.slot.bypass ? 'Efeito desligado: nada a medir' : 'Redução de ganho agora (o traço segura o pico)')
-                : 'O medidor mostra um efeito de dinâmica por vez: toque neste para medir',
+            message: widget.slot.bypass
+                ? 'Efeito desligado: nada a medir'
+                : (live ? 'Redução de ganho agora (o traço segura o pico)' : 'O medidor mostra um efeito de dinâmica por vez: toque neste para medir'),
             waitDuration: const Duration(milliseconds: 600),
             child: _GrMeter(source: meterLive ? x.c.fxMeter : null, max: _kind == EffectKind.gate ? 60 : 24, color: x.color, fontFamily: font),
           ),

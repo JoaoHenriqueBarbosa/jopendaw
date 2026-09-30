@@ -245,7 +245,7 @@ O arquivo `.jopendaw` é um pacote zip com o documento do projeto e os áudios d
 | Tela `Projetos`, barra da página (celular) | Só o ícone, tooltip `Importar projeto` | O mesmo | O mesmo |
 | Tela `Projetos` vazia (`Nenhum projeto ainda`) | `Importar projeto` (botão contornado ao lado de `Criar o primeiro`) | O mesmo | O mesmo |
 
-A barra de transporte não tem mais um botão só para o projeto: ele fica dentro da janela `Exportar áudio`, que abre no botão `Exportar` (ícone de disquete, tooltip `Exportar a música (e as faixas separadas) em WAV`). O `Exportar` em si é outra coisa: gera **som** (WAV), não o projeto editável ([capítulo 08](08-exportacao.md)). Escolher `Projeto inteiro (.jopendaw)…` não guarda as opções do WAV nem começa a exportar áudio: a janela de opções fecha e só a do arquivo do projeto continua.
+A barra de transporte não tem mais um botão só para o projeto: ele fica dentro da janela `Exportar áudio`, que abre no botão `Exportar` (ícone de disquete, tooltip `Exportar áudio (WAV, FLAC ou MP3)`). O `Exportar` em si é outra coisa: gera **som** (WAV), não o projeto editável ([capítulo 08](08-exportacao.md)). Escolher `Projeto inteiro (.jopendaw)…` não guarda as opções do WAV nem começa a exportar áudio: a janela de opções fecha e só a do arquivo do projeto continua.
 
 ### Janela `Exportar projeto`
 

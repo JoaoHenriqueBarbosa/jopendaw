@@ -211,7 +211,7 @@ class TransportBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 IconButton.filledTonal(
-                  tooltip: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',
+                  tooltip: recording ? 'Pare a gravação para exportar' : 'Exportar áudio (WAV, FLAC ou MP3)',
                   onPressed: idle ? export : null,
                   icon: const Icon(Icons.save_alt),
                 ),
@@ -224,7 +224,7 @@ class TransportBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Tooltip(
-                  message: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',
+                  message: recording ? 'Pare a gravação para exportar' : 'Exportar áudio (WAV, FLAC ou MP3)',
                   child: FilledButton.tonalIcon(onPressed: idle ? export : null, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),
                 ),
               ];

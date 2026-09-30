@@ -204,3 +204,60 @@ async fn encode_com_cota_estourada_diz_onde_liberar() {
     assert_eq!(j["status"], "failed");
     assert!(j["error"].as_str().unwrap().contains("tela Conta"), "{j}");
 }
+
+async fn status_of(e: &Env, u: &User, id: &str) -> Option<String> {
+    let r = get(e, &format!("/api/jobs/{id}"), u).await;
+    (r.status == StatusCode::OK).then(|| r.json()["status"].as_str().unwrap_or_default().to_string())
+}
+
+async fn wait_status(e: &Env, u: &User, id: &str, want: &str) {
+    for _ in 0..600 {
+        if status_of(e, u, id).await.as_deref() == Some(want) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("a tarefa {id} não chegou a {want}");
+}
+
+/// Uma exportação por vez: a segunda espera `queued` (sem `running` falso), e um `audio_to_midi` passa na frente dela.
+#[tokio::test]
+async fn encode_segunda_espera_na_fila_e_midi_nao_fica_sem_vaga() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let (long1, _) = upload(&e, &a, &stereo_wav(44_100, 220.0, 240.0)).await;
+    let (long2, _) = upload(&e, &a, &stereo_wav(44_100, 221.0, 240.0)).await;
+    let (short, _) = upload(&e, &a, &stereo_wav(44_100, 330.0, 0.5)).await;
+    let mp3 = json!({"format": "mp3", "bitrate": 320});
+    let j1 = new_job(&e, &a, "encode_audio", &long1, Some(mp3.clone())).await.json()["id"].as_str().unwrap().to_string();
+    let j2 = new_job(&e, &a, "encode_audio", &long2, Some(mp3)).await.json()["id"].as_str().unwrap().to_string();
+    wait_status(&e, &a, &j1, "running").await;
+    // a segunda continua na fila enquanto a primeira roda
+    assert_eq!(status_of(&e, &a, &j2).await.as_deref(), Some("queued"));
+    let m = new_job(&e, &a, "audio_to_midi", &short, None).await.json()["id"].as_str().unwrap().to_string();
+    assert_eq!(wait_job(&e, &a, &m).await["status"], "done");
+    assert_eq!(status_of(&e, &a, &j1).await.as_deref(), Some("running"), "a conversão longa devia seguir rodando");
+    assert_eq!(status_of(&e, &a, &j2).await.as_deref(), Some("queued"));
+    // a que está na fila se cancela na hora; a que roda, também
+    assert_eq!(del(&e, &format!("/api/jobs/{j2}"), &a).await.status, StatusCode::NO_CONTENT);
+    assert_eq!(del(&e, &format!("/api/jobs/{j1}"), &a).await.status, StatusCode::NO_CONTENT);
+}
+
+/// Cancelar uma conversão em andamento a interrompe: a tarefa some, o áudio enviado já pode ser apagado e nenhum
+/// resultado sobra na conta.
+#[tokio::test]
+async fn encode_em_andamento_pode_ser_cancelada() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let (hash, _) = upload(&e, &a, &stereo_wav(44_100, 220.0, 240.0)).await;
+    let id = new_job(&e, &a, "encode_audio", &hash, Some(json!({"format": "mp3", "bitrate": 320}))).await.json()["id"].as_str().unwrap().to_string();
+    wait_status(&e, &a, &id, "running").await;
+    assert_eq!(del(&e, &format!("/api/jobs/{id}"), &a).await.status, StatusCode::NO_CONTENT);
+    assert_eq!(get(&e, &format!("/api/jobs/{id}"), &a).await.status, StatusCode::NOT_FOUND);
+    // sem tarefa, o WAV deixa de estar em uso
+    assert_eq!(del_force(&e, &hash, &a).await.status, StatusCode::OK);
+    // dá tempo de o trabalho parar; nenhum áudio (nem resultado) fica na conta
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let list: Value = get(&e, "/api/samples", &a).await.json();
+    assert!(list["samples"].as_array().unwrap().is_empty(), "{list}");
+}

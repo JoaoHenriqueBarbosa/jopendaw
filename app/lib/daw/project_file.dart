@@ -387,6 +387,15 @@ void remapDocIds(DawDoc doc) {
   for (final m in doc.markers) {
     m.id = keep(m.id);
   }
+  // os moduladores também têm id (uma faixa importada não pode repeti-los), o das faixas e o do master
+  for (final t in doc.tracks) {
+    for (final src in t.modulation.sources) {
+      src.id = keep(src.id);
+    }
+  }
+  for (final src in doc.masterModulation.sources) {
+    src.id = keep(src.id);
+  }
 
   // os destinos da modulação apontam efeitos e envios pelo id, como a automação
   AutoTarget? modTarget(AutoTarget t) => switch (t.kind) {
@@ -452,7 +461,7 @@ void remapDocIds(DawDoc doc) {
     }
     mapped.add(
       MidiMapping(
-        id: m.id,
+        id: keep(m.id),
         source: m.source,
         trackId: track,
         target: AutoTarget(m.target.kind, ref: ref, param: m.target.param),

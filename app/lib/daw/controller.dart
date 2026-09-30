@@ -1041,18 +1041,27 @@ class DawController extends ChangeNotifier {
     } else {
       _templated = true;
       await _store.delete(key);
-      d = ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: project.beatsPerBar);
+      d = ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: _quarterBeatsPerBar);
+      d.meterMap = _projectMeterMap;
     }
     // projeto novo: o mapa de MIDI learn padrão do aparelho (se o usuário salvou um)
     d.midiMap = midiDefaultFrom(await loadMidiDefault(_store), d.tracks, newId);
     return d;
   }
 
+  /// Batidas de semínima do compasso do projeto: o `beatsPerBar` do documento conta semínimas, e o do projeto no servidor é
+  /// o numerador (um 6/8 é 6 lá e 3 aqui; um 7/8, 3,5 arredondado para 4, com o mapa de compassos guardando o 7/8 exato).
+  int get _quarterBeatsPerBar => (project.beatsPerBar * 4 / project.beatUnit).round().clamp(1, 32);
+
+  /// O mapa de compassos de um projeto sem documento: vazio no n/4 (o `beatsPerBar` basta), o compasso exato nos outros.
+  List<MeterChange> get _projectMeterMap => project.beatUnit == 4 ? const [] : [MeterChange(1, project.beatsPerBar, project.beatUnit)];
+
   DawDoc _fresh() => DawDoc(
     bpm: project.bpm.toDouble(),
-    beatsPerBar: project.beatsPerBar,
+    beatsPerBar: _quarterBeatsPerBar,
+    meterMap: _projectMeterMap,
     tracks: [DawTrack(id: newId(), name: 'Áudio 1', color: 0)],
-    loopEnd: project.beatsPerBar * 4.0,
+    loopEnd: project.beatsPerBar * 4.0 * 4 / project.beatUnit,
   );
 
   Future<void> _loadSample(String hash) async {
@@ -2150,6 +2159,8 @@ class DawController extends ChangeNotifier {
   (int, int, int) get _wantedTempo {
     // o compasso inicial de verdade (um 6/8 guarda 3 em `beatsPerBar`): é o que o cabeçalho do projeto mostra
     final m = doc.meter.changeAt(1);
+    // o teto é o do servidor (`beats_per_bar` 1..32, também no CHECK do banco) e o da tela do mapa de compassos; o mapa
+    // aceita até 64 no JSON, mas um PATCH com mais de 32 seria recusado e o espelho ficaria pendente para sempre
     return (doc.bpm.round().clamp(minBpmInt, maxBpmInt), m.numerator.clamp(1, 32), const {1, 2, 4, 8, 16, 32}.contains(m.denominator) ? m.denominator : 4);
   }
 
@@ -3739,7 +3750,11 @@ class DawController extends ChangeNotifier {
     final (chain, slot) = f;
     final spec = _fxSpec(slot.kind, id);
     if (spec == null) return;
-    final v = _fit(spec, value);
+    var v = _fit(spec, value);
+    // cruzamentos: a mesma regra do motor (o alto 1,5× acima do baixo); o valor efetivo é o que fica
+    if ((slot.kind == EffectKind.multiband || slot.kind == EffectKind.imager) && (id == 0 || id == 1)) {
+      v = _fit(spec, id == 0 ? math.min(v, slot.param(1) / 1.5) : math.max(v, slot.param(0) * 1.5));
+    }
     if (slot.params.containsKey(id) && slot.params[id] == v) return;
     if (undoable) checkpoint();
     autoRec.value(track, AutoTarget(AutoKind.effect, ref: slotId, param: id), v);
@@ -3970,7 +3985,7 @@ class DawController extends ChangeNotifier {
   bool _watchingAnalyzer = false;
   String? _watchAnalyzerTrack;
 
-  /// Efeito cujo indicador (redução de ganho) o motor manda em [fxMeter]; null desliga. Segue o
+  /// Efeito cujo indicador (ver [fxMeter]) o motor manda em [fxMeter]; null desliga. Segue o
   /// slot se ele muda de lugar.
   void watchEffect(int track, String? slotId) {
     final valid = track == -1 || (track >= 0 && track < doc.tracks.length);
@@ -3989,8 +4004,10 @@ class DawController extends ChangeNotifier {
     if (calls.isNotEmpty) _engine.calls(calls);
   }
 
-  /// Indicador do efeito observado (redução de ganho em dB, ≥ 0) e espectro da faixa observada
+  /// Indicador do efeito observado e espectro da faixa observada
   /// (dB por faixa linear de frequência, de 0 à metade da taxa), ao vivo.
+  /// A convenção é do efeito: dB de redução (≥ 0) no compressor, gate, limitador e de-esser; as reduções
+  /// das 3 bandas em décimos de dB, 8 bits cada, no multibanda; a correlação (−1 a 1) na imagem estéreo.
   final fxMeter = ValueNotifier<double>(0);
   final spectrum = ValueNotifier<Float32List?>(null);
 

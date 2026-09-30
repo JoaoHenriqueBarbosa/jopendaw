@@ -4,6 +4,8 @@
 /// projetos salvos. Os valores vão ao motor na unidade da tabela (dB, Hz, segundos).
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart' hide Curve;
 
 import 'instruments.dart';
@@ -282,6 +284,31 @@ const imagerParams = <ParamSpec>[
   ParamSpec.choice(6, 'Mono nos graves', 'Mono', _noYes),
   ParamSpec(7, 'Abaixo de', 'Mono', 40, 500, 120, unit: 'Hz', curve: Curve.log),
 ];
+
+/// Cruzamentos efetivos do multibanda e da imagem estéreo, a mesma regra do motor: o alto fica pelo menos
+/// 1,5× acima do baixo (nos extremos dos knobs eles se cruzariam). Devolve `(baixo, alto)` em Hz.
+(double, double) effectiveCrossovers(double low, double high) {
+  final h = math.max(high, low * 1.5);
+  return (math.min(low, h / 1.5), h);
+}
+
+/// Texto do aviso quando um ajuste do efeito muda o áudio de verdade (solo do multibanda, "Ouvir banda" do
+/// de-esser), inclusive na exportação: fácil esquecer ligado. Null se o efeito está desligado ou sem isso.
+String? effectMonitoringNote(EffectKind kind, Map<int, double> params, {bool bypass = false}) {
+  if (bypass) return null;
+  bool on(int id) => (params[id] ?? 0) >= 0.5;
+  switch (kind) {
+    case EffectKind.multiband:
+      for (var b = 0; b < 3; b++) {
+        if (on(multibandBase + b * multibandStride + 5)) return 'solo';
+      }
+      return null;
+    case EffectKind.deesser:
+      return on(7) ? 'ouvindo a banda' : null;
+    default:
+      return null;
+  }
+}
 
 /// Todos os parâmetros de um efeito no padrão.
 Map<int, double> defaultEffectParams(EffectKind kind) => {for (final p in kind.params) p.id: p.def};

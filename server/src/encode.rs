@@ -123,7 +123,14 @@ pub struct Encoded {
 }
 
 /// Codifica o WAV lido no formato pedido. `progress` recebe de 0 a 1.
+#[cfg(test)]
 pub fn encode(wav: &WavIn, format: Format, meta: &Meta, progress: &dyn Fn(f32)) -> Result<Encoded, String> {
+    encode_cancelable(wav, format, meta, progress, &|| false)
+}
+
+/// Como [`encode`], e `cancel` é perguntado entre uma etapa e outra (um segundo de MP3 por vez): quando devolve `true`,
+/// para com o erro "cancelado".
+pub fn encode_cancelable(wav: &WavIn, format: Format, meta: &Meta, progress: &dyn Fn(f32), cancel: &dyn Fn() -> bool) -> Result<Encoded, String> {
     let mut warnings = Vec::new();
     let pcm = &wav.pcm;
     let bytes = match format {
@@ -140,7 +147,7 @@ pub fn encode(wav: &WavIn, format: Format, meta: &Meta, progress: &dyn Fn(f32)) 
             with_vorbis_comment(flac, meta)?
         }
         Format::Cbr(_) | Format::Vbr(_) => {
-            let mp3 = encode_mp3(pcm, format, progress)?;
+            let mp3 = encode_mp3(pcm, format, progress, cancel)?;
             let mut out = id3v24(meta);
             out.extend_from_slice(&mp3);
             out
@@ -150,7 +157,7 @@ pub fn encode(wav: &WavIn, format: Format, meta: &Meta, progress: &dyn Fn(f32)) 
     Ok(Encoded { bytes, warnings })
 }
 
-fn encode_mp3(pcm: &Pcm, format: Format, progress: &dyn Fn(f32)) -> Result<Vec<u8>, String> {
+fn encode_mp3(pcm: &Pcm, format: Format, progress: &dyn Fn(f32), cancel: &dyn Fn() -> bool) -> Result<Vec<u8>, String> {
     if !matches!(pcm.rate, 44_100 | 48_000) {
         return Err(format!("MP3 exige 44,1 ou 48 kHz e o áudio tem {} Hz; exporte o WAV nessa taxa ou use FLAC", pcm.rate));
     }
@@ -173,6 +180,9 @@ fn encode_mp3(pcm: &Pcm, format: Format, progress: &dyn Fn(f32)) -> Result<Vec<u
     let total = pcm.data.len().max(1);
     let mut buf: Vec<f32> = Vec::with_capacity(chunk);
     for (i, part) in pcm.data.chunks(chunk).enumerate() {
+        if cancel() {
+            return Err("cancelado".into());
+        }
         buf.clear();
         buf.extend(part.iter().map(|&s| s as f32 / 8_388_608.0));
         enc.push_pcm_f32(&buf, ch as u16, pcm.rate).map_err(fail)?;

@@ -11,7 +11,7 @@ Cada efeito é um cartão no painel `Efeitos` (tecla `F`), na cadeia de uma faix
 - **Rótulo** é o texto que aparece embaixo do knob (ou na pílula, ou no seletor). **Grupo** é o título cinza em maiúsculas que agrupa os controles no cartão (`TIMBRE`, `SAÍDA`...).
 - **Escala**: `linear`, `log` (o knob gasta o mesmo curso por oitava, para frequências e tempos), `inteiro` (passos de 1) ou `opções` (menu ou pílula).
 - Porcentagens são mostradas de 0% a 100% (o motor guarda 0 a 1). Tempos abaixo de 1 s são mostrados em ms.
-- **Padrão** é o valor de um efeito recém-adicionado e o que `Reiniciar (valores padrão)` restaura. Os padrões do app (`app/lib/daw/effects.dart`) e os do motor (`engine/src/fx/`) foram conferidos e são os mesmos nos 12 primeiros efeitos e no `De-esser` e na `Imagem estéreo`. No `Multibanda` o motor nasce com outros valores por banda (limiar de −24 dB nas três, razão 4:1, ataque 10 ms, soltura 150 ms); isso não aparece no uso, porque o app manda todos os parâmetros do cartão ao motor assim que o efeito é criado, e vale a tabela do app.
+- **Padrão** é o valor de um efeito recém-adicionado e o que `Reiniciar (valores padrão)` restaura. Os padrões do app (`app/lib/daw/effects.dart`) e os do motor (`engine/src/fx/`) foram conferidos e são os mesmos nos 12 primeiros efeitos e no `De-esser` e na `Imagem estéreo`. No `Multibanda` o motor também foi alinhado ao app na fase 17 (limiar −24/−22/−20 dB, razão 3:1, ataque 20/10/4 ms e soltura 250/150/80 ms nas bandas baixa/média/aguda), e um teste do motor confere os números contra `effects.dart`.
 - **Presets** aplicam *todos* os parâmetros: o que a tabela do preset não cita vale o padrão. Nas tabelas de preset, um traço `·` significa "padrão".
 - Todo valor é guardado na unidade da tabela (dB, Hz, segundos) e limitado à faixa; digitar um valor fora dela o limita.
 - Cada parâmetro pode ser automatizado, menos o `Sidechain`.
@@ -650,7 +650,7 @@ Os knobs se agrupam em `CRUZAMENTO`, `SAÍDA` e um grupo por banda (`BAIXA`, `M�
 | `Bypass` (por banda) | A banda passa sem compressão **e sem o `Ganho`** dela. | `Não`/`Sim`. Padrão `Não`. |
 | `Joelho` (por banda) | Largura da transição suave em volta do limiar; 0 = joelho duro. | 0 a 24 dB, linear. Padrão 6 dB. |
 
-Com `Bypass` ligado numa banda, os outros seis controles dela ficam apagados (continuam mexíveis); `Solo` e `Bypass` não se apagam. O cruzamento médio/agudo fica sempre pelo menos 1,5 vez acima do baixo: com o baixo em 800 Hz e o médio/agudo em 1 kHz, o motor usa 1,2 kHz (a tela continua mostrando 1 kHz) `(testado só por testes automáticos)`. Todos os controles são automatizáveis ([07 Automação](07-automacao.md)).
+Com `Bypass` ligado numa banda, os outros seis controles dela ficam apagados (continuam mexíveis); `Solo` e `Bypass` não se apagam. O cruzamento médio/agudo fica sempre pelo menos 1,5 vez acima do baixo: nos extremos dos knobs (baixo perto de 800 Hz e médio/agudo perto de 1 kHz) o app aplica a mesma regra ao mover um cruzamento: o que você move para além do limite para em 1,5× (ou 1/1,5×) o outro, e o valor mostrado no knob e no gráfico é o efetivo (a imagem estéreo tem a mesma regra). Enquanto uma banda está em `Solo` o cartão ganha o selo `SOLO` e a janela de `Exportar` avisa que a exportação sairá assim `(testado só por testes automáticos)`. O id 3 do contrato de parâmetros do motor não é usado (reservado; o motor o ignora e o app não o mostra). Todos os controles são automatizáveis ([07 Automação](07-automacao.md)).
 
 ### Presets
 

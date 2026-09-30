@@ -74,10 +74,10 @@ Pressuposto: o mix já passou pelo guia [Loudness e master](loudness-e-master.md
 | `Não consegui falar com o servidor (sem conexão?).` | Sem rede | Reconecte e `Voltar às opções` (refaz o render) ou salve o WAV agora |
 | `Sua sessão terminou; entre de novo para exportar em MP3.` | A sessão expirou no meio | Entre de novo; `Exportar em WAV mesmo assim` guarda o que já estava pronto |
 | `cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta` | A conta está cheia (o WAV temporário também conta) | Na tela `Conta`, `Limpar áudios sem uso`; depois `Voltar às opções` |
-| `arquivo grande demais (máximo de 512 MB)` | O WAV enviado passou de 512 MB (acontece com trechos longos a 88,2 ou 96 kHz) | Exporte um trecho menor ou uma taxa menor `(não confirmado)` |
+| `O WAV desta música passa de 512 MB ...` e `Exportar` desligado | O WAV que sobe ao servidor passaria de 512 MB (acontece com trechos longos a 88,2 ou 96 kHz) | Exporte em WAV, ou reduza a taxa, o trecho ou a cauda |
 | `O servidor demorou demais para responder.` | Envio ou conversão lentos (teto de 120 s por pedido e de 20 min de espera) | Tente de novo, com um trecho menor ou numa rede melhor |
 | `O servidor converte até 30 minutos por arquivo...` e `Exportar` desligado | Trecho mais `Cauda` acima de 30 minutos | `Região do loop`, cauda menor ou WAV |
 | A taxa mudou para 44,1 kHz sozinha | O MP3 só aceita 44,1 e 48 kHz | Escolha `48 kHz`, se preferir |
-| Cancelei e sobrou áudio na conta | A conversão já estava rodando no servidor: ela não é interrompida | Na tela `Conta`, `Limpar áudios sem uso` (só leva o que subiu há mais de 1 hora) |
-| O arquivo salvo não abre no Android | Você cancelou a janela de salvar e o app contou como salvo | Exporte de novo e conclua o `Salvar <nome>` `(lido do código)` |
+| Cancelei e sobrou áudio na conta | Só num servidor antigo: ele não cancela a conversão em andamento (`409`) | O app tenta apagar de novo depois de 3, 10 e 30 s; se sobrar, na tela `Conta`, `Limpar áudios sem uso` (só leva o que subiu há mais de 1 hora) |
+| A janela diz `Exportação cancelada: você não escolheu onde salvar` | Você fechou a janela `Salvar <nome>` do Android | `Voltar às opções` e exporte de novo, concluindo o `Salvar <nome>` |
 | O MP3 soa mais alto ou estoura na decodificação | Pico do MP3 acima do WAV | Baixe o `Teto de true peak` (−1,5 ou −2,0 dBTP) e exporte de novo |

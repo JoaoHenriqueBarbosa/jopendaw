@@ -312,7 +312,7 @@ Peças de outros módulos que eles usam: `dsp::Svf` (filtro de estado TPT: `Svf:
 
 **Armadilhas.**
 - O comentário do trait (`effect.rs:33`) ainda diz que `meter` é "redução de ganho em dB (≥ 0) nos de dinâmica, 0 nos outros"; para o multibanda (inteiro empacotado) e a imagem (−1..1, pode ser negativo) isso é falso. Quem consome o indicador precisa saber o tipo do efeito observado.
-- A sonda de teste de `host.js` guarda o **máximo** de `fxMeter` desde a última leitura (`probe.fxMeter = Math.max(...)`): para o multibanda esse máximo do número empacotado não é o máximo de cada banda, e para a imagem estéreo esconde a correlação negativa.
+- A sonda de teste de `host.js` (corrigida na fase 17) guarda em `probe.fxMeter` o **último** valor recebido, que serve a todos os efeitos, e em `probe.fxMeterMax` o máximo desde a última leitura, que só faz sentido nas dinâmicas simples: para o multibanda o máximo do número empacotado não é o máximo de cada banda, e para a imagem estéreo esconderia a correlação negativa. A convenção de cada efeito está no comentário de `Effect::meter`.
 - O motor mede **um** efeito por vez (`watch_fx`): o multibanda, o de-esser e a imagem disputam o mesmo indicador com o compressor, o gate e o limitador.
 
 ### Compensação de latência dos efeitos (PDC)

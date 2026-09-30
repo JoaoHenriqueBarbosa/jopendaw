@@ -1789,7 +1789,8 @@ impl Engine {
         self.watch_fx = (track, slot);
     }
 
-    /// Indicador do efeito observado (redução de ganho em dB na dinâmica); 0 se nenhum.
+    /// Indicador do efeito observado, na convenção dele (ver [`Effect::meter`](effect::Effect::meter): dB de
+    /// redução, reduções empacotadas do multibanda ou correlação da imagem); 0 se nenhum.
     pub fn fx_meter(&self) -> f32 {
         let (track, slot) = self.watch_fx;
         if slot < 0 {

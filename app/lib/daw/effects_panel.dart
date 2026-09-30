@@ -470,6 +470,21 @@ class _EffectsPanelState extends State<EffectsPanel> {
           ),
         ],
         if (s.bypass) ...[const SizedBox(width: 7), const Text('desligado', style: TextStyle(fontSize: 10.5, color: Colors.white38))],
+        if (effectMonitoringNote(s.kind, s.params, bypass: s.bypass) case final note?) ...[
+          const SizedBox(width: 7),
+          Tooltip(
+            message: 'Este efeito está em $note: o áudio muda de verdade, inclusive na exportação',
+            child: Container(
+              key: const ValueKey('fx-monitor-badge'),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(color: Palette.danger.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(3)),
+              child: Text(
+                note.toUpperCase(),
+                style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
       ],
     );
     // o título também arrasta: no computador na hora, no celular com toque longo (a rolagem vem antes)

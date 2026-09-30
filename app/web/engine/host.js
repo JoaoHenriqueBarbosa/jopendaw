@@ -15,14 +15,18 @@
 
   // Último estado do motor e o maior pico de cada canal desde a última leitura: para conferir de
   // fora (console, testes automatizados) que o áudio está saindo mesmo, sem precisar ouvir.
-  const probe = { beat: 0, playing: false, peaks: [], fxMeter: 0, spectrum: null, inputPeak: 0 };
+  const probe = { beat: 0, playing: false, peaks: [], fxMeter: 0, fxMeterMax: 0, spectrum: null, inputPeak: 0 };
   // O worklet manda o espectro a cada poucos estados; entre um e outro vale o último (null só
   // quando nada é observado, como o Dart espera).
   let spectrum = null;
   function track(beat, playing, peaks, fxMeter) {
     probe.beat = beat;
     probe.playing = playing;
-    probe.fxMeter = Math.max(probe.fxMeter, fxMeter);
+    // O último valor vale para todos os efeitos; o máximo só faz sentido nas dinâmicas simples (redução em
+    // dB): no multibanda o número é empacotado (o máximo dele não é o de cada banda) e na imagem estéreo
+    // esconderia a correlação negativa.
+    probe.fxMeter = fxMeter;
+    probe.fxMeterMax = Math.max(probe.fxMeterMax, fxMeter);
     probe.spectrum = spectrum;
     // faixas entraram ou saíram: as posições agora são de outros canais
     if (peaks.length !== probe.peaks.length) probe.peaks = [];
@@ -170,6 +174,7 @@
     probe.playing = false;
     probe.peaks = [];
     probe.fxMeter = 0;
+    probe.fxMeterMax = 0;
     probe.loudness = null;
     engineFrames = 0;
     if (oldCtx) {
@@ -619,12 +624,14 @@
     saveFile,
     sha256,
     // posição, tocando, estado do contexto, os picos (esq, dir por faixa; o master por último) e
-    // o maior indicador do efeito observado desde a leitura anterior, que zera os dois; com o
+    // o último indicador do efeito observado (`fxMeter`) e o maior desde a leitura anterior (`fxMeterMax`, só
+    // para as dinâmicas simples), que zera picos e máximo; com o
     // analisador ligado, a faixa mais forte do espectro (índice e dB) e quantas faixas ele tem; com
     // a entrada aberta, o maior pico dela
     probe: () => {
       const r = { beat: probe.beat, playing: probe.playing, context: ctx ? ctx.state : 'none', peaks: probe.peaks.map((v) => Math.round(v * 1000) / 1000) };
       r.fxMeter = Math.round(probe.fxMeter * 100) / 100;
+      r.fxMeterMax = Math.round(probe.fxMeterMax * 100) / 100;
       const s = probe.spectrum;
       if (s) {
         let bin = 0;
@@ -634,7 +641,7 @@
       if (probe.loudness) r.loudness = probe.loudness.map((v) => Math.round(v * 10) / 10);
       if (input) r.input = Math.round(probe.inputPeak * 1000) / 1000;
       probe.peaks = probe.peaks.map(() => 0);
-      probe.fxMeter = 0;
+      probe.fxMeterMax = 0;
       probe.inputPeak = 0;
       return r;
     },
