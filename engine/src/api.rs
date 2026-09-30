@@ -214,10 +214,16 @@ const CALLS: &[Signature] = &[
     sig("cc_clear", &[], None),
 ];
 
+/// Os nomes das chamadas que [`apply`] aceita (a tabela inteira), para os hospedeiros conferirem que
+/// cobrem todas.
+pub fn call_names() -> impl Iterator<Item = &'static str> {
+    CALLS.iter().map(|s| s.name)
+}
+
 /// Exports do wasm que não passam por aqui: `init` recria o motor com a taxa do hospedeiro (quem
 /// hospeda cria o dele), e os outros levam memória por ponteiro, então cada hospedeiro tem uma
 /// função própria para eles.
-const HOST_ONLY: &[&str] = &[
+pub const HOST_ONLY: &[&str] = &[
     "alloc",
     "dealloc",
     "init",

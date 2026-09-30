@@ -12,6 +12,7 @@
 
 use std::cell::UnsafeCell;
 
+use jopendaw_engine::api::MAX_TRACKS;
 use jopendaw_engine::{Clip, Engine, Sample};
 
 struct Global(UnsafeCell<Option<Engine>>);
@@ -101,9 +102,14 @@ pub extern "C" fn metronome(on: u32, gain: f32) {
     engine().set_metronome(on != 0, gain);
 }
 
+/// Número de faixas, de 0 a [`MAX_TRACKS`] como em `api::apply` (o Android e o render usam o mesmo
+/// teto); acima disso a chamada é ignorada e o motor fica como estava, em vez de reservar
+/// gigabytes na memória do wasm (um −1 que deu a volta vira 4294967295).
 #[unsafe(no_mangle)]
 pub extern "C" fn tracks(n: usize) {
-    engine().set_track_count(n);
+    if n <= MAX_TRACKS {
+        engine().set_track_count(n);
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -134,7 +140,7 @@ pub extern "C" fn clip_add(track: usize, sample: u32, start: f64, offset: f64, l
     engine().add_clip(Clip { track, sample, start, offset, length, gain, fade_in, fade_out });
 }
 
-/// Tipo da faixa `i` (0 áudio, 1 sintetizador, 2 bateria, 3 sampler, 4 barramento). Mandar o
+/// Tipo da faixa `i` (0 áudio, 1 sintetizador, 2 bateria, 3 sampler, 4 barramento, 5 FM, 6 wavetable). Mandar o
 /// mesmo tipo de novo não mexe em nada; trocar recria o instrumento nos padrões, então vem antes
 /// dos `param`.
 #[unsafe(no_mangle)]
@@ -546,4 +552,26 @@ pub extern "C" fn loudness_reset() {
 #[unsafe(no_mangle)]
 pub extern "C" fn loudness(kind: u32) -> f64 {
     engine().loudness(kind)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// O motor é global (uma thread só no worklet): só um teste mexe nele aqui.
+    #[test]
+    fn tracks_acima_do_teto_e_ignorado_como_no_apply() {
+        init(48_000.0);
+        tracks(3);
+        assert_eq!(engine().tracks().len(), 3);
+        // um −1 que deu a volta, e o teto mais um: nada é reservado, o motor fica como estava
+        tracks(usize::MAX);
+        tracks(u32::MAX as usize);
+        tracks(MAX_TRACKS + 1);
+        assert_eq!(engine().tracks().len(), 3);
+        tracks(0);
+        assert_eq!(engine().tracks().len(), 0);
+        tracks(MAX_TRACKS);
+        assert_eq!(engine().tracks().len(), MAX_TRACKS);
+    }
 }

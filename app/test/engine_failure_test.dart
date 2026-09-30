@@ -76,4 +76,18 @@ void main() {
     expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
     expect((r.stdout as String).trim(), 'ok');
   });
+
+  test('render da web com mais de 64 saídas roda em passadas, cada saída no lugar (node, com o engine.wasm)', () async {
+    final bool node;
+    try {
+      node = Process.runSync('node', ['--version']).exitCode == 0;
+    } on ProcessException {
+      markTestSkipped('sem node');
+      return;
+    }
+    if (!node) return;
+    final r = await Process.run('node', ['test/js/render_passes_check.mjs']);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect((r.stdout as String).trim(), 'ok');
+  });
 }

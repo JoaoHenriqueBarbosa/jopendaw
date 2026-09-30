@@ -1134,8 +1134,9 @@ class _AddEffectRow extends StatelessWidget {
   const _AddEffectRow({required this.c, required this.track, required this.empty});
 
   Future<void> _pick(BuildContext context) async {
+    if (!c.canAddEffect(track)) return;
     final kind = await pickEffectKind(context);
-    if (kind != null) c.addEffect(track, kind);
+    if (kind != null && c.canAddEffect(track)) c.addEffect(track, kind);
   }
 
   @override
@@ -1146,9 +1147,9 @@ class _AddEffectRow extends StatelessWidget {
     ),
     child: Builder(
       builder: (context) => InkWell(
-        onTap: () => _pick(context),
+        onTap: c.canAddEffect(track) ? () => _pick(context) : null,
         child: Tooltip(
-          message: track < 0 ? 'Adicionar efeito no master' : 'Adicionar efeito',
+          message: !c.canAddEffect(track) ? DawController.effectLimitHint : (track < 0 ? 'Adicionar efeito no master' : 'Adicionar efeito'),
           waitDuration: const Duration(milliseconds: 800),
           child: const Row(
             children: [
@@ -1265,6 +1266,7 @@ class _NewSendRow extends StatelessWidget {
   const _NewSendRow({required this.c, required this.track});
 
   void _create() {
+    if (!c.canAddSend(track)) return;
     final id = c.doc.tracks[track].id;
     c.addBusTrack();
     final bus = c.selectedTrack < c.doc.tracks.length ? c.doc.tracks[c.selectedTrack] : null;
@@ -1277,10 +1279,10 @@ class _NewSendRow extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     height: _row,
     child: Tooltip(
-      message: 'Criar um barramento e enviar esta faixa para ele (retorno de reverb, delay...)',
+      message: c.canAddSend(track) ? 'Criar um barramento e enviar esta faixa para ele (retorno de reverb, delay...)' : DawController.sendLimitHint,
       waitDuration: const Duration(milliseconds: 800),
       child: InkWell(
-        onTap: _create,
+        onTap: c.canAddSend(track) ? _create : null,
         child: const Row(
           children: [
             SizedBox(width: 18, child: Icon(Icons.add, size: 12, color: Colors.white54)),
@@ -1336,11 +1338,16 @@ class _SendRowState extends State<_SendRow> with _DragValue {
 
   void _create({bool pre = false}) => c.setSend(widget.track, widget.bus.id, pre: pre, undoable: true);
 
+  /// Sem envio para este barramento e a faixa já no limite do motor: não dá para criar mais um.
+  bool get _full => _send == null && !c.canAddSend(widget.track);
+
   Future<void> _menu(Offset? at) async {
     final s = _send;
     final bus = widget.bus.id;
     final v = await _showMenu<String>(context, at, [
-      if (s == null) ...[
+      if (s == null && _full)
+        _item('limit', DawController.sendLimitHint, icon: Icons.block)
+      else if (s == null) ...[
         _item('post', 'Criar envio pós-fader', icon: Icons.add),
         _item('pre', 'Criar envio pré-fader', icon: Icons.add),
       ] else ...[
@@ -1369,7 +1376,7 @@ class _SendRowState extends State<_SendRow> with _DragValue {
     final name = widget.bus.name;
     final showLevel = s != null && (active || _hover);
     final tip = s == null
-        ? 'Enviar para $name: toque para criar (pós-fader) ou arraste para dosar'
+        ? (_full ? '${DawController.sendLimitHint}: remova um envio para criar este' : 'Enviar para $name: toque para criar (pós-fader) ou arraste para dosar')
         : 'Envio para $name: ${formatDb(s.level)} dB, ${s.pre ? 'pré' : 'pós'}-fader\n'
               'Arraste ou use a roda · duplo clique: 0 dB · botão direito: pré/pós e remover';
     return Tooltip(
@@ -1383,7 +1390,7 @@ class _SendRowState extends State<_SendRow> with _DragValue {
           onLongPress: () => _menu(null),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: s == null ? _create : null,
+            onTap: s == null && !_full ? _create : null,
             onDoubleTap: s == null || s.level == 1 ? null : () => c.setSend(widget.track, widget.bus.id, level: 1, undoable: true),
             onSecondaryTapUp: (d) => _menu(d.globalPosition),
             onVerticalDragStart: dragStart,

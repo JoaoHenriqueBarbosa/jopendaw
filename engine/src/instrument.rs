@@ -345,18 +345,23 @@ pub(crate) mod contract {
     /// Mínimo, máximo, padrão e se o valor é inteiro de cada id, na ordem dos ids.
     pub type Row = (f32, f32, f32, bool);
 
-    /// Lê `const <name> = <ParamSpec>[...]` do app e confere cada linha com `rows`.
-    pub fn check(name: &str, rows: &[Row]) {
+    /// O fonte de `instruments.dart`; `None` (com aviso) quando o teste roda sem o app ao lado.
+    pub fn source() -> Option<String> {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/lib/daw/instruments.dart");
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let src = std::fs::read_to_string(path);
+        if src.is_err() {
             eprintln!("sem {path}: conferência pulada");
-            return;
-        };
+        }
+        src.ok()
+    }
+
+    /// Lê `const <name> = <ParamSpec>[...]` do app: cada linha literal vira (id, faixa e padrão).
+    pub fn rows(src: &str, name: &str) -> Vec<(usize, Row)> {
         let start = src.find(&format!("const {name} = <ParamSpec>[")).unwrap_or_else(|| panic!("{name} não está no app"));
         let body = &src[start..];
         let body = &body[..body.find("];").unwrap()];
         let quoted = |s: &str| s.matches('\'').count() / 2;
-        let mut seen = vec![false; rows.len()];
+        let mut out = Vec::new();
         for line in body.lines().map(str::trim) {
             if let Some(rest) = line.strip_prefix("ParamSpec.choice(") {
                 let id: usize = rest.split(',').next().unwrap().trim().parse().unwrap();
@@ -371,19 +376,62 @@ pub(crate) mod contract {
                 };
                 // o padrão, quando não é a primeira opção, vem em `def: n`
                 let def: f32 = rest.split("def:").nth(1).map_or(0.0, |d| d.trim().trim_end_matches([')', ',']).parse().unwrap());
-                let (min, max, rdef, discrete) = rows[id];
-                assert!(discrete && min == 0.0 && max == (options - 1) as f32 && rdef == def, "{name} id {id}");
-                assert!(!seen[id], "{name}: id {id} repetido");
-                seen[id] = true;
+                out.push((id, (0.0, (options - 1) as f32, def, true)));
             } else if let Some(rest) = line.strip_prefix("ParamSpec(") {
                 let fields: Vec<&str> = rest.split(',').map(|f| f.trim().trim_end_matches(')')).collect();
                 let id: usize = fields[0].parse().unwrap();
                 let (min, max, def): (f32, f32, f32) = (fields[3].parse().unwrap(), fields[4].parse().unwrap(), fields[5].parse().unwrap());
-                assert_eq!(rows[id], (min, max, def, line.contains("Curve.integer")), "{name} id {id}");
-                assert!(!seen[id], "{name}: id {id} repetido");
-                seen[id] = true;
+                out.push((id, (min, max, def, line.contains("Curve.integer"))));
             }
         }
+        out
+    }
+
+    /// Lê `const <name> = <ParamSpec>[...]` do app e confere cada linha com `expected`.
+    pub fn check(name: &str, expected: &[Row]) {
+        let Some(src) = source() else { return };
+        let mut seen = vec![false; expected.len()];
+        for (id, row) in rows(&src, name) {
+            assert_eq!(expected[id], row, "{name} id {id}");
+            assert!(!seen[id], "{name}: id {id} repetido");
+            seen[id] = true;
+        }
         assert!(seen.iter().all(|&s| s), "{name}: ids sem espelho no app: {seen:?}");
+    }
+
+    /// As constantes `static const a = 1, bCd = 2;` de uma classe de ids de `presets.dart` (nome em
+    /// camelCase e valor); vazio, com aviso, sem o app ao lado.
+    pub fn dart_ids(class: &str) -> Vec<(String, u32)> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/lib/daw/presets.dart");
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("sem {path}: conferência pulada");
+            return Vec::new();
+        };
+        let body = &src[src.find(&format!("abstract final class {class} {{")).unwrap_or_else(|| panic!("{class} não está no app"))..];
+        let body = &body[..body.find("\n}").unwrap()];
+        let mut out = Vec::new();
+        for line in body.lines().map(str::trim) {
+            let Some(rest) = line.strip_prefix("static const ") else { continue };
+            for part in rest.trim_end_matches(';').split(',') {
+                if let Some((name, value)) = part.split_once('=') {
+                    if let Ok(v) = value.trim().parse() {
+                        out.push((name.trim().to_owned(), v));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// `oneShot` → `ONE_SHOT`.
+    pub fn screaming(camel: &str) -> String {
+        let mut out = String::new();
+        for c in camel.chars() {
+            if c.is_ascii_uppercase() {
+                out.push('_');
+            }
+            out.push(c.to_ascii_uppercase());
+        }
+        out
     }
 }

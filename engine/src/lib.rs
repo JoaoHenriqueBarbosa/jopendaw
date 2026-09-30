@@ -3,7 +3,7 @@
 //! Tudo o que soa passa por aqui: o transporte (tocar, parar, loop), os clipes de áudio na linha do
 //! tempo, as faixas de instrumento com as notas do sequenciador e as tocadas ao vivo, o mixer
 //! (volume, pan, mudo, solo) e o metrônomo. O crate não sabe de plataforma: quem o hospeda (o
-//! AudioWorklet na web, o Oboe no Android) chama [`Engine::process`] com blocos de amostras e manda
+//! AudioWorklet na web, o AAudio no Android) chama [`Engine::process`] com blocos de amostras e manda
 //! os comandos entre um bloco e outro, na mesma thread de áudio.
 //!
 //! O tempo da linha do tempo é contado em quadros (amostras por canal) na taxa do motor; posições

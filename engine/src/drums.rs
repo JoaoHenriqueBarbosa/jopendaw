@@ -1564,4 +1564,68 @@ mod tests {
         r.extend(br);
         write_wav(&dir.join("levada.wav"), &l, &r);
     }
+
+    // ------------------------------------------------------------ contrato com o app
+
+    /// `drumParams` e `drumPieces` (instruments.dart) e `DrumId` (presets.dart) contra o motor: as
+    /// peças e suas notas, a faixa e o padrão de cada um dos 4 parâmetros e do volume geral.
+    #[test]
+    fn tabela_e_ids_iguais_aos_do_app() {
+        use crate::instrument::{contract, drum_param as dp};
+        let Some(src) = contract::source() else { return };
+        // peças: `DrumPiece('nome', nota)`, na ordem dos ids
+        let pieces = &src[src.find("const drumPieces").or_else(|| src.find("final drumPieces")).expect("drumPieces não está no app")..];
+        let pieces = &pieces[..pieces.find("];").unwrap()];
+        let pitches: Vec<u8> = pieces
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("DrumPiece("))
+            .map(|l| l.trim_end_matches([')', ',']).rsplit(',').next().unwrap().trim().parse().unwrap())
+            .collect();
+        assert_eq!(pitches, PIECE_PITCH, "peças e notas do app");
+        // a tabela é um laço sobre as peças (4 linhas) mais o volume geral (48)
+        let table = &src[src.find("final drumParams").unwrap()..];
+        let table = &table[..table.find("];").unwrap()];
+        let field = |line: &str| -> [f32; 3] {
+            let f: Vec<&str> = line.split(',').map(str::trim).collect();
+            [f[3].parse().unwrap(), f[4].parse().unwrap(), f[5].trim_end_matches(')').parse().unwrap()]
+        };
+        let mut want: Vec<Option<[f32; 3]>> = vec![None; 4];
+        let mut master = None;
+        for line in table.lines().map(str::trim) {
+            if let Some(rest) = line.strip_prefix("ParamSpec(i * 4") {
+                let k = if let Some(r) = rest.strip_prefix(" + ") { r.split(',').next().unwrap().parse::<usize>().unwrap() } else { 0 };
+                let rest = format!("{k}{}", &rest[rest.find(',').unwrap()..]);
+                want[k] = Some(field(&rest));
+            } else if let Some(rest) = line.strip_prefix("const ParamSpec(48,") {
+                master = Some(field(&format!("48,{rest}")));
+            }
+        }
+        let want: Vec<[f32; 3]> = want.into_iter().map(|w| w.expect("os 4 parâmetros de peça no app")).collect();
+        let d = Drums::new(RATE);
+        for (k, &[min, max, def]) in want.iter().enumerate() {
+            assert_eq!((RANGE[k].0, RANGE[k].1, DEFAULT_PIECE[k]), (min, max, def), "parâmetro {k} da peça");
+            // e o `set_param` limita nessa faixa
+            let mut d = Drums::new(RATE);
+            d.set_param(k as u32, min - 1e6);
+            assert_eq!(d.params[0][k], min);
+            d.set_param(k as u32, max + 1e6);
+            assert_eq!(d.params[0][k], max);
+            assert_eq!(d.params[PIECES - 1][k], DEFAULT_PIECE[k]);
+        }
+        assert_eq!(d.master, DEFAULT_MASTER);
+        let [min, max, def] = master.expect("volume geral no app");
+        let mut m = Drums::new(RATE);
+        assert_eq!(m.master, def);
+        m.set_param(dp::MASTER, min - 1e6);
+        assert_eq!(m.master, min);
+        m.set_param(dp::MASTER, max + 1e6);
+        assert_eq!(m.master, max);
+        // `DrumId` do app
+        let consts = [("LEVEL", dp::LEVEL), ("TUNE", dp::TUNE), ("DECAY", dp::DECAY), ("TONE", dp::TONE), ("MASTER", dp::MASTER)];
+        for (name, value) in contract::dart_ids("DrumId") {
+            let name = contract::screaming(&name);
+            let engine = consts.iter().find(|c| c.0 == name).unwrap_or_else(|| panic!("DrumId.{name} não existe no motor"));
+            assert_eq!(engine.1, value, "DrumId.{name}");
+        }
+    }
 }

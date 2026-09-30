@@ -27,6 +27,8 @@
 // chamadas e dá o mesmo resultado; 1024 (múltiplo de 128) fica bem abaixo do MAX_BLOCK dele
 // (4096), que também limita o que `captured` devolve de uma vez.
 const RENDER_BLOCK = 1024;
+// Capturas por motor (`record::MAX_CAPTURES`): com mais saídas o render roda em passadas.
+const MAX_CAPTURES = 64;
 
 // Fade curto de um clipe cortado no fim do trecho: sem ele a cauda começaria com um estalo (o
 // mesmo tempo do fade do motor ao parar).
@@ -184,106 +186,123 @@ function renderWith(w, job, onProgress) {
     throw err;
   }
 
-  w.init(rate);
-  // os áudios: a memória do wasm fica com eles (o `sample_load` toma posse)
-  for (const s of job.samples || []) {
-    const [l, r] = s.channels;
-    if (!l || l.length === 0) continue;
-    const n = l.length;
-    const pl = w.alloc(n);
-    new Float32Array(w.memory.buffer, pl, n).set(l);
-    let pr = 0;
-    if (r && r.length === n) {
-      pr = w.alloc(n);
-      new Float32Array(w.memory.buffer, pr, n).set(r);
-    }
-    w.sample_load(s.id, pl, pr, n, s.rate);
-    // no Worker a cópia que veio na mensagem já não serve: solta antes do render (num projeto
-    // longo, os áudios em dobro pesam tanto quanto as saídas)
-    if (job.releaseSamples) s.channels = null;
-  }
-
-  for (const [name, ...args] of prepareCalls(calls, toBeat, bpm)) {
-    // um motor mais antigo que o app não conhece alguma função nova: o resto do documento vale
-    if (typeof w[name] === 'function') w[name](...args);
-  }
-  // o render nunca tem metrônomo nem loop (o trecho é linear, do começo ao fim) e ninguém observa
-  // espectro ou indicador: só custariam
-  w.loop_set(0, 0, 0);
-  w.metronome(0, 0);
-  w.watch_fx(-1, -1);
-  w.watch_analyzer(-2);
-
-  // de onde vem cada saída: o master é a própria saída do `process`; as faixas, capturas do motor.
-  // Com capturas, o primeiro `process` prepara o render: as transições de um motor recém-criado
-  // (efeitos entrando do seco, envios subindo do zero) terminam no silêncio e o atraso do limitador
-  // do master é descontado, para a saída começar alinhada na posição de partida. Só o master
-  // também quer isso (senão a mixagem sairia diferente com e sem stems): a captura dele serve só
-  // para preparar.
-  const canCapture = typeof w.capture_clear === 'function' && typeof w.capture_add === 'function';
-  const sources = [];
-  if (canCapture) w.capture_clear();
-  for (const o of outputs) {
-    if (o === -1) {
-      sources.push(-1);
-      continue;
-    }
-    const index = w.capture_add(o);
-    if (!(index >= 0)) throw new RenderError('failed', `O motor não conseguiu separar a faixa ${o + 1} no render.`);
-    sources.push(index);
-  }
-  if (canCapture && !wantsTracks) w.capture_add(-1);
-
-  const pl = w.alloc(RENDER_BLOCK);
-  const pr = w.alloc(RENDER_BLOCK);
-  const cl = wantsTracks ? w.alloc(RENDER_BLOCK) : 0;
-  const cr = wantsTracks ? w.alloc(RENDER_BLOCK) : 0;
-  let mem = null;
-  let vl, vr, vcl, vcr;
-
-  w.seek(fromBeat);
-  w.play();
-  let done = 0;
-  let lastReport = -1;
-  const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
-  while (done < total) {
-    const n = Math.min(RENDER_BLOCK, total - done);
-    w.process(pl, pr, n);
-    // a memória pode crescer em qualquer chamada: as vistas são refeitas quando o buffer muda
-    if (w.memory.buffer !== mem) {
-      mem = w.memory.buffer;
-      vl = new Float32Array(mem, pl, RENDER_BLOCK);
-      vr = new Float32Array(mem, pr, RENDER_BLOCK);
-      if (wantsTracks) {
-        vcl = new Float32Array(mem, cl, RENDER_BLOCK);
-        vcr = new Float32Array(mem, cr, RENDER_BLOCK);
+  // Cada passada roda um motor novo com até MAX_CAPTURES saídas (o limite de capturas do motor);
+  // um pedido com mais faixas separadas roda em várias, como no Android.
+  const passes = Math.ceil(outputs.length / MAX_CAPTURES);
+  for (let pass = 0; pass < passes; pass++) {
+    const first = pass * MAX_CAPTURES;
+    const outs = outputs.slice(first, first + MAX_CAPTURES);
+    const passTracks = outs.some((o) => o !== -1);
+    w.init(rate);
+    // os áudios: a memória do wasm fica com eles (o `sample_load` toma posse)
+    for (const s of job.samples || []) {
+      const [l, r] = s.channels;
+      if (!l || l.length === 0) continue;
+      const n = l.length;
+      const pl = w.alloc(n);
+      new Float32Array(w.memory.buffer, pl, n).set(l);
+      let pr = 0;
+      if (r && r.length === n) {
+        pr = w.alloc(n);
+        new Float32Array(w.memory.buffer, pr, n).set(r);
       }
+      w.sample_load(s.id, pl, pr, n, s.rate);
+      // no Worker a cópia que veio na mensagem já não serve: solta antes do render (num projeto
+      // longo, os áudios em dobro pesam tanto quanto as saídas); só na última passada, que as
+      // anteriores precisam deles de novo
+      if (job.releaseSamples && pass === passes - 1) s.channels = null;
     }
-    for (let k = 0; k < sources.length; k++) {
-      const [ol, or] = result[k];
-      if (sources[k] === -1) {
-        ol.set(n === RENDER_BLOCK ? vl : vl.subarray(0, n), done);
-        or.set(n === RENDER_BLOCK ? vr : vr.subarray(0, n), done);
-      } else {
-        w.captured(sources[k], cl, cr, n);
-        if (w.memory.buffer !== mem) {
-          mem = w.memory.buffer;
-          vl = new Float32Array(mem, pl, RENDER_BLOCK);
-          vr = new Float32Array(mem, pr, RENDER_BLOCK);
+
+    for (const [name, ...args] of prepareCalls(calls, toBeat, bpm)) {
+      // um motor mais antigo que o app não conhece alguma função nova: o resto do documento vale
+      if (typeof w[name] === 'function') w[name](...args);
+    }
+    // o render nunca tem metrônomo nem loop (o trecho é linear, do começo ao fim) e ninguém observa
+    // espectro ou indicador: só custariam
+    w.loop_set(0, 0, 0);
+    w.metronome(0, 0);
+    w.watch_fx(-1, -1);
+    w.watch_analyzer(-2);
+
+    // de onde vem cada saída: o master é a própria saída do `process`; as faixas, capturas do motor.
+    // Com capturas, o primeiro `process` prepara o render: as transições de um motor recém-criado
+    // (efeitos entrando do seco, envios subindo do zero) terminam no silêncio e o atraso do limitador
+    // do master é descontado, para a saída começar alinhada na posição de partida. Só o master
+    // também quer isso (senão a mixagem sairia diferente com e sem stems): a captura dele serve só
+    // para preparar.
+    const canCapture = typeof w.capture_clear === 'function' && typeof w.capture_add === 'function';
+    const sources = [];
+    if (canCapture) w.capture_clear();
+    for (const o of outs) {
+      if (o === -1) {
+        sources.push(-1);
+        continue;
+      }
+      const index = w.capture_add(o);
+      if (!(index >= 0)) throw new RenderError('failed', `O motor não conseguiu separar a faixa ${o + 1} no render.`);
+      sources.push(index);
+    }
+    if (canCapture && !passTracks) w.capture_add(-1);
+
+    const pl = w.alloc(RENDER_BLOCK);
+    const pr = w.alloc(RENDER_BLOCK);
+    const cl = passTracks ? w.alloc(RENDER_BLOCK) : 0;
+    const cr = passTracks ? w.alloc(RENDER_BLOCK) : 0;
+    let mem = null;
+    let vl, vr, vcl, vcr;
+
+    w.seek(fromBeat);
+    w.play();
+    let done = 0;
+    let lastReport = -1;
+    const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+    while (done < total) {
+      const n = Math.min(RENDER_BLOCK, total - done);
+      w.process(pl, pr, n);
+      // a memória pode crescer em qualquer chamada: as vistas são refeitas quando o buffer muda
+      if (w.memory.buffer !== mem) {
+        mem = w.memory.buffer;
+        vl = new Float32Array(mem, pl, RENDER_BLOCK);
+        vr = new Float32Array(mem, pr, RENDER_BLOCK);
+        if (passTracks) {
           vcl = new Float32Array(mem, cl, RENDER_BLOCK);
           vcr = new Float32Array(mem, cr, RENDER_BLOCK);
         }
-        ol.set(n === RENDER_BLOCK ? vcl : vcl.subarray(0, n), done);
-        or.set(n === RENDER_BLOCK ? vcr : vcr.subarray(0, n), done);
+      }
+      for (let k = 0; k < sources.length; k++) {
+        const [ol, or] = result[first + k];
+        if (sources[k] === -1) {
+          ol.set(n === RENDER_BLOCK ? vl : vl.subarray(0, n), done);
+          or.set(n === RENDER_BLOCK ? vr : vr.subarray(0, n), done);
+        } else {
+          w.captured(sources[k], cl, cr, n);
+          if (w.memory.buffer !== mem) {
+            mem = w.memory.buffer;
+            vl = new Float32Array(mem, pl, RENDER_BLOCK);
+            vr = new Float32Array(mem, pr, RENDER_BLOCK);
+            vcl = new Float32Array(mem, cl, RENDER_BLOCK);
+            vcr = new Float32Array(mem, cr, RENDER_BLOCK);
+          }
+          ol.set(n === RENDER_BLOCK ? vcl : vcl.subarray(0, n), done);
+          or.set(n === RENDER_BLOCK ? vcr : vcr.subarray(0, n), done);
+        }
+      }
+      done += n;
+      if (onProgress) {
+        const t = now();
+        if (t - lastReport >= 100) {
+          lastReport = t;
+          onProgress((pass + done / total) / passes);
+        }
       }
     }
-    done += n;
-    if (onProgress) {
-      const t = now();
-      if (t - lastReport >= 100) {
-        lastReport = t;
-        onProgress(done / total);
-      }
+    // o motor da próxima passada nasce de `init`: solta os blocos desta (o `alloc` não se solta sozinho)
+    if (typeof w.dealloc !== 'function') continue;
+    w.dealloc(pl, RENDER_BLOCK);
+    w.dealloc(pr, RENDER_BLOCK);
+    if (passTracks) {
+      w.dealloc(cl, RENDER_BLOCK);
+      w.dealloc(cr, RENDER_BLOCK);
     }
   }
   if (onProgress) onProgress(1);

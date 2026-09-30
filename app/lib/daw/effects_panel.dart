@@ -220,6 +220,10 @@ class _EffectsPanelState extends State<EffectsPanel> {
     if (kind != null && mounted) _add(track, kind);
   }
 
+  /// Com a cadeia cheia (o motor comporta [DawController.maxEffectsPerChain] efeitos), o botão de
+  /// adicionar fica desabilitado e a dica explica o limite.
+  Widget _limitHint(bool full, Widget child) => full ? Tooltip(message: DawController.effectLimitHint, child: child) : child;
+
   // ---------------------------------------------------------------------- cabeçalho
 
   Widget _header(BuildContext context, int track, List<EffectSlot> chain, Color color, bool desktop) {
@@ -228,12 +232,16 @@ class _EffectsPanelState extends State<EffectsPanel> {
         ? 'nenhum efeito'
         : '${chain.length} ${chain.length == 1 ? 'efeito' : 'efeitos'}${off > 0 ? ' · $off desligado${off == 1 ? '' : 's'}' : ''}';
     final picker = _TrackPicker(c: c, track: track, color: color);
+    final full = !c.canAddEffect(track);
     final add = Builder(
-      builder: (ctx) => FilledButton.tonalIcon(
-        onPressed: () => _addMenu(ctx, track, color),
-        style: desktop ? null : FilledButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 12)),
-        icon: const Icon(Icons.add, size: 18),
-        label: Text(desktop ? 'Adicionar efeito' : 'Efeito'),
+      builder: (ctx) => _limitHint(
+        full,
+        FilledButton.tonalIcon(
+          onPressed: full ? null : () => _addMenu(ctx, track, color),
+          style: desktop ? null : FilledButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 12)),
+          icon: const Icon(Icons.add, size: 18),
+          label: Text(desktop ? 'Adicionar efeito' : 'Efeito'),
+        ),
       ),
     );
     return DecoratedBox(
@@ -293,7 +301,8 @@ class _EffectsPanelState extends State<EffectsPanel> {
           proxyDecorator: _proxy,
           onReorderItem: (from, to) => c.moveEffect(track, chain[from].id, to),
           footer: Builder(
-            builder: (ctx) => _AddTile(color: color, onTap: () => _addMenu(ctx, track, color)),
+            builder: (ctx) =>
+                _limitHint(!c.canAddEffect(track), _AddTile(color: color, onTap: c.canAddEffect(track) ? () => _addMenu(ctx, track, color) : null)),
           ),
           children: [
             for (var i = 0; i < chain.length; i++)
@@ -322,7 +331,14 @@ class _EffectsPanelState extends State<EffectsPanel> {
     footer: Builder(
       builder: (ctx) => Padding(
         padding: const EdgeInsets.only(top: 2),
-        child: OutlinedButton.icon(onPressed: () => _addMenu(ctx, track, color), icon: const Icon(Icons.add, size: 18), label: const Text('Adicionar efeito')),
+        child: _limitHint(
+          !c.canAddEffect(track),
+          OutlinedButton.icon(
+            onPressed: c.canAddEffect(track) ? () => _addMenu(ctx, track, color) : null,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Adicionar efeito'),
+          ),
+        ),
       ),
     ),
     children: [
@@ -687,7 +703,9 @@ class _TrackPicker extends StatelessWidget {
 /// O fim da cadeia no computador: um lugar para o próximo efeito.
 class _AddTile extends StatefulWidget {
   final Color color;
-  final VoidCallback onTap;
+
+  /// Null: o botão está desabilitado (limite de efeitos).
+  final VoidCallback? onTap;
   const _AddTile({required this.color, required this.onTap});
 
   @override
@@ -699,30 +717,33 @@ class _AddTileState extends State<_AddTile> {
 
   @override
   Widget build(BuildContext context) => MouseRegion(
-    cursor: SystemMouseCursors.click,
-    onEnter: (_) => setState(() => _hover = true),
+    cursor: widget.onTap == null ? SystemMouseCursors.forbidden : SystemMouseCursors.click,
+    onEnter: (_) => setState(() => _hover = widget.onTap != null),
     onExit: (_) => setState(() => _hover = false),
     child: GestureDetector(
       onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        width: 118,
-        decoration: BoxDecoration(
-          color: _hover ? widget.color.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.02),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _hover ? widget.color.withValues(alpha: 0.5) : Palette.hairlineStrong),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_circle_outline, size: 26, color: _hover ? widget.color : Colors.white38),
-            const SizedBox(height: 6),
-            Text(
-              'Adicionar\nefeito',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, height: 1.3, color: _hover ? Colors.white : Colors.white54),
-            ),
-          ],
+      child: Opacity(
+        opacity: widget.onTap == null ? 0.4 : 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 118,
+          decoration: BoxDecoration(
+            color: _hover ? widget.color.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.02),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _hover ? widget.color.withValues(alpha: 0.5) : Palette.hairlineStrong),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_outline, size: 26, color: _hover ? widget.color : Colors.white38),
+              const SizedBox(height: 6),
+              Text(
+                'Adicionar\nefeito',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, height: 1.3, color: _hover ? Colors.white : Colors.white54),
+              ),
+            ],
+          ),
         ),
       ),
     ),

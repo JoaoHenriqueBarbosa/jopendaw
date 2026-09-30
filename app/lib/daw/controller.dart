@@ -2696,10 +2696,27 @@ class DawController extends ChangeNotifier {
     return null;
   }
 
-  /// Adiciona um efeito no padrão no fim da cadeia (ou na posição [at]); desfazível.
+  /// Efeitos por cadeia e envios por faixa que o motor comporta (`MAX_SLOTS` e `MAX_SENDS` em
+  /// engine/src/mixer.rs): o 17º seria descartado em silêncio (o cartão aparece e não soa).
+  static const maxEffectsPerChain = 16;
+  static const maxSendsPerTrack = 16;
+
+  /// Dica dos botões de adicionar quando a cadeia (ou a lista de envios) já está cheia.
+  static const effectLimitHint = 'Limite de $maxEffectsPerChain efeitos por faixa';
+  static const sendLimitHint = 'Limite de $maxSendsPerTrack envios por faixa';
+
+  /// A cadeia de [track] (−1 = master) ainda tem lugar para mais um efeito.
+  bool canAddEffect(int track) => (_chain(track)?.length ?? maxEffectsPerChain) < maxEffectsPerChain;
+
+  /// A faixa ainda tem lugar para mais um envio.
+  bool canAddSend(int track) => track >= 0 && track < doc.tracks.length && doc.tracks[track].sends.length < maxSendsPerTrack;
+
+  /// Adiciona um efeito no padrão no fim da cadeia (ou na posição [at]); desfazível. Cadeia cheia
+  /// ([maxEffectsPerChain]): [StateError] (a interface desabilita o botão antes).
   EffectSlot addEffect(int track, EffectKind kind, {int? at}) {
     final chain = _chain(track);
     if (chain == null) throw ArgumentError.value(track, 'track', 'faixa inexistente');
+    if (chain.length >= maxEffectsPerChain) throw StateError('$effectLimitHint: o motor não toca mais que isso.');
     final slot = EffectSlot(id: newId(), kind: kind);
     edit((_) => chain.insert((at ?? chain.length).clamp(0, chain.length), slot));
     return slot;
@@ -2801,6 +2818,8 @@ class DawController extends ChangeNotifier {
     final lv = level == null || level.isNaN ? null : _sendLevel(level);
     final send = t.sends.where((s) => s.target == busId).firstOrNull;
     if (send == null) {
+      // o motor só comporta [maxSendsPerTrack] envios por faixa: o seguinte não soaria
+      if (t.sends.length >= maxSendsPerTrack) return false;
       edit((_) => t.sends.add(Send(target: busId, level: lv ?? defaultSendLevel, pre: pre ?? false)));
       return true;
     }

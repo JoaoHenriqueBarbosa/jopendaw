@@ -1,7 +1,7 @@
 /// O motor de áudio nativo (`engine/android`, `libjopendaw_engine.so`) visto pelo dart:ffi.
 ///
 /// É o mesmo motor em Rust que a web roda em WASM no AudioWorklet. Aqui a thread de áudio do
-/// Oboe/AAudio é a dona dele: as funções `jd_*` só enfileiram comandos (sem trava) ou leem o que
+/// AAudio é a dona dele: as funções `jd_*` só enfileiram comandos (sem trava) ou leem o que
 /// ela publicou, então são chamadas direto da thread da interface. O estado (posição, picos,
 /// indicador do efeito, espectro) vem por polling a ~60 Hz, como o worklet mandaria; o que é pesado
 /// (decodificar, renderizar, sha-256 de arquivo grande) roda num isolate para a tela não travar.

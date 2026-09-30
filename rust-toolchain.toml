@@ -1,3 +1,5 @@
 [toolchain]
 channel = "stable"
 components = ["rustfmt", "clippy", "rust-analyzer"]
+# alvos de engine/build-web.sh e engine/build-android.sh: o rustup os instala junto
+targets = ["wasm32-unknown-unknown", "aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]

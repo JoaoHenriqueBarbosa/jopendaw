@@ -5,8 +5,9 @@
 # (aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android) e do NDK, pelo
 # ANDROID_NDK_HOME ou no lugar padrão do Android Studio no Mac.
 #
-# Plataforma 24: a mínima do app (a biblioteca abre no Android 7; o AAudio, da API 26, é carregado
-# em tempo de execução). O NDK r28 alinha os segmentos em 16 KB, o que o Android 15 exige.
+# Plataforma 24: a biblioteca abre até no Android 7 (o AAudio, da API 26, é carregado em tempo de
+# execução, e o que não é áudio ao vivo não depende dele); o app exige a 26 (`minSdk` em
+# app/android/app/build.gradle.kts). O NDK r28 alinha os segmentos em 16 KB, o que o Android 15 exige.
 set -eu
 cd "$(dirname "$0")/.."
 

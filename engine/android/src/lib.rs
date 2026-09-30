@@ -670,11 +670,8 @@ mod tests {
         assert_eq!(jd_offline_process(h, 10), ERR_BAD_ARG);
     }
 
-    /// Precisa do `engine::api::apply` de verdade (outro agente da fase 5 implementa; neste
-    /// worktree ele é um esqueleto que não conhece nome nenhum). Depois da integração:
-    /// `cargo test -p jopendaw-engine-android -- --ignored`.
+    /// Renderiza fora de tempo real com o `engine::api::apply` de verdade.
     #[test]
-    #[ignore = "depende do engine::api::apply completo"]
     fn offline_render_with_the_real_apply() {
         let h = jd_offline_new(48_000.0);
         let s = [0.5f32; 24_000];
@@ -697,7 +694,6 @@ mod tests {
 
     /// O motor que toca com o despachante de verdade: notas ao vivo registradas na captura.
     #[test]
-    #[ignore = "depende do engine::api::apply completo"]
     fn live_notes_with_the_real_apply() {
         let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(jd_start(), 48_000.0);
@@ -711,11 +707,11 @@ mod tests {
         assert_eq!(notes[1], 62.0);
         assert_eq!(calls(r#"[["stop"]]"#), 0);
     }
+
     /// Bend, modulação e pedal ao vivo passam pelo despachante e voltam na captura como eventos de
     /// controle: altura 256 + controle (384 bend, 257 modulação, 320 pedal) e o valor no lugar da
     /// velocidade.
     #[test]
-    #[ignore = "depende do engine::api::apply completo"]
     fn live_controls_are_recorded_with_the_real_apply() {
         let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(jd_start(), 48_000.0);
@@ -753,5 +749,57 @@ mod tests {
         assert_eq!((frames, channels), (x.len() as i64 * 2, 2));
         jd_decoded_free(h);
         assert_eq!(unsafe { jd_stretch(std::ptr::null(), std::ptr::null(), 10, rate, 2.0, 0.0) }, 0);
+    }
+
+    /// O que cada export do wasm que leva ponteiro vira no Android (`None`: não precisa de função
+    /// própria, com o motivo). Um export novo em `HOST_ONLY` obriga a decidir aqui.
+    const HOST_ONLY_IN_ANDROID: &[(&str, Option<&str>, &str)] = &[
+        ("alloc", None, "memória do wasm; aqui os buffers são do Dart"),
+        ("dealloc", None, "memória do wasm; aqui os buffers são do Dart"),
+        ("init", Some("jd_start"), "abre a saída e cria o motor"),
+        ("process", None, "quem chama é o callback do AAudio, não o Dart"),
+        ("sample_load", Some("jd_sample_load"), ""),
+        ("analyzer", Some("jd_spectrum"), ""),
+        ("set_input", None, "a entrada é lida pelo próprio callback de saída (full duplex)"),
+        ("rec_notes", Some("jd_rec_notes"), ""),
+        ("captured", Some("jd_offline_captured"), ""),
+        ("peaks", Some("jd_state"), "os picos vêm junto do estado"),
+        ("stretch_run", Some("jd_stretch"), ""),
+        ("stretch_channel", Some("jd_decoded_copy"), "o resultado do warp é lido como um áudio decodificado"),
+        ("stretch_free", Some("jd_decoded_free"), ""),
+        ("detect_bpm", Some("jd_detect_bpm"), ""),
+        ("detect_confidence", Some("jd_detect_bpm"), "a confiança sai pelo ponteiro do jd_detect_bpm"),
+    ];
+
+    /// A superfície do wasm que o worklet usa tem o par no Android: toda chamada da tabela do
+    /// `api.rs` passa por `jd_calls` (o despachante é o mesmo), e todo export do wasm com ponteiro tem
+    /// a função `jd_*` correspondente (ou um motivo para não ter).
+    #[test]
+    fn exports_do_wasm_e_chamadas_da_tabela_tem_par_no_android() {
+        use jopendaw_engine::api::{self, HOST_ONLY};
+        // toda chamada da tabela chega ao `apply` pelo JSON do jd_calls e o motor a conhece
+        let names: Vec<&str> = api::call_names().collect();
+        assert!(names.len() > 40, "só {} chamadas na tabela", names.len());
+        for name in &names {
+            let json = format!(r#"[["{name}", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]"#);
+            let parsed = call::parse_calls(json.as_bytes()).unwrap_or_else(|e| panic!("{name}: o jd_calls não lê a chamada: {e}"));
+            assert_eq!(parsed[0].name(), *name);
+            let r = api::Call::parse(name, parsed[0].args());
+            assert!(r.is_ok(), "{name}: o despachante não a conhece: {r:?}");
+        }
+        // e o que só passa por ponteiro tem função própria, cada uma exportada de fato
+        let src = include_str!("lib.rs");
+        for host_only in HOST_ONLY {
+            let Some((_, jd, why)) = HOST_ONLY_IN_ANDROID.iter().find(|(n, ..)| n == host_only) else {
+                panic!("{host_only}: export do wasm com ponteiro sem decisão para o Android (HOST_ONLY_IN_ANDROID)");
+            };
+            match jd {
+                Some(f) => assert!(src.contains(&format!("extern \"C\" fn {f}(")), "{host_only}: falta {f} no Android ({why})"),
+                None => assert!(!why.is_empty(), "{host_only}: sem função no Android e sem motivo"),
+            }
+        }
+        for (name, ..) in HOST_ONLY_IN_ANDROID {
+            assert!(HOST_ONLY.contains(name), "{name}: no mapa do Android mas fora de HOST_ONLY");
+        }
     }
 }

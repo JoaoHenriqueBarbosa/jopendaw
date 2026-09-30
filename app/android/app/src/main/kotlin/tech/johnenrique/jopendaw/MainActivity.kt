@@ -190,7 +190,7 @@ class MainActivity : FlutterActivity() {
          * Carrega o motor nativo pelo System.loadLibrary antes de o Dart abri-lo (o DynamicLibrary.open
          * do engine_ffi.dart acha a mesma cópia, já carregada). Só por este caminho o Android chama o
          * JNI_OnLoad da biblioteca com a JavaVM, que é por onde o motor pega o contexto do app para
-         * o cpal/oboe consultar o AudioManager pela JNI (listar entradas, taxa nativa). Sem os .so
+         * o motor consultar o AudioManager pela JNI (listar entradas, taxa nativa). Sem os .so
          * (build sem o motor), o app abre igual e a tela do projeto avisa que o motor não carregou.
          */
         private val engineLoaded: Boolean by lazy {

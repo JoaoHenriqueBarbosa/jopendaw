@@ -845,4 +845,66 @@ mod tests {
         assert!(max_jump < 0.01, "{max_jump}");
         assert!(l[4799].abs() < 1e-3);
     }
+
+    // ------------------------------------------------------------ contrato com o app
+
+    /// `samplerParams` (instruments.dart) e `SamplerId` (presets.dart) contra o motor: os mesmos ids,
+    /// e cada limite e padrão da tabela é o que `set_param` limita e o `new` já traz.
+    #[test]
+    fn tabela_e_ids_iguais_aos_do_app() {
+        use crate::instrument::contract;
+        let Some(src) = contract::source() else { return };
+        // o valor que o motor guardou de cada id (o alcance do bend mora em `PitchExpr`, conferido à parte)
+        let read = |s: &Sampler, id: u32| -> f32 {
+            match id {
+                param::ROOT => s.root,
+                param::TUNE => s.tune,
+                param::ATTACK => s.adsr[0],
+                param::DECAY => s.adsr[1],
+                param::SUSTAIN => s.adsr[2],
+                param::RELEASE => s.adsr[3],
+                param::LEVEL => s.level,
+                param::ONE_SHOT => f32::from(s.one_shot),
+                param::VELOCITY => s.velocity,
+                other => panic!("id {other} sem leitura no teste"),
+            }
+        };
+        let rows = contract::rows(&src, "samplerParams");
+        let ids: Vec<usize> = rows.iter().map(|r| r.0).collect();
+        assert_eq!(ids.len(), 10, "os ids do sampler: {ids:?}");
+        for id in 0..=param::BEND_RANGE {
+            assert!(ids.contains(&(id as usize)), "id {id} do sampler sem linha no app");
+        }
+        for (id, (min, max, def, _)) in rows {
+            let id = id as u32;
+            if id == param::BEND_RANGE {
+                assert_eq!((min, max, def), (0.0, crate::expression::MAX_BEND_RANGE, crate::expression::DEFAULT_BEND_RANGE), "alcance do bend");
+                continue;
+            }
+            let mut s = Sampler::new(RATE);
+            assert_eq!(read(&s, id), def, "padrão do id {id}");
+            s.set_param(id, min - 1e6);
+            assert_eq!(read(&s, id), min, "mínimo do id {id}");
+            s.set_param(id, max + 1e6);
+            assert_eq!(read(&s, id), max, "máximo do id {id}");
+        }
+        // `SamplerId` do app: cada constante é o id do motor de mesmo nome
+        let consts = [
+            ("ROOT", param::ROOT),
+            ("ATTACK", param::ATTACK),
+            ("DECAY", param::DECAY),
+            ("SUSTAIN", param::SUSTAIN),
+            ("RELEASE", param::RELEASE),
+            ("LEVEL", param::LEVEL),
+            ("ONE_SHOT", param::ONE_SHOT),
+            ("TUNE", param::TUNE),
+            ("VELOCITY", param::VELOCITY),
+            ("BEND_RANGE", param::BEND_RANGE),
+        ];
+        for (name, value) in contract::dart_ids("SamplerId") {
+            let name = contract::screaming(&name);
+            let engine = consts.iter().find(|c| c.0 == name).unwrap_or_else(|| panic!("SamplerId.{name} não existe no motor"));
+            assert_eq!(engine.1, value, "SamplerId.{name}");
+        }
+    }
 }
