@@ -96,6 +96,34 @@ void main() {
       c.dispose();
     });
 
+    test('sem documento local: o open só termina com o documento e os áudios do servidor (nunca a faixa vazia)', () async {
+      final bytes = wav(0.3), h = hashOf(bytes);
+      final api = FakeSyncApi()
+        ..version = 3
+        ..doc = docJson(sample: h)
+        ..samples[h] = bytes;
+      final c = fakeController(FakeEngine(), store: MemoryStore(), api: api, canSync: () => true, syncTimeScale: 100);
+      var readyBeforeDoc = false;
+      c.addListener(() {
+        if (c.ready && c.doc.tracks.first.name != 'Servidor') readyBeforeDoc = true;
+      });
+      await c.open();
+      expect(readyBeforeDoc, isFalse);
+      expect(c.ready, isTrue);
+      expect(trackName(c), 'Servidor');
+      expect(c.waveforms, contains(h), reason: 'o áudio já veio junto, sem clipe mudo depois');
+      c.dispose();
+    });
+
+    test('sem documento local e sem rede: abre vazio (não fica preso no spinner)', () async {
+      final api = FakeSyncApi()..failures = 1;
+      final c = fakeController(FakeEngine(), store: MemoryStore(), api: api, canSync: () => true, syncTimeScale: 100);
+      await c.open();
+      expect(c.ready, isTrue);
+      expect(c.doc.tracks, hasLength(1));
+      c.dispose();
+    });
+
     test('abre na hora com o local mesmo sem rede: o doc local fica e o estado é offline', () async {
       final api = FakeSyncApi()..failures = 1;
       final c = await opened(api, storeWith(local: docJson(track: 'Local', bpm: 120), version: 1));

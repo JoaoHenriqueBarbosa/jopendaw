@@ -440,6 +440,9 @@ class DawController extends ChangeNotifier {
   SyncService get sync =>
       _syncService ??= SyncService(projectId: project.id, api: _api, store: _store, host: _SyncBridge(this), canSync: _canSync, timeScale: syncTimeScale);
 
+  /// O documento desta abertura veio de um modelo escolhido ao criar o projeto.
+  bool _templated = false;
+
   /// O último documento gravado no aparelho: só o que difere dele conta como mudança a enviar.
   String? _lastSaved;
 
@@ -550,10 +553,26 @@ class DawController extends ChangeNotifier {
         // sem a escolha guardada, vale a entrada padrão
       }
       if (_disposed) return;
+      // Sem documento local e sem modelo escolhido, o projeto pode existir só no servidor (criado
+      // em outro aparelho): espera a primeira conversa com ele, documento e áudios, antes de
+      // mostrar o estúdio. Senão aparece uma faixa vazia que depois troca por tudo de uma vez.
+      // Offline ou lento, segue com o vazio depois de um tempo e a sincronização continua atrás.
+      final waitServer = saved is! String && !_templated && _canSync();
+      final started = sync.start(localExisted: saved is String || _templated);
+      if (waitServer) {
+        _lastSaved = jsonEncode(doc.toJson());
+        try {
+          await started.timeout(const Duration(seconds: 25));
+        } catch (_) {
+          // a sincronização segue em segundo plano e mostra o próprio estado
+        }
+        if (_disposed) return;
+      } else {
+        unawaited(started);
+      }
       ready = true;
       _sync();
       _lastSaved = jsonEncode(doc.toJson());
-      unawaited(sync.start(localExisted: saved is String));
       // faixa de áudio que ficou armada ou monitorando: a entrada volta aberta, como estava
       if (doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
     } catch (e) {
@@ -605,6 +624,7 @@ class DawController extends ChangeNotifier {
     final key = 'template:${project.id}';
     final chosen = await _store.get(key);
     if (chosen is! String) return _fresh();
+    _templated = true;
     await _store.delete(key);
     return ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: project.beatsPerBar);
   }
