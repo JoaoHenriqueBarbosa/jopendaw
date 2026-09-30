@@ -9,6 +9,7 @@ import '../daw/controller.dart';
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/marker.dart';
+import '../daw/midi_file_ui.dart' show importFiles;
 import '../daw/model.dart' show DawDoc;
 import '../daw/timeline.dart';
 import '../daw/transport_bar.dart';
@@ -149,7 +150,8 @@ class _DawStudioState extends State<DawStudio> {
     } else if (mod && k == LogicalKeyboardKey.keyD) {
       action = () => duplicateSelectedClip(c);
     } else if (mod && k == LogicalKeyboardKey.keyI) {
-      action = c.importAudio;
+      final ctx = node.context;
+      action = ctx != null ? () => importFiles(ctx, c) : c.importAudio;
     } else if (mod && k == LogicalKeyboardKey.keyK) {
       action = c.toggleKeyboard;
     } else if (!mod && k == LogicalKeyboardKey.keyS) {

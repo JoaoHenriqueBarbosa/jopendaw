@@ -12,6 +12,7 @@ import '../widgets/theme.dart';
 import 'controller.dart';
 import 'dock.dart';
 import 'export.dart';
+import 'midi_file_ui.dart' show importFiles;
 import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
 import 'shortcuts_dialog.dart';
@@ -199,8 +200,8 @@ class TransportBar extends StatelessWidget {
         List<Widget> files(bool labels) => !labels
             ? [
                 IconButton.filledTonal(
-                  tooltip: withMod('Importar áudio (Ctrl+I)'),
-                  onPressed: idle ? c.importAudio : null,
+                  tooltip: withMod('Importar áudio ou MIDI (Ctrl+I)'),
+                  onPressed: idle ? () => importFiles(context, c) : null,
                   icon: const Icon(Icons.file_open_outlined),
                 ),
                 const SizedBox(width: 4),
@@ -211,7 +212,11 @@ class TransportBar extends StatelessWidget {
                 ),
               ]
             : [
-                FilledButton.tonalIcon(onPressed: idle ? c.importAudio : null, icon: const Icon(Icons.file_open_outlined), label: const Text('Importar')),
+                FilledButton.tonalIcon(
+                  onPressed: idle ? () => importFiles(context, c) : null,
+                  icon: const Icon(Icons.file_open_outlined),
+                  label: const Text('Importar'),
+                ),
                 const SizedBox(width: 8),
                 Tooltip(
                   message: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',

@@ -14,6 +14,7 @@ import 'controller.dart';
 import 'export_options.dart';
 import 'loudness.dart';
 import 'loudness_panel.dart';
+import 'midi_file_ui.dart';
 import 'model.dart';
 import 'project_file_ui.dart';
 import 'transport_bar.dart' show describeActionError;
@@ -36,11 +37,15 @@ Future<void> showExportDialog(BuildContext context, DawController c) async {
   var options = _lastOptions ?? const ExportOptions();
   while (true) {
     if (!context.mounted) return;
-    var wholeProject = false;
+    var wholeProject = false, midi = false;
     final chosen = await showDialog<ExportOptions>(
       context: context,
-      builder: (_) => ExportDialog(c: c, initial: options, onWholeProject: () => wholeProject = true),
+      builder: (_) => ExportDialog(c: c, initial: options, onWholeProject: () => wholeProject = true, onMidi: () => midi = true),
     );
+    if (midi && context.mounted) {
+      await showExportMidiDialog(context, c);
+      return;
+    }
     if (wholeProject && context.mounted) {
       await showExportProjectDialog(context, name: c.project.name, loadDoc: () async => c.doc, loadSample: loadSampleLocalOrServer);
       return;
@@ -82,7 +87,10 @@ class ExportDialog extends StatefulWidget {
 
   /// Chamado quando a pessoa prefere levar o projeto inteiro (.jopendaw) em vez da música em WAV.
   final VoidCallback? onWholeProject;
-  const ExportDialog({super.key, required this.c, this.initial = const ExportOptions(), this.onWholeProject});
+
+  /// Chamado quando a pessoa prefere as notas em MIDI (.mid) (ver `midi_file_ui.dart`).
+  final VoidCallback? onMidi;
+  const ExportDialog({super.key, required this.c, this.initial = const ExportOptions(), this.onWholeProject, this.onMidi});
 
   @override
   State<ExportDialog> createState() => _ExportDialogState();
@@ -272,6 +280,16 @@ class _ExportDialogState extends State<ExportDialog> {
             },
             icon: const Icon(Icons.inventory_2_outlined, size: 18),
             label: const Text('Projeto inteiro (.jopendaw)…'),
+          ),
+        if (widget.onMidi != null)
+          TextButton.icon(
+            key: const Key('export-midi-link'),
+            onPressed: () {
+              widget.onMidi!();
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.piano, size: 18),
+            label: const Text('Notas em MIDI (.mid)…'),
           ),
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
         FilledButton.icon(onPressed: _empty ? null : _submit, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),

@@ -26,6 +26,7 @@ import 'export_options.dart';
 import 'instruments.dart';
 import 'loudness.dart';
 import 'midi_cc.dart';
+import 'midi_file.dart';
 import 'model.dart';
 import 'sync.dart';
 import 'templates.dart';
@@ -2253,6 +2254,80 @@ class DawController extends ChangeNotifier {
     _sync();
     _scheduleSave();
     notifyListeners();
+  }
+
+  /// Importa um arquivo MIDI (.mid): uma faixa de sintetizador (bateria no canal 10) por faixa do
+  /// arquivo, cada uma com um clipe a partir de [at] (padrão: o cursor), tudo num passo do
+  /// desfazer. Se o arquivo traz andamento ou compasso diferentes dos do projeto, [confirmTempo]
+  /// decide se eles passam para o projeto. Erro de arquivo vai para [error] (mensagem legível) e
+  /// devolve null; sucesso devolve o [MidiImportReport], com os avisos. A lógica está em `midi_file.dart`.
+  Future<MidiImportReport?> importMidiBytes(String name, Uint8List bytes, {Future<bool> Function(MidiFileData data)? confirmTempo, double? at}) async {
+    if (_blockedByRecording('importar MIDI')) return null;
+    status = 'Lendo $name…';
+    notifyListeners();
+    final MidiFileData data;
+    try {
+      data = await parseMidiFile(bytes);
+    } on MidiFormatException catch (e) {
+      status = null;
+      error = 'Não deu para importar $name: ${e.message}';
+      notifyListeners();
+      return null;
+    } catch (_) {
+      status = null;
+      error = 'Não deu para importar $name: o arquivo MIDI está corrompido.';
+      notifyListeners();
+      return null;
+    }
+    status = null;
+    if (_disposed) return null;
+    var useTempo = false;
+    final fileBpm = data.firstBpm;
+    if (confirmTempo != null && (fileBpm != null || data.beatsPerBar != null)) {
+      final differs = (fileBpm != null && appBpmFor(fileBpm) != doc.bpm.round()) || (data.beatsPerBar != null && data.beatsPerBar != doc.beatsPerBar);
+      if (differs) useTempo = await confirmTempo(data);
+    }
+    if (_disposed) return null;
+    final bar = useTempo ? (data.beatsPerBar ?? doc.beatsPerBar) : doc.beatsPerBar;
+    final items = midiImportTracks(data, beatsPerBar: bar, start: at ?? snapBeat(beat.value), newId: newId);
+    edit((d) {
+      if (useTempo) applyImportedTempo(d, data);
+      final first = d.tracks.length;
+      for (final it in items) {
+        final n = d.tracks.length;
+        d.tracks.add(
+          DawTrack(
+            id: newId(),
+            name: it.name.isNotEmpty ? it.name : _nextTrackName(d, it.kind),
+            color: n % Palette.tracks.length,
+            kind: it.kind,
+            midi: [it.clip],
+          ),
+        );
+      }
+      selectedClip = items.first.clip.id;
+      _select(first);
+    });
+    if (useTempo) await _mirrorTempo();
+    final warnings = [...data.warnings];
+    if (data.hasTempoChanges) {
+      final bpms = [for (final p in data.tempoMap) p.bpm];
+      warnings.add(
+        'O arquivo muda de andamento no meio (de ${bpms.reduce(math.min).round()} a ${bpms.reduce(math.max).round()} BPM): '
+        'o app tem um andamento só, então as mudanças foram ignoradas.',
+      );
+    }
+    return MidiImportReport(tracks: items.length, notes: data.noteCount, tempoApplied: useTempo, warnings: warnings);
+  }
+
+  /// GANCHO do mapa de andamento: hoje só o primeiro andamento e o primeiro compasso do arquivo
+  /// entram no documento. Quando o documento tiver mapa de andamento, aqui é o lugar de passar
+  /// [MidiFileData.tempoMap] inteiro (batida em semínimas, BPM real) em vez do primeiro ponto.
+  void applyImportedTempo(DawDoc d, MidiFileData data) {
+    final bpm = data.firstBpm;
+    if (bpm != null) d.bpm = appBpmFor(bpm).toDouble();
+    final bpb = data.beatsPerBar;
+    if (bpb != null) d.beatsPerBar = bpb;
   }
 
   /// Decodifica, guarda no aparelho e registra no motor e no documento (se ainda não estiver);

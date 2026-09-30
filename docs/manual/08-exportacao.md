@@ -244,3 +244,9 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 ## Atalhos
 
 Nenhum atalho de teclado abre a exportação ou o congelamento. A janela de progresso não fecha por fora (nem com Esc) enquanto trabalha; só o botão **Cancelar** a interrompe.
+
+## MIDI (.mid)
+
+**Exportar.** Na janela **Exportar**, o botão **Notas em MIDI (.mid)…** oferece o **clipe selecionado** (sai do início do arquivo) ou **todas as faixas de notas** (uma trilha por faixa, cada uma num canal; bateria no canal 10; nas posições do projeto). O arquivo é SMF tipo 1 a 480 pulsos por semínima, com o andamento e o compasso do projeto, o nome de cada faixa, as notas e os controles do clipe (pitch bend, modulação e pedal). Notas fora de 0–127 ou fora do trecho do clipe não saem, e a janela conta quantas.
+
+**Importar.** O botão **Importar** (Ctrl+I) aceita `.mid` e `.midi` junto com os áudios. Cada trilha com notas vira uma faixa de sintetizador (o canal 10 vira bateria) com um clipe no cursor; um canal por faixa. Se o arquivo traz andamento ou compasso diferentes do projeto, o app pergunta se deve usá-los. Lê tipos 0, 1 e 2 e qualquer PPQ; recusa tempo SMPTE. Limites, avisados na hora: o app usa só o primeiro andamento e o primeiro compasso; notas de bateria GM sem peça no app (pandeiro, vibraslap…) entram mas ficam sem som; volume, pan e outros controles são ignorados; arquivo cortado importa o que deu para ler.
