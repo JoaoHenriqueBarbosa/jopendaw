@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -251,7 +252,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 else if (!_loading && _error == null && c.inputDevices.isEmpty)
                   Text('Nenhuma entrada encontrada. Conecte um microfone ou interface e toque em procurar.', style: muted)
                 else
-                  Text('O navegador pede permissão para o microfone na primeira vez.', style: muted),
+                  Text(
+                    kIsWeb ? 'O navegador pede permissão para o microfone na primeira vez.' : 'O Android pede permissão para o microfone na primeira vez.',
+                    style: muted,
+                  ),
                 if (_error != null || controllerError != null) ...[const SizedBox(height: 8), InlineNotice(_error ?? controllerError!)],
                 const SizedBox(height: 12),
                 Row(
@@ -314,7 +318,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 if (_latencyError != null) Text(_latencyError!, style: muted.copyWith(color: Palette.danger)),
                 const SizedBox(height: 4),
                 Text(
-                  'Quanto o áudio gravado chega atrasado, além do que o navegador já informa: positivo adianta o que for gravado, '
+                  'Quanto o áudio gravado chega atrasado, além do que ${kIsWeb ? 'o navegador' : 'o sistema'} já informa: positivo adianta o que for gravado, '
                   'negativo atrasa. Para medir, grave o metrônomo pelo microfone e ajuste até a batida gravada cair na grade.',
                   style: muted,
                 ),

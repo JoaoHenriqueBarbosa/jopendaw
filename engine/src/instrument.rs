@@ -413,10 +413,10 @@ pub(crate) mod contract {
         for line in body.lines().map(str::trim) {
             let Some(rest) = line.strip_prefix("static const ") else { continue };
             for part in rest.trim_end_matches(';').split(',') {
-                if let Some((name, value)) = part.split_once('=') {
-                    if let Ok(v) = value.trim().parse() {
-                        out.push((name.trim().to_owned(), v));
-                    }
+                if let Some((name, value)) = part.split_once('=')
+                    && let Ok(v) = value.trim().parse()
+                {
+                    out.push((name.trim().to_owned(), v));
                 }
             }
         }

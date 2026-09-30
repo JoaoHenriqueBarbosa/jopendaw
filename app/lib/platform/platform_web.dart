@@ -57,3 +57,10 @@ void localWrite(String key, String value) {
     web.window.localStorage.setItem(key, value);
   } catch (_) {}
 }
+
+/// Só no Android: a aba do navegador já segura a tela acesa com áudio tocando (e o sistema cuida do resto).
+void keepScreenOn(bool on) {}
+
+/// Só no Android (ver platform_native.dart): na web a aba segue tocando em segundo plano, como
+/// qualquer player, e não há aviso de fone que sai; devolve um desligar vazio.
+void Function() watchAudioSession({void Function()? onLeave, void Function()? onReturn, void Function()? onNoisy, void Function()? onDevices}) => () {};

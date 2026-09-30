@@ -17,6 +17,7 @@ import '../api/sync_api.dart';
 import '../auth/session.dart';
 import '../audio/engine.dart';
 import '../models/project.dart';
+import '../platform/platform.dart' show keepScreenOn, watchAudioSession;
 import '../widgets/theme.dart';
 import 'audio_to_midi.dart';
 import 'automation_math.dart';
@@ -632,11 +633,17 @@ class DawController extends ChangeNotifier {
 
   Future<void> open() async {
     try {
-      if (!_engine.supported) throw UnsupportedError('O motor de áudio ainda não roda neste aparelho: use o jopendaw no navegador por enquanto.');
+      if (!_engine.supported) throw UnsupportedError('O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.');
       engineRate = await _engine.start();
       _engine.onState = _onEngineState;
       _engine.onLoudness = _onLoudness;
       _engine.onEngineFailed = _onEngineFailed;
+      try {
+        _unwatchAudio = watchAudioSession(onLeave: _onAppLeave, onReturn: _onAppReturn, onNoisy: _onAudioNoisy, onDevices: _onAudioDevices);
+      } on Object catch (e) {
+        // fora de um app Flutter (um teste sem binding): sem os avisos do aparelho
+        debugPrint('sessão de áudio do aparelho: $e');
+      }
       final saved = await _store.get(_docKey);
       // o andamento e o compasso são do documento (o servidor só os espelha, ver [_mirrorTempo]):
       // só um documento novo parte dos do projeto
@@ -735,7 +742,72 @@ class DawController extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------------------------ o aparelho (Android)
+  // Na web nada disto dispara (a aba resolve sozinha): as funções de `platform` são vazias.
+
+  void Function()? _unwatchAudio;
+  bool _awake = false;
+
+  /// Tela acesa enquanto toca ou grava, e solta ao parar; só vai ao sistema quando muda.
+  void _keepAwake(bool on) {
+    if (_awake == on) return;
+    _awake = on;
+    keepScreenOn(on);
+  }
+
+  /// O app saiu da tela (ou a tela apagou): sem um serviço em primeiro plano o Android pode matar o
+  /// processo a qualquer momento, e o microfone aberto acende o aviso de privacidade. Para o
+  /// transporte (gravando, encerra a gravação, que fica salva), solta as notas ao vivo e fecha a
+  /// entrada.
+  void _onAppLeave() {
+    if (_disposed) return;
+    _pauseForSystem();
+    if (_inputOpen && !recording) {
+      _inputOpen = false;
+      inputLevel.value = 0;
+      _quietly(_engine.stopInput);
+    }
+  }
+
+  /// Voltou para a tela: garante a saída tocando (reabre se o Android a derrubou) e reabre a
+  /// entrada se alguma faixa de áudio ficou armada ou monitorando, como o `open`.
+  void _onAppReturn() {
+    if (_disposed || !ready) return;
+    unawaited(_engine.resume());
+    if (!_inputOpen && doc.tracks.any((t) => t.kind == TrackKind.audio && (t.armed || t.monitor))) unawaited(_restoreInput());
+  }
+
+  /// O fone (com fio ou Bluetooth) saiu e o som passaria para o alto-falante: para o transporte,
+  /// como todo app de mídia.
+  void _onAudioNoisy() {
+    if (_disposed) return;
+    _pauseForSystem();
+  }
+
+  /// Um aparelho de áudio entrou ou saiu (fone plugado, interface USB): a saída pode ter trocado
+  /// de rota, e o motor reabre no aparelho novo.
+  void _onAudioDevices() {
+    if (_disposed || !ready) return;
+    unawaited(_engine.resume());
+  }
+
+  /// Pausa (sem voltar o cursor) por causa do sistema. Gravando, encerra a gravação.
+  void _pauseForSystem() {
+    if (recording) {
+      unawaited(_finishRecording());
+      return;
+    }
+    if (playing.value || _live.isNotEmpty || _keyNotes.isNotEmpty || _midiNotes.isNotEmpty) {
+      _engine.calls([
+        ['stop'],
+        ..._releaseLive(),
+      ]);
+    }
+    playing.value = false;
+  }
+
   void _onEngineState(EngineState s) {
+    _keepAwake(s.playing || recording);
     _stateClock
       ..reset()
       ..start();
@@ -834,7 +906,7 @@ class DawController extends ChangeNotifier {
     } catch (e) {
       if (_disposed) return null;
       status = null;
-      error = 'Não deu para abrir $name: é um formato de áudio que este navegador decodifica?';
+      error = 'Não deu para abrir $name: é um formato de áudio que $_thisHost decodifica?';
       notifyListeners();
       return null;
     }
@@ -854,6 +926,9 @@ class DawController extends ChangeNotifier {
     if (_engine.onState == _onEngineState) _engine.onState = null;
     if (_engine.onLoudness == _onLoudness) _engine.onLoudness = null;
     if (_engine.onEngineFailed == _onEngineFailed) _engine.onEngineFailed = null;
+    _unwatchAudio?.call();
+    _unwatchAudio = null;
+    _keepAwake(false);
     if (_engine.onMidi == _onMidi) _engine.onMidi = null;
     if (_engine.onMidiInputs == _onMidiInputs) _engine.onMidiInputs = null;
     // gravação pela metade some com a tela; a entrada fecha (o navegador apaga o aviso de microfone)
@@ -2167,7 +2242,7 @@ class DawController extends ChangeNotifier {
         selectedClip = clip.id;
         selectedTrack = ti;
       } catch (e) {
-        error = 'Não deu para abrir $name: é um formato de áudio que este navegador decodifica?';
+        error = 'Não deu para abrir $name: é um formato de áudio que $_thisHost decodifica?';
       }
     }
     status = null;
@@ -2220,7 +2295,7 @@ class DawController extends ChangeNotifier {
     } catch (e) {
       if (_disposed) return;
       status = null;
-      error = 'Não deu para abrir $name: é um formato de áudio que este navegador decodifica?';
+      error = 'Não deu para abrir $name: é um formato de áudio que $_thisHost decodifica?';
     }
     notifyListeners();
   }
@@ -2561,7 +2636,7 @@ class DawController extends ChangeNotifier {
       midiInputs = inputs;
       midiEnabled = true;
     } on UnsupportedError catch (e) {
-      error = e.message ?? 'Este navegador não dá acesso a MIDI.';
+      error = e.message ?? '${_thisHost[0].toUpperCase()}${_thisHost.substring(1)} não dá acesso a MIDI.';
     } on StateError catch (e) {
       error = e.message;
     } catch (e) {
@@ -3211,13 +3286,20 @@ class DawController extends ChangeNotifier {
     return s.contains('NotAllowed') || s.contains('Permission') || s.contains('permiss') || s.contains('negou') || s.contains('denied');
   }
 
+  /// "este navegador" na web, "este aparelho" no app: as mensagens ao usuário falam de onde ele está.
+  static String get _thisHost => kIsWeb ? 'este navegador' : 'este aparelho';
+
   /// O motivo de a entrada não abrir, para o usuário.
   static String _inputError(Object e) {
-    if (e is UnsupportedError) return e.message ?? 'Este navegador não dá acesso ao microfone.';
+    if (e is UnsupportedError) return e.message ?? '${_thisHost[0].toUpperCase()}${_thisHost.substring(1)} não dá acesso ao microfone.';
     if (e is UnimplementedError) return 'A gravação de áudio ainda não funciona neste aparelho.';
     if (e is StateError) return e.message;
     final s = '$e';
-    if (_denied(e)) return 'O navegador negou o acesso ao microfone. Libere o microfone nas permissões do site e tente de novo.';
+    if (_denied(e)) {
+      return kIsWeb
+          ? 'O navegador negou o acesso ao microfone. Libere o microfone nas permissões do site e tente de novo.'
+          : 'O Android negou o acesso ao microfone. Libere o microfone nas permissões do app (Configurações › Apps › jopendaw › Permissões) e tente de novo.';
+    }
     if (s.contains('NotFound') || s.contains('Overconstrained')) return 'Nenhuma entrada de áudio encontrada: conecte um microfone ou escolha outra entrada.';
     if (s.contains('NotReadable')) return 'A entrada de áudio está ocupada por outro programa ou foi desconectada.';
     return 'Não deu para abrir a entrada de áudio: $s';
