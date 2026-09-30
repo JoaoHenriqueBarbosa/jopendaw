@@ -1,7 +1,8 @@
 [workspace]
 resolver = "3"
-# O servidor, o motor de áudio (puro, sem plataforma) e o motor compilado para WASM (a web).
-members = ["server", "engine", "engine/wasm"]
+# O servidor, o motor de áudio (puro, sem plataforma), o motor compilado para WASM (a web) e a
+# biblioteca nativa do app Android.
+members = ["server", "engine", "engine/wasm", "engine/android"]
 
 [workspace.package]
 version = "0.1.0"
@@ -37,3 +38,10 @@ panic = "unwind"
 [profile.wasm]
 inherits = "release"
 opt-level = 3
+
+# O motor no Android (libjopendaw_engine.so): rápido como o do navegador, mas com unwind. Cada função
+# exportada e a thread de áudio pegam o pânico (catch_unwind) e viram um código de erro ou silêncio;
+# com `abort`, um pânico derrubaria o app inteiro junto.
+[profile.android]
+inherits = "release"
+panic = "unwind"
