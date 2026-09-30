@@ -15,6 +15,38 @@ fn too_long() -> String {
     format!("áudio longo demais: o máximo é {} minutos", (MAX_SECONDS / 60.0) as u32)
 }
 
+fn segment_too_long() -> String {
+    format!("trecho longo demais: o máximo é {} minutos", (MAX_SECONDS / 60.0) as u32)
+}
+
+/// Trecho do arquivo a decodificar, em segundos. O teto de [`MAX_SECONDS`] vale pelo trecho, não pelo arquivo:
+/// um clipe curto de um arquivo grande converte.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Span {
+    pub start: f64,
+    pub end: Option<f64>,
+}
+
+impl Span {
+    fn is_whole(&self) -> bool {
+        self.start <= 0.0 && self.end.is_none()
+    }
+
+    /// Quadros `[de, até)` do trecho numa taxa; `até` é `usize::MAX` sem fim.
+    fn frames(&self, rate: u32) -> (usize, usize) {
+        let to = |s: f64| (s * rate as f64).round().max(0.0) as usize;
+        (to(self.start), self.end.map_or(usize::MAX, to))
+    }
+
+    fn too_long_error(&self) -> String {
+        if self.is_whole() { too_long() } else { segment_too_long() }
+    }
+
+    fn empty_error(&self) -> String {
+        if self.is_whole() { "áudio vazio".into() } else { "o trecho pedido está fora do áudio".into() }
+    }
+}
+
 /// Áudio decodificado: amostras intercaladas como inteiros de 24 bits (em `i32`). 24 bits cobre
 /// 16, 24 e o float de 32 sem perda relevante, e é o que o FLAC de saída grava.
 #[derive(Debug)]
@@ -37,7 +69,13 @@ fn u32le(b: &[u8], at: usize) -> Option<u32> {
 
 /// Lê um WAV: PCM inteiro de 16, 24 ou 32 bits, ou float de 32 bits (inclusive no formato
 /// EXTENSIBLE), mono ou estéreo. O resto (8 bits, 64 bits, 3+ canais, MP3 etc.) é `UNSUPPORTED`.
+#[cfg(test)]
 pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
+    decode_wav_span(bytes, Span::default())
+}
+
+/// Como [`decode_wav`], mas só o trecho `span` vira amostras.
+pub fn decode_wav_span(bytes: &[u8], span: Span) -> Result<Pcm, String> {
     let bad = || UNSUPPORTED.to_string();
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err(bad());
@@ -75,8 +113,12 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
     }
     let frame = channels * (bits / 8);
     let usable = &data[..data.len() - data.len() % frame.max(1)];
+    let total = usable.len() / frame.max(1);
+    let (from, to) = span.frames(rate);
+    let (from, to) = (from.min(total), to.min(total));
+    let usable = &usable[from * frame.max(1)..to.max(from) * frame.max(1)];
     if usable.len() / frame.max(1) > (MAX_SECONDS * rate as f64) as usize {
-        return Err(too_long());
+        return Err(span.too_long_error());
     }
     let samples: Vec<i32> = match (tag, bits) {
         (1, 16) => usable.as_chunks::<2>().0.iter().map(|c| (i16::from_le_bytes(*c) as i32) << 8).collect(),
@@ -95,7 +137,7 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
         _ => return Err(bad()),
     };
     if samples.is_empty() {
-        return Err("áudio vazio".into());
+        return Err(span.empty_error());
     }
     Ok(Pcm { rate, channels, data: samples })
 }
@@ -103,14 +145,29 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Pcm, String> {
 /// Decodifica qualquer formato aceito: o WAV pelo caminho rápido próprio e o resto (FLAC, MP3, OGG
 /// Vorbis, AAC/M4A, ALAC) pelo symphonia. Mono ou estéreo, até [`MAX_SECONDS`]. Os erros voltam em
 /// português, prontos para o `error` do job.
+#[cfg(test)]
 pub fn decode_audio(bytes: &[u8]) -> Result<Pcm, String> {
-    match decode_wav(bytes) {
-        Err(e) if e == UNSUPPORTED => decode_symphonia(bytes),
+    decode_audio_span(bytes, Span::default())
+}
+
+/// Ogg com fluxo Opus: o symphonia (sem o codec) o recusa de um jeito genérico, então o container é
+/// reconhecido antes para dar a mensagem certa.
+fn is_ogg_opus(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"OggS") && bytes[..bytes.len().min(512)].windows(8).any(|w| w == b"OpusHead")
+}
+
+pub const OPUS_UNSUPPORTED: &str = "áudio Opus não é suportado; converta para WAV, FLAC, MP3, OGG Vorbis ou AAC/M4A";
+
+/// Como [`decode_audio`], mas só o trecho `span` (em segundos do arquivo) é decodificado e limitado a
+/// [`MAX_SECONDS`]; o que vem antes dele é decodificado e descartado, sem ficar na memória.
+pub fn decode_audio_span(bytes: &[u8], span: Span) -> Result<Pcm, String> {
+    match decode_wav_span(bytes, span) {
+        Err(e) if e == UNSUPPORTED => decode_symphonia(bytes, span),
         r => r,
     }
 }
 
-fn decode_symphonia(bytes: &[u8]) -> Result<Pcm, String> {
+fn decode_symphonia(bytes: &[u8], span: Span) -> Result<Pcm, String> {
     use symphonia::core::{
         audio::SampleBuffer,
         codecs::{CODEC_TYPE_NULL, DecoderOptions},
@@ -120,6 +177,9 @@ fn decode_symphonia(bytes: &[u8]) -> Result<Pcm, String> {
         meta::MetadataOptions,
         probe::Hint,
     };
+    if is_ogg_opus(bytes) {
+        return Err(OPUS_UNSUPPORTED.into());
+    }
     let bad = || UNSUPPORTED.to_string();
     let mss = MediaSourceStream::new(Box::new(std::io::Cursor::new(bytes.to_vec())), Default::default());
     let mut format =
@@ -131,6 +191,8 @@ fn decode_symphonia(bytes: &[u8]) -> Result<Pcm, String> {
     let mut out: Vec<i32> = Vec::new();
     let mut spec: Option<(u32, usize)> = None;
     let mut buf: Option<SampleBuffer<f32>> = None;
+    // quadros já decodificados (o `span` é em quadros do arquivo)
+    let mut pos: usize = 0;
     // fim do arquivo (ou arquivo cortado): vale o que já saiu
     while let Ok(packet) = format.next_packet() {
         if packet.track_id() != track_id {
@@ -159,14 +221,26 @@ fn decode_symphonia(bytes: &[u8]) -> Result<Pcm, String> {
         }
         let b = buf.as_mut().expect("buffer criado acima");
         b.copy_interleaved_ref(decoded);
-        out.extend(b.samples().iter().map(|&f| if f.is_nan() { 0 } else { (f * 8_388_608.0).round().clamp(I24_MIN as f32, I24_MAX as f32) as i32 }));
+        let (from, to) = span.frames(rate);
+        let frames = b.samples().len() / channels;
+        let (lo, hi) = (from.saturating_sub(pos).min(frames), to.saturating_sub(pos).min(frames));
+        pos += frames;
+        out.extend(
+            b.samples()[lo * channels..hi.max(lo) * channels]
+                .iter()
+                .map(|&f| if f.is_nan() { 0 } else { (f * 8_388_608.0).round().clamp(I24_MIN as f32, I24_MAX as f32) as i32 }),
+        );
         if out.len() / channels > (MAX_SECONDS * rate as f64) as usize {
-            return Err(too_long());
+            return Err(span.too_long_error());
+        }
+        // passou do fim do trecho: o resto do arquivo não interessa
+        if pos >= to {
+            break;
         }
     }
-    let (rate, channels) = spec.ok_or_else(|| "não consegui decodificar o áudio (arquivo corrompido ou codec não suportado, como Opus)".to_string())?;
+    let (rate, channels) = spec.ok_or_else(|| "não consegui decodificar o áudio (arquivo corrompido ou formato não suportado)".to_string())?;
     if out.is_empty() {
-        return Err("áudio vazio".into());
+        return Err(span.empty_error());
     }
     Ok(Pcm { rate, channels, data: out })
 }
@@ -636,6 +710,12 @@ mod tests {
     fn lixo_e_arquivo_cortado_dao_erro_claro() {
         assert_eq!(decode_audio(b"isto nao e audio").unwrap_err(), UNSUPPORTED);
         assert_eq!(decode_audio(&[]).unwrap_err(), UNSUPPORTED);
+        // Opus dentro de Ogg é reconhecido e recebe a mensagem própria (o symphonia não o abre)
+        let mut opus = b"OggS\x00\x02".to_vec();
+        opus.extend_from_slice(&[0; 20]);
+        opus.extend_from_slice(b"OpusHead\x01\x02");
+        assert_eq!(decode_audio(&opus).unwrap_err(), OPUS_UNSUPPORTED);
+        assert!(!is_ogg_opus(&fixture("seno440.ogg")), "Vorbis não é Opus");
         // MP3 cortado no meio ainda decodifica o que deu; cortado antes do primeiro quadro é erro
         let mp3 = fixture("seno440.mp3");
         assert!(decode_audio(&mp3[..mp3.len() / 2]).is_ok());
@@ -651,6 +731,37 @@ mod tests {
         // no limite passa
         let ok = vec![0u8; 599 * 8000 * 2];
         assert!(decode_wav(&wav(1, 16, 1, 8000, &ok)).is_ok());
+    }
+
+    #[test]
+    fn trecho_limita_o_trecho_e_nao_o_arquivo() {
+        // 11 minutos: o arquivo inteiro passa do teto, mas um trecho de 2 s dele converte
+        let mut payload = vec![0u8; 660 * 8000 * 2];
+        for (i, c) in payload.as_chunks_mut::<2>().0.iter_mut().enumerate().skip(100 * 8000).take(2 * 8000) {
+            *c = (((i % 40) as i16 - 20) * 500).to_le_bytes();
+        }
+        let file = wav(1, 16, 1, 8000, &payload);
+        assert_eq!(decode_audio(&file).unwrap_err(), too_long());
+        let pcm = decode_audio_span(&file, Span { start: 100.0, end: Some(102.0) }).unwrap();
+        assert_eq!(pcm.data.len(), 2 * 8000);
+        assert!(pcm.data.iter().any(|&x| x != 0), "o trecho certo foi lido");
+        // trecho de mais de 10 min também falha, com a mensagem do trecho
+        assert_eq!(decode_audio_span(&file, Span { start: 0.0, end: Some(650.0) }).unwrap_err(), segment_too_long());
+        // sem fim: do início do trecho até o fim do arquivo
+        assert_eq!(decode_audio_span(&file, Span { start: 650.0, end: None }).unwrap().data.len(), 10 * 8000);
+        // fora do áudio
+        assert!(decode_audio_span(&file, Span { start: 700.0, end: Some(701.0) }).unwrap_err().contains("fora do áudio"));
+    }
+
+    #[test]
+    fn trecho_em_formato_comprimido() {
+        // o MP3 de teste tem ~0,6 s a 22,05 kHz; o trecho de 0,2 a 0,4 s tem ~0,2 s
+        let full = decode_audio(&fixture("seno440.mp3")).unwrap();
+        let part = decode_audio_span(&fixture("seno440.mp3"), Span { start: 0.2, end: Some(0.4) }).unwrap();
+        let secs = part.data.len() as f64 / part.channels as f64 / part.rate as f64;
+        assert!((0.15..=0.25).contains(&secs), "{secs}s");
+        assert!(part.data.len() < full.data.len());
+        assert!(decode_audio_span(&fixture("seno440.mp3"), Span { start: 30.0, end: None }).unwrap_err().contains("fora do áudio"));
     }
 
     #[test]

@@ -17,6 +17,12 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// O servidor recusou apagar um áudio enviado há pouco (o projeto que o usa pode não ter sincronizado):
+/// a pessoa pode insistir com `force`.
+class SampleRecent extends ApiException {
+  SampleRecent(String message) : super(409, message);
+}
+
 /// A sessão morreu no servidor (saiu, refresh reusado ou vencido): o app volta ao login.
 class Unauthenticated implements Exception {
   @override
@@ -259,8 +265,17 @@ class ApiClient implements SyncApi {
   // ---- armazenamento de áudios (tela Conta) ----
   Future<StorageUsage> storageUsage() async => StorageUsage.fromJson(await _get('/api/samples') as Map<String, dynamic>);
 
-  /// Apaga um áudio sem uso; devolve os bytes liberados. Em uso, o servidor responde 409.
-  Future<int> deleteSample(String hash) async => ((await _delete('/api/samples/$hash')) as Map<String, dynamic>)['freed_bytes'] as int;
+  /// Apaga um áudio sem uso; devolve os bytes liberados. Em uso, o servidor responde 409; enviado na última hora,
+  /// também 409, e aí lança [SampleRecent] (com [force] apaga mesmo assim).
+  Future<int> deleteSample(String hash, {bool force = false}) async {
+    final r = await _send('DELETE', '/api/samples/$hash', q: force ? {'force': 'true'} : null);
+    if (r.statusCode == 409) {
+      final j = _decode(r);
+      if (j is Map && j['recent'] == true) throw SampleRecent(j['error'] as String? ?? 'áudio enviado há pouco');
+    }
+    if (r.statusCode >= 400) throw _error(r);
+    return (_decode(r) as Map<String, dynamic>)['freed_bytes'] as int;
+  }
 
   Future<CleanupResult> cleanupSamples() async => CleanupResult.fromJson(await _json('POST', '/api/samples/cleanup', {}) as Map<String, dynamic>);
 

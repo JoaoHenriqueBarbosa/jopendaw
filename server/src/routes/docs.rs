@@ -13,10 +13,12 @@ use chrono::{DateTime, Utc};
 use sea_orm::EntityTrait;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sqlx::PgPool;
+use std::collections::HashSet;
 use uuid::Uuid;
 
-use super::{ApiError, ApiResult, err, projects::owned};
-use crate::{AppState, auth::Auth, entities::prelude::ProjectDoc};
+use super::{ApiError, ApiResult, err, projects::owned, samples::collect_hashes};
+use crate::{AppState, auth::Auth, entities::prelude::ProjectDoc, storage};
 
 /// Teto do documento. O corpo também leva `base_version` e as chaves, então a leitura aceita uma
 /// folga pequena e quem decide é o tamanho do corpo inteiro.
@@ -59,6 +61,23 @@ pub async fn put(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>, bo
 
     // a troca de versão e o updated_at do projeto andam juntos: ou os dois, ou nenhum
     let mut tx = s.pool.begin().await?;
+    // áudios que este documento passa a citar: a trava por hash (a mesma do apagar e do criar tarefa) vale até o
+    // commit, então um apagar concorrente ou espera este documento (e o vê ao conferir os usos) ou já terminou,
+    // e aí a conferência abaixo pega o áudio que sumiu
+    let newly = newly_cited(&s.pool, auth.user_id, id, &b.doc).await?;
+    storage::lock_hashes(&mut tx, &newly).await?;
+    if !newly.is_empty() {
+        let alive: Vec<(String,)> =
+            sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1 AND hash = ANY($2)").bind(auth.user_id).bind(&newly).fetch_all(&mut *tx).await?;
+        let alive: HashSet<String> = alive.into_iter().map(|r| r.0).collect();
+        let gone: Vec<&String> = newly.iter().filter(|h| !alive.contains(*h)).collect();
+        if !gone.is_empty() {
+            tx.rollback().await?;
+            let body =
+                json!({"error": "um áudio citado pelo projeto foi apagado neste instante; envie o áudio de novo e tente salvar outra vez", "missing": gone});
+            return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response());
+        }
+    }
     let doc = sqlx::types::Json(&b.doc);
     let written: Option<(i64, DateTime<Utc>)> = if b.base_version == 0 {
         // primeira gravação: se outra chegou antes, a linha já existe e o INSERT não retorna nada
@@ -90,6 +109,27 @@ pub async fn put(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>, bo
     sqlx::query("UPDATE projects SET updated_at = $2 WHERE id = $1").bind(id).bind(updated_at).execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(Json(json!({"version": version, "updated_at": updated_at})).into_response())
+}
+
+/// Os áudios da conta que `doc` cita e a versão gravada do projeto ainda não citava (só esses precisam de trava:
+/// os que já eram citados continuam protegidos pela própria citação).
+async fn newly_cited(pool: &PgPool, owner: Uuid, project: Uuid, doc: &Value) -> Result<Vec<String>, sqlx::Error> {
+    let mut cited = HashSet::new();
+    collect_hashes(doc, &mut cited);
+    if cited.is_empty() {
+        return Ok(Vec::new());
+    }
+    let old: Option<(sqlx::types::Json<Value>,)> =
+        sqlx::query_as("SELECT doc FROM project_docs WHERE project_id = $1 AND doc IS NOT NULL").bind(project).fetch_optional(pool).await?;
+    if let Some((old,)) = old {
+        let mut before = HashSet::new();
+        collect_hashes(&old.0, &mut before);
+        cited.retain(|h| !before.contains(h));
+    }
+    let cited: Vec<String> = cited.into_iter().collect();
+    let owned: Vec<(String,)> =
+        sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1 AND hash = ANY($2)").bind(owner).bind(&cited).fetch_all(pool).await?;
+    Ok(owned.into_iter().map(|r| r.0).collect())
 }
 
 fn too_big() -> ApiError {

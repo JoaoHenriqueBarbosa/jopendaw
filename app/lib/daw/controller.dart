@@ -1988,7 +1988,15 @@ class DawController extends ChangeNotifier {
     final clip = f.$2;
     onProgress?.call('Enviando o áudio…', null);
     await sync.uploadSamples([clip.sample]);
-    final r = await runAudioToMidi(_api, clip.sample, onProgress: onProgress, isCancelled: isCancelled, pollEvery: pollEvery, options: options);
+    final r = await runAudioToMidi(
+      _api,
+      clip.sample,
+      onProgress: onProgress,
+      isCancelled: isCancelled,
+      pollEvery: pollEvery,
+      options: options,
+      span: spanForClip(clip),
+    );
     if (_disposed) throw ConversionCancelled();
     // o clipe pode ter mudado de lugar, de corte ou sumido enquanto o servidor trabalhava
     final now = _findClip(clipId);

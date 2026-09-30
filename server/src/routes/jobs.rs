@@ -27,10 +27,7 @@ use crate::{
     AppState,
     audio::{self, MidiParams},
     auth::Auth,
-    entities::{
-        job,
-        prelude::{Job, Sample},
-    },
+    entities::{job, prelude::Job},
     storage::{self, RegisterError},
 };
 
@@ -57,12 +54,37 @@ fn check_params(kind: &str, params: Option<Value>) -> Result<Option<Value>, ApiE
         return Ok(None);
     }
     let mut out = Map::new();
-    for (key, lo, hi) in [("min_note_ms", 0.0, 5000.0), ("rms_floor_db", -120.0, 0.0)] {
+    // o piso de nível entra em `(db - piso) / (-6 - piso)`: com piso >= -6 dB o divisor some, então o teto é -10
+    for (key, lo, hi) in [("min_note_ms", 0.0, 5000.0), ("rms_floor_db", -120.0, -10.0)] {
         if let Some(v) = obj.get(key).filter(|v| !v.is_null()) {
             match v.as_f64() {
                 Some(n) if (lo..=hi).contains(&n) => out.insert(key.into(), json!(n)),
                 _ => return Err(bad(&format!("{key}: número entre {lo} e {hi}"))),
             };
+        }
+    }
+    // trecho do arquivo a analisar, em segundos; o teto de duração vale pelo trecho
+    let seconds = |key: &str| -> Result<Option<f64>, ApiError> {
+        match obj.get(key).filter(|v| !v.is_null()) {
+            None => Ok(None),
+            Some(v) => match v.as_f64() {
+                Some(n) if n.is_finite() && (0.0..=1e7).contains(&n) => Ok(Some(n)),
+                _ => Err(bad(&format!("{key}: segundos, número de 0 em diante"))),
+            },
+        }
+    };
+    let (start, end) = (seconds("start")?, seconds("end")?);
+    if let Some(e) = end {
+        if e <= start.unwrap_or(0.0) {
+            return Err(bad("end: precisa ser maior que start"));
+        }
+        if e - start.unwrap_or(0.0) > audio::MAX_SECONDS {
+            return Err(bad(&format!("trecho longo demais: o máximo é {} minutos", (audio::MAX_SECONDS / 60.0) as u32)));
+        }
+    }
+    for (key, v) in [("start", start), ("end", end)] {
+        if let Some(n) = v {
+            out.insert(key.into(), json!(n));
         }
     }
     Ok(Some(Value::Object(out)))
@@ -76,21 +98,26 @@ pub async fn create(State(s): State<AppState>, auth: Auth, Json(b): Json<NewJob>
         return Err(err(StatusCode::BAD_REQUEST, "sample: hash SHA-256 inválido"));
     }
     let params = check_params(&b.kind, b.params)?;
-    // áudio de outra conta é 404, igual ao que não existe
-    Sample::find_by_id((auth.user_id, b.sample.clone())).one(&s.db).await?.ok_or_else(ApiError::not_found)?;
-
     let (active,): (i64,) =
         sqlx::query_as("SELECT count(*) FROM jobs WHERE owner_id = $1 AND status IN ('queued', 'running')").bind(auth.user_id).fetch_one(&s.pool).await?;
     if active >= MAX_ACTIVE_PER_USER {
         return Err(err(StatusCode::TOO_MANY_REQUESTS, format!("você já tem {MAX_ACTIVE_PER_USER} tarefas em andamento; aguarde alguma terminar")));
     }
+    // sob a trava do hash: conferir que o áudio existe e criar a tarefa não pode se cruzar com um apagar do
+    // mesmo áudio, que senão o tiraria do armazenamento entre um passo e outro
+    let mut lock = storage::lock_hash(&s.pool, &b.sample).await?;
+    // áudio de outra conta é 404, igual ao que não existe
+    let owned: Option<(i64,)> =
+        sqlx::query_as("SELECT size FROM samples WHERE owner_id = $1 AND hash = $2").bind(auth.user_id).bind(&b.sample).fetch_optional(&mut *lock).await?;
+    owned.ok_or_else(ApiError::not_found)?;
     let (id,): (Uuid,) = sqlx::query_as("INSERT INTO jobs (owner_id, kind, sample_hash, params) VALUES ($1, $2, $3, $4) RETURNING id")
         .bind(auth.user_id)
         .bind(&b.kind)
         .bind(&b.sample)
         .bind(params.map(sqlx::types::Json))
-        .fetch_one(&s.pool)
+        .fetch_one(&mut *lock)
         .await?;
+    lock.commit().await?;
     s.job_wake.notify_one();
     Ok((StatusCode::ACCEPTED, Json(json!({"id": id, "status": "queued"}))))
 }
@@ -180,7 +207,11 @@ enum Output {
 /// O trabalho pesado, síncrono: decodificar e processar o áudio já lido do armazenamento. Roda em `spawn_blocking`.
 fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
     let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
-    let pcm = audio::decode_audio(&bytes)?;
+    let span = audio::Span {
+        start: params.and_then(|p| p.get("start")).and_then(Value::as_f64).unwrap_or(0.0),
+        end: params.and_then(|p| p.get("end")).and_then(Value::as_f64),
+    };
+    let pcm = audio::decode_audio_span(&bytes, span)?;
     drop(bytes);
     set(0.1);
     match kind {
@@ -199,7 +230,9 @@ fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &Atomic
             let mono = pcm.to_mono();
             let duration = mono.len() as f64 / pcm.rate as f64;
             let notes = audio::audio_to_midi(&mono, pcm.rate, p, &|f| set(0.1 + 0.9 * f));
-            Ok(Output::Result(json!({"notes": notes, "duration": duration})))
+            // os tempos das notas continuam em segundos do arquivo inteiro, mesmo com só um trecho analisado
+            let notes: Vec<audio::Note> = notes.into_iter().map(|n| audio::Note { start: n.start + span.start, ..n }).collect();
+            Ok(Output::Result(json!({"notes": notes, "duration": duration, "start": span.start})))
         }
     }
 }
@@ -277,7 +310,7 @@ async fn save_flac(s: &AppState, owner: Uuid, bytes: Vec<u8>) -> Result<Value, S
     }
     match registered {
         Ok(()) => Ok(json!({"sample": hash, "bytes": bytes.len()})),
-        Err(RegisterError::Quota) => Err("cota de armazenamento de 4 GB excedida".into()),
+        Err(RegisterError::Quota) => Err(storage::QUOTA_MESSAGE.into()),
         Err(RegisterError::Db(e)) => {
             tracing::error!(error = %e, "falha ao registrar o FLAC");
             Err("erro interno ao registrar o arquivo".into())

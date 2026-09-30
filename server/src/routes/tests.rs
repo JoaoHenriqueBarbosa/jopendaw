@@ -594,8 +594,17 @@ async fn job_orfao_volta_para_a_fila() {
             .unwrap();
     // só as desta conta: o `running` de outros testes é proposital
     routes::jobs::requeue(&e.state.pool, Some(a.id)).await.unwrap();
-    // o worker do teste (ou o de outro teste) pega e termina
-    let j = wait_job(&e, &a, &id.to_string()).await;
+    // o worker do teste (ou o de outro teste) pega e termina. Se o pegou o worker de um teste que já acabou (o runtime
+    // dele morre no meio), a tarefa fica `running` para sempre: recolocar na fila de novo faz parte do que se testa
+    let mut j = Value::Null;
+    for _ in 0..20 {
+        j = get(&e, &format!("/api/jobs/{id}"), &a).await.json();
+        if j["status"] == "done" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        routes::jobs::requeue(&e.state.pool, Some(a.id)).await.unwrap();
+    }
     assert_eq!(j["status"], "done", "{j}");
 }
 
@@ -607,6 +616,11 @@ async fn put_doc(e: &Env, u: &User, project: &str, base: i64, doc: Value) -> Res
 
 async fn del(e: &Env, uri: &str, u: &User) -> Res {
     call(e, Method::DELETE, uri, Some(&u.token), vec![], &[]).await
+}
+
+/// Apaga insistindo (`force=true`): os áudios dos testes acabaram de ser enviados e a proteção do envio recente os seguraria.
+async fn del_force(e: &Env, hash: &str, u: &User) -> Res {
+    del(e, &format!("/api/samples/{hash}?force=true"), u).await
 }
 
 async fn post_empty(e: &Env, uri: &str, token: Option<&str>) -> Res {
@@ -667,6 +681,16 @@ async fn samples_listar_e_apagar() {
         assert_eq!(r.json()["projects"].as_array().unwrap().len(), 1);
         assert!(e.state.store.exists(h).await.unwrap());
     }
+    // recém-enviado e sem uso: o documento que o cita pode não ter chegado, então o apagar avisa (409) e o usuário confirma
+    let l = get(&e, "/api/samples", &a).await.json();
+    assert_eq!(sample_row(&l, &loose_hash)["recent"], true);
+    let r = del(&e, &format!("/api/samples/{loose_hash}"), &a).await;
+    assert_eq!((r.status, r.json()["recent"].clone()), (StatusCode::CONFLICT, json!(true)));
+    assert!(r.json()["error"].as_str().unwrap().contains("enviado há pouco"));
+    assert!(e.state.store.exists(&loose_hash).await.unwrap());
+    // com a folga vencida apaga sem insistir
+    backdate(&e, &a, &loose_hash).await;
+    assert_eq!(sample_row(&get(&e, "/api/samples", &a).await.json(), &loose_hash)["recent"], false);
     // sem uso: sai do registro e do armazenamento, e a cota volta
     let r = del(&e, &format!("/api/samples/{loose_hash}"), &a).await;
     assert_eq!((r.status, r.json()["freed_bytes"].clone()), (StatusCode::OK, json!(16)));
@@ -684,7 +708,9 @@ async fn samples_listar_e_apagar() {
     let l = get(&e, "/api/samples", &a).await.json();
     assert_eq!((sample_row(&l, &used_clip)["unused"].clone(), l["used_bytes"].clone()), (json!(true), json!(32)));
     assert!(e.state.store.exists(&used_clip).await.unwrap());
-    assert_eq!(del(&e, &format!("/api/samples/{used_clip}"), &a).await.status, StatusCode::OK);
+    // recente (acabou de ser enviado) mas a pessoa confirma: force=true
+    assert_eq!(del(&e, &format!("/api/samples/{used_clip}"), &a).await.status, StatusCode::CONFLICT);
+    assert_eq!(del_force(&e, &used_clip, &a).await.status, StatusCode::OK);
 }
 
 #[tokio::test]
@@ -704,7 +730,7 @@ async fn samples_apagar_devolve_a_cota() {
     assert_eq!(r.status, StatusCode::PAYLOAD_TOO_LARGE);
     assert!(r.json()["error"].as_str().unwrap().contains("Conta"), "a mensagem aponta a saída");
 
-    let r = del(&e, &format!("/api/samples/{fake}"), &a).await;
+    let r = del_force(&e, &fake, &a).await;
     assert_eq!((r.status, r.json()["freed_bytes"].as_i64()), (StatusCode::OK, Some(storage::QUOTA_BYTES - 10)));
     let (_, r) = upload(&e, &a, &body).await;
     assert_eq!(r.status, StatusCode::NO_CONTENT);
@@ -731,7 +757,7 @@ async fn samples_isolamento_entre_contas_e_hash_igual() {
     assert_eq!(put_doc(&e, &b, &pb, 0, json!({"samples": {hash.clone(): {"name": "x.wav", "duration": 1.0}}})).await.status, StatusCode::OK);
     // o projeto da B não segura o áudio da A (mas segura o da própria B)
     assert_eq!(del(&e, &format!("/api/samples/{hash}"), &b).await.status, StatusCode::CONFLICT);
-    assert_eq!(del(&e, &format!("/api/samples/{hash}"), &a).await.status, StatusCode::OK);
+    assert_eq!(del_force(&e, &hash, &a).await.status, StatusCode::OK);
     // os bytes ficam, porque a B ainda os registra; a B lê normalmente
     assert!(e.state.store.exists(&hash).await.unwrap());
     let r = get(&e, &format!("/api/samples/{hash}"), &b).await;
@@ -741,7 +767,7 @@ async fn samples_isolamento_entre_contas_e_hash_igual() {
 
     // quando a B também larga, aí sim os bytes saem
     assert_eq!(put_doc(&e, &b, &pb, 1, json!({"samples": {}})).await.status, StatusCode::OK);
-    assert_eq!(del(&e, &format!("/api/samples/{hash}"), &b).await.status, StatusCode::OK);
+    assert_eq!(del_force(&e, &hash, &b).await.status, StatusCode::OK);
     assert!(!e.state.store.exists(&hash).await.unwrap());
 }
 
@@ -794,14 +820,212 @@ async fn job_audio_para_midi_mp3_e_parametros_extremos() {
     assert_eq!(j["status"], "done", "{j}");
     assert!(j["result"]["notes"].as_array().unwrap().iter().any(|n| n["pitch"] == 69), "{j}");
     // extremos: fora da faixa é 400 na criação; nos limites da faixa a tarefa roda sem quebrar
-    for p in
-        [json!({"min_note_ms": 5001}), json!({"min_note_ms": -0.5}), json!({"rms_floor_db": -121}), json!({"rms_floor_db": 0.1}), json!({"min_note_ms": "x"})]
-    {
+    for p in [
+        json!({"min_note_ms": 5001}),
+        json!({"min_note_ms": -0.5}),
+        json!({"rms_floor_db": -121}),
+        json!({"rms_floor_db": 0.1}),
+        json!({"rms_floor_db": 0}),
+        json!({"rms_floor_db": -9.9}),
+        json!({"min_note_ms": "x"}),
+    ] {
         assert_eq!(new_job(&e, &a, "audio_to_midi", &hash, Some(p)).await.status, StatusCode::BAD_REQUEST);
     }
-    for p in [json!({"min_note_ms": 5000, "rms_floor_db": 0}), json!({"min_note_ms": 0, "rms_floor_db": -120})] {
+    let r = new_job(&e, &a, "audio_to_midi", &hash, Some(json!({"rms_floor_db": -6}))).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST);
+    let msg = r.json()["error"].as_str().unwrap().to_string();
+    assert!(msg.contains("-120") && msg.contains("-10"), "{msg}");
+    for p in [json!({"min_note_ms": 5000, "rms_floor_db": -10}), json!({"min_note_ms": 0, "rms_floor_db": -120})] {
         let r = new_job(&e, &a, "audio_to_midi", &hash, Some(p)).await;
         let j = wait_job(&e, &a, r.json()["id"].as_str().unwrap()).await;
         assert_eq!(j["status"], "done", "{j}");
     }
+}
+
+// ---------------------------------------------------------------- endurecimento (fase 11)
+
+/// Segura a trava por hash como faria um envio ou apagar em andamento, até a transação ser confirmada.
+async fn hold_lock(e: &Env, hash: &str) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    storage::lock_hash(&e.state.pool, hash).await.unwrap()
+}
+
+fn clone_user(u: &User) -> User {
+    User { id: u.id, token: u.token.clone() }
+}
+
+#[tokio::test]
+async fn limpar_revalida_documento_que_chegou_depois_da_lista() {
+    let e = Arc::new(env_or_skip!());
+    let a = user(&e).await;
+    let (h, _) = upload(&e, &a, &rand_bytes()).await;
+    backdate(&e, &a, &h).await;
+    let p = project(&e, &a).await;
+    // o cleanup lê os documentos (nada cita h), e só então chega o documento que cita
+    let lock = hold_lock(&e, &h).await;
+    let (e2, tok) = (e.clone(), a.token.clone());
+    let task = tokio::spawn(async move { call(&e2, Method::POST, "/api/samples/cleanup", Some(&tok), vec![], &[]).await });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    sqlx::query("INSERT INTO project_docs (project_id, version, doc) VALUES ($1, 1, $2)")
+        .bind(Uuid::parse_str(&p).unwrap())
+        .bind(sqlx::types::Json(json!({"tracks": [{"audio": [{"sample": h}]}]})))
+        .execute(&e.state.pool)
+        .await
+        .unwrap();
+    lock.commit().await.unwrap();
+    let r = task.await.unwrap();
+    assert_eq!(r.json()["removed"], 0, "{}", r.json());
+    assert!(e.state.store.exists(&h).await.unwrap());
+    assert_eq!(get(&e, &format!("/api/samples/{h}"), &a).await.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn limpar_nao_apaga_o_que_ganhou_tarefa_no_meio() {
+    let e = Arc::new(env_or_skip!());
+    let a = user(&e).await;
+    let (h, _) = upload(&e, &a, &rand_bytes()).await;
+    backdate(&e, &a, &h).await;
+    let lock = hold_lock(&e, &h).await;
+    let (e2, tok) = (e.clone(), a.token.clone());
+    let task = tokio::spawn(async move { call(&e2, Method::POST, "/api/samples/cleanup", Some(&tok), vec![], &[]).await });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    sqlx::query("INSERT INTO jobs (owner_id, kind, sample_hash, status) VALUES ($1, 'flac', $2, 'running')")
+        .bind(a.id)
+        .bind(&h)
+        .execute(&e.state.pool)
+        .await
+        .unwrap();
+    lock.commit().await.unwrap();
+    assert_eq!(task.await.unwrap().json()["removed"], 0);
+    assert!(e.state.store.exists(&h).await.unwrap());
+}
+
+#[tokio::test]
+async fn criar_tarefa_e_apagar_do_mesmo_audio_nao_se_cruzam() {
+    let e = Arc::new(env_or_skip!());
+    let a = user(&e).await;
+    // vários pares tarefa x apagar ao mesmo tempo: ou a tarefa é criada (e o apagar recusa) ou o apagar vence (e a tarefa é 404);
+    // nunca uma tarefa que falha com "áudio não encontrado no armazenamento"
+    for _ in 0..6 {
+        let (h, _) = upload(&e, &a, &rand_bytes()).await;
+        let (e1, e2, t1, t2, h1, h2) = (e.clone(), e.clone(), a.token.clone(), a.token.clone(), h.clone(), h.clone());
+        let job = tokio::spawn(async move {
+            let body = serde_json::to_vec(&json!({"kind": "flac", "sample": h1})).unwrap();
+            call(&e1, Method::POST, "/api/jobs", Some(&t1), body, &[("content-type", "application/json")]).await
+        });
+        let del = tokio::spawn(async move { call(&e2, Method::DELETE, &format!("/api/samples/{h2}?force=true"), Some(&t2), vec![], &[]).await });
+        let (job, del) = (job.await.unwrap(), del.await.unwrap());
+        match (job.status, del.status) {
+            // a tarefa já tinha terminado (e falhado pelo formato) quando o apagar chegou: também vale
+            (StatusCode::ACCEPTED, StatusCode::CONFLICT | StatusCode::OK) => {
+                let j = wait_job(&e, &a, job.json()["id"].as_str().unwrap()).await;
+                // o áudio de teste não é um WAV: a falha é do formato, não do armazenamento
+                assert!(!j["error"].as_str().unwrap().contains("armazenamento"), "{j}");
+            }
+            (StatusCode::NOT_FOUND, StatusCode::OK) => {}
+            other => panic!("combinação inesperada: {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn put_do_documento_espera_a_trava_do_hash_e_recusa_audio_que_sumiu() {
+    let e = Arc::new(env_or_skip!());
+    let a = user(&e).await;
+    let (h, _) = upload(&e, &a, &rand_bytes()).await;
+    let p = project(&e, &a).await;
+    // 1. um apagar em andamento segura o PUT que passa a citar o hash
+    let lock = hold_lock(&e, &h).await;
+    let (e2, u2, p2, h2) = (e.clone(), clone_user(&a), p.clone(), h.clone());
+    let task = tokio::spawn(async move { put_doc(&e2, &u2, &p2, 0, json!({"tracks": [{"audio": [{"sample": h2}]}]})).await });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert!(!task.is_finished(), "o PUT deveria esperar a trava do hash");
+    lock.commit().await.unwrap();
+    assert_eq!(task.await.unwrap().status, StatusCode::OK);
+
+    // 2. o apagar terminou antes de o PUT tomar a trava: o áudio sumiu, o PUT recusa em vez de gravar citação solta
+    let (h3, _) = upload(&e, &a, &rand_bytes()).await;
+    let mut lock = hold_lock(&e, &h3).await;
+    let (e3, u3, p3, h4) = (e.clone(), clone_user(&a), p.clone(), h3.clone());
+    let task = tokio::spawn(async move { put_doc(&e3, &u3, &p3, 1, json!({"tracks": [{"audio": [{"sample": h4}]}]})).await });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    sqlx::query("DELETE FROM samples WHERE owner_id = $1 AND hash = $2").bind(a.id).bind(&h3).execute(&mut *lock).await.unwrap();
+    lock.commit().await.unwrap();
+    let r = task.await.unwrap();
+    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.json());
+    assert_eq!(r.json()["missing"], json!([h3]));
+    // e a versão não andou
+    assert_eq!(get(&e, &format!("/api/projects/{p}/doc"), &a).await.json()["version"], 1);
+}
+
+#[tokio::test]
+async fn job_de_cota_estourada_diz_onde_liberar() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let (h, _) = upload(&e, &a, &sine_wav(440.0, 0.3)).await;
+    let fake = storage::hex_sha256(b"enorme-de-cota");
+    sqlx::query("INSERT INTO samples (owner_id, hash, size) VALUES ($1, $2, $3)")
+        .bind(a.id)
+        .bind(&fake)
+        .bind(storage::QUOTA_BYTES - 100)
+        .execute(&e.state.pool)
+        .await
+        .unwrap();
+    let j = wait_job(&e, &a, new_job(&e, &a, "flac", &h, None).await.json()["id"].as_str().unwrap()).await;
+    assert_eq!(j["status"], "failed");
+    assert!(j["error"].as_str().unwrap().contains("tela Conta"), "{j}");
+}
+
+#[tokio::test]
+async fn job_opus_tem_mensagem_propria() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let mut opus = b"OggS\x00\x02".to_vec();
+    opus.extend_from_slice(&[0; 20]);
+    opus.extend_from_slice(b"OpusHead\x01\x02");
+    let (h, _) = upload(&e, &a, &opus).await;
+    let j = wait_job(&e, &a, new_job(&e, &a, "audio_to_midi", &h, None).await.json()["id"].as_str().unwrap()).await;
+    assert_eq!(j["status"], "failed");
+    assert!(j["error"].as_str().unwrap().contains("Opus"), "{j}");
+}
+
+#[tokio::test]
+async fn job_trecho_de_arquivo_longo() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    // 11 minutos a 8 kHz, com uma senoide de 440 Hz entre 100 s e 101 s: o arquivo passa do teto, o trecho não
+    let rate = 8000usize;
+    let mut samples = vec![0i16; 660 * rate];
+    for (i, x) in samples.iter_mut().enumerate().skip(100 * rate).take(rate) {
+        *x = (12_000.0 * (std::f32::consts::TAU * 440.0 * i as f32 / rate as f32).sin()) as i16;
+    }
+    let (h, _) = upload(&e, &a, &wav16(rate as u32, &samples)).await;
+    let inteiro = wait_job(&e, &a, new_job(&e, &a, "audio_to_midi", &h, None).await.json()["id"].as_str().unwrap()).await;
+    assert_eq!(inteiro["status"], "failed");
+    assert!(inteiro["error"].as_str().unwrap().contains("longo demais"), "{inteiro}");
+
+    let r = new_job(&e, &a, "audio_to_midi", &h, Some(json!({"start": 99.5, "end": 101.5}))).await;
+    assert_eq!(r.status, StatusCode::ACCEPTED, "{}", r.json());
+    let j = wait_job(&e, &a, r.json()["id"].as_str().unwrap()).await;
+    assert_eq!(j["status"], "done", "{j}");
+    assert!((j["result"]["duration"].as_f64().unwrap() - 2.0).abs() < 0.01, "{j}");
+    let notes = j["result"]["notes"].as_array().unwrap();
+    assert!(notes.iter().any(|n| n["pitch"] == 69), "{j}");
+    // os tempos continuam em segundos do arquivo inteiro
+    let s = notes[0]["start"].as_f64().unwrap();
+    assert!((99.9..101.0).contains(&s), "{s}");
+
+    // validações do trecho
+    for p in [
+        json!({"start": -1}),
+        json!({"start": 10, "end": 5}),
+        json!({"start": 5, "end": 5}),
+        json!({"start": 0, "end": 601}),
+        json!({"end": "x"}),
+        json!({"start": 1e9}),
+    ] {
+        assert_eq!(new_job(&e, &a, "audio_to_midi", &h, Some(p)).await.status, StatusCode::BAD_REQUEST);
+    }
+    // trecho fora do áudio: falha clara
+    let j = wait_job(&e, &a, new_job(&e, &a, "audio_to_midi", &h, Some(json!({"start": 700, "end": 701}))).await.json()["id"].as_str().unwrap()).await;
+    assert!(j["error"].as_str().unwrap().contains("fora do áudio"), "{j}");
 }

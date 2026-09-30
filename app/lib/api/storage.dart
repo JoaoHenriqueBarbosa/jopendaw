@@ -11,7 +11,11 @@ class StoredSample {
   final DateTime? createdAt;
   final List<String> projects;
 
-  const StoredSample({required this.hash, required this.size, this.name, this.createdAt, this.projects = const []});
+  /// Enviado na última hora: o projeto que o usa pode ainda não ter sincronizado, então "sem uso" pode ser só
+  /// aparência.
+  final bool recent;
+
+  const StoredSample({required this.hash, required this.size, this.name, this.createdAt, this.projects = const [], this.recent = false});
 
   bool get unused => projects.isEmpty;
 
@@ -21,6 +25,7 @@ class StoredSample {
     size: (j['size'] as num).toInt(),
     createdAt: DateTime.tryParse('${j['created_at']}'),
     projects: [for (final p in (j['projects'] as List? ?? const [])) (p as Map)['name'] as String? ?? ''],
+    recent: j['recent'] == true,
   );
 }
 

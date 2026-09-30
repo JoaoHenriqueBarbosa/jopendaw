@@ -10,7 +10,7 @@ import '../api/sync_api.dart';
 import 'model.dart';
 
 /// Os dois ajustes da análise, com os padrões do servidor (`MidiParams::default`). A faixa é a da
-/// interface; o servidor aceita mais (0 a 5000 ms, -120 a 0 dB) e recusa o que passar disso.
+/// interface; o servidor aceita mais (0 a 5000 ms, -120 a -10 dB) e recusa o que passar disso.
 class MidiConvertOptions {
   static const minNoteMsRange = (20.0, 500.0);
   static const rmsFloorDbRange = (-80.0, -20.0);
@@ -27,6 +27,14 @@ class MidiConvertOptions {
       MidiConvertOptions(minNoteMs: minNoteMs ?? this.minNoteMs, rmsFloorDb: rmsFloorDb ?? this.rmsFloorDb);
 
   Map<String, dynamic> toParams() => {'min_note_ms': minNoteMs, 'rms_floor_db': rmsFloorDb};
+
+  /// Os parâmetros do job com o trecho do arquivo a analisar (segundos): o teto de 10 min do servidor vale pelo trecho,
+  /// não pelo arquivo, então um clipe curto de um arquivo longo converte.
+  Map<String, dynamic> toParamsFor(({double start, double end})? span) => {
+    ...toParams(),
+    if (span != null) 'start': span.start,
+    if (span != null) 'end': span.end,
+  };
 }
 
 /// Uma nota como o servidor a devolve: tempos em segundos do áudio inteiro.
@@ -78,6 +86,14 @@ List<MidiNote> notesForClip(ConvertedNotes r, AudioClip clip, double bpm) {
   return out;
 }
 
+/// Folga em volta do clipe, em segundos, para o analisador ter contexto nas pontas (a nota que começa antes do corte, o
+/// quadro de análise cheio); as notas de fora da janela do clipe são descartadas em [notesForClip].
+const convertMarginSeconds = 0.25;
+
+/// O trecho do arquivo que o clipe toca (`offset` e `length` em segundos do arquivo), com a folga, para mandar ao servidor.
+({double start, double end}) spanForClip(AudioClip clip) =>
+    (start: math.max(0.0, clip.offset - convertMarginSeconds), end: clip.offset + clip.length + convertMarginSeconds);
+
 /// A conversão foi cancelada pela pessoa.
 class ConversionCancelled implements Exception {
   @override
@@ -95,10 +111,11 @@ Future<ConvertedNotes> runAudioToMidi(
   bool Function()? isCancelled,
   Duration pollEvery = const Duration(seconds: 1),
   MidiConvertOptions options = const MidiConvertOptions(),
+  ({double start, double end})? span,
 }) async {
   bool cancelled() => isCancelled?.call() ?? false;
   onProgress?.call('Analisando o áudio…', null);
-  var job = await api.createJob('audio_to_midi', sample, options.toParams());
+  var job = await api.createJob('audio_to_midi', sample, options.toParamsFor(span));
   var failures = 0;
   while (true) {
     if (cancelled()) throw ConversionCancelled();

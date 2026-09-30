@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/api/storage.dart';
+import 'package:jopendaw_app/screens/account_screen.dart';
 import 'package:jopendaw_app/api/sync_api.dart';
 import 'package:jopendaw_app/daw/audio_to_midi.dart';
 import 'package:jopendaw_app/daw/export_options.dart';
@@ -75,6 +76,33 @@ void main() {
       {'min_note_ms': 60.0, 'rms_floor_db': -45.0},
       {'min_note_ms': 120.0, 'rms_floor_db': -30.0},
     ]);
+  });
+
+  test('runAudioToMidi manda o trecho do clipe (start/end) e não o arquivo inteiro', () async {
+    final api = _SpyApi()..script = [_done];
+    final clip = AudioClip(id: 'c', sample: 'h', start: 0, length: 3);
+    clip.offset = 100;
+    final span = spanForClip(clip);
+    expect((span.start, span.end), (99.75, 103.25));
+    await runAudioToMidi(api, 'h', span: span);
+    expect(api.params.single, {'min_note_ms': 60.0, 'rms_floor_db': -45.0, 'start': 99.75, 'end': 103.25});
+    // no começo do arquivo a folga não passa de 0
+    clip.offset = 0.1;
+    expect(spanForClip(clip).start, 0.0);
+  });
+
+  test('cleanupSummary: plural e verbo concordam', () {
+    expect(cleanupSummary(const CleanupResult(0, 0, 0)), 'Nada para apagar.');
+    expect(cleanupSummary(const CleanupResult(1, 2048, 0)), 'Liberei 2,0 KB (1 áudio apagado).');
+    expect(cleanupSummary(const CleanupResult(3, 2048, 0)), 'Liberei 2,0 KB (3 áudios apagados).');
+    expect(cleanupSummary(const CleanupResult(2, 2048, 1)), 'Liberei 2,0 KB (2 áudios apagados). 1 áudio enviado na última hora ficou de fora.');
+    expect(cleanupSummary(const CleanupResult(1, 2048, 4)), 'Liberei 2,0 KB (1 áudio apagado). 4 áudios enviados na última hora ficaram de fora.');
+    expect(cleanupSummary(const CleanupResult(0, 0, 2)), 'Nada para apagar. 2 áudios enviados na última hora ficaram de fora.');
+  });
+
+  test('StoredSample.recent vem do servidor', () {
+    expect(StoredSample.fromJson({'hash': 'a', 'size': 1, 'recent': true}).recent, isTrue);
+    expect(StoredSample.fromJson({'hash': 'a', 'size': 1}).recent, isFalse);
   });
 
   group('diálogo de conversão', () {

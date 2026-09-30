@@ -344,6 +344,21 @@ pub async fn lock_hash(pool: &PgPool, hash: &str) -> Result<sqlx::Transaction<'s
     Ok(tx)
 }
 
+/// Mensagem da cota estourada, a mesma no envio e nas tarefas (a saída é a mesma: apagar o que não se usa).
+pub const QUOTA_MESSAGE: &str = "cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta";
+
+/// Toma, na transação `tx`, a trava por hash (a mesma de [`lock_hash`]) de vários conteúdos de uma vez, em
+/// ordem fixa para duas transações com os mesmos hashes não se travarem uma na outra.
+pub async fn lock_hashes(tx: &mut sqlx::Transaction<'static, sqlx::Postgres>, hashes: &[String]) -> Result<(), sqlx::Error> {
+    let mut sorted: Vec<&String> = hashes.iter().collect();
+    sorted.sort();
+    sorted.dedup();
+    for h in sorted {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))").bind(h).execute(&mut **tx).await?;
+    }
+    Ok(())
+}
+
 pub enum RegisterError {
     /// Passaria da cota da conta.
     Quota,

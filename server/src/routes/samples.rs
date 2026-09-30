@@ -5,7 +5,7 @@
 use axum::{
     Json,
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -62,7 +62,7 @@ pub async fn missing(State(s): State<AppState>, auth: Auth, Json(b): Json<Missin
 }
 
 fn quota_error() -> ApiError {
-    err(StatusCode::PAYLOAD_TOO_LARGE, "cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta")
+    err(StatusCode::PAYLOAD_TOO_LARGE, storage::QUOTA_MESSAGE)
 }
 
 pub async fn upload(State(s): State<AppState>, auth: Auth, Path(hash): Path<String>, headers: HeaderMap, body: Body) -> Result<StatusCode, ApiError> {
@@ -169,7 +169,7 @@ struct Refs {
 /// Todo texto do documento que tem cara de hash conta como citação (o `samples` do documento, o `sample`
 /// de clipes e faixas de sampler, as zonas e o que vier depois): mais conservador que conhecer cada
 /// campo, e por isso nunca libera um áudio que um campo novo ainda cita.
-fn collect_hashes(v: &Value, out: &mut HashSet<String>) {
+pub(super) fn collect_hashes(v: &Value, out: &mut HashSet<String>) {
     match v {
         Value::String(s) if storage::valid_hash(s) => {
             out.insert(s.clone());
@@ -224,6 +224,7 @@ pub async fn list(State(s): State<AppState>, auth: Auth) -> ApiResult<Value> {
     let rows: Vec<(String, i64, DateTime<Utc>)> =
         sqlx::query_as("SELECT hash, size, created_at FROM samples WHERE owner_id = $1 ORDER BY size DESC, hash").bind(auth.user_id).fetch_all(&s.pool).await?;
     let refs = references(&s.pool, auth.user_id).await?;
+    let cutoff = Utc::now() - chrono::Duration::seconds(CLEANUP_GRACE_SECS);
     let (mut used, mut unused_bytes, mut unused) = (0i64, 0i64, 0u32);
     let samples: Vec<Value> = rows
         .into_iter()
@@ -234,19 +235,78 @@ pub async fn list(State(s): State<AppState>, auth: Auth) -> ApiResult<Value> {
                 unused_bytes += size;
                 unused += 1;
             }
-            json!({"hash": hash, "name": refs.names.get(&hash), "size": size, "created_at": created_at, "unused": projects.is_empty(), "project_count": projects.len(), "projects": projects})
+            let recent = created_at > cutoff;
+            json!({"hash": hash, "name": refs.names.get(&hash), "size": size, "created_at": created_at, "unused": projects.is_empty(), "recent": recent, "project_count": projects.len(), "projects": projects})
         })
         .collect();
     Ok(Json(json!({"quota_bytes": QUOTA_BYTES, "used_bytes": used, "unused_bytes": unused_bytes, "unused_count": unused, "samples": samples})))
 }
 
-/// Tira o áudio da conta e, se nenhuma outra conta o tem, os bytes do armazenamento. Devolve os bytes
-/// liberados na cota (`None` se já não estava registrado). Quem chama já conferiu que ninguém o usa.
-async fn remove(s: &AppState, owner: Uuid, hash: &str) -> Result<Option<i64>, ApiError> {
+/// Quem cita um único áudio: o mesmo cálculo de [`references`], mas só nos documentos que contêm o texto do
+/// hash (filtro no banco, que não lê os outros), para conferir um hash por vez sem varrer a conta toda.
+async fn projects_citing(pool: &PgPool, owner: Uuid, hash: &str) -> Result<BTreeMap<Uuid, String>, sqlx::Error> {
+    let mut out = BTreeMap::new();
+    let mut rows = sqlx::query_as::<_, (Uuid, String, Option<sqlx::types::Json<Value>>)>(
+        "SELECT p.id, p.name, d.doc FROM projects p JOIN project_docs d ON d.project_id = p.id WHERE p.owner_id = $1 AND position($2 in d.doc::text) > 0",
+    )
+    .bind(owner)
+    .bind(hash)
+    .fetch(pool);
+    while let Some(row) = rows.next().await {
+        let (id, name, doc) = row?;
+        let Some(doc) = doc else { continue };
+        let mut hashes = HashSet::new();
+        collect_hashes(&doc.0, &mut hashes);
+        if hashes.contains(hash) {
+            out.insert(id, name);
+        }
+    }
+    Ok(out)
+}
+
+/// Como uma tentativa de apagar terminou.
+enum Removal {
+    /// Apagado; os bytes liberados na cota.
+    Removed(i64),
+    /// Já não estava registrado.
+    Gone,
+    /// Algum documento o cita (a checagem é refeita sob a trava do hash, então vale mesmo se o documento
+    /// chegou depois de a lista ser calculada).
+    InUse(BTreeMap<Uuid, String>),
+    /// Há tarefa na fila ou rodando com ele.
+    Job,
+    /// Enviado há menos que [`CLEANUP_GRACE_SECS`] (e a pessoa não insistiu).
+    Recent,
+}
+
+/// Tira o áudio da conta e, se nenhuma outra conta o tem, os bytes do armazenamento, mas só se ninguém o
+/// usa: a checagem (documentos, tarefas e a folga do envio recente) é feita AQUI, sob a trava do hash, e não
+/// antes. Quem cita um hash (PUT do documento) e quem cria tarefa com ele tomam a mesma trava, então nada
+/// muda entre a conferência e a remoção. `grace` liga a proteção do envio recente.
+async fn remove_if_unused(s: &AppState, owner: Uuid, hash: &str, grace: bool) -> Result<Removal, ApiError> {
     let mut lock = storage::lock_hash(&s.pool, hash).await?;
+    let row: Option<(DateTime<Utc>,)> =
+        sqlx::query_as("SELECT created_at FROM samples WHERE owner_id = $1 AND hash = $2").bind(owner).bind(hash).fetch_optional(&mut *lock).await?;
+    let Some((created_at,)) = row else { return Ok(Removal::Gone) };
+    // a leitura dos documentos vai por outra conexão: vê tudo o que já foi confirmado antes de a trava chegar a esta
+    let citing = projects_citing(&s.pool, owner, hash).await?;
+    if !citing.is_empty() {
+        return Ok(Removal::InUse(citing));
+    }
+    let (job,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM jobs WHERE owner_id = $1 AND sample_hash = $2 AND status IN ('queued', 'running'))")
+        .bind(owner)
+        .bind(hash)
+        .fetch_one(&mut *lock)
+        .await?;
+    if job {
+        return Ok(Removal::Job);
+    }
+    if grace && created_at > Utc::now() - chrono::Duration::seconds(CLEANUP_GRACE_SECS) {
+        return Ok(Removal::Recent);
+    }
     let gone: Option<(i64,)> =
         sqlx::query_as("DELETE FROM samples WHERE owner_id = $1 AND hash = $2 RETURNING size").bind(owner).bind(hash).fetch_optional(&mut *lock).await?;
-    let Some((size,)) = gone else { return Ok(None) };
+    let Some((size,)) = gone else { return Ok(Removal::Gone) };
     // o mesmo conteúdo pode ser de outra conta: os bytes só saem quando ninguém mais os registra
     let (shared,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM samples WHERE hash = $1)").bind(hash).fetch_one(&mut *lock).await?;
     if !shared {
@@ -254,55 +314,56 @@ async fn remove(s: &AppState, owner: Uuid, hash: &str) -> Result<Option<i64>, Ap
         s.store.delete(hash).await.map_err(ApiError::internal)?;
     }
     lock.commit().await?;
-    Ok(Some(size))
+    Ok(Removal::Removed(size))
 }
 
-async fn has_active_job(pool: &PgPool, owner: Uuid, hash: &str) -> Result<bool, sqlx::Error> {
-    let (n,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM jobs WHERE owner_id = $1 AND sample_hash = $2 AND status IN ('queued', 'running'))")
-        .bind(owner)
-        .bind(hash)
-        .fetch_one(pool)
-        .await?;
-    Ok(n)
+#[derive(Deserialize, Default)]
+pub struct DeleteQuery {
+    /// Apaga mesmo sendo um envio recente (a pessoa confirmou).
+    #[serde(default)]
+    force: bool,
 }
 
 /// Apaga um áudio da conta, só se nenhum documento dela o cita; do contrário 409 com a lista dos projetos.
-pub async fn delete(State(s): State<AppState>, auth: Auth, Path(hash): Path<String>) -> Result<Response, ApiError> {
+/// Um envio da última hora também dá 409 (`recent: true`), porque o documento que o cita pode ainda não ter
+/// sincronizado; `?force=true` insiste.
+pub async fn delete(State(s): State<AppState>, auth: Auth, Path(hash): Path<String>, Query(q): Query<DeleteQuery>) -> Result<Response, ApiError> {
     if !storage::valid_hash(&hash) {
         return Err(ApiError::not_found());
     }
-    Sample::find_by_id((auth.user_id, hash.clone())).one(&s.db).await?.ok_or_else(ApiError::not_found)?;
-    let refs = references(&s.pool, auth.user_id).await?;
-    if let Some(p) = refs.projects.get(&hash) {
-        let body = json!({"error": "este áudio ainda é usado em projetos; tire-o de lá antes de apagar", "projects": projects_json(Some(p))});
-        return Ok((StatusCode::CONFLICT, Json(body)).into_response());
+    match remove_if_unused(&s, auth.user_id, &hash, !q.force).await? {
+        Removal::Removed(freed) => Ok(Json(json!({"freed_bytes": freed})).into_response()),
+        Removal::Gone => Err(ApiError::not_found()),
+        Removal::InUse(p) => {
+            let body = json!({"error": "este áudio ainda é usado em projetos; tire-o de lá antes de apagar", "projects": projects_json(Some(&p))});
+            Ok((StatusCode::CONFLICT, Json(body)).into_response())
+        }
+        Removal::Job => Err(err(StatusCode::CONFLICT, "há uma tarefa em andamento com este áudio; tente de novo quando ela terminar")),
+        Removal::Recent => {
+            let body = json!({"error": "áudio enviado há pouco; o projeto que o usa pode não ter sincronizado ainda. Espere ou confirme para apagar mesmo assim", "recent": true});
+            Ok((StatusCode::CONFLICT, Json(body)).into_response())
+        }
     }
-    if has_active_job(&s.pool, auth.user_id, &hash).await? {
-        return Err(err(StatusCode::CONFLICT, "há uma tarefa em andamento com este áudio; tente de novo quando ela terminar"));
-    }
-    let freed = remove(&s, auth.user_id, &hash).await?.ok_or_else(ApiError::not_found)?;
-    Ok(Json(json!({"freed_bytes": freed})).into_response())
 }
 
 /// Apaga de uma vez todos os áudios da conta que nenhum documento cita (menos os enviados na última
-/// hora, ver `CLEANUP_GRACE_SECS`).
+/// hora, ver `CLEANUP_GRACE_SECS`). A lista de candidatos sai de uma leitura só; cada um é conferido de novo
+/// na hora de apagar.
 pub async fn cleanup(State(s): State<AppState>, auth: Auth) -> ApiResult<Value> {
-    let rows: Vec<(String, i64, DateTime<Utc>)> =
-        sqlx::query_as("SELECT hash, size, created_at FROM samples WHERE owner_id = $1").bind(auth.user_id).fetch_all(&s.pool).await?;
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1").bind(auth.user_id).fetch_all(&s.pool).await?;
     let refs = references(&s.pool, auth.user_id).await?;
-    let cutoff = Utc::now() - chrono::Duration::seconds(CLEANUP_GRACE_SECS);
     let (mut removed, mut freed, mut recent) = (0u32, 0i64, 0u32);
-    for (hash, _, created_at) in rows {
-        if refs.projects.contains_key(&hash) || has_active_job(&s.pool, auth.user_id, &hash).await? {
+    for (hash,) in rows {
+        if refs.projects.contains_key(&hash) {
             continue;
         }
-        if created_at > cutoff {
-            recent += 1;
-            continue;
-        }
-        if let Some(size) = remove(&s, auth.user_id, &hash).await? {
-            removed += 1;
-            freed += size;
+        match remove_if_unused(&s, auth.user_id, &hash, true).await? {
+            Removal::Removed(size) => {
+                removed += 1;
+                freed += size;
+            }
+            Removal::Recent => recent += 1,
+            Removal::Gone | Removal::InUse(_) | Removal::Job => {}
         }
     }
     Ok(Json(json!({"removed": removed, "freed_bytes": freed, "skipped_recent": recent})))

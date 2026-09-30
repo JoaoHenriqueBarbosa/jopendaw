@@ -9,6 +9,20 @@ import '../widgets/format.dart';
 import '../widgets/legal.dart';
 import '../widgets/page.dart';
 
+/// O aviso depois da limpeza de áudios sem uso, com o plural e o verbo concordando ("1 áudio apagado", "3 áudios apagados").
+@visibleForTesting
+String cleanupSummary(CleanupResult r) {
+  if (r.removed == 0 && r.skippedRecent == 0) return 'Nada para apagar.';
+  final n = r.skippedRecent;
+  return [
+    if (r.removed == 0)
+      'Nada para apagar.'
+    else
+      'Liberei ${fmtBytes(r.freedBytes)} (${plural(r.removed, 'áudio')} ${r.removed == 1 ? 'apagado' : 'apagados'}).',
+    if (n > 0) '${plural(n, 'áudio')} enviado${n == 1 ? '' : 's'} na última hora ${n == 1 ? 'ficou' : 'ficaram'} de fora.',
+  ].join(' ');
+}
+
 /// A conta: nome, sair deste aparelho ou de todos, e apagar a conta.
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -21,6 +35,11 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
   final _api = ApiClient.instance;
 
   StorageUsage? _usage;
+
+  /// A última atualização da tela (`reload`) falhou depois de a ação já ter dado certo.
+  bool _reloadFailed = false;
+
+  static const _reloadWarning = 'Não deu para atualizar a tela; recarregue a página para ver o estado atual.';
 
   @override
   void initState() {
@@ -37,10 +56,26 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
     } catch (_) {}
   }
 
+  /// Roda depois de uma ação que deu certo. Se atualizar a tela falha, a ação NÃO falhou: o `run` não pode mostrar
+  /// isso como erro dela, então a falha vira só um aviso (ver [_finish]).
   @override
   Future<void> reload() async {
-    await _session.refreshMe();
-    await _loadUsage();
+    _reloadFailed = false;
+    try {
+      await _session.refreshMe();
+      final u = await _api.storageUsage();
+      if (mounted) setState(() => _usage = u);
+    } catch (_) {
+      _reloadFailed = true;
+    }
+  }
+
+  /// O aviso final de uma ação que deu certo: o texto do que foi feito e, se a tela não atualizou, o aviso disso.
+  void _finish(String? result) {
+    if (!mounted) return;
+    final done = result ?? info;
+    final text = [?done, if (_reloadFailed) _reloadWarning].join(' ');
+    setState(() => info = text.isEmpty ? null : text);
   }
 
   Future<void> _cleanup() async {
@@ -58,27 +93,40 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
       return;
     }
     String? result;
-    await run(() async {
-      final r = await _api.cleanupSamples();
-      result = r.removed == 0 ? 'Nada para apagar.' : 'Liberei ${fmtBytes(r.freedBytes)} (${plural(r.removed, 'áudio')} apagados).';
-      if (r.skippedRecent > 0) result = '$result ${plural(r.skippedRecent, 'áudio')} enviado na última hora ficou de fora.';
-    });
-    if (mounted && result != null) setState(() => info = result);
+    if (await run(() async => result = cleanupSummary(await _api.cleanupSamples()))) _finish(result);
   }
 
   Future<void> _deleteSample(StoredSample smp) async {
-    if (!await confirmAction(
-      context,
-      title: 'Apagar este áudio?',
-      message: '${smp.name ?? 'Áudio sem nome'} (${fmtBytes(smp.size)}) some do servidor. Não tem volta.',
-      action: 'Apagar',
-      destructive: true,
-    )) {
-      return;
+    // enviado na última hora: o projeto que o usa pode ainda não ter sincronizado, então a confirmação já avisa
+    var force = smp.recent;
+    for (;;) {
+      if (!await confirmAction(
+        context,
+        title: force ? 'Áudio enviado há pouco' : 'Apagar este áudio?',
+        message: force
+            ? '${smp.name ?? 'Este áudio'} (${fmtBytes(smp.size)}) foi enviado na última hora e o projeto que o usa pode ainda não ter '
+                  'sincronizado. Se ele estiver em uso, o projeto perde o som. Apagar mesmo assim? Não tem volta.'
+            : '${smp.name ?? 'Áudio sem nome'} (${fmtBytes(smp.size)}) some do servidor. Não tem volta.',
+        action: force ? 'Apagar mesmo assim' : 'Apagar',
+        destructive: true,
+      )) {
+        return;
+      }
+      String? result;
+      var refused = false;
+      final ok = await run(() async {
+        try {
+          result = 'Liberei ${fmtBytes(await _api.deleteSample(smp.hash, force: force))}.';
+        } on SampleRecent {
+          refused = true;
+        }
+      });
+      if (!mounted) return;
+      if (ok && !refused) return _finish(result);
+      // o servidor achou recente o que a tela não sabia: pergunta de novo, agora com o aviso
+      if (!refused || force) return;
+      force = true;
     }
-    String? result;
-    await run(() async => result = 'Liberei ${fmtBytes(await _api.deleteSample(smp.hash))}.');
-    if (mounted && result != null) setState(() => info = result);
   }
 
   Widget _storageCard(ThemeData theme) {
@@ -121,7 +169,7 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
                       contentPadding: EdgeInsets.zero,
                       title: Text(smp.name ?? 'Áudio sem nome', maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(
-                        '${fmtBytes(smp.size)} · ${smp.unused ? 'sem uso' : 'em ${smp.projects.join(', ')}'}',
+                        '${fmtBytes(smp.size)} · ${smp.unused ? (smp.recent ? 'sem uso · recém-enviado' : 'sem uso') : 'em ${smp.projects.join(', ')}'}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
