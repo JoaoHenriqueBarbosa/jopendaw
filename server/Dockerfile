@@ -21,9 +21,12 @@ WORKDIR /app
 COPY --from=build /src/target/server/jopendaw-server /usr/local/bin/jopendaw-server
 COPY server/schema.sql ./schema.sql
 # sem root no container: um bug no servidor não vira root no host
-RUN useradd --system --no-create-home --shell /usr/sbin/nologin jopendaw
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin jopendaw \
+    && mkdir -p /data && chown jopendaw /data
 USER jopendaw
 
-ENV PORT=8080
+# os áudios dos usuários moram aqui: monte um volume persistente em /data (sem ele somem a cada deploy)
+ENV PORT=8080 DATA_DIR=/data
+VOLUME /data
 EXPOSE 8080
 CMD ["jopendaw-server"]

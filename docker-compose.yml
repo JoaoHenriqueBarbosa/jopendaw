@@ -29,6 +29,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+    volumes:
+      - jopendaw-data:/data
     depends_on:
       - db
     ports:
@@ -45,3 +47,4 @@ services:
 
 volumes:
   jopendaw-pgdata:
+  jopendaw-data:
