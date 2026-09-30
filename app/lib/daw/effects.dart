@@ -190,6 +190,7 @@ const distortionParams = <ParamSpec>[
   ParamSpec(5, 'Bits', 'Bitcrusher', 1, 16, 8, curve: Curve.integer),
   ParamSpec(6, 'Reduzir taxa', 'Bitcrusher', 1, 32, 1, unit: '×', curve: Curve.integer),
   ParamSpec.choice(7, 'Sobreamostragem', 'Saída', ['1×', '2×', '4×'], def: 1),
+  ParamSpec.choice(8, 'Dither', 'Bitcrusher', _noYes),
 ];
 
 const filterParams = <ParamSpec>[

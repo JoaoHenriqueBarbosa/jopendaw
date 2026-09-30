@@ -98,6 +98,7 @@ const _names = <EffectKind, Map<String, String>>{
     'BITS': 'Bits',
     'DOWNSAMPLE': 'Reduzir taxa',
     'OVERSAMPLE': 'Sobreamostragem',
+    'DITHER': 'Dither',
   },
   EffectKind.filter: {
     'TYPE': 'Tipo',

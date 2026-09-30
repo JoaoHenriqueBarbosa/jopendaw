@@ -178,6 +178,21 @@ double compressorCurve(double x, double threshold, double ratio, double knee) {
   return over <= 0 ? x : threshold + over / ratio;
 }
 
+/// Ganho de saída do compressor (dB) como o motor o aplica: o manual mais, com o ganho automático
+/// ligado, metade do que falta a um sinal em 0 dBFS (`update_makeup` em `fx/compressor.rs`).
+double compressorMakeupDb(double threshold, double ratio, double manual, bool auto) => manual + (auto ? -threshold * (1 - 1 / ratio) * 0.5 : 0);
+
+/// O que não faz efeito com os ajustes de agora (fica apagado na tela, mas mexível). [v] lê o valor
+/// atual do parâmetro pelo id.
+bool effectParamDimmed(EffectKind kind, ParamSpec p, double Function(int id) v) => switch (kind) {
+  // o ganho manual continua valendo com o automático ligado: os dois se somam
+  EffectKind.distortion => ((p.id == 5 || p.id == 6 || p.id == 8) && v(1).round() != 5) || (p.id == 7 && v(1).round() == 5),
+  EffectKind.filter => (p.id == 3 || p.id == 5 || p.id == 9 || p.id == 10) && v(4) <= 0,
+  EffectKind.reverb => p.id == 3 && v(9) >= 0.5,
+  EffectKind.delay => p.id == 6 && v(5) >= 0.5,
+  _ => false,
+};
+
 // ------------------------------------------------------------------------ quem o motor observa
 
 /// Coordena o que os editores montados pedem ao motor: um espectro (o da faixa do EQ montado mais
@@ -335,14 +350,7 @@ class _Fx {
   };
 
   /// O que não faz efeito com os ajustes de agora fica apagado (mas mexível).
-  bool dimmed(ParamSpec p) => switch (kind) {
-    EffectKind.compressor => p.id == 5 && v(9) >= 0.5,
-    EffectKind.distortion => (p.id == 5 || p.id == 6) && v(1).round() != 5,
-    EffectKind.filter => (p.id == 3 || p.id == 5 || p.id == 9 || p.id == 10) && v(4) <= 0,
-    EffectKind.reverb => p.id == 3 && v(9) >= 0.5,
-    EffectKind.delay => p.id == 6 && v(5) >= 0.5,
-    _ => false,
-  };
+  bool dimmed(ParamSpec p) => effectParamDimmed(kind, p, v);
 
   /// Os grupos da tabela, na ordem, só com os parâmetros visíveis (menos os de [skip]).
   /// Um grupo que reaparece mais adiante na tabela (a sobreamostragem da distorção, em "Saída"
@@ -2134,11 +2142,11 @@ class _TransferPainter extends CustomPainter {
     _ => (-60.0, 0.0),
   };
 
-  /// Saída estática para a entrada [x] (dB), com o ganho de saída manual do compressor.
+  /// Saída estática para a entrada [x] (dB), com o ganho de saída do compressor (manual + automático).
   double _out(double x) => switch (kind) {
     EffectKind.gate => x >= _v(0) ? x : x + _v(4),
     EffectKind.limiter => math.min(x + _v(0), _v(1)),
-    _ => compressorCurve(x, _v(0), _v(1), _v(4)) + (_v(9) >= 0.5 ? 0 : _v(5)),
+    _ => compressorCurve(x, _v(0), _v(1), _v(4)) + compressorMakeupDb(_v(0), _v(1), _v(5), _v(9) >= 0.5),
   };
 
   /// Entrada que dá a redução [gr] na curva (compressor e limitador); null se não há.

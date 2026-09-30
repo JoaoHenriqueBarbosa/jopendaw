@@ -281,6 +281,30 @@ void main() {
       }
     });
 
+    test('ganho do compressor: o manual soma ao automático (como no motor) e o knob não apaga', () {
+      // motor: auto = −limiar · (1 − 1/razão) · 0,5, somado ao ganho manual
+      expect(compressorMakeupDb(-20, 4, 0, false), 0);
+      expect(compressorMakeupDb(-20, 4, 3, false), 3);
+      expect(compressorMakeupDb(-20, 4, 0, true), closeTo(7.5, 1e-9));
+      expect(compressorMakeupDb(-20, 4, 3, true), closeTo(10.5, 1e-9));
+      double v(int id) => {9: 1.0, 5: 3.0, 1: 4.0}[id] ?? 0;
+      final makeup = compressorParams.firstWhere((p) => p.id == 5);
+      expect(effectParamDimmed(EffectKind.compressor, makeup, v), isFalse);
+    });
+
+    test('distorção: o que o tipo escolhido ignora fica apagado (sobreamostragem no bitcrusher, bits e dither fora dele)', () {
+      ParamSpec p(int id) => distortionParams.firstWhere((s) => s.id == id);
+      expect(p(8).name, 'Dither');
+      double crush(int id) => id == 1 ? 5 : 0;
+      double soft(int id) => 0;
+      expect(effectParamDimmed(EffectKind.distortion, p(7), crush), isTrue);
+      expect(effectParamDimmed(EffectKind.distortion, p(8), crush), isFalse);
+      expect(effectParamDimmed(EffectKind.distortion, p(5), crush), isFalse);
+      expect(effectParamDimmed(EffectKind.distortion, p(7), soft), isFalse);
+      expect(effectParamDimmed(EffectKind.distortion, p(8), soft), isTrue);
+      expect(effectParamDimmed(EffectKind.distortion, p(5), soft), isTrue);
+    });
+
     test('presets: ids da tabela, valores na faixa e reconhecidos depois de aplicados', () {
       for (final kind in EffectKind.values) {
         final list = effectPresetsFor(kind);

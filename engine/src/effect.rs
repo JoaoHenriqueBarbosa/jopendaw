@@ -282,6 +282,8 @@ pub mod distortion_param {
     pub const DOWNSAMPLE: u32 = 6;
     /// Sobreamostragem: 0 1×, 1 2×, 2 4×.
     pub const OVERSAMPLE: u32 = 7;
+    /// Dither TPDF na quantização do bitcrusher: 0 desligado, 1 ligado.
+    pub const DITHER: u32 = 8;
 }
 
 pub mod filter_param {
