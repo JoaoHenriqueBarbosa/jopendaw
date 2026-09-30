@@ -13,9 +13,9 @@ enum AutoMode {
   /// Só toca a automação (padrão): mexer no controle muda o valor fixo, como sempre foi.
   read('Ler', 'L', 'Só toca a automação; mexer no controle não grava.'),
 
-  /// Grava o tempo todo enquanto toca, sobrescrevendo: na raia que tem este modo próprio, desde o
-  /// começo da reprodução; no modo da barra, desde a primeira vez que o controle é mexido.
-  write('Escrever', 'E', 'Grava o tempo todo enquanto toca, sobrescrevendo o que já havia.'),
+  /// Depois do primeiro toque no controle grava o tempo todo enquanto toca, sobrescrevendo (na barra ou no modo
+  /// próprio da raia: sem mexer no controle não se apaga a curva antiga).
+  write('Escrever', 'E', 'Depois do primeiro toque no controle, grava até parar, sobrescrevendo o que já havia.'),
 
   /// Grava só enquanto o controle está seguro; ao soltar, volta ao valor automatizado com uma rampa curta.
   touch('Toque', 'T', 'Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.'),

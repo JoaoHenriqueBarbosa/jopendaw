@@ -148,11 +148,11 @@ Menu do botão (cada item tem o nome e uma frase em letra pequena):
 | Modo (rótulo exato) | Frase do menu | O que faz na prática |
 |---|---|---|
 | `Ler` (padrão) | `Só toca a automação; mexer no controle não grava.` | Nada grava. Mexer num controle automatizado muda só o valor fixo; a curva continua mandando enquanto toca. |
-| `Escrever` | `Grava o tempo todo enquanto toca, sobrescrevendo o que já havia.` | Grava sem parar e por cima da curva antiga, mesmo com a mão fora do controle (nesse caso, o último valor que ele teve). **Pelo botão da barra** começa na primeira vez em que você mexe no controle e vai até parar o transporte. **Pelo seletor `E` da raia** começa no instante em que você aperta play, com o valor fixo do controle, e grava até parar. |
+| `Escrever` | `Depois do primeiro toque no controle, grava até parar, sobrescrevendo o que já havia.` | Depois do **primeiro toque no controle**, grava sem parar e por cima da curva antiga, mesmo com a mão fora do controle (nesse caso, o último valor que ele teve), até o transporte parar. Vale igual pelo botão da barra e pelo seletor `E` da raia: sem mexer no controle, a curva antiga não é apagada. |
 | `Toque` | `Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.` | Grava só enquanto o controle está seguro. Ao soltar, o valor volta ao que a automação tinha ali, numa rampa curta de **1/4 de batida**. Se não havia automação, volta ao valor fixo que o controle tinha antes da sua primeira mexida. Em parâmetros de opções e inteiros a volta é um degrau, sem rampa. |
 | `Trava` | `Grava enquanto você segura o controle e mantém o último valor até parar.` | Grava enquanto você segura e, ao soltar, **mantém o último valor** (continua gravando-o) até o transporte parar. |
 
-O `Escrever` pelo seletor da raia só começa sozinho **no play**, e só em raias que já existem (mesmo vazias). Se você troca a raia para `E` com a música já tocando, ela passa a gravar no primeiro movimento do controle. `(lido do código)`
+O `Escrever` (da barra ou da raia) só começa a gravar no primeiro toque no controle, inclusive em raias ocultas: um play sem mexer em nada nunca apaga a curva.
 
 "Soltar" é: fim do arraste; o último dedo ou botão do mouse levantado; ou, na roda do mouse, 0,5 s sem girar.
 
@@ -186,7 +186,7 @@ Durante o trecho gravado o controle mostra o que a sua mão pôs (não a curva),
 - No fim do trecho ele **afina** essas amostras: ficam só os pontos que a reta entre eles não consegue substituir com erro maior que **0,8% da faixa do controle**, medido na **escala do controle** (a do fader para volume e envio, logarítmica para Hz e segundos), a mesma em que a curva anda entre pontos. Valor parado vira 2 pontos; um movimento suave vira poucos. Um teste automático exige que uma senoide de 4 s (241 amostras) no pan vire no máximo 70 pontos, com erro abaixo de 0,02 numa faixa de −1 a 1 `(testado só por testes automáticos)`.
 - Os pontos gravados são retas (`curve` 0), sem alças. Valores fora da faixa são presos a ela; volume nunca vira `NaN` nem passa de +6 dB.
 - **Sobrescrever:** a região gravada (do primeiro ao último ponto do trecho) **substitui** os pontos antigos que estavam dentro dela; o que está fora fica. Nas duas pontas entram pontos com o valor que a curva antiga tinha ali, para a vizinhança não se deformar (um trecho **curvo** cortado ao meio é reamostrado em retas de cerca de 1/8 de batida, porque a curva de um trecho é medida do começo ao fim dele). Se o gesto começou noutro valor, há um degrau no começo.
-- **Loop:** cada volta grava por cima da anterior; onde elas se cobrem, a **última vale**. No `Toque`, soltar numa volta e agarrar de novo na seguinte funciona; agarrado de uma volta à outra, o retorno ao valor antigo só acontece ao soltar de fato.
+- **Loop:** cada volta grava por cima da anterior; onde elas se cobrem, a **última vale**. No `Toque`, na volta seguinte o app **para de gravar** (e devolve o valor fixo) até você agarrar o controle de novo, mesmo que o dedo continue nele: sem isso a volta 2 regravaria o último valor mantido por cima da curva antiga. Na `Trava`, a volta seguinte só continua gravando se o controle ainda está seguro; se você já soltou, ela para na virada. O `Escrever` segue nas voltas.
 - Um cursor que volta atrás (por exemplo, você clica na régua tocando) é tratado como a virada do loop: a volta que acabou entra na raia e uma nova começa. `(lido do código)`
 
 ### Desfazer
@@ -203,7 +203,7 @@ Botão pequeno (24 × 22 px) no cabeçalho de cada raia, com a letra do modo: `L
 | Menu | `Seguir a barra (Ler)` (o modo atual da barra entre parênteses), `Ler`, `Escrever`, `Toque`, `Trava` |
 | Aparência | Letra e fundo vermelhos se o modo que vale grava; borda vermelha só quando o modo é próprio e grava; borda cinza-clara quando é próprio em `Ler`; borda quase apagada quando segue a barra |
 
-O modo próprio **sobrepõe** o da barra: com a barra em `Ler` e uma raia em `T`, só aquele alvo grava; com a barra em `Toque` e uma raia em `L`, ela não grava. O modo próprio de `Escrever` é o único que grava desde o play, e por isso **apaga a curva antiga** de onde ele passar (grava o valor fixo do controle até você mexer).
+O modo próprio **sobrepõe** o da barra: com a barra em `Ler` e uma raia em `T`, só aquele alvo grava; com a barra em `Toque` e uma raia em `L`, ela não grava. O `Escrever` da raia também só grava depois do primeiro toque no controle.
 
 ### Limites da gravação
 
@@ -211,7 +211,7 @@ O modo próprio **sobrepõe** o da barra: com a barra em `Ler` e uma raia em `T`
 - Durante a gravação de áudio ou MIDI (e na contagem) a automação não grava: aviso `A automação não grava junto com a gravação de áudio ou MIDI.` ao lado do botão, por 5 segundos.
 - **O modo não é salvo no projeto**: nem o da barra nem os das raias. Reabrir o projeto volta tudo a `Ler`.
 - Uma passada só guarda o que você mexeu; controles que você não tocou não mudam.
-- **O valor fixo acompanha a sua mão.** O valor que o fader ou o knob mostra parado é o último que você pôs (é o valor fixo do documento), não a curva gravada; ao tocar, ele volta a seguir a curva. Mesmo depois de um `Toque`, que devolve a *curva* ao valor antigo, o valor fixo parado fica onde a sua mão largou. `(lido do código)`
+- **O valor fixo acompanha a sua mão, menos no `Toque`.** Em `Escrever` e `Trava` o valor que o fader ou o knob mostra parado é o último que você pôs (o valor fixo do documento). No `Toque`, ao soltar, o valor fixo **volta ao que era antes da sua mão**, junto com a curva. `(lido do código)`
 - Ocultar a raia (olho riscado) não desliga o modo próprio dela: um `E` numa raia oculta continua gravando desde o play. `(lido do código)`
 
 ## Passo a passo
@@ -298,3 +298,8 @@ O modo próprio **sobrepõe** o da barra: com a barra em `Ler` e uma raia em `T`
 | `Ctrl+A` / `Cmd+A` | Seleciona todos os pontos da raia |
 | `Esc` | Limpa a seleção |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Desfaz / refaz (um passo por arraste; uma passada de gravação de automação inteira é um passo só) |
+
+## Correções da fase 14
+
+- O mini fader do **Master** (cabeçalho da linha do master) agora grava como o da faixa, e mostra o valor da mão enquanto grava.
+- Só levantar o ponteiro (ou cancelá-lo) fecha um `Toque`; mexer o mouse sem botão (por exemplo com a roda) não fecha mais o trecho.

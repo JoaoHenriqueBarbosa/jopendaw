@@ -290,9 +290,10 @@ void main() {
       final first = presetsFor(TrackKind.synth).first;
       final mine = t.getTopLeft(find.text('MEUS PRESETS')).dy;
       expect(mine, lessThan(t.getTopLeft(find.text(first.category.toUpperCase())).dy));
-      expect(t.getTopLeft(find.text('Meu lead').last).dy, lessThan(t.getTopLeft(find.text(first.name)).dy));
+      expect(t.getTopLeft(find.text('Meu lead').last).dy, lessThan(t.getTopLeft(find.text(first.name).last).dy));
       expect(t.getTopLeft(find.text('Salvar como preset…')).dy, lessThan(t.getTopLeft(find.text(first.category.toUpperCase())).dy));
-      expect(t.getTopLeft(find.text('Importar preset…')).dy, lessThan(t.getTopLeft(find.text(first.name)).dy));
+      // (o primeiro de fábrica se chama "Inicial", como o rótulo do botão numa faixa nova: vale o do menu, o último)
+      expect(t.getTopLeft(find.text('Importar preset…')).dy, lessThan(t.getTopLeft(find.text(first.name).last).dy));
       expect(find.text('MEUS PRESETS'), findsOneWidget);
       // aplicar de dentro do topo continua funcionando, e o rótulo vai a "(editado)" com a mão
       await t.tap(find.text('Meu lead').last);

@@ -89,3 +89,15 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 - **O seletor mostra `Nome (editado)` de um preset que apaguei ou renomeei:** o painel guarda o último nome aplicado até você fechá-lo; é só o rótulo (achado sem correção no app).
 - **O seletor mostra `Personalizado` depois de reabrir o projeto:** o `(editado)` não é salvo com o projeto. Os valores continuam lá; se baterem com um preset, o nome dele aparece.
 - **Apliquei um preset de sampler e o áudio não veio:** o preset do sampler não leva áudio nem zonas; escolha o áudio no cartão `Áudio` e refaça as zonas.
+
+## Correções da fase 14
+
+- **Não deu para guardar:** se o guardado local recusa a gravação, o menu de presets mostra em vermelho `Não deu para guardar seus presets neste aparelho.` e a ação (salvar, renomear, apagar, importar) abre uma janela `Presets não guardados`. Os presets seguem na memória até fechar o app.
+- **Arquivo ilegível:** a cópia do conteúdo ilegível vai para a chave `userpresets.bak` antes de qualquer gravação (se já há outra cópia diferente, `userpresets.bak.<ms>`), e o menu avisa.
+- **Arquivo de versão mais nova** (você voltou a um app antigo): os presets legíveis aparecem, mas o arquivo fica só para leitura: salvar, renomear e apagar valem só até fechar o app, e o menu avisa. Nada é sobrescrito.
+- **`(editado)`** segue o renomear e some ao apagar o preset aplicado.
+- **`Inicial`** vale numa faixa nova mesmo que exista um preset seu com todos os valores no padrão.
+- O campo de nome não aceita marcas de largura zero nem de direção (U+200B..U+200F, U+202A..U+202E, U+FEFF): o nome guardado é o digitado.
+- O aviso de importação de outro tipo usa o nome em português (`Reverb`, `Sintetizador`).
+- Cancelar o `salvar como` da exportação (Android) mostra `Exportação cancelada`.
+- **Global por aparelho:** os presets ficam na chave `userpresets`, sem id de conta: quem entra com outra conta no mesmo aparelho vê os mesmos presets. Proposta, não feita: prefixar a chave com o id do usuário (`userpresets:<id>`) e migrar a chave antiga na primeira abertura; não foi feito porque `Session.user` chega depois do carregamento e o guardado do documento também é por aparelho.

@@ -308,7 +308,7 @@ void main() {
       expect(at(c, pan, 2), closeTo(-0.5, 1e-9));
     });
 
-    test('Escrever com modo próprio na raia: grava desde o começo o valor fixo, sobrescrevendo', () {
+    test('Escrever com modo próprio na raia: só grava depois do primeiro toque no controle (sem gesto não apaga a curva)', () {
       final c = rig(e);
       c.doc.tracks[0].pan = 0.25;
       final lane = c.addLane(0, pan);
@@ -320,11 +320,22 @@ void main() {
         c.beat.value = b;
       }
       c.playing.value = false;
-      expect(at(c, pan, 1), closeTo(-1, 1e-9), reason: 'antes de 2 igual');
-      expect(at(c, pan, 2.5), closeTo(0.25, 1e-9));
-      expect(at(c, pan, 5.9), closeTo(0.25, 1e-9));
+      expect(laneOf(c, pan).points.map((p) => (p.beat, p.value)), [(0.0, -1.0), (4.0, -1.0), (12.0, 1.0)], reason: 'ninguém tocou no controle');
+
+      // com o gesto: grava dali até parar, por cima
+      c.beat.value = 2;
+      c.playing.value = true;
+      c.beat.value = 3;
+      grab(c, 0, pan);
+      movePan(c, 0.5);
+      c.autoRec.release(0, pan);
+      for (final b in [4.0, 5.0, 6.0]) {
+        c.beat.value = b;
+      }
+      c.playing.value = false;
+      expect(at(c, pan, 2.5), closeTo(-1, 1e-9), reason: 'antes do gesto: igual');
+      expect(at(c, pan, 5.9), closeTo(0.5, 1e-9));
       expect(at(c, pan, 12), 1);
-      expect(at(c, pan, 8), closeTo(-1 + 2 * (8 - 4) / 8, 0.02), reason: 'a rampa antiga depois de 6 segue igual');
     });
 
     test('Escrever pela barra começa no primeiro toque no controle e segue até parar', () {

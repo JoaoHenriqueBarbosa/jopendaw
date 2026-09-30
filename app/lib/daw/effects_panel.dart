@@ -43,7 +43,7 @@ class _EffectsPanelState extends State<EffectsPanel> {
   final _scroll = ScrollController();
 
   /// Último preset aplicado em cada slot (pelo id), para o título dizer "Sala (editado)".
-  final _lastPreset = <String, String>{};
+  final _lastPreset = <String, ({String name, String? userId})>{};
 
   /// Faixa mostrada no último build: trocou, a cadeia volta ao começo.
   int? _shownTrack;
@@ -72,6 +72,17 @@ class _EffectsPanelState extends State<EffectsPanel> {
   }
 
   void _onUserPresets() {
+    // preset apagado ou renomeado: o "(editado)" não pode citar o que não existe nem o nome antigo
+    for (final k in _lastPreset.keys.toList()) {
+      final id = _lastPreset[k]!.userId;
+      if (id == null) continue;
+      final p = _userPresets.byId(id);
+      if (p == null) {
+        _lastPreset.remove(k);
+      } else if (p.name != _lastPreset[k]!.name) {
+        _lastPreset[k] = (name: p.name, userId: id);
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -153,12 +164,12 @@ class _EffectsPanelState extends State<EffectsPanel> {
       _ => null,
     };
     if (sidechain != null) values[sidechain] = s.param(sidechain);
-    _lastPreset[s.id] = p.name;
+    _lastPreset[s.id] = (name: p.name, userId: null);
     c.applyEffectPreset(track, s.id, values);
   }
 
   void _applyUserPreset(int track, EffectSlot s, UserPreset p) {
-    _lastPreset[s.id] = p.name;
+    _lastPreset[s.id] = (name: p.name, userId: p.id);
     c.applyEffectPreset(track, s.id, UserPresets.paramsForEffect(p, s));
   }
 
@@ -434,7 +445,7 @@ class _EffectsPanelState extends State<EffectsPanel> {
     final userPreset = _userPresets.matchingEffect(s);
     final preset = userPreset == null ? matchingEffectPreset(s) : null;
     final last = _lastPreset[s.id];
-    final sub = preset?.name ?? userPreset?.name ?? (last != null ? '$last (editado)' : null);
+    final sub = preset?.name ?? userPreset?.name ?? (last != null ? '${last.name} (editado)' : null);
     final title = Row(
       children: [
         Icon(s.kind.icon, size: 16, color: s.bypass ? Colors.white38 : color),
@@ -547,7 +558,7 @@ class _EffectsPanelState extends State<EffectsPanel> {
       },
       itemBuilder: (_) => [
         // "Meus presets" e salvar/importar no topo, acima dos de fábrica
-        ...userPresetEntries(presets: userList, current: userCurrent, color: color, checkWidth: 30),
+        ...userPresetEntries(presets: userList, current: userCurrent, color: color, checkWidth: 30, problem: _userPresets.problem),
         if (presets.isNotEmpty) ...[
           PopupMenuItem<Object>(
             enabled: false,

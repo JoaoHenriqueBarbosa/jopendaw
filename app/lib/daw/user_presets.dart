@@ -159,14 +159,37 @@ class PresetImport {
 abstract class UserPresetStorage {
   Future<String?> read();
   Future<void> write(String json);
+
+  /// Guarda uma cópia do conteúdo que não deu para ler (arquivo corrompido), antes de qualquer gravação por cima.
+  /// Sem cópia por padrão (guardados que não têm onde pôr).
+  Future<void> writeBackup(String raw) async {}
+
+  /// A cópia guardada por [writeBackup] (a mais antiga que ainda existe), ou null.
+  Future<String?> readBackup() async => null;
 }
 
 /// No `LocalStore` do aparelho (web: IndexedDB; Android: arquivo; outros sistemas: nada guardado, e
 /// então os presets valem só até fechar o app).
 class LocalUserPresetStorage implements UserPresetStorage {
   static const key = 'userpresets';
+
+  /// Onde vai o conteúdo ilegível antes de ser sobrescrito (se já há outra cópia diferente, `userpresets.bak.<ms>`).
+  static const backupKey = 'userpresets.bak';
   final LocalStore _store;
   LocalUserPresetStorage([LocalStore? store]) : _store = store ?? LocalStore.instance;
+
+  @override
+  Future<String?> readBackup() async {
+    final v = await _store.get(backupKey);
+    return v is String ? v : null;
+  }
+
+  @override
+  Future<void> writeBackup(String raw) async {
+    final old = await readBackup();
+    if (old == raw) return;
+    await _store.put(old == null ? backupKey : '$backupKey.${DateTime.now().millisecondsSinceEpoch}', raw);
+  }
 
   @override
   Future<String?> read() async {
@@ -181,11 +204,26 @@ class LocalUserPresetStorage implements UserPresetStorage {
 /// Guardado só na memória (testes e sistemas sem guardado).
 class MemoryUserPresetStorage implements UserPresetStorage {
   String? data;
+
+  /// A cópia do que não deu para ler (ver [UserPresetStorage.writeBackup]).
+  String? backup;
   @override
   Future<String?> read() async => data;
   @override
   Future<void> write(String json) async => data = json;
+  @override
+  Future<void> writeBackup(String raw) async => backup ??= raw;
+  @override
+  Future<String?> readBackup() async => backup;
 }
+
+enum _Stored { ok, unreadable, future }
+
+/// O nome do tipo em português ("Reverb", "Sintetizador"), ou o nome interno se o tipo é desconhecido.
+String presetKindLabel(PresetFamily family, String kind) => switch (family) {
+  PresetFamily.instrument => TrackKind.values.where((k) => k.name == kind).firstOrNull?.label ?? kind,
+  PresetFamily.effect => EffectKind.parse(kind)?.label ?? kind,
+};
 
 class UserPresets extends ChangeNotifier {
   UserPresets(this._storage);
@@ -199,22 +237,63 @@ class UserPresets extends ChangeNotifier {
   Future<void> _writes = Future.value();
   var _seq = 0;
 
-  /// Falha da última gravação (o guardado recusou): a tela pode avisar; os presets seguem na memória.
+  /// Falha da última gravação (o guardado recusou): a tela mostra o aviso; os presets seguem na memória.
   String? saveError;
+
+  /// Aviso do carregamento: arquivo ilegível (guardado à parte) ou de versão mais nova (só leitura).
+  String? loadNotice;
+
+  /// O arquivo local é de uma versão mais nova (ou não deu para lê-lo): nada é gravado por cima dele.
+  bool _readOnly = false;
+
+  /// O que a tela deve avisar agora (falha de gravação ou aviso do carregamento), ou null.
+  String? get problem => saveError ?? loadNotice;
+
+  /// O preset pelo id, ou null (apagado).
+  UserPreset? byId(String id) {
+    for (final p in _items) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
 
   /// Carrega uma vez (chamar de novo devolve o mesmo futuro).
   Future<void> load() => _loading ??= _load();
 
   Future<void> _load() async {
+    String? raw;
     try {
-      final raw = await _storage.read();
-      if (raw != null) {
-        // se algo já foi salvo nesta sessão antes do carregamento acabar, não duplica
-        final have = {for (final p in _items) p.id};
-        _items.insertAll(0, parseStored(raw).where((p) => !have.contains(p.id) && !exists(p.family, p.kind, p.name)));
-      }
+      raw = await _storage.read();
     } catch (_) {
-      // guardado ilegível: começa vazio (a próxima gravação o substitui)
+      // não dá para saber o que há lá: não grava por cima
+      _readOnly = true;
+      loadNotice = 'Não deu para ler seus presets guardados neste aparelho. O que você salvar agora vale só até fechar o app.';
+      notifyListeners();
+      return;
+    }
+    if (raw != null && raw.trim().isNotEmpty) {
+      final r = _inspect(raw);
+      switch (r.state) {
+        case _Stored.ok:
+          break;
+        case _Stored.future:
+          // versão mais nova (voltou a um app antigo): mostra o que dá para ler e não sobrescreve nada
+          _readOnly = true;
+          loadNotice =
+              'Seus presets foram guardados por uma versão mais nova do app. Aqui eles ficam só para leitura: o que você salvar, '
+              'renomear ou apagar vale só até fechar o app.';
+        case _Stored.unreadable:
+          try {
+            await _storage.writeBackup(raw);
+            loadNotice = 'O arquivo dos seus presets estava ilegível. Guardei uma cópia dele (userpresets.bak) e a lista começou vazia.';
+          } catch (_) {
+            _readOnly = true;
+            loadNotice = 'O arquivo dos seus presets está ilegível e não deu para guardar uma cópia dele. Nada será gravado por cima; o que você salvar vale só até fechar o app.';
+          }
+      }
+      // se algo já foi salvo nesta sessão antes do carregamento acabar, não duplica
+      final have = {for (final p in _items) p.id};
+      _items.insertAll(0, r.presets.where((p) => !have.contains(p.id) && !exists(p.family, p.kind, p.name)));
     }
     notifyListeners();
   }
@@ -306,19 +385,24 @@ class UserPresets extends ChangeNotifier {
 
   void _changed() {
     notifyListeners();
-    final json = jsonEncode({
-      'format': _localFormat,
-      'version': userPresetFormatVersion,
-      'presets': [for (final p in _items) p.toJson()],
-    });
-    // uma gravação de cada vez, na ordem: a última vence
+    // uma gravação de cada vez, na ordem: a última vence. Espera o carregamento (para não gravar por cima do que ainda
+    // não foi lido) e monta o arquivo na hora de gravar, já com o que o carregamento trouxe.
     _writes = _writes.then((_) async {
+      await load();
+      if (_readOnly) return;
+      final json = jsonEncode({
+        'format': _localFormat,
+        'version': userPresetFormatVersion,
+        'presets': [for (final p in _items) p.toJson()],
+      });
+      final before = saveError;
       try {
         await _storage.write(json);
         saveError = null;
       } catch (e) {
-        saveError = 'Não deu para guardar os presets neste aparelho.';
+        saveError = 'Não deu para guardar seus presets neste aparelho.';
       }
+      if (saveError != before) notifyListeners();
     });
   }
 
@@ -327,13 +411,24 @@ class UserPresets extends ChangeNotifier {
 
   // ------------------------------------------------------------------------ arquivo local
 
-  /// Lê o arquivo local; entrada inválida é pulada, nunca lança por causa de um preset ruim.
+  /// Lê o arquivo local; entrada inválida é pulada, nunca lança por causa de um preset ruim. Arquivo ilegível ou de
+  /// versão mais nova dá lista vazia (o [load] os distingue e não sobrescreve).
   @visibleForTesting
   static List<UserPreset> parseStored(String raw) {
-    final j = jsonDecode(raw);
-    if (j is! Map || j['format'] != _localFormat) return const [];
+    final r = _inspect(raw);
+    return r.state == _Stored.ok ? r.presets : const [];
+  }
+
+  static ({_Stored state, List<UserPreset> presets}) _inspect(String raw) {
+    Object? j;
+    try {
+      j = jsonDecode(raw);
+    } catch (_) {
+      return (state: _Stored.unreadable, presets: const []);
+    }
+    if (j is! Map || j['format'] != _localFormat) return (state: _Stored.unreadable, presets: const []);
     final v = j['version'];
-    if (v is! int || v > userPresetFormatVersion) return const [];
+    if (v is! int || v < 1) return (state: _Stored.unreadable, presets: const []);
     final out = <UserPreset>[];
     final ids = <String>{};
     for (final e in (j['presets'] is List ? j['presets'] as List : const [])) {
@@ -343,7 +438,7 @@ class UserPresets extends ChangeNotifier {
         out.add(p);
       } catch (_) {}
     }
-    return out;
+    return (state: v > userPresetFormatVersion ? _Stored.future : _Stored.ok, presets: out);
   }
 
   // ------------------------------------------------------------------------ arquivo .jopreset

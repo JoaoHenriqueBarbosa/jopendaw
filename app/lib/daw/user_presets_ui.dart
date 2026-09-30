@@ -12,7 +12,9 @@ import '../widgets/theme.dart';
 import 'user_presets.dart';
 
 /// Guarda o `.jopreset` (o mesmo caminho do WAV e do projeto: download na web, "salvar como" no Android).
-typedef SavePresetFile = Future<void> Function(String name, Uint8List bytes, String mime);
+///
+/// Devolve `false` se a pessoa cancelou o "salvar como" (o `saveFile` do motor devolve bool); qualquer outro valor é "guardado".
+typedef SavePresetFile = Future<Object?> Function(String name, Uint8List bytes, String mime);
 
 /// Escolhe o arquivo a importar: nome e bytes, ou null se a pessoa cancelou.
 typedef PickPresetFile = Future<(String, Uint8List)?> Function();
@@ -55,8 +57,23 @@ Future<(String, Uint8List)?> pickUserPresetFile() async {
 /// dezenas de itens): a seção "Meus presets" e os itens "Salvar como preset…" e "Importar preset…".
 /// Terminam num divisor, que já separa dos de fábrica. Os valores são [UserPresetChoice].
 /// [checkWidth] é a largura da coluna do visto, para alinhar com os itens de fábrica.
-List<PopupMenuEntry<Object>> userPresetEntries({required List<UserPreset> presets, UserPreset? current, required Color color, double checkWidth = 24}) {
+///
+/// [problem] (`UserPresets.problem`): aviso inline, em vermelho, quando os presets não estão sendo guardados neste aparelho.
+List<PopupMenuEntry<Object>> userPresetEntries({
+  required List<UserPreset> presets,
+  UserPreset? current,
+  required Color color,
+  double checkWidth = 24,
+  String? problem,
+}) {
   return [
+    if (problem != null)
+      PopupMenuItem<Object>(
+        key: const ValueKey('user-preset-problem'),
+        enabled: false,
+        height: 44,
+        child: Text(problem, style: const TextStyle(fontSize: 12, color: Palette.danger)),
+      ),
     PopupMenuItem<Object>(
       enabled: false,
       height: 26,
@@ -162,6 +179,7 @@ Future<void> handleUserPresetChoice(
       } on PresetFormatException catch (e) {
         if (context.mounted) await showPresetMessage(context, 'Não foi possível salvar', e.message);
       }
+      if (context.mounted) await _warnIfNotStored(context, store);
     case ImportUserPreset():
       try {
         final file = await (pick ?? pickUserPresetFile)();
@@ -175,8 +193,10 @@ Future<void> handleUserPresetChoice(
         }
         // o arquivo pode ser de outro tipo: ele entra no tipo dele, e o menu deste painel avisa
         final other = r.preset.family != family || r.preset.kind != kind;
-        final lines = [...r.warnings, if (other) 'O preset é de outro tipo (${r.preset.kind}): ele foi guardado, mas só aparece no menu desse tipo.'];
+        final label = presetKindLabel(r.preset.family, r.preset.kind);
+        final lines = [...r.warnings, if (other) 'O preset é de outro tipo ($label): ele foi guardado, mas só aparece no menu desse tipo.'];
         if (lines.isNotEmpty && context.mounted) await showPresetMessage(context, 'Preset "${r.preset.name}" importado', lines.join('\n'));
+        if (context.mounted) await _warnIfNotStored(context, store);
       } catch (e) {
         if (context.mounted) await showPresetMessage(context, 'Não foi possível abrir o arquivo', '$e');
       }
@@ -216,6 +236,7 @@ Future<void> handleUserPresetChoice(
           } on PresetFormatException catch (e) {
             if (context.mounted) await showPresetMessage(context, 'Não foi possível renomear', e.message);
           }
+          if (context.mounted) await _warnIfNotStored(context, store);
         case _MoreAction.delete:
           final ok = await confirmPresetDialog(
             context,
@@ -224,15 +245,27 @@ Future<void> handleUserPresetChoice(
             confirm: 'Apagar',
             danger: true,
           );
-          if (ok) store.delete(preset.id);
+          if (ok) {
+            store.delete(preset.id);
+            if (context.mounted) await _warnIfNotStored(context, store);
+          }
         case _MoreAction.export:
           try {
-            await (save ?? AudioEngine.instance.saveFile)(presetFileName(preset.name), store.exportBytes(preset), userPresetMime);
+            final saved = await (save ?? AudioEngine.instance.saveFile)(presetFileName(preset.name), store.exportBytes(preset), userPresetMime);
+            // cancelou o "salvar como" (Android): nada foi gravado, e a pessoa fica sabendo
+            if (saved == false && context.mounted) await showPresetMessage(context, 'Exportação cancelada', 'O preset "${preset.name}" não foi exportado.');
           } catch (e) {
             if (context.mounted) await showPresetMessage(context, 'Não foi possível exportar', '$e');
           }
       }
   }
+}
+
+/// Espera a gravação local e, se ela falhou, avisa que o preset só vale até fechar o app (o menu mostra o mesmo aviso).
+Future<void> _warnIfNotStored(BuildContext context, UserPresets store) async {
+  await store.flush();
+  final problem = store.problem;
+  if (problem != null && context.mounted) await showPresetMessage(context, 'Presets não guardados', problem);
 }
 
 /// Pede o nome; devolve o nome já limpo (ou null se cancelou).
@@ -273,7 +306,8 @@ class _NameDialogState extends State<_NameDialog> {
         controller: _ctl,
         autofocus: true,
         maxLength: maxUserPresetName,
-        inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[\u0000-\u001f\u007f-\u009f  ]'))],
+        // o que `cleanPresetName` trocaria por espaço não entra: o nome guardado é o digitado
+        inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200b-\u200f\u202a-\u202e\ufeff]'))],
         decoration: const InputDecoration(labelText: 'Nome', counterText: ''),
         textInputAction: TextInputAction.done,
         onChanged: (_) => setState(() {}),

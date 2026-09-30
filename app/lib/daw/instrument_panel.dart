@@ -50,8 +50,9 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   /// peças; os outros no C3.
   final _octave = <TrackKind, int>{TrackKind.synth: 3, TrackKind.drums: 2, TrackKind.sampler: 3, TrackKind.fm: 3, TrackKind.wavetable: 3};
 
-  /// Último preset aplicado em cada faixa (pelo id), para o menu dizer "Pad quente (editado)".
-  final _lastPreset = <String, String>{};
+  /// Último preset aplicado em cada faixa (pelo id), para o menu dizer "Pad quente (editado)". [userId]: o id do preset do
+  /// usuário (para seguir o renomear e sumir ao apagar).
+  final _lastPreset = <String, ({String name, String? userId})>{};
 
   /// Celular: o teclado da tela aparece embaixo; dá para escondê-lo e ganhar altura.
   bool _keysVisible = true;
@@ -75,6 +76,17 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   }
 
   void _onUserPresets() {
+    // preset apagado ou renomeado: o "(editado)" não pode citar o que não existe nem o nome antigo
+    for (final k in _lastPreset.keys.toList()) {
+      final id = _lastPreset[k]!.userId;
+      if (id == null) continue;
+      final p = _userPresets.byId(id);
+      if (p == null) {
+        _lastPreset.remove(k);
+      } else if (p.name != _lastPreset[k]!.name) {
+        _lastPreset[k] = (name: p.name, userId: id);
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -249,16 +261,19 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     final last = _lastPreset[t.id];
     // a faixa recém-criada traz o padrão do tipo, que não é um "personalizado" de ninguém
     final pristine = t.kind.params.every((s) => (t.param(s.id) - s.def).abs() <= 1e-6 * math.max(1, s.def.abs()));
-    final label = current?.name ?? userCurrent?.name ?? (last != null ? '$last (editado)' : (pristine ? 'Inicial' : 'Personalizado'));
+    // faixa nova com um preset do usuário todo no padrão: vale o "Inicial" (nada foi aplicado ainda)
+    final hideUser = userCurrent != null && pristine && last == null;
+    final label =
+        current?.name ?? (hideUser ? null : userCurrent?.name) ?? (last != null ? '${last.name} (editado)' : (pristine ? 'Inicial' : 'Personalizado'));
     final what = t.kind == TrackKind.drums ? 'kit' : 'preset';
 
     void apply(Preset p) {
-      setState(() => _lastPreset[t.id] = p.name);
+      setState(() => _lastPreset[t.id] = (name: p.name, userId: null));
       c.applyPreset(x.ti, presetParams(p, t));
     }
 
     void applyUser(UserPreset p) {
-      setState(() => _lastPreset[t.id] = p.name);
+      setState(() => _lastPreset[t.id] = (name: p.name, userId: p.id));
       c.applyPreset(x.ti, UserPresets.paramsFor(p, t));
     }
 
@@ -266,14 +281,14 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     void step(int dir) {
       final all = <Object>[...list, ...userList];
       var i = all.indexWhere((p) => identical(p, current) || identical(p, userCurrent));
-      if (i < 0) i = all.indexWhere((p) => (p is Preset ? p.name : (p as UserPreset).name) == last);
+      if (i < 0 && last != null) i = all.indexWhere((p) => p is Preset ? last.userId == null && p.name == last.name : (p as UserPreset).id == last.userId);
       i = i < 0 ? (dir > 0 ? 0 : all.length - 1) : (i + dir) % all.length;
       final n = all[i];
       n is Preset ? apply(n) : applyUser(n as UserPreset);
     }
 
     // "Meus presets" e salvar/importar no topo, acima dos de fábrica
-    final entries = <PopupMenuEntry<Object>>[...userPresetEntries(presets: userList, current: userCurrent, color: x.color)];
+    final entries = <PopupMenuEntry<Object>>[...userPresetEntries(presets: userList, current: userCurrent, color: x.color, problem: _userPresets.problem)];
     String? section;
     for (final p in list) {
       if (p.category != section) {

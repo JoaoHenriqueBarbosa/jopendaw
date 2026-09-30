@@ -812,8 +812,9 @@ class DawController extends ChangeNotifier {
     }
     if (e is PointerDownEvent || e is PointerMoveEvent) _pointerActiveAt = DateTime.now();
     _pointersDown = _pointerIds.length;
-    // o último dedo levantou: o Toque acaba, o controle volta ao valor automatizado
-    if (_pointersDown == 0 && e is! PointerDownEvent) autoRec.releaseAll();
+    // o último dedo levantou: o Toque acaba, o controle volta ao valor automatizado. Só Up/Cancel contam: movimento do
+    // mouse sem botão (ou a roda) também chega aqui com nenhum ponteiro apertado e não pode fechar o trecho
+    if (_pointersDown == 0 && (e is PointerUpEvent || e is PointerCancelEvent)) autoRec.releaseAll();
   }
 
   void _onEngineFailed(String message) {
@@ -1549,6 +1550,31 @@ class DawController extends ChangeNotifier {
     if (_undo.length > 200) _undo.removeAt(0);
     _redo.clear();
     notifyListeners();
+  }
+
+  /// Devolve o valor fixo do alvo (o que o controle mostra parado) sem passar pela gravação nem pelo histórico:
+  /// o Toque, ao acabar, tira o valor fixo do último ponto da mão.
+  void autoSetFixed(int track, AutoTarget target, double value) {
+    if (!value.isFinite) return;
+    final r = _resolve(track, target);
+    if (r == null) return;
+    final v = r.spec != null ? _fit(r.spec!, value) : value.clamp(r.min, r.max).toDouble();
+    if (v == r.value) return;
+    final t = track < 0 ? null : doc.tracks[track];
+    mutate((d) {
+      switch (target.kind) {
+        case AutoKind.volume:
+          t != null ? t.gain = v : d.masterGain = v;
+        case AutoKind.pan:
+          t != null ? t.pan = v : d.masterPan = v;
+        case AutoKind.instrument:
+          t?.params[target.param] = v;
+        case AutoKind.effect:
+          _findSlot(track, target.ref ?? '')?.$2.params[target.param] = v;
+        case AutoKind.send:
+          t?.sends.where((s) => s.target == target.ref).firstOrNull?.level = v;
+      }
+    });
   }
 
   /// Reenvia a automação ao motor (a raia que começou a ser gravada sai dele).

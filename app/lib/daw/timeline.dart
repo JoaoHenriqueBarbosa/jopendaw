@@ -1502,17 +1502,28 @@ class _MasterHeader extends StatelessWidget {
                     if (!compact) ...[
                       const SizedBox(width: 4),
                       Expanded(
-                        child: c.automated(-1, AutoKind.volume)
-                            ? ValueListenableBuilder<double>(
-                                valueListenable: c.beat,
-                                builder: (_, _, _) => _MiniFader(
-                                  gain: c.liveValue(-1, AutoKind.volume),
-                                  automated: c.playing.value,
-                                  onStart: c.checkpoint,
-                                  onGain: (g) => c.mutate((d) => d.masterGain = g),
-                                ),
-                              )
-                            : _MiniFader(gain: c.doc.masterGain, onStart: c.checkpoint, onGain: (g) => c.mutate((d) => d.masterGain = g)),
+                        // grava automação como o da faixa (Escrever/Toque/Trava); gravando, vale o que a mão pôs
+                        child: ListenableBuilder(
+                          listenable: Listenable.merge([c.beat, c.autoRec]),
+                          builder: (_, _) {
+                            const volume = AutoTarget(AutoKind.volume);
+                            final hand = c.autoRec.isRecording(-1, volume);
+                            final follows = c.automated(-1, AutoKind.volume) && !hand;
+                            return _MiniFader(
+                              gain: follows ? c.liveValue(-1, AutoKind.volume) : c.doc.masterGain,
+                              automated: follows && c.playing.value,
+                              onStart: () {
+                                c.autoRec.touch(-1, volume);
+                                c.checkpoint();
+                              },
+                              onGain: (g) {
+                                c.autoRec.value(-1, volume, g);
+                                c.mutate((d) => d.masterGain = g);
+                              },
+                              onEnd: () => c.autoRec.release(-1, volume),
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ],

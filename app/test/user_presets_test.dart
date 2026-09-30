@@ -597,4 +597,8 @@ class _Failing implements UserPresetStorage {
   Future<String?> read() async => null;
   @override
   Future<void> write(String json) => Future.error('sem espaço');
+  @override
+  Future<void> writeBackup(String raw) async {}
+  @override
+  Future<String?> readBackup() async => null;
 }

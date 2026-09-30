@@ -10,7 +10,7 @@
 ///   "antes" e "depois" para a curva vizinha não se deformar (um trecho curvo cortado ao meio é
 ///   reamostrado, porque a curva de um trecho é medida do começo ao fim dele).
 /// - [AutoRecorder]: acompanha o transporte e os controles. Só grava com o transporte tocando (e
-///   fora da gravação de áudio/MIDI); cada gesto vira um trecho que entra na automação quando o
+///   fora da gravação de áudio/MIDI) e só depois de um toque no controle; cada gesto vira um trecho que entra na automação quando o
 ///   gesto acaba; o que a passada inteira mudou vai ao histórico como um passo só.
 ///
 /// A raia que está sendo gravada sai do motor (o controle vale o que a mão pôs) e o controle mostra
@@ -401,34 +401,8 @@ class AutoRecorder extends ChangeNotifier {
   void _onPlaying() {
     if (c.playing.value) {
       _lastBeat = c.beat.value;
-      _startWrites();
     } else {
       _endSession();
-    }
-  }
-
-  /// Raias com modo próprio Escrever gravam desde o começo da reprodução.
-  void _startWrites() {
-    if (c.recording || c.countingIn || laneModes.isEmpty) return;
-    var started = false;
-    void scan(int track, List<AutoLane> lanes) {
-      for (final l in lanes) {
-        if (laneModes[l.id] != AutoMode.write) continue;
-        final e = _entryFor(track, l.target, AutoMode.write);
-        if (e == null || e.seg != null) continue;
-        e.mode = AutoMode.write;
-        e.seg = _Seg()..add(c.beat.value, e.last);
-        started = true;
-      }
-    }
-
-    for (var i = 0; i < c.doc.tracks.length; i++) {
-      scan(i, c.doc.tracks[i].lanes);
-    }
-    scan(-1, c.doc.masterLanes);
-    if (started) {
-      _snapshot ??= c.autoSnapshot();
-      c.autoSyncNow();
     }
   }
 
@@ -448,19 +422,31 @@ class AutoRecorder extends ChangeNotifier {
       // seguinte começa do zero; onde as duas se cobrem, a última vale
       final le = c.doc.loopEnd;
       if (c.doc.loopOn && le > prev && le - prev < 1) seg.add(le, e.last);
-      e.seg = _Seg()..add(b, e.last);
+      // Toque para de gravar na volta seguinte (até agarrar o controle de novo) e devolve o valor fixo; a Trava só
+      // segue se o controle ainda está seguro; o Escrever segue sempre
+      final goOn = e.mode == AutoMode.write || (e.mode == AutoMode.latch && e.held);
+      e.seg = goOn ? (_Seg()..add(b, e.last)) : null;
       _apply(e, seg, wrapped: true);
+      if (!goOn && e.mode == AutoMode.touch) _restoreFixed(e);
+      if (!goOn) notifyListeners();
     }
+  }
+
+  /// O Toque acabou: o valor fixo (o que o controle mostra parado) volta ao de antes da mão.
+  void _restoreFixed(_Live e) {
+    if (e.mode == AutoMode.touch && e.fallback.isFinite) c.autoSetFixed(e.track, e.target, e.fallback);
   }
 
   /// Acaba o trecho: entra na automação e o alvo volta ao motor.
   void _finish(_Live e) {
     _live.remove(_key(e.track, e.target));
     final seg = e.seg;
-    if (seg == null) return;
-    seg.add(c.beat.value, e.last);
-    _apply(e, seg);
-    notifyListeners();
+    if (seg != null) {
+      seg.add(c.beat.value, e.last);
+      _apply(e, seg);
+    }
+    _restoreFixed(e);
+    if (seg != null) notifyListeners();
   }
 
   void _apply(_Live e, _Seg seg, {bool wrapped = false}) {
@@ -494,6 +480,7 @@ class AutoRecorder extends ChangeNotifier {
       if (seg == null) continue;
       if (e.last.isFinite) seg.add(b, e.last);
       _apply(e, seg);
+      _restoreFixed(e);
     }
     final snap = _snapshot;
     if (_dirty && snap != null) c.autoCommitUndo(snap);
