@@ -13,7 +13,7 @@ Os números de tempo são exemplos a 120 BPM em 4/4 (1 batida = 0,5 s; 1 compass
 | Cartão do LFO: forma, `Livre`/`Andamento`, divisão, `Profundidade`, `Fase`, `Bipolar`/`Unipolar` | O movimento em si | [06g Cartão do LFO](../manual/06g-modulacao.md#cartão-do-lfo) |
 | Cartão do seguidor de envelope: `Ganho`, `Ataque`, `Soltura` | Um movimento que responde ao nível do som da faixa | [06g Cartão do seguidor de envelope](../manual/06g-modulacao.md#cartão-do-seguidor-de-envelope) |
 | A barra de profundidade de cada destino (−100% a +100%) | Quanto do curso do controle o modulador percorre | [06g Destinos e profundidade](../manual/06g-modulacao.md#destinos-e-profundidade) |
-| `Modular…` (botão direito num knob; botão direito do mouse no fader e no pan) | Ligar um controle específico, sem passar pelos presets | [06g O menu `Modular…`](../manual/06g-modulacao.md#o-menu-modular) |
+| `Modular…` (botão direito ou toque longo num knob, no fader, no pan, no mini fader e no nível do envio) | Ligar um controle específico, sem passar pelos presets | [06g O menu `Modular…`](../manual/06g-modulacao.md#o-menu-modular) |
 | Sintetizador (`Reese`, `Pad quente`) e o knob `Corte` | O baixo e o pad dos exemplos | [04a Sintetizador](../manual/04a-sintetizador.md) |
 | Barramento e saída da faixa | Reunir bumbo e pad no cenário 4 | [06 Mixer, saída e nome](../manual/06-mixer.md#saída-e-nome) |
 | Fader, pan e medidor do canal | Ler o nível em que a modulação parte | [06 Mixer](../manual/06-mixer.md) · [06b Medidores](../manual/06b-analisador-e-medidores.md) |
@@ -57,9 +57,9 @@ O LFO em `Andamento` tira a fase da **posição em batidas** da música, não de
 | Sintoma | Causa provável | O que fazer |
 |---|---|---|
 | O wobble parece "chapado" em cima (fica aberto boa parte do ciclo) | A base está perto do topo do curso e o destino passa dos 20 kHz, onde a onda é presa (o preset, com ±1 oitava, já evita isso no `Corte` padrão) | Baixe a profundidade ou o `Corte` base (700 Hz é uma base equilibrada) |
-| Com o preset `Baixo ácido (303)` o wobble fica preso no fundo | O `Corte` base de 260 Hz com `+40%` desce além dos 20 Hz, o mínimo do knob, e a onda fica cortada embaixo | Suba o `Corte` base para 700 Hz, ou desça a profundidade para `+25%` (com 260 Hz de base, de 46 Hz a 1,5 kHz) |
-| Arrastar a barra ou um knob do cartão com o projeto tocando faz o wobble "engasgar" | (Corrigido) o motor mantém a fase do LFO e o nível do seguidor quando a modulação é reenviada | Se ainda ouvir, use `Andamento` (a fase vem da batida) e avise |
-| Nada acontece | O clipe está sem notas, ou a barra do destino está em `0%`, ou o controle não é um destino (`Onda`, `Tipo`, `Vozes`) | Confira o cartão: a linha do destino mostra `+40%` e o nome `Instrumento · Corte` |
+| Com o preset `Baixo ácido (303)` o wobble fica preso no fundo | O preset `Wobble no corte` nasce em `+10%` (±1 oitava: de 130 a 520 Hz com a base de 260 Hz), sem prender; se você subiu a profundidade para `+40%`, o destino desce além dos 20 Hz, o mínimo do knob, e a onda fica cortada embaixo | Desça a profundidade para `+25%` (com 260 Hz de base, de 46 Hz a 1,5 kHz) ou suba o `Corte` base para 700 Hz |
+| Arrastar a barra ou um knob do cartão com o projeto tocando faz o wobble "engasgar" | Isso era do motor antigo, que recomeçava a fase do LFO e o nível do seguidor a cada edição; desde a fase 18 o motor mantém os dois quando a modulação é reenviada igual (testado só por testes automáticos) | Se ainda ouvir, use `Andamento` (a fase vem da batida) e avise |
+| Nada acontece | O clipe está sem notas, ou a barra do destino está em `0%`, ou o controle não é um destino (`Onda`, `Tipo`, `Vozes`) | Confira o cartão: a linha do destino mostra `+10%` (ou o valor que você pôs) e o nome `Instrumento · Corte` |
 
 ## Cenário 2: tremolo de pad
 
@@ -161,7 +161,7 @@ O seguidor guarda o maior pico de cada passo de 32 quadros e o alisa com o `Ataq
 
 | Cenário | Preset ou modulador | Destino e profundidade |
 |---|---|---|
-| Wobble de baixo | `Wobble no corte` (`1/8`) | `Instrumento · Corte` em `+30%` (base 700 Hz) |
+| Wobble de baixo | `Wobble no corte` (`1/8`) | `Instrumento · Corte` em `+10%` (±1 oitava, o que o preset cria) ou `+30%` (base 700 Hz, mais fundo) |
 | Tremolo de pad | `Tremolo no volume` (6 Hz) | `Volume` em `+15%` (ou `Andamento` `1/8 tercina`) |
 | Auto-pan | `Auto-pan` (`1/2`) | `Pan` em `+50%` (ou `+20%` mais discreto) |
 | Bombeio falso | `Seguidor de envelope` (`Ataque` 5 ms, `Soltura` 150 ms) no barramento | `Volume` em `-30%` |

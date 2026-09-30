@@ -16,10 +16,12 @@ Comece por aqui, na ordem:
 | [02 Transporte](manual/02-transporte.md) | Barra superior, andamento e tap tempo, loop, metrônomo, punch |
 | [02b Timeline e clipes](manual/02b-timeline-e-clipes.md) | Faixas, clipes, marcadores, minimapa |
 | [02c Pastas de faixa](manual/02c-pastas-de-faixa.md) | Agrupar faixas sob um barramento, recolher e expandir, solo e stems da pasta |
+| [02d Histórico e versões](manual/02d-historico-e-versoes.md) | Passos do desfazer com nome e hora, painel `Histórico`, versões nomeadas do projeto (salvar, restaurar, comparar, duplicar) e as automáticas |
 | [03 Áudio e clipes](manual/03-audio-e-clipes.md) | Importar, fades, ganho |
 | [03b Warp e altura](manual/03b-warp-e-altura.md) | Esticar no tempo, transpor, detectar andamento |
 | [03c Gravação](manual/03c-gravacao.md) | Microfone, tomadas, MIDI ao vivo, punch in/out, pré-roll e opções do metrônomo |
 | [03d Áudio para MIDI](manual/03d-audio-para-midi.md) | Converter melodia cantada em notas |
+| [03e Editar áudio](manual/03e-editar-audio.md) | Dividir um clipe por transientes, em partes iguais ou na grade, remover silêncio, normalizar por pico, RMS ou LUFS e quantizar por fatias |
 | [04 Painel de instrumento](manual/04-painel-de-instrumento.md) | Presets, teclado, knobs |
 | [04a Sintetizador](manual/04a-sintetizador.md) | Subtrativo |
 | [04b Bateria](manual/04b-bateria.md) | 12 peças sintetizadas |
@@ -61,9 +63,11 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Loudness e master](guias/loudness-e-master.md) | Nível competitivo e seguro |
 | [Exportar para compartilhar e arquivar](guias/exportar-para-compartilhar.md) | Prévia em MP3 por mensagem, arquivo em FLAC e master final em WAV 24 bits e MP3 320 |
 | [Remix com warp e altura](guias/remix-com-warp-e-altura.md) | Esticar, transpor e sobrepor |
+| [Editar áudio: dividir, limpar silêncios e nivelar](guias/editar-audio-dividir-quantizar-normalizar.md) | Loop de bateria fatiado e reordenado, voz sem silêncios longos e três vozes no mesmo LUFS |
 | [Fades e crossfades na prática](guias/fades-e-crossfades.md) | Emendar tomadas de voz, loop sem clique, entrada suave de um pad, com a curva de cada caso |
 | [Trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md) | Nuvem, conflito, offline |
 | [Backup e levar o projeto para outro aparelho](guias/backup-e-levar-projeto-para-outro-aparelho.md) | Arquivo `.jopendaw` |
+| [Voltar atrás: histórico e versões](guias/voltar-atras-historico-e-versoes.md) | Experimentar uma mixagem e voltar (A contra B), recuperar o projeto de ontem, tirar uma cópia para uma variação |
 | [Mapa de andamento e compasso](guias/mapa-de-andamento-e-compasso.md) | Virada de andamento, ritardando em rampa, 4/4 para 3/4 e 6/8 |
 | [MIDI de e para outros programas](guias/midi-de-e-para-outros-programas.md) | Exportar e importar `.mid`: melodia para outro DAW, pacote de acordes, backup das notas |
 | [Atalhos e fluxo rápido](guias/atalhos-e-fluxo-rapido.md) | Trabalhar sem tirar a mão do teclado |

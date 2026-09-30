@@ -88,8 +88,8 @@ Com um mapa de andamento, este botão mexe só no **andamento inicial** (o ponto
 
 | Controle (tooltip) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| **Desfazer (Ctrl+Z)** (seta para trás) | Volta um passo. | Guarda até 200 passos. Desligado sem passos ou gravando. | Um arraste inteiro (mover, aparar, desenhar loop) é um passo só; uma passada de gravação de automação (do play ao stop, com todos os controles) também. |
-| **Refazer (Ctrl+Shift+Z)** (seta para frente) | Refaz o passo desfeito. | Também Ctrl+Y. | Fazer uma edição nova apaga o que dava para refazer. |
+| **Desfazer: <nome do passo> (Ctrl+Z)** (seta para trás; sem passo o tooltip é só `Desfazer (Ctrl+Z)`) | Volta um passo. **Botão direito** (mouse) ou **pressão longa** (dedo) abre um menu com `Histórico… (N)`, `Versões…` e `Salvar versão…`. | Guarda até 200 passos. Desligado sem passos ou gravando (o menu ainda abre). | Um arraste inteiro (mover, aparar, desenhar loop) é um passo só; uma passada de gravação de automação (do play ao stop, com todos os controles) também. O tooltip diz o passo, por exemplo `Desfazer: Mover clipe (Ctrl+Z)`. Tudo sobre o histórico e as versões: [capítulo 02d](02d-historico-e-versoes.md). |
+| **Refazer: <nome do passo> (Ctrl+Shift+Z)** (seta para frente; sem passo, `Refazer (Ctrl+Shift+Z)`) | Refaz o passo desfeito. Mesmo menu do botão direito e da pressão longa. | Também Ctrl+Y. | Fazer uma edição nova apaga o que dava para refazer. |
 | **Cortar no cursor (S)** (tesoura) | Divide no cursor o clipe selecionado. Sem clipe selecionado, divide todos os clipes que o cursor cruza na faixa selecionada. Só corta se o cursor está estritamente dentro do clipe. | Áudio e notas; uma nota que cruza o corte vira duas. | Sem efeito se nenhum clipe cruza o cursor. |
 | **Duplicar (Ctrl+D)** (ícone de cópia) | Copia o clipe selecionado para logo depois dele e seleciona a cópia. O que a cópia cobrir é aparado (ver [sobreposição de clipes](02b-timeline-e-clipes.md)). | Desligado sem clipe selecionado. | Com o editor de notas aberto, ele passa para a cópia. |
 | **Apagar o clipe (Delete)** (lixeira) | Apaga o clipe selecionado, sem fechar o vão. | Desligado sem clipe selecionado. | Backspace também apaga. |
@@ -263,6 +263,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 ## Combina com
 
 - [Timeline e clipes](02b-timeline-e-clipes.md): a régua, o cursor, a grade e os marcadores que a barra controla, e a faixa `Andamento` (mapa de andamento) sob a régua.
+- [Histórico e versões](02d-historico-e-versoes.md): o painel `Histórico` (cada passo do desfazer com nome e hora), as `Versões` nomeadas do projeto e o menu do botão direito em `Desfazer` e `Refazer`.
 - [Mapa de andamento e de compassos na prática](../guias/mapa-de-andamento-e-compasso.md): virada de andamento, ritardando em rampa, 4/4 para 3/4 e 6/8.
 - [Gravação](03c-gravacao.md): armar faixas, contagem, tomadas, latência, punch, pré-roll e as opções do metrônomo.
 - [Regravar um trecho com punch e pré-roll](../guias/regravar-um-trecho-com-punch-e-pre-roll.md): consertar uma frase, gravar um solo sem contagem, tap tempo e metrônomo com subdivisões.
@@ -275,7 +276,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 ## Limites e pegadinhas
 
 - **Gravando, a barra trava o que mudaria a gravação:** desfazer, refazer, andamento, compasso, loop (ligar, desenhar, seções), importar, exportar, congelar e trocar de entrada ficam desligados ou avisam `Pare a gravação para…`. O cursor também não pula (clicar na régua, numa raia ou num marcador não move o cursor).
-- **O que não entra no desfazer:** ligar o loop, o metrônomo, a contagem, o pré-roll, o punch (e a região dele), as opções do metrônomo, a compensação de latência, armar e monitorar faixas. Mudar o andamento pelo tap tempo (`T` ou o `Salvar` da janela) entra, como qualquer mudança de andamento. Desfazer uma nota nunca mexe neles. Desenhar a região do loop na régua entra, e desfazer volta o loop junto.
+- **O que não entra no desfazer:** ligar o loop, o metrônomo, a contagem, o pré-roll, o punch (e a região dele), as opções do metrônomo, a compensação de latência, armar e monitorar faixas. Mudar o andamento pelo tap tempo (`T` ou o `Salvar` da janela) entra, como qualquer mudança de andamento. Desfazer uma nota nunca mexe neles. Desenhar a região do loop na régua entra, e desfazer volta o loop junto. Recolher e expandir uma pasta, abrir e fechar raias de automação e os mapeamentos de MIDI learn também ficam de fora. Os nomes dos passos e o painel `Histórico`: [02d](02d-historico-e-versoes.md). Um detalhe do nome: o `Salvar` da janela `Andamento e compasso` (e o tap tempo) guarda o passo como `Região do loop`, não como `Mudar andamento`; desfazer funciona igual. `(lido do código)`
 - **O que não é salvo com o projeto:** o modo de automação (o da barra e o de cada raia: volta a `Ler` ao reabrir), grade, zoom, rolagem, seguir o cursor, altura das faixas, modo da régua, teclado musical (oitava e intensidade), altura do painel de baixo e a última escolha da janela de exportação (dura só a sessão). O que fica no projeto: andamento, compasso, loop (região e liga/desliga), metrônomo e as opções dele, contagem, pré-roll, punch (região e liga/desliga), compensação de latência e marcadores.
 - **Metrônomo e loop não vão para a exportação.** O arquivo sai linear, do começo ao fim, sem cliques.
 - **Web e Android:** os botões são os mesmos; no celular Importar e Exportar mostram só o ícone, a barra fica embaixo e o painel de baixo ocupa 60% da altura livre. No celular (janela sempre abaixo de 1640 px) a barra também não tem a duração total nem o botão de atalhos; os atalhos abrem pelas Configurações (a tecla `?` só serve com teclado físico).
@@ -288,7 +289,7 @@ No conflito, a janela **O projeto mudou em outro aparelho** abre sozinha uma vez
 
 ## Atalhos
 
-Vale o Ctrl no Windows e no Linux e o Cmd (⌘) no Mac; a janela de atalhos mostra ⌘ no Mac. Os tooltips e menus escrevem sempre `Ctrl` (nos que passam por `withMod`, `⌘` no Mac). Estas são as teclas **padrão**: desde a fase 16 elas podem ser trocadas em `Atalhos do teclado` > `Personalizar` ([capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos)), e os tooltips da barra (`Loop (L)`, `Metrônomo (C)`, `Cortar no cursor (S)`, `Parar e voltar (Enter)`, `Apagar o clipe (Delete)`, `Duplicar (Ctrl+D)`, `Desfazer (Ctrl+Z)`…) **não acompanham a troca**: continuam com a tecla de fábrica. A janela `?` mostra a tecla de agora.
+Vale o Ctrl no Windows e no Linux e o Cmd (⌘) no Mac; a janela de atalhos mostra ⌘ no Mac. Os tooltips e menus escrevem sempre `Ctrl` (nos que passam por `withMod`, `⌘` no Mac). Estas são as teclas **padrão**: desde a fase 16 elas podem ser trocadas em `Atalhos do teclado` > `Personalizar` ([capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos)), e, desde a fase 18, os tooltips da barra (`Loop (L)`, `Metrônomo (C)`, `Cortar no cursor (S)`, `Desfazer (Ctrl+Z)`…) leem a tecla de agora do catálogo; poucas exceções têm a tecla escrita à mão (como o `(Q)` de quantizar no piano roll). A janela `?` mostra a lista completa.
 
 | Tecla | Ação |
 |---|---|
@@ -302,6 +303,7 @@ Vale o Ctrl no Windows e no Linux e o Cmd (⌘) no Mac; a janela de atalhos most
 | T | Tap tempo: bata no ritmo; o andamento vale quando você para de bater (ver a janela `Andamento e compasso`) |
 | Ctrl+Z | Desfazer |
 | Ctrl+Shift+Z ou Ctrl+Y | Refazer |
+| Ctrl+Shift+H | Abrir o painel `Histórico` (passos do desfazer, com `Versões…`); ver [02d](02d-historico-e-versoes.md) |
 | S | Cortar no cursor |
 | Ctrl+D | Duplicar o clipe |
 | Delete ou Backspace | Apagar o clipe selecionado |

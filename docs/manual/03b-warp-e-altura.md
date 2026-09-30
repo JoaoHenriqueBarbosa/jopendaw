@@ -72,6 +72,7 @@ O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao and
 - [Áudio para MIDI](03d-audio-para-midi.md): a análise lê o arquivo **original**, mas as notas criadas respeitam o warp (o andamento do próprio áudio vira a régua das batidas), somam a transposição e espelham no reverso, para caírem alinhadas com o clipe como ele toca. As notas são gravadas na hora da conversão: mudar o warp depois não as move (ver "Coerência com o clipe" lá).
 - [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe): `Ganho do clipe…`, outro item do mesmo menu, muda o volume do clipe; o warp não mexe nele.
 - [Mixer](06-mixer.md): o clipe esticado passa pela cadeia de efeitos da faixa como qualquer outro.
+- [Editar áudio](03e-editar-audio.md): `Dividir por transientes…`, `Remover silêncio…` e `Quantizar por fatias…` **recusam** um clipe com warp, transposição ou inversão (`Este clipe usa warp, transposição ou inversão. A edição por fatias trabalha no áudio original e ignora o warp; desligue o processamento em “Warp e altura…” antes de editar.`), porque os cortes são pontos do arquivo original. Só `Normalizar clipe…` vale com warp. Para editar: `Desligar o warp`, `Zerar` a altura e desligar `Inverter o áudio`, edite, e religue o warp em cada pedaço (o warp é por clipe). Para um loop de outro andamento, faça o warp e **não** fatie; para bateria tocada perto da grade no andamento do projeto, fatie e quantize sem warp.
 
 ## Limites e pegadinhas
 

@@ -56,8 +56,8 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| `Desfazer (Ctrl+Z)` | Desfaz o último passo | Até 200 passos | Desligado gravando |
-| `Refazer (Ctrl+Shift+Z)` | Refaz | | Desligado gravando |
+| `Desfazer: <passo> (Ctrl+Z)` (sem passo, `Desfazer (Ctrl+Z)`) | Desfaz o último passo; o tooltip diz qual (`Desfazer: Mover clipe`) | Até 200 passos | Desligado gravando. Botão direito ou pressão longa: menu `Histórico… (N)`, `Versões…`, `Salvar versão…` ([capítulo 02d](02d-historico-e-versoes.md)) |
+| `Refazer: <passo> (Ctrl+Shift+Z)` | Refaz | | Desligado gravando. Mesmo menu do botão direito |
 | `Cortar no cursor (S)` | Divide os clipes no cursor | | |
 | `Duplicar (Ctrl+D)` | Duplica o clipe selecionado | Desligado sem clipe selecionado | |
 | `Apagar o clipe (Delete)` | Apaga o clipe selecionado | Desligado sem clipe selecionado | |
@@ -65,7 +65,7 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | Botão `Automação` (ícone de linha quebrada; tooltip `Automação: <modo>. <dica>`) | Escolhe o modo de gravação da automação; fica entre a grade e o `Afastar` | Em `Ler` (padrão) só o ícone; nos outros modos aparece em vermelho com o nome do modo | Modos em [Capítulo 07](07-automacao.md) |
 | `Afastar` / `Aproximar` | Zoom horizontal | Passo de 1,5x | Também `−` e `+` |
 | `Seguir o cursor na reprodução` | A janela rola atrás do cursor tocando | Ligado por padrão | Também no menu `Visão` |
-| Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequenas`, `Faixas médias`, `Faixas grandes`, `Seguir o cursor`, `Régua em minutos e segundos` | Altura padrão: média | |
+| Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequenas`, `Faixas médias`, `Faixas grandes`, `Seguir o cursor`, `Régua em minutos e segundos`, e, abaixo de um traço, `Histórico… (N)` (painel dos passos do desfazer; também `Ctrl+Shift+H`) e `Versões…` (cópias nomeadas do projeto) | Altura padrão: média | Histórico e versões: [capítulo 02d](02d-historico-e-versoes.md) |
 | Menu de bandeira (`Seções e marcadores (M cria um no cursor)`) | Lista de marcadores (clicar leva o cursor), `Marcador no cursor (M)`, `Loop entre marcadores`, `Loop desta seção`, `Loop no clipe selecionado (Shift+L)` | `Nenhum marcador ainda` quando vazio | A bandeira fica ciano com marcadores |
 | Duração (texto cinza, ex.: `0:08`) | Duração do projeto em minutos e segundos; tooltip `Duração do projeto: ... (N compassos)` | **Só em janelas de 1640 px ou mais** (some abaixo disso, inclusive no celular) | Conta até o fim do último clipe |
 
@@ -95,7 +95,7 @@ A aba `Modulação` do mesmo painel (tooltip `Modulação da faixa: LFO, seguido
 | `Importar áudio ou MIDI (Ctrl+I)` (rótulo `Importar` quando há largura) | Abre o seletor de arquivos de áudio ou MIDI | áudio: `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff`; MIDI: `mid`, `midi` | Desligado gravando ou com trabalho em andamento |
 | `Exportar áudio (WAV, FLAC ou MP3)` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
 | `Configurações: entrada de áudio, latência e contagem` | Abre `Configurações` | | [Capítulo 09](09-configuracoes-atalhos-android.md) |
-| `Atalhos do teclado (?)` | Abre `Atalhos do teclado`, com a lista das teclas de agora e, no rodapé, o botão `Personalizar` (só na web e no computador) | **Só em janelas de 1640 px ou mais** (ao lado da engrenagem) | Em janelas menores: a tecla `?` ou o botão `Atalhos do teclado` no rodapé das `Configurações`. Personalização: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
+| `Atalhos do teclado (?)` | Abre `Atalhos do teclado`, com a lista das teclas de agora e, no rodapé, o botão `Personalizar` (em todo aparelho; no celular só vale com teclado físico) | **Só em janelas de 1640 px ou mais** (ao lado da engrenagem) | Em janelas menores: a tecla `?` ou o botão `Atalhos do teclado` no rodapé das `Configurações`. Personalização: [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos) |
 | Texto com roda girando (por último na barra) | Trabalho em andamento (`Importando <nome>…`, `Exportando…`, `Salvando a gravação…`, `Processando o warp…`) | | |
 
 O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones. A duração total e o botão `Atalhos do teclado (?)` são outra regra: só existem quando a janela tem 1640 px ou mais, para a engrenagem caber numa janela de 1512 px ([capítulo 02](02-transporte.md#onde-fica)).
@@ -199,7 +199,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 **Local primeiro.** O projeto abre e edita no seu aparelho, sem esperar a rede: o documento e os áudios ficam guardados no aparelho (no navegador, no IndexedDB; no Android, em arquivos do app). A nuvem trabalha em segundo plano: traz a versão mais nova quando você não tem nada pendente e envia o que mudou depois de 3 segundos sem edição. Se dois aparelhos mudarem o mesmo projeto, o app pergunta qual vale. Tudo isso está no [capítulo 01b](01b-nuvem-e-sincronizacao.md).
 
-**Desfazer.** Guarda até 200 passos; ligar o metrônomo ou o loop e a calibragem de latência não entram no histórico. O histórico é da sessão de edição: some ao fechar o projeto.
+**Desfazer.** Guarda até 200 passos, cada um com nome e hora (o painel `Histórico` os lista e leva o projeto a qualquer um); ligar o metrônomo ou o loop e a calibragem de latência não entram no histórico. O histórico é da sessão de edição: some ao fechar o projeto e quando a nuvem troca o projeto pelo de outro aparelho. Para guardar um ponto de volta que dure, use as **versões** (`Versões…`): cópias nomeadas do projeto, só deste aparelho. Ver [02d](02d-historico-e-versoes.md).
 
 ## Glossário
 
@@ -258,7 +258,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 
 - [01 Projetos, modelos e conta](01-projetos-modelos-conta.md): entrar e criar o primeiro projeto.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): vários aparelhos, conflitos e cotas.
-- [02 Transporte](02-transporte.md) e [02b Timeline e clipes](02b-timeline-e-clipes.md): as duas áreas que você mais usa. [02c Pastas de faixa](02c-pastas-de-faixa.md): agrupar e recolher faixas.
+- [02 Transporte](02-transporte.md) e [02b Timeline e clipes](02b-timeline-e-clipes.md): as duas áreas que você mais usa. [02c Pastas de faixa](02c-pastas-de-faixa.md): agrupar e recolher faixas. [02d Histórico e versões](02d-historico-e-versoes.md): voltar atrás passo a passo ou a uma cópia nomeada do projeto.
 - [06 Mixer](06-mixer.md) e [08 Exportação](08-exportacao.md): fechar a mixagem e tirar o WAV.
 - [09 Configurações, atalhos e Android](09-configuracoes-atalhos-android.md): teclas e diferenças de plataforma.
 - Receitas prontas: pasta `../guias/`.
@@ -268,7 +268,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 - O andamento e o compasso moram no servidor: mudar o `120 BPM · 4/4` da barra chama a API. Sem rede o app mostra o novo andamento nesta sessão, mas o servidor guarda o antigo, e ao reabrir o projeto vale o do servidor (lido do código; o aviso de erro na tela ao falhar não foi confirmado).
 - O botão da barra sempre escreve `/4` (`120 BPM · 4/4`), mesmo que o cadastro do projeto no servidor tenha outra figura de tempo; o card da lista mostra a fórmula do cadastro.
 - Os tooltips, o item `Duplicar` do menu do clipe e a janela `Atalhos do teclado` mostram `⌘` no Mac e no iOS e `Ctrl` nos outros sistemas (`Desfazer (⌘+Z)` no Mac). Nesta tabela do capítulo eles aparecem como `Ctrl`.
-- **Os atalhos são personalizáveis (fase 16), mas os tooltips não acompanham.** Só a janela `Atalhos do teclado` (e a tela `Personalizar` dentro dela) leem as teclas de agora. Os tooltips desta tabela (`Loop (L)`, `Metrônomo (C)`, `Parar e voltar (Enter)`, `Mixer (X)`…) e das abas do painel de baixo trazem sempre a tecla **padrão**: se você trocou a tecla, o texto continua mostrando a de fábrica. Ver [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos). `(lido do código)`
+- **Os atalhos são personalizáveis (fase 16) e os tooltips acompanham a troca (fase 18).** Os tooltips e menus (`Loop (L)`, `Metrônomo (C)`, `Mixer (X)`…) leem a tecla de agora do catálogo; sobram poucas exceções com a tecla escrita à mão (por exemplo o `(Q)` do tooltip de quantizar no piano roll), que continuam mostrando a de fábrica. Ver [capítulo 09](09-configuracoes-atalhos-android.md#personalizar-os-atalhos). `(lido do código)`
 - No menu `Visão`, `Faixas pequenas`, `Faixas médias` e `Faixas grandes` não têm atalho de teclado (antes da fase 9 o menu mostrava siglas `(P)`, `(M)` e `(G)` que pareciam atalhos; `M` cria marcador).
 - Só há motor de áudio no navegador e no Android. Em outro sistema (um build de computador nativo) a tela do projeto avisa (`O motor de áudio não roda neste sistema: use o jopendaw no navegador ou no Android.`) e não toca.
 - Se o som some de repente e aparece o aviso vermelho com o botão `Reiniciar o áudio`, o motor caiu; veja "Aviso de falha do áudio" acima. O projeto não é perdido.
@@ -293,4 +293,5 @@ Os atalhos mais usados, com as teclas **padrão** (a lista completa, a tela `Per
 | `Esc` | Fechar o painel |
 | `Z` | Enquadrar o projeto |
 | `Ctrl+Z` (`⌘Z` no Mac) | Desfazer |
+| `Ctrl+Shift+H` (`⌘+Shift+H` no Mac) | Abrir o painel `Histórico` |
 | `?` | Abrir a janela de atalhos |

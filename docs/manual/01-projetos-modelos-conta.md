@@ -296,7 +296,7 @@ Enquanto roda, o botão `Cancelar` fica desligado: não dá para interromper a m
 ### O que o arquivo NÃO contém
 
 - **Andamento e compasso do projeto como campos do servidor:** o arquivo guarda os do documento e, ao importar, eles são aplicados ao projeto novo (o andamento do espelho do servidor vira número inteiro entre 20 e 999, e o do documento importado mantém as casas decimais; o compasso é o do compasso 1 do mapa do documento: numerador entre 1 e 32 e a figura (`1`, `2`, `4`, `8`, `16` ou `32`) só se mudou, de modo que um arquivo que começa em `6/8` cria um projeto que aparece como `6/8` na lista e no subtítulo antes de abrir). No espelho do servidor um andamento com casas decimais é arredondado; no documento importado ele fica como estava.
-- **O histórico de desfazer:** o projeto importado abre com o desfazer vazio.
+- **O histórico de desfazer e as versões nomeadas:** o projeto importado abre com o desfazer vazio e sem nenhuma versão (elas ficam só no aparelho onde foram salvas; ver [02d](02d-historico-e-versoes.md)). Para levar uma versão no arquivo, use `Duplicar como novo projeto…` nas `Versões` e exporte o projeto novo.
 - **Os sons derivados do warp** (esticados, transpostos, invertidos): cada aparelho os refaz a partir do original, como na sincronização.
 - **Preferências do aparelho:** zoom e rolagem, altura das faixas, seleção, entrada de áudio escolhida, teclado e MIDI ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
 - **O vínculo com a nuvem:** id do projeto, versão no servidor e estado de sincronização. O projeto importado é um projeto novo, sem ligação com o original.
@@ -330,11 +330,13 @@ Aparecem em vermelho na tela `Projetos` e nada é criado.
 
 ## Histórico de desfazer e versões do projeto
 
+Resumo. O capítulo completo, com todos os botões, os nomes dos passos e os passo a passo, é o [02d Histórico e versões](02d-historico-e-versoes.md).
+
 ### Histórico com nomes
 
-Cada passo do `Desfazer` tem nome (`Mover clipe`, `Apagar faixa`, `Mudar andamento`, `Inserir acorde`, `Gravar automação`, `Agrupar em pasta`…); o que não tem nome aparece como `Edição` com a hora. Os botões da barra dizem o passo no tooltip: `Desfazer: Mover clipe`, `Refazer: Apagar faixa`.
+Cada passo do `Desfazer` tem nome (`Mover clipe`, `Apagar faixa`, `Mudar andamento` (arrastar pontos do mapa), `Inserir acorde`, `Gravar automação`, `Agrupar em pasta`…); o que não tem nome aparece como `Edição` com a hora. Os botões da barra dizem o passo no tooltip: `Desfazer: Mover clipe`, `Refazer: Apagar faixa`.
 
-Para abrir a lista: pressão longa (celular) ou botão direito (mouse) em `Desfazer` ou `Refazer` e `Histórico…`; o menu `Visão` (lupa) com `Histórico…`; ou o atalho `Ctrl+Shift+H` (`⌘+Shift+H` no Mac), ação `Abrir o histórico` da janela de atalhos. O painel mostra `N passos (máx. 200)`, do mais recente ao mais antigo, com o estado de agora destacado; os passos em cinza foram desfeitos e ainda dá para refazer. Tocar num passo leva o projeto até ele de uma vez. `Limpar histórico` esquece o desfazer (o projeto fica como está; as versões não mudam). Durante a gravação o painel fica parado.
+Para abrir a lista: pressão longa (celular) ou botão direito (mouse) em `Desfazer` ou `Refazer` e `Histórico…`; o menu `Visão` (ícone de quatro setas para fora) com `Histórico…`; ou o atalho `Ctrl+Shift+H` (`⌘+Shift+H` no Mac), ação `Abrir o histórico` da janela de atalhos. O painel mostra `N passos (máx. 200)`, do mais recente ao mais antigo, com o estado de agora destacado; os passos em cinza foram desfeitos e ainda dá para refazer. Tocar num passo leva o projeto até ele de uma vez. `Limpar histórico` esquece o desfazer (o projeto fica como está; as versões não mudam). Durante a gravação o painel fica parado.
 
 ### Versões nomeadas
 
@@ -353,6 +355,7 @@ Uma versão é uma cópia do projeto inteiro (faixas, clipes, efeitos, automaç�
 
 - [00 Visão geral](00-visao-geral.md): o mapa do estúdio que abre depois de criar o projeto.
 - [01b Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o que acontece com o projeto ao mudar de aparelho.
+- [02d Histórico e versões](02d-historico-e-versoes.md): o histórico de desfazer com nomes e as versões nomeadas (`Duplicar como novo projeto…` usa o mesmo caminho da importação).
 - [08 Exportação](08-exportacao.md): o `Exportar` em WAV gera som; o `.jopendaw` guarda o projeto editável. Um não substitui o outro.
 - [Guia: backup e levar o projeto para outro aparelho](../guias/backup-e-levar-projeto-para-outro-aparelho.md): backup periódico, migrar entre aparelhos e enviar a um colaborador.
 - [04 Painel de instrumento](04-painel-de-instrumento.md) e [04b Bateria](04b-bateria.md): para mexer nos timbres que o modelo `Batida eletrônica` monta.
@@ -363,7 +366,7 @@ Uma versão é uma cópia do projeto inteiro (faixas, clipes, efeitos, automaç�
 
 - **Criar, renomear e apagar precisam de rede**: a lista de projetos vem do servidor. Sem rede a tela `Projetos` mostra o erro com `Tentar de novo`. Já dentro de um projeto aberto, a edição segue funcionando ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
 - **O modelo é aplicado só uma vez, no aparelho que criou o projeto.** A escolha fica guardada no aparelho até a primeira abertura. Se você abrir o projeto recém-criado antes em outro aparelho, ele começa como o `Vazio` (uma faixa `Áudio 1`); o modelo só vira documento quando o aparelho que criou abrir o projeto. Evite editar no outro aparelho antes disso, senão os dois lados terão mudado e aparecerá o diálogo de conflito ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
-- **Apagar o projeto apaga o cadastro e o documento no servidor, e limpa o aparelho, mas não os áudios do servidor.** No aparelho o app apaga o documento local, o estado de sincronização, o modelo pendente e os áudios guardados que só aquele projeto citava (um áudio que outro projeto do aparelho ainda cita fica). No servidor os áudios continuam contando na cota da conta e aparecem como `sem uso` na tela `Conta`, de onde você os apaga ([capítulo 01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)). Os sons derivados do warp desses áudios (o cache dos clipes esticados, transpostos ou invertidos) saem junto; os de um áudio que outro projeto ainda usa ficam (resolvido em `1180152`; antes não entravam na limpeza).
+- **Apagar o projeto apaga o cadastro e o documento no servidor, e limpa o aparelho, mas não os áudios do servidor.** No aparelho o app apaga o documento local, o estado de sincronização, o modelo pendente, as versões nomeadas do projeto ([02d](02d-historico-e-versoes.md)) e os áudios guardados que só aquele projeto citava (um áudio que outro projeto do aparelho ainda cita fica). No servidor os áudios continuam contando na cota da conta e aparecem como `sem uso` na tela `Conta`, de onde você os apaga ([capítulo 01b](01b-nuvem-e-sincronizacao.md#cotas-e-limites)). Os sons derivados do warp desses áudios (o cache dos clipes esticados, transpostos ou invertidos) saem junto; os de um áudio que outro projeto ainda usa ficam (resolvido em `1180152`; antes não entravam na limpeza).
 - **`Mexido ...` no card** acompanha o servidor: só muda quando o documento é enviado (ou o nome, alterado). Uma edição que ainda não sincronizou não atualiza o card.
 - O `Email` da conta não pode ser trocado na tela `Conta`.
 - `Sair` encerra a sessão, mas não apaga do aparelho os projetos e áudios já guardados: eles continuam lá e voltam a valer quando a conta entrar de novo.

@@ -2,7 +2,7 @@
 
 > Guardar com nome o som que você ajustou (um instrumento ou um efeito), chamá-lo em outra faixa ou projeto com dois toques e levá-lo a outro aparelho ou a um colega num arquivo `.jopreset`; cerca de 5 minutos para o primeiro preset e mais 5 para levar um a outro aparelho.
 
-Tudo o que está aqui sai do código do app (commit `b39d3d4`; a posição da seção `MEUS PRESETS` no **topo** dos menus vem do commit `18c72f4`, da fase 13; os avisos do guardado, o backup e o `(editado)` que segue renomear e apagar vêm do `504b4b8`, da fase 14; a separação entre aviso de carga e falha de gravação e o `Restaurar presets do backup…` vêm do `ffa76ba`, da fase 16). O uso no Chrome foi relatado pela sessão de código (salvar `Meu baixo grave` e o preset aparecer marcado com o visto); o resto das receitas segue o comportamento lido do código e dos testes automáticos, e foi montado sem ouvir o resultado `(não confirmado ao ouvido)`. Os presets ficam **neste aparelho**: não sincronizam com a conta e não vão dentro do arquivo do projeto (ver [Limitações](#limitações-reais)).
+Tudo o que está aqui sai do código do app (commit `b39d3d4`; a posição da seção `MEUS PRESETS` no **topo** dos menus vem do commit `18c72f4`, da fase 13; os avisos do guardado, o backup e o `(editado)` que segue renomear e apagar vêm do `504b4b8`, da fase 14; a separação entre aviso de carga e falha de gravação e o `Restaurar presets do backup…` vêm do `ffa76ba`, da fase 16; a leitura de todas as cópias e os contadores separados do restaurar vêm do `c1fb192`, da fase 18 A). O uso no Chrome foi relatado pela sessão de código (salvar `Meu baixo grave` e o preset aparecer marcado com o visto); o resto das receitas segue o comportamento lido do código e dos testes automáticos, e foi montado sem ouvir o resultado `(não confirmado ao ouvido)`. Os presets ficam **neste aparelho**: não sincronizam com a conta e não vão dentro do arquivo do projeto (ver [Limitações](#limitações-reais)).
 
 ## Ingredientes
 
@@ -57,7 +57,7 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 - **Ponto de partida a partir de um preset de fábrica:** aplique o de fábrica, ajuste e salve com outro nome; o de fábrica continua lá.
 - **Renomear e arrumar:** `…` da linha, `Renomear…` (título `Renomear preset`) e `Apagar…` (`Apagar o preset?`, sem desfazer). Renomear e apagar não entram no `Ctrl+Z` do projeto.
 - **Cópia de segurança:** exporte os presets de que não abre mão. Se o navegador recusar a gravação, o menu de presets mostra um aviso em vermelho e os presets valem só até fechar o app (ver [Avisos do guardado](#avisos-do-guardado)).
-- **Recuperar presets de um arquivo que estava ilegível:** se na abertura o app guardou uma cópia (`userpresets.bak`), o menu de presets ganha `Restaurar presets do backup…`; ele soma os presets da cópia aos seus (ver [Restaurar do backup](#restaurar-do-backup)).
+- **Recuperar presets de um arquivo que estava ilegível:** se na abertura o app guardou uma cópia (`userpresets.bak` ou uma das extras `userpresets.bak.<número>`), o menu de presets ganha `Restaurar presets do backup…`; ele soma os presets de todas as cópias aos seus (ver [Restaurar do backup](#restaurar-do-backup)).
 
 ## Por que funciona
 
@@ -70,7 +70,7 @@ Para um colega, o arquivo é o mesmo: o `.jopreset` é um JSON pequeno e legíve
 
 - **Só neste aparelho.** Na web, os presets ficam no IndexedDB do site (banco `jopendaw`); no Android, num arquivo do app. Outro navegador, outro perfil, janela anônima, limpar os dados do site ou desinstalar o app começam sem presets. Não sincronizam com a conta e não entram no `.jopendaw` do projeto ([Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) cobre o projeto, não os presets).
 - **Global por aparelho.** Os presets ficam na chave `userpresets`, sem id de conta: quem entra com outra conta no mesmo aparelho vê os mesmos presets. Proposta, não feita: prefixar a chave com o id do usuário (`userpresets:<id>`) e migrar a chave antiga na primeira abertura; não foi feito porque `Session.user` chega depois do carregamento e o guardado do documento também é por aparelho.
-- **A cópia de um arquivo ilegível se recupera só pelo `Restaurar presets do backup…`.** Não há tela para abrir o arquivo `userpresets.bak` em si; o item lê os presets dele (mesmo de um arquivo cortado ao meio) e soma aos seus. Só a cópia principal é lida, não as extras `userpresets.bak.<número>`, e ela nunca é apagada (ver [Restaurar do backup](#restaurar-do-backup)).
+- **A cópia de um arquivo ilegível se recupera só pelo `Restaurar presets do backup…`.** Não há tela para abrir o arquivo `userpresets.bak` em si; o item lê os presets de todas as cópias (a principal e as extras `userpresets.bak.<número>`, da mais recente para a mais antiga, mesmo de um arquivo cortado ao meio) e soma aos seus. As cópias nunca são apagadas (ver [Restaurar do backup](#restaurar-do-backup)).
 - **Sampler sem áudio e sem zonas.** O preset do sampler é só timbre; um multi-sample não viaja pelo preset.
 - **Sem preset de cadeia.** Um preset por efeito; a ordem, o bypass, o `Sidechain` e os envios são refeitos à mão.
 - **A seção `MEUS PRESETS` ficava no fim do menu: resolvido na fase 13 (`18c72f4`).** Ela, `Salvar como preset…` e `Importar preset…` agora abrem no topo dos menus de instrumento e de efeito. O inverso passa a valer: com muitos presets seus, os de fábrica descem e o menu (460 px de altura máxima no instrumento, 680 px no efeito) precisa rolar para chegar neles.
@@ -114,11 +114,13 @@ Até a fase 15 o aviso do arquivo ilegível saía em vermelho e a janela `Preset
 
 ### Restaurar do backup
 
-`Restaurar presets do backup…` (menu de presets, depois de `Importar preset…`) aparece enquanto o aparelho tiver a cópia `userpresets.bak` e continua aparecendo depois de dispensar o aviso cinza, porque a cópia não é apagada.
+`Restaurar presets do backup…` (menu de presets, depois de `Importar preset…`) aparece enquanto o aparelho tiver alguma cópia (`userpresets.bak` ou `userpresets.bak.<número>`) e continua aparecendo depois de dispensar o aviso cinza, porque as cópias não são apagadas.
 
 1. Abra o menu de presets de um instrumento ou de um efeito e escolha `Restaurar presets do backup…`.
-2. Na janela `Restaurar do backup?`, toque em `Restaurar`. O app lê a cópia preset por preset (mesmo de um arquivo cortado ao meio) e soma ao que você tem; o que tem o mesmo nome no mesmo tipo, ou passaria do limite de 300 por tipo, fica de fora.
-3. Leia a janela do resultado: `Presets restaurados` (`N presets restaurados.`), `Nada novo para restaurar` (`Todos os presets da cópia já estão na sua lista.`) ou `Não foi possível restaurar` (`Não há cópia de presets neste aparelho.`, `Não consegui recuperar nenhum preset da cópia: o arquivo está danificado demais.` ou, com o guardado só de leitura, `Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.`).
+2. Na janela `Restaurar do backup?`, toque em `Restaurar`. O app lê as cópias, a mais recente primeiro, preset por preset (mesmo de um arquivo cortado ao meio) e soma ao que você tem; o que tem o mesmo nome no mesmo tipo, ou passaria do limite de 300 por tipo, fica de fora.
+3. Leia a janela do resultado: `Presets restaurados` (`N presets restaurados.`, com `M já existiam (mesmo nome) e ficaram como estavam.` e/ou `K ficaram de fora porque o tipo já tem o máximo de 300 presets.`, cada frase só quando o número não é zero), `Nada novo para restaurar` (`Nenhum preset da cópia pôde ser somado.` e as mesmas frases) ou `Não foi possível restaurar` (`Não há cópia de presets neste aparelho.`, `Não consegui recuperar nenhum preset da cópia: o arquivo está danificado demais.` ou, com o guardado só de leitura, `Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.`).
+
+Se a leitura do arquivo principal falhou (o aviso vermelho `Não deu para ler seus presets guardados neste aparelho...`), o item também aparece quando há cópias, mas como o guardado está só para leitura o restaurar termina em `Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.`
 
 Detalhes em [04 Painel de instrumento, Restaurar do backup](../manual/04-painel-de-instrumento.md#restaurar-do-backup). `(testado só por testes automáticos; não visto no navegador nem no Android)`
 

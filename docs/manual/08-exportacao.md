@@ -364,6 +364,7 @@ Limites e pegadinhas do `.mid`:
 - [Timeline e clipes](02b-timeline-e-clipes.md): o menu da faixa (**Congelar em áudio**) e o comprimento do projeto.
 - [Mixer](06-mixer.md) e [Painel de efeitos](06c-painel-de-efeitos.md): o que define o som do master e dos stems.
 - [Analisador e medidores](06b-analisador-e-medidores.md): as leituras `M`, `S`, `I` e `TP` do master, para conferir o mix antes de normalizar.
+- [Editar áudio](03e-editar-audio.md#normalizar-clipe): `Normalizar clipe…` leva um clipe a um alvo de pico, RMS ou LUFS no projeto, antes do mix.
 - [Guia: loudness e master](../guias/loudness-e-master.md): do nível das faixas ao arquivo entregue no alvo certo.
 - [Automação](07-automacao.md): vai inteira para o arquivo (WAV); no `.mid` a automação não vai.
 - [Pastas de faixa](02c-pastas-de-faixa.md): a pasta gera o próprio stem, além dos das faixas dela (ver [Stems](#stems)).
@@ -383,6 +384,7 @@ Limites e pegadinhas do `.mid`:
 - **O `I` do arquivo pode diferir do que o mixer mostrou.** O mixer mede a saída ao vivo (com metrônomo e entrada monitorada, tudo desde o último `Zerar`); a exportação mede só a mixagem. Vale o número da janela do resultado.
 - **Uma mixagem que já está perto do limitador de segurança desce.** Com true peak em torno de −0,3 dBTP e o teto padrão de −1,0, o ganho nunca é maior que −0,7 dB, mesmo que o alvo peça menos.
 - **Loudness só na mixagem.** Os stems só recebem o ganho (opcional); nenhum é medido.
+- **`Normalizar clipe…` × `Normalizar o loudness`.** O item `Editar áudio` › `Normalizar clipe…` (modo `LUFS`, [03e](03e-editar-audio.md#normalizar-clipe)) usa a mesma conta de loudness integrado, mas mede **um clipe** no arquivo original (sem fader, pan nem efeitos) e ajusta o `Ganho do clipe` no projeto; a exportação mede a **mixagem renderizada** e aplica um ganho só ao arquivo, depois do limitador do master. Duas vozes com o mesmo LUFS de clipe não chegam iguais à mixagem se passarem por efeitos ou faders diferentes. O do clipe é para igualar as fontes; o da exportação, para entregar no alvo.
 - **O fim é o último clipe.** Automação, marcadores e loop depois dele não estendem o arquivo; use **Cauda** para o que precisa soar depois.
 - **Áudios que faltam** (`áudio fora deste aparelho`) saem como silêncio, com o aviso ao final. Abra o projeto no aparelho que tem os arquivos ou sincronize antes.
 - **Deixe a aba aberta** durante o render no navegador; feche o app e o render some sem salvar.
