@@ -22,6 +22,9 @@ pub struct Config {
     /// A conta de demonstração que entra por código (quem revisa o app na Play Store não recebe
     /// o email do magic link): `REVIEW_EMAIL` e `REVIEW_CODE`, os dois ou nenhum.
     pub review: Option<(String, String)>,
+    /// Onde ficam os áudios (`blobs/`) e os temporários de upload. Lido aqui, no setup frio, e
+    /// levado pelo estado: a parte quente do hot-patch não lê o ambiente.
+    pub data_dir: std::path::PathBuf,
 }
 
 /// Cliente OAuth de `{PREFIX}_CLIENT_ID` e `{PREFIX}_CLIENT_SECRET`: os dois, ou nenhum.
@@ -46,6 +49,7 @@ impl Config {
         let jmail_api_key = var("JMAIL_API_KEY").context("falta JMAIL_API_KEY (chave do app jopendaw no jmail)")?;
         let trim = |s: String| s.trim_end_matches('/').to_string();
         Ok(Config {
+            data_dir: var("DATA_DIR").unwrap_or_else(|| "./data".into()).into(),
             jwt_secret: jwt_secret.into_bytes(),
             app_base_url: trim(var("APP_BASE_URL").unwrap_or_else(|| "http://localhost:8080".into())),
             mail_from: var("MAIL_FROM").unwrap_or_else(|| "no-reply@jopendaw.local".into()),

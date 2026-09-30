@@ -20,7 +20,7 @@ use crate::{
 const DEFAULT_BPM: i32 = 120;
 const DEFAULT_SAMPLE_RATE: i32 = 48_000;
 
-async fn owned(db: &DatabaseConnection, auth: &Auth, id: Uuid) -> Result<project::Model, ApiError> {
+pub(super) async fn owned(db: &DatabaseConnection, auth: &Auth, id: Uuid) -> Result<project::Model, ApiError> {
     Project::find_by_id(id).filter(project::Column::OwnerId.eq(auth.user_id)).one(db).await?.ok_or_else(ApiError::not_found)
 }
 

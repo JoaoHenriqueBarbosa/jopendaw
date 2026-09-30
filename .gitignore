@@ -18,5 +18,9 @@ __pycache__/
 # Backups tirados de produção
 dumps/
 
+# Armazenamento de samples (DATA_DIR)
+/data/
+/server/data/
+
 # worktrees dos agentes
 /.claude/worktrees/

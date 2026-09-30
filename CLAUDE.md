@@ -93,10 +93,15 @@ teste de novo.
   servidor com prova PKCE do app; no Android o Discord autoriza no app dele e volta por
   `discord-{id}:/authorize/callback`), código de acesso para a revisão da Play Store. JWT de 15 min +
   refresh opaco rotativo. Contas em SQL direto pelo sqlx no mesmo pool do SeaORM.
-- Domínio do DAW no SeaORM: `server/src/entities/` (hoje só `project`) e `server/src/routes/`
+- Domínio do DAW no SeaORM: `server/src/entities/` (`project`, `project_doc`, `sample`, `job`) e `server/src/routes/`
   (um submódulo por recurso, handlers com `State<DatabaseConnection>` + extractor `Auth`, sempre
   filtrando pelo dono). Schema em `server/schema.sql`; sem migrations automáticas: mudança vai no
   schema e num script idempotente em `db/migrations/`.
+- Fase 6 (servidor): documento versionado do projeto (`routes/docs.rs`, 409 com o doc do servidor se a
+  `base_version` for velha), áudios endereçados por SHA-256 em `DATA_DIR/blobs/` com cota de 4 GB por
+  conta (`routes/samples.rs`, `storage.rs`) e fila de tarefas (`routes/jobs.rs`: worker tokio sobre a
+  tabela `jobs`, FLAC e áudio→MIDI em `audio.rs`). Testes de rota: `TEST_DATABASE_URL=... cargo test -p
+  jopendaw-server` (banco à parte com o `schema.sql`; sem a variável eles se pulam).
 - Erros da API: `{"error": "..."}` via `ApiError`; 5xx sem detalhe do banco.
 - App: `main.dart` (go_router; `/login`, `/entrar`, `/authorize/callback` fora do shell; `/`,
   `/projetos/:id`, `/conta` dentro do `ResponsiveScaffold`: rail lateral ≥ 800 px, barra inferior

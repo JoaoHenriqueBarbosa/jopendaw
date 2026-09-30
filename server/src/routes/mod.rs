@@ -2,10 +2,16 @@
 //! do SeaORM, um submódulo por recurso; contas ficam em `auth.rs` e `oauth.rs`, em SQL direto
 //! pelo sqlx.
 
+mod docs;
+pub mod jobs;
 mod projects;
+mod samples;
+#[cfg(test)]
+mod tests;
 
 use axum::{
     Json, Router,
+    extract::DefaultBodyLimit,
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -90,7 +96,17 @@ pub fn router(state: AppState) -> Router {
         // projetos
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/projects/{id}", get(projects::get).patch(projects::patch).delete(projects::delete))
-        .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
+        // documento do projeto: o limite padrão do axum (2 MB) sai, o teto de 8 MB é do handler
+        .route("/api/projects/{id}/doc", get(docs::get).put(docs::put).layer(DefaultBodyLimit::disable()))
+        // áudios: sem limite padrão só aqui; o teto de 512 MB e a cota são aplicados no upload
+        .route("/api/samples/missing", post(samples::missing))
+        .route("/api/samples/{hash}", get(samples::download).put(samples::upload).layer(DefaultBodyLimit::disable()))
+        // tarefas pesadas
+        .route("/api/jobs", get(jobs::list).post(jobs::create))
+        .route("/api/jobs/{id}", get(jobs::get))
+        // `if_not_present`: a rota de download dos áudios põe o próprio Cache-Control (imutável, por
+        // hash) e o resto da API cai no no-store
+        .layer(SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
         .layer(SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")));
 
     Router::new().route("/healthz", get(|| async { "ok" })).merge(api).with_state(state)

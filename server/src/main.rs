@@ -1,3 +1,4 @@
+mod audio;
 mod auth;
 mod config;
 mod db;
@@ -5,6 +6,7 @@ mod entities;
 mod mail;
 mod oauth;
 mod routes;
+mod storage;
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
@@ -27,6 +29,8 @@ pub struct AppState {
     pub pool: PgPool,
     pub cfg: Arc<Config>,
     pub mailer: Arc<Mailer>,
+    /// Acorda o worker das tarefas quando entra uma nova (`routes/jobs.rs`).
+    pub job_wake: Arc<tokio::sync::Notify>,
 }
 
 /// Os handlers do domínio pedem só `State<DatabaseConnection>`.
@@ -57,8 +61,15 @@ async fn setup() -> anyhow::Result<Setup> {
     tracing::info!("banco conectado");
     let mailer = Arc::new(Mailer::new(&cfg.jmail_url, &cfg.jmail_api_key)?);
 
-    // faxina de tokens vencidos, uma vez por hora
+    let state = AppState { db, pool: pool.clone(), cfg: Arc::new(cfg), mailer, job_wake: Arc::new(tokio::sync::Notify::new()) };
+
+    // tarefas que estavam rodando quando o processo caiu voltam para a fila, e o worker começa
+    routes::jobs::requeue_orphans(&pool).await?;
+    tokio::spawn(routes::jobs::worker(state.clone()));
+
+    // faxina de tokens vencidos e de áudios sem registro, uma vez por hora
     let cleanup_pool = pool.clone();
+    let data_dir = state.cfg.data_dir.clone();
     tokio::spawn(async move {
         loop {
             if let Err(e) = auth::cleanup(&cleanup_pool).await {
@@ -67,11 +78,14 @@ async fn setup() -> anyhow::Result<Setup> {
             if let Err(e) = oauth::cleanup(&cleanup_pool).await {
                 tracing::warn!(error = %e, "faxina das entradas por provedor falhou");
             }
+            if let Err(e) = storage::cleanup(&cleanup_pool, &data_dir).await {
+                tracing::warn!(error = %e, "faxina dos áudios falhou");
+            }
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
 
-    Ok(Setup { state: AppState { db, pool, cfg: Arc::new(cfg), mailer }, static_dir, port })
+    Ok(Setup { state, static_dir, port })
 }
 
 /// A parte quente: o roteador e o servidor HTTP. Com o hot-patch, cada patch derruba esta future
