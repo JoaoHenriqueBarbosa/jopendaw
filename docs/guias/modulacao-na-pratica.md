@@ -10,7 +10,7 @@ Os números de tempo são exemplos a 120 BPM em 4/4 (1 batida = 0,5 s; 1 compass
 |---|---|---|
 | Aba `Modulação` do painel de baixo (ao lado de `Efeitos`) | Criar e ajustar os moduladores da faixa selecionada | [06g Modulação](../manual/06g-modulacao.md#onde-fica) |
 | `Presets` (`Wobble no corte`, `Tremolo no volume`, `Auto-pan`, `Vibrato de afinação`) | Começar de um modulador já ligado | [06g Presets](../manual/06g-modulacao.md#presets) |
-| Cartão do LFO: forma, `Livre`/`Andamento`, divisão, `Profund.`, `Fase`, `Bipolar`/`Unipolar` | O movimento em si | [06g Cartão do LFO](../manual/06g-modulacao.md#cartão-do-lfo) |
+| Cartão do LFO: forma, `Livre`/`Andamento`, divisão, `Profundidade`, `Fase`, `Bipolar`/`Unipolar` | O movimento em si | [06g Cartão do LFO](../manual/06g-modulacao.md#cartão-do-lfo) |
 | Cartão do seguidor de envelope: `Ganho`, `Ataque`, `Soltura` | Um movimento que responde ao nível do som da faixa | [06g Cartão do seguidor de envelope](../manual/06g-modulacao.md#cartão-do-seguidor-de-envelope) |
 | A barra de profundidade de cada destino (−100% a +100%) | Quanto do curso do controle o modulador percorre | [06g Destinos e profundidade](../manual/06g-modulacao.md#destinos-e-profundidade) |
 | `Modular…` (botão direito num knob; botão direito do mouse no fader e no pan) | Ligar um controle específico, sem passar pelos presets | [06g O menu `Modular…`](../manual/06g-modulacao.md#o-menu-modular) |
@@ -36,8 +36,8 @@ A profundidade de um destino é uma **fração do curso inteiro** do controle, n
 
 1. Numa faixa de sintetizador, escolha o preset `Reese` (grupo `Baixos`: `Corte` em 700 Hz, `Ressonância` 22%) e escreva ou grave algumas notas longas num clipe.
 2. Selecione a faixa e abra a aba `Modulação` (o assunto mostra `<faixa> · sem moduladores`).
-3. `Presets`, `Wobble no corte`. Nasce o cartão `1 · LFO senoide · 1/8` com o destino `Instrumento · Corte` em `+40%`.
-4. Dê play e arraste a barra do destino até `+30%`. O corte vai de 88 Hz a 5,6 kHz (em `+40%` iria de 44 Hz a 11 kHz: o fundo some).
+3. `Presets`, `Wobble no corte`. Nasce o cartão `1 · LFO senoide · 1/8` com o destino `Instrumento · Corte` em `+10%` do curso (±1 oitava).
+4. Dê play e arraste a barra do destino para abrir ou fechar o movimento: `+30%` leva o corte de 88 Hz a 5,6 kHz (com a base de 700 Hz).
 5. Volte ao painel `Instrumento` e suba a `Ressonância` de 22% para 45%: o "uau" fica mais nítido. O knob `Corte` continua em 700 Hz, com o anel ciano ao redor.
 6. Para trocar o ritmo, abra a lista de divisões do cartão: `1/4` (2 Hz), `1/8 pontilhada` (2,7 Hz) ou `1/16` (8 Hz).
 
@@ -56,9 +56,9 @@ O LFO em `Andamento` tira a fase da **posição em batidas** da música, não de
 
 | Sintoma | Causa provável | O que fazer |
 |---|---|---|
-| O wobble parece "chapado" em cima (fica aberto boa parte do ciclo) | A base está perto do topo do curso: com `Corte` em 2400 Hz e `+40%`, a metade de cima passa de 20 kHz e é presa nesse valor | Baixe a profundidade ou o `Corte` base (700 Hz é uma base equilibrada) |
+| O wobble parece "chapado" em cima (fica aberto boa parte do ciclo) | A base está perto do topo do curso e o destino passa dos 20 kHz, onde a onda é presa (o preset, com ±1 oitava, já evita isso no `Corte` padrão) | Baixe a profundidade ou o `Corte` base (700 Hz é uma base equilibrada) |
 | Com o preset `Baixo ácido (303)` o wobble fica preso no fundo | O `Corte` base de 260 Hz com `+40%` desce além dos 20 Hz, o mínimo do knob, e a onda fica cortada embaixo | Suba o `Corte` base para 700 Hz, ou desça a profundidade para `+25%` (com 260 Hz de base, de 46 Hz a 1,5 kHz) |
-| Arrastar a barra ou um knob do cartão com o projeto tocando faz o wobble "engasgar" | Cada edição reenvia a modulação inteira e o motor recomeça a fase de LFOs `Livre` | Use `Andamento` (a fase vem da batida) ou ajuste com o projeto parado `(lido do código; não confirmado ao ouvido)` |
+| Arrastar a barra ou um knob do cartão com o projeto tocando faz o wobble "engasgar" | (Corrigido) o motor mantém a fase do LFO e o nível do seguidor quando a modulação é reenviada | Se ainda ouvir, use `Andamento` (a fase vem da batida) e avise |
 | Nada acontece | O clipe está sem notas, ou a barra do destino está em `0%`, ou o controle não é um destino (`Onda`, `Tipo`, `Vozes`) | Confira o cartão: a linha do destino mostra `+40%` e o nome `Instrumento · Corte` |
 
 ## Cenário 2: tremolo de pad
@@ -90,7 +90,7 @@ O destino de volume anda na **curva do fader** (ganho = 2 × posição³), entã
 | O tremolo estala | Uma forma com salto (`Dente de serra`, `Quadrada`, `Sample & hold`) em taxa alta | Elas já passam por um alisamento de ~1 ms; troque para `Senoide` ou `Triângulo` se ainda incomodar |
 | O volume passa de 0 dB nos picos | A base do fader mais a profundidade sobe além de 0 dB (o topo é +6 dB) | Abaixe o fader ou passe o LFO para `Unipolar` com destino negativo |
 | O fader não se mexe | Não é para se mexer: ele mostra a base | Confira o pontinho ciano no canto do fader e o cartão da aba |
-| No celular não acho o `Modular…` do fader | O toque longo só vale nos knobs | Use o preset ou o `Destino` do cartão (lista `Volume`, `Pan`, `Envio → nome`) |
+| No celular não acho o `Modular…` do fader | Toque longo no fader, no pan ou no nível de envio (e no mini fader do cabeçalho) abre o menu com `Modular…` | Ou use o `Destino` do cartão (lista `Volume`, `Pan`, `Envio → nome`) |
 
 ## Cenário 3: auto-pan de sintetizador
 

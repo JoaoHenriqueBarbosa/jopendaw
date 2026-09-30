@@ -10,7 +10,7 @@ Legenda de confiança deste capítulo: quase tudo vem da leitura do código (`en
 - **Assunto** ao lado das abas: `<faixa> · sem moduladores`, `<faixa> · 1 modulador` ou `<faixa> · N moduladores` (`Master · ...` no master), com o ponto na cor da faixa (branco no `Master`).
 - **Menu `Modular…`** de um controle: clique com o botão direito (toque longo no celular) num knob do [painel de instrumento](04-painel-de-instrumento.md) ou do [painel de efeitos](06c-painel-de-efeitos.md); botão direito do **mouse** no fader e no pan do [mixer](06-mixer.md) (inclusive os do `Master`). Ele abre um seletor e, ao escolher, a aba `Modulação` abre na faixa do controle.
 - **Só com controle que se move de forma contínua.** Os seletores de opção e os inteiros não têm `Modular…` (ver [O que a modulação não alcança](#o-que-a-modulação-não-alcança)).
-- **Celular (Android):** o mesmo motor e a mesma aba. A diferença é o gesto: toque longo nos knobs no lugar do botão direito. O fader e o pan do mixer **não** têm toque longo fora do modo `Aprender MIDI` (só o botão direito do mouse); no celular, ligue o fader, o pan e o nível de envio pela lista `Destino` do cartão (ver abaixo), que traz `Volume`, `Pan` e `Envio → nome`.
+- **Celular (Android):** o mesmo motor e a mesma aba. A diferença é o gesto: toque longo nos knobs, no fader e no pan do mixer no lugar do botão direito (o menu traz `Modular…`). No nível de `Envio` e no mini fader do cabeçalho o item também está (menu do envio: botão direito ou toque longo). O `Destino` do cartão continua sendo o caminho de lista, com `Volume`, `Pan` e `Envio → nome`.
 
 ## Controles
 
@@ -56,7 +56,7 @@ O LFO (oscilador de baixa frequência) é uma onda que sobe e desce; a saída de
 | `Livre` / `Andamento` (chips; o ativo fica aceso e não clica) | `Livre`: a taxa é em Hz, independente da música. `Andamento`: cada ciclo dura uma divisão de compasso e acompanha o andamento | Padrão `Livre` | Com `Andamento` o knob `Taxa` dá lugar à lista de divisões. A taxa livre e a divisão ficam guardadas as duas ao alternar |
 | `Taxa` (knob, só em `Livre`) | Velocidade em Hz | 0,01 a 50 Hz, escala logarítmica, padrão 1 Hz | Leitura `1.00 Hz`, `12 Hz` |
 | Lista de divisões (só em `Andamento`) | Duração de um ciclo | 24 itens: `4 compassos`, `2 compassos`, `1 compasso`, `1/2`, `1/4`, `1/8`, `1/16`, `1/32`, cada um em três versões: reta, `pontilhada` (1,5 vez mais longa) e `tercina` (2/3 da duração). Padrão `1/4` | `1/4` é um ciclo por tempo (a 120 bpm, 2 Hz); `1/8` a 120 bpm dá 4 Hz. Os compassos contam sempre **4 tempos**, mesmo num projeto em 6/8 |
-| `Profund.` (knob) | Amplitude do LFO, multiplicada pela profundidade de cada destino | 0 a 100%, padrão 100% | Em 50% todos os destinos deste LFO andam metade |
+| `Profundidade` (knob) | Amplitude do LFO, multiplicada pela profundidade de cada destino | 0 a 100%, padrão 100% | Em 50% todos os destinos deste LFO andam metade |
 | `Fase` (knob) | Onde no ciclo a onda começa | 0 a 100% do ciclo, lido em graus (`0°` a `360°`), padrão 0° | Duas faixas com o mesmo LFO defasadas de 180° balançam em oposição |
 | `Bipolar` / `Unipolar` (chips) | `Bipolar`: a saída vai de −profundidade a +profundidade, em volta do valor base. `Unipolar`: de 0 a +profundidade, então o valor só se afasta da base para um lado | Padrão `Bipolar` | Unipolar com profundidade de destino positiva só **sobe** a partir da base; negativa, só desce |
 
@@ -69,8 +69,8 @@ O seguidor mede o nível do som **da própria faixa** (o pico, não a média) e 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | `Ganho` (knob) | Multiplica o nível medido antes de virar modulação | 0 a 8, leitura `×2.00`, padrão ×2 | O nível é em amplitude linear (0 a 1), **não em dB**: um pico de −6 dBFS (0,5) com `Ganho` ×2 já enche a escala; um sinal fraco, de −30 dBFS (0,03), quase não mexe em nada. A saída é presa em 0 a 1 |
-| `Ataque` (knob) | Quão rápido a leitura sobe quando o som fica mais forte | 0,5 a 500 ms, escala logarítmica, padrão 10 ms | É a constante de tempo (cerca de 63% do caminho), não o tempo até 100% |
-| `Soltura` (knob) | Quão rápido a leitura desce quando o som cede | 5 ms a 3 s, escala logarítmica, padrão 120 ms | Soltura curta acompanha cada golpe; longa forma uma "barriga" suave |
+| `Ataque` (knob) | Quão rápido a leitura sobe quando o som fica mais forte | 0,5 a 5000 ms, escala logarítmica, padrão 10 ms | É a constante de tempo (cerca de 63% do caminho), não o tempo até 100% |
+| `Soltura` (knob) | Quão rápido a leitura desce quando o som cede | 5 ms a 5 s, escala logarítmica, padrão 120 ms | Soltura curta acompanha cada golpe; longa forma uma "barriga" suave |
 | `Bipolar` / `Unipolar` (chips) | Igual ao LFO: `Unipolar` (padrão) sai de 0 a 1; `Bipolar` remapeia para −1 a +1 (silêncio = −1) | Padrão `Unipolar` | Para "abaixa quando o som é forte", deixe `Unipolar` e ponha profundidade **negativa** no destino |
 
 Um seguidor sem destino não mede nada (o motor só entrega o nível à faixa se há um destino vivo). Ele só mexe em controles **da mesma faixa** dele (ver [Limites e pegadinhas](#limites-e-pegadinhas)).
@@ -105,7 +105,7 @@ Notas de leitura:
 
 ### O menu `Modular…`
 
-Ele é uma entrada do menu de contexto do controle (botão direito; toque longo nos knobs), logo abaixo de `Aprender MIDI` e de `Remover mapeamento (...)`. No fader e no pan do mixer o menu do botão direito traz `Aprender MIDI`, `Remover mapeamento (...)` (só se mapeado), `Modular…` e `Mapeamentos MIDI…`. O item só aparece se o controle se modula. No nível de `Envio` do mixer e no mini fader do cabeçalho da faixa não há `Modular…` (o botão direito do envio é o menu do envio); ligue-os pelo `Destino` do cartão.
+Ele é uma entrada do menu de contexto do controle (botão direito; toque longo no toque), logo abaixo de `Aprender MIDI` e de `Remover mapeamento (...)`. No fader e no pan do mixer o menu (botão direito ou toque longo) traz `Aprender MIDI`, `Remover mapeamento (...)` (só se mapeado), `Modular…` e `Mapeamentos MIDI…`; no nível de `Envio` do mixer, o menu do envio traz `Modular…` (só com o envio criado); o mini fader do cabeçalho da faixa tem o mesmo menu do fader. O item só aparece se o controle se modula, e o tooltip dos knobs o cita.
 
 Escolhido `Modular…`, abre o diálogo `Modular: <controle>` (por exemplo `Modular: Instrumento · Corte`):
 
@@ -138,12 +138,12 @@ Mexer no knob desloca o anel junto (ele acompanha o valor base). Com o knob segu
 
 | Preset (rótulo exato) | Descrição no menu | O que cria | Destino que procura | Quando recusa |
 |---|---|---|---|---|
-| `Wobble no corte` | `LFO sincronizado (1/8) movendo o corte do filtro` | LFO em `Andamento`, divisão `1/8` (a 120 bpm, 4 Hz) | `Instrumento · Corte` (sintetizador, wavetable), senão o `Corte` do **primeiro** efeito `Filtro` da cadeia; profundidade **+40%** | Faixa sem instrumento com `Corte` e sem `Filtro` na cadeia (bateria, sampler e FM sem `Filtro`; áudio; barramento) |
+| `Wobble no corte` | `LFO sincronizado (1/8) movendo o corte do filtro` | LFO em `Andamento`, divisão `1/8` (a 120 bpm, 4 Hz) | `Instrumento · Corte` (sintetizador, wavetable), senão o `Corte` do **primeiro** efeito `Filtro` da cadeia; quantidade de **±1 oitava** na escala logarítmica do corte (cerca de **+10%** do curso de 20 Hz a 20 kHz: com o `Corte` padrão de 2400 Hz o filtro vai de 1,2 a 4,8 kHz, sem prender a onda no topo) | Faixa sem instrumento com `Corte` e sem `Filtro` na cadeia (bateria, sampler e FM sem `Filtro`; áudio; barramento) |
 | `Tremolo no volume` | `LFO de 6 Hz movendo o volume da faixa` | LFO livre, 6 Hz | `Volume`, **+15%** | Nunca (todo canal tem volume) |
 | `Auto-pan` | `LFO sincronizado (1/2) passeando o som entre os lados` | LFO em `Andamento`, divisão `1/2` (a 120 bpm, 1 Hz) | `Pan`, **+50%** (de um lado ao outro se o pan está no centro) | Nunca |
-| `Vibrato de afinação` | `LFO de 5,5 Hz movendo a afinação em centésimos de semitom` | LFO livre, 5,5 Hz | O **primeiro** parâmetro do instrumento em `ct` e escala linear, **+6%** (±12 ct em −100 a +100) | Faixa sem instrumento e bateria |
+| `Vibrato de afinação` | `LFO de 5,5 Hz movendo a afinação da faixa em ±12 centésimos (só no Sampler)` | LFO livre, 5,5 Hz | A `Afinação` da faixa toda do `Sampler`, **+6%** (±12 ct em −100 a +100) | **Só aparece no menu do Sampler**: nos outros instrumentos não há afinação da faixa toda e o preset fica escondido |
 
-Sobre o alvo do `Vibrato de afinação` (lido da tabela de parâmetros, não ouvido): no `Sampler` é a `Afinação` da faixa toda (vibrato de verdade). No `Sintetizador` é a `Desafinação` do `Oscilador 2` (só o segundo oscilador desafina e bate contra o primeiro, o que soa mais como um coro lento que como vibrato). No `FM` é o `Fino` do `Operador 1`, e no `Wavetable` a `Desafinação` do `Oscilador 1`. Para um vibrato da voz inteira no sintetizador, use o `Vibrato` do LFO do próprio instrumento ([04a](04a-sintetizador.md)).
+Sobre o alvo do `Vibrato de afinação`: só o `Sampler` tem uma afinação da faixa toda (vibrato de verdade). No `Sintetizador`, no `FM` e no `Wavetable` os parâmetros em `ct` mexem num oscilador ou operador só (soam como um coro lento, não como vibrato), então o preset não é oferecido; para um vibrato da voz inteira no sintetizador, use o `Vibrato` do LFO do próprio instrumento ([04a](04a-sintetizador.md)).
 
 Aplicar o mesmo preset duas vezes cria dois moduladores que **somam** no mesmo controle. O preset entra como um passo no desfazer.
 
@@ -193,8 +193,8 @@ A modulação mora no documento do projeto, e por isso vai junto com o salvament
 ### Wobble no filtro de um baixo (sincronizado ao andamento)
 
 1. Numa faixa de sintetizador com o preset `Reese` (`Corte` em 700 Hz), com um clipe de notas, abra a aba `Modulação` (o assunto mostra `<faixa> · sem moduladores`).
-2. Toque em `Presets` e escolha `Wobble no corte`. Nasce o cartão `1 · LFO senoide · 1/8` com o destino `Instrumento · Corte` em `+40%`.
-3. Com o projeto tocando, arraste a barra do destino até `+30%`: o corte vai de 88 Hz a 5,6 kHz (em 40% chegaria a 44 Hz, quase fechado).
+2. Toque em `Presets` e escolha `Wobble no corte`. Nasce o cartão `1 · LFO senoide · 1/8` com o destino `Instrumento · Corte` em `+10%` do curso (±1 oitava).
+3. Com o projeto tocando, arraste a barra do destino para abrir ou fechar o movimento: `+30%` leva o corte de 88 Hz a 5,6 kHz (com uma base de 700 Hz).
 4. Para outro ritmo, troque a lista de divisões: `1/4` (mais lento), `1/8 pontilhada` ou `1/16` (rápido).
 5. Suba a `Ressonância` do instrumento (por exemplo de 22% a 45%) para o "uau" ficar mais nítido. O knob `Corte` segue mostrando 700 Hz e ganha o anel ciano.
 
@@ -219,7 +219,7 @@ A modulação mora no documento do projeto, e por isso vai junto com o salvament
 1. Numa faixa `Sampler` com um som sustentado, abra a aba `Modulação`, `Presets` e `Vibrato de afinação`.
 2. O destino é `Instrumento · Afinação`, em `+6%` (±12 ct), a 5,5 Hz.
 3. Para um vibrato que **entra devagar**, não há como atrasar o LFO; use a roda de modulação de MIDI ([04](04-painel-de-instrumento.md#rodas-de-pitch-bend-e-de-modulação)) ou o `Vibrato da roda` do sampler.
-4. Num sintetizador, FM ou wavetable, o preset mexe só num oscilador ou operador (ver [Presets](#presets)); prefira o `Vibrato` do LFO do instrumento, ou ligue você mesmo um LFO ao parâmetro que quiser com `Modular…`.
+4. Num sintetizador, FM ou wavetable o preset não aparece; use o `Vibrato` do LFO do instrumento, ou ligue você mesmo um LFO ao parâmetro que quiser com `Modular…`.
 
 ### Seguidor de envelope no volume: bombeio falso
 
@@ -249,12 +249,12 @@ Receita completa, com a variação de LFO no andamento, em [Modulação na prát
 - **Quatro moduladores por faixa, quatro destinos por modulador.** No `Master` também. Mais que isso o app recusa (o JSON de um arquivo de fora que passe do limite é cortado ao abrir).
 - **O seguidor só ouve a própria faixa e só mexe nela.** Não há entrada externa nem escolha de faixa-chave. Para "abaixar por outra faixa", use o `Sidechain` do compressor.
 - **O knob mostra a base, não o valor ao vivo.** O anel é o alcance possível, não o ponteiro. Para ver o movimento, ouça (ou olhe o medidor da faixa).
-- **Editar a modulação com o projeto tocando pode reiniciar os LFOs livres.** Cada edição reenvia toda a modulação ao motor, e um modulador reenviado começa do zero: o LFO `Livre` recomeça o ciclo e o seguidor esquece o nível (o LFO em `Andamento` não sente, porque a fase vem da posição da música). Ao arrastar o `Profund.` de um LFO livre ouvindo, o movimento pode "engasgar" a cada passo do arraste `(lido do código; não confirmado ao ouvido)`.
-- **Base perto da ponta do curso "corta" a onda.** Com `Corte` em 2400 Hz e o preset `Wobble no corte` (+40%), a metade de cima passa de 20 kHz e fica presa: o filtro passa boa parte do ciclo aberto. Baixe a profundidade ou abaixe o `Corte` base. Vale para todo controle: a onda é presa entre o mínimo e o máximo.
+- **Editar a modulação com o projeto tocando não recomeça os moduladores.** Cada edição reenvia toda a modulação, mas o motor mantém a fase do LFO livre e o nível do seguidor quando o modulador volta do mesmo tipo (trocar o tipo recomeça o estado).
+- **Base perto da ponta do curso "corta" a onda.** Vale para todo controle: a onda é presa entre o mínimo e o máximo. O preset `Wobble no corte` usa ±1 oitava para não prender com o `Corte` padrão, mas uma base perto de 20 kHz ou de 20 Hz ainda prende (um `Baixo ácido` com `Corte` de 260 Hz desce ao mínimo só em oitavas maiores).
 - **A profundidade é fração do curso, em Hz é em oitavas.** 10% no `Corte` (20 Hz a 20 kHz) é cerca de uma oitava, não 10% de Hz.
 - **Volume: a mesma % soa mais forte com o fader baixo.** A profundidade anda na posição do fader (curva cúbica); com o fader em −12 dB o mesmo `+15%` varia mais em dB.
 - **Macro nova em 0% não faz nada** (unipolar), e a macro não tem MIDI learn nem automação: hoje é um botão de mouse.
-- **Presets recusam faixas sem o controle.** `Wobble no corte` numa faixa de bateria, `Vibrato de afinação` numa faixa de áudio: `<preset>: esta faixa não tem o controle que o preset move.`
+- **Presets recusam faixas sem o controle.** `Wobble no corte` numa faixa de bateria, `Vibrato de afinação` fora do Sampler (o item nem aparece no menu): `<preset>: esta faixa não tem o controle que o preset move.`
 - **Aplicar o mesmo preset de novo soma.** Dois `Tremolo no volume` na mesma faixa somam as duas ondas no volume.
 - **Fader, pan e envio no celular.** Sem botão direito, o `Modular…` deles não abre por toque; use o `Destino` do cartão.
 - **A dica dos knobs não cita `Modular…`.** O tooltip continua dizendo `menu (digitar o valor, Aprender MIDI)`; o menu tem o item `Modular…` mesmo assim.
