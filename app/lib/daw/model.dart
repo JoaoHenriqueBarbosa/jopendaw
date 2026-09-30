@@ -61,6 +61,9 @@ class AutoFade {
   Map<String, dynamic> toJson() => {'len': prevLength, 'shape': prevShape.index};
 }
 
+/// Teto de repetições de um clipe em loop (cada uma é um clipe no motor).
+const int maxLoopRepeats = 4096;
+
 class AudioClip {
   String id;
 
@@ -181,6 +184,9 @@ class AudioClip {
   /// O clipe está em loop de fato: liga e com duração maior que o trecho que repete.
   bool get looping => loopLength != null && length > loopLength! + 1e-9;
 
+  /// A duração pede mais repetições que o teto [maxLoopRepeats]: o que passa dele não toca.
+  bool get loopCapped => loopLength != null && length > loopLength! * maxLoopRepeats + 1e-9;
+
   /// Ganho que o motor recebe: a polaridade invertida é o ganho com o sinal trocado (o motor
   /// multiplica a amostra por ele, então o som sai espelhado, sem mais nada).
   double get engineGain => invert ? -gain : gain;
@@ -214,7 +220,7 @@ class AudioClip {
     final out = <double>[];
     var left = length;
     // teto de segurança: um trecho minúsculo numa duração enorme não explode a lista
-    while (left > 1e-9 && out.length < 4096) {
+    while (left > 1e-9 && out.length < maxLoopRepeats) {
       final d = math.min(cell, left);
       out.add(d);
       left -= d;
@@ -1062,8 +1068,9 @@ class DawDoc {
 
   /// Fim do último clipe, em batidas.
   double get contentEnd => math.max(
-    tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, clipEnd(c))),
-    tracks.expand((t) => t.midi).fold(0.0, (m, c) => math.max(m, c.end)),
+    math.max(tracks.expand((t) => t.clips).fold(0.0, (m, c) => math.max(m, clipEnd(c))), tracks.expand((t) => t.midi).fold(0.0, (m, c) => math.max(m, c.end))),
+    // a faixa congelada toca o áudio renderizado, com a cauda: a exportação não pode cortá-lo
+    tracks.fold(0.0, (m, t) => t.frozen == null ? m : math.max(m, clipEnd(t.frozen!.clip))),
   );
 
   /// Duração do projeto em segundos: o fim do último clipe pelo mapa de andamento.

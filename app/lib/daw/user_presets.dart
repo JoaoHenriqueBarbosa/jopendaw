@@ -390,6 +390,20 @@ class UserPresets extends ChangeNotifier {
   Future<PresetRestore> restoreFromBackup() async {
     await load();
     if (_readOnly && !_readFailed) throw PresetFormatException('Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.');
+    if (_readFailed) {
+      // a leitura que falhou na abertura pode ter sido passageira (arquivo em uso, guardado ocupado): antes de gravar
+      // por cima, relê uma vez. Se agora abre, o arquivo principal tem presets de verdade e NÃO é sobrescrito.
+      String? now;
+      var readAgain = true;
+      try {
+        now = await _storage.read();
+      } catch (_) {
+        readAgain = false;
+      }
+      if (readAgain && now != null && now.trim().isNotEmpty) {
+        throw PresetFormatException('O arquivo de presets deste aparelho voltou a abrir. Feche e abra o app para carregá-lo; nada foi sobrescrito.');
+      }
+    }
     var raws = <String>[];
     try {
       raws = await _backups();

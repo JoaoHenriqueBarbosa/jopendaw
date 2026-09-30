@@ -630,6 +630,8 @@ List<DawTrack> exportableTracks(DawDoc doc) => [
     if (t.kind.isInstrument && t.midi.any((c) => c.notes.isNotEmpty || c.controls.isNotEmpty)) t,
 ];
 
+/// Faixa congelada ENTRA no arquivo com as notas originais, de propósito: o .mid é o conteúdo editável (quem exporta
+/// MIDI quer as notas, não o áudio renderizado), e elas seguem no documento enquanto a faixa está congelada.
 /// As faixas que [buildMidiFile] escreve quando o arquivo é do projeto todo: as de [exportableTracks]
 /// que se ouviriam (com alguma faixa em solo só as em solo; senão todas menos as mudas), como o
 /// render de áudio.

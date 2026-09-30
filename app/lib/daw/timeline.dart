@@ -1372,9 +1372,10 @@ class _TrackMenu extends StatelessWidget {
       },
       itemBuilder: (context) {
         final t = c.doc.tracks[index];
-        final why = _cannotBounce(c, t);
+        final why = freezeBlocker(c, index, verb: 'renderizar');
         final frozen = t.frozen != null;
-        final whyFreeze = frozen ? freezeBlocker(c, index, needsRender: false) : freezeBlocker(c, index);
+        final whyFreeze = frozen ? null : freezeBlocker(c, index);
+        final whyConvert = freezeBlocker(c, index, needsRender: !frozen, verb: 'converter');
         final caption = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white38);
         return [
           if (t.kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
@@ -1411,13 +1412,13 @@ class _TrackMenu extends StatelessWidget {
           if (t.kind != TrackKind.bus && (frozen || t.kind != TrackKind.audio))
             PopupMenuItem(
               value: 'convert',
-              enabled: whyFreeze == null,
+              enabled: whyConvert == null,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('Converter em áudio…'),
-                  Text(whyFreeze ?? 'Troca o conteúdo por um clipe de áudio', style: caption),
+                  Text(whyConvert ?? 'Troca o conteúdo por um clipe de áudio', style: caption),
                 ],
               ),
             ),
@@ -1444,24 +1445,13 @@ class _TrackMenu extends StatelessWidget {
   );
 }
 
-/// Por que a faixa não pode ser congelada agora (null quando pode): barramento só tem o que as
-/// outras mandam, faixa sem clipes (ou só com clipes de notas vazios) renderizaria silêncio, e
-/// durante a gravação o documento ainda vai mudar.
-String? _cannotBounce(DawController c, DawTrack t) {
-  if (t.kind == TrackKind.bus) return 'Barramento não tem som próprio';
-  final empty = t.kind.isInstrument ? t.midi.every((m) => m.notes.isEmpty) : t.clips.isEmpty;
-  if (empty) return 'A faixa está vazia';
-  if (c.recording) return 'Pare a gravação antes';
-  return null;
-}
-
 /// Congelar ou converter: pergunta a margem de cauda (reverb e delay) e roda o render com o progresso. Faixa já
 /// congelada convertida não renderiza de novo, então não pergunta nada.
 Future<void> _freezeAsking(BuildContext context, DawController c, int index, {required bool convert}) async {
   if (!context.mounted || index >= c.doc.tracks.length) return;
   final t = c.doc.tracks[index];
   final reuse = convert && t.frozen != null;
-  if (freezeBlocker(c, index, needsRender: !reuse) != null) return;
+  if (freezeBlocker(c, index, needsRender: !reuse, verb: convert ? 'converter' : 'congelar') != null) return;
   var tail = t.frozen?.tail ?? kDefaultFreezeTail;
   if (!reuse) {
     final picked = await showDialog<double>(
@@ -1510,14 +1500,7 @@ class _FreezeOptionsDialogState extends State<_FreezeOptionsDialog> {
           ),
           const SizedBox(height: 16),
           Text('Cauda dos efeitos: ${_tail.round()} s', style: Theme.of(context).textTheme.labelLarge),
-          Slider(
-            value: _tail,
-            min: 0,
-            max: 30,
-            divisions: 30,
-            label: '${_tail.round()} s',
-            onChanged: (v) => setState(() => _tail = v),
-          ),
+          Slider(value: _tail, min: 0, max: 30, divisions: 30, label: '${_tail.round()} s', onChanged: (v) => setState(() => _tail = v)),
           Text(
             'Quanto o reverb e o delay podem soar depois do fim do último clipe. O silêncio no fim é aparado.',
             style: Theme.of(context).textTheme.labelSmall,
@@ -1533,7 +1516,7 @@ class _FreezeOptionsDialogState extends State<_FreezeOptionsDialog> {
 }
 
 Future<void> _bounce(BuildContext context, DawController c, int index) async {
-  if (!context.mounted || index >= c.doc.tracks.length || _cannotBounce(c, c.doc.tracks[index]) != null) return;
+  if (!context.mounted || index >= c.doc.tracks.length || freezeBlocker(c, index, verb: 'renderizar') != null) return;
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -1622,7 +1605,11 @@ class _BounceDialogState extends State<_BounceDialog> {
     return PopScope(
       canPop: error != null,
       child: AlertDialog(
-        title: Text(error == null ? '${widget.mode == _FreezeMode.convert ? 'Convertendo' : 'Congelando'} "${widget.name}"' : 'Não deu para ${widget.mode == _FreezeMode.convert ? 'converter' : 'congelar'}'),
+        title: Text(
+          error == null
+              ? '${widget.mode == _FreezeMode.convert ? 'Convertendo' : 'Congelando'} "${widget.name}"'
+              : 'Não deu para ${widget.mode == _FreezeMode.convert ? 'converter' : 'congelar'}',
+        ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: error != null
@@ -2225,15 +2212,18 @@ class _LanesState extends State<_Lanes> {
                       child: IgnorePointer(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: _frozenColor.withValues(alpha: 0.14),
-                            border: Border.all(color: _frozenColor.withValues(alpha: 0.6)),
+                            color: (c.missing.contains(f.sample) ? Palette.danger : _frozenColor).withValues(alpha: 0.14),
+                            border: Border.all(color: (c.missing.contains(f.sample) ? Palette.danger : _frozenColor).withValues(alpha: 0.6)),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Align(
                             alignment: Alignment.topLeft,
                             child: Padding(
                               padding: const EdgeInsets.all(3),
-                              child: Icon(Icons.ac_unit, size: 12, color: _frozenColor),
+                              // sem o áudio congelado neste aparelho a faixa toca mudo: avisa como nos clipes comuns
+                              child: c.missing.contains(f.sample)
+                                  ? const Text('áudio fora deste aparelho', style: TextStyle(fontSize: 11))
+                                  : Icon(Icons.ac_unit, size: 12, color: _frozenColor),
                             ),
                           ),
                         ),
@@ -3106,7 +3096,14 @@ class _WarpBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts = [if (clip.muted) 'M', if (clip.invert) 'Ø', if (clip.loopLength != null) 'L', if (clip.stretches) 'W', if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st', if (clip.reverse) 'R'];
+    final parts = [
+      if (clip.muted) 'M',
+      if (clip.invert) 'Ø',
+      if (clip.loopLength != null) 'L',
+      if (clip.stretches) 'W',
+      if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st',
+      if (clip.reverse) 'R',
+    ];
     final label = pending ? 'processando…' : parts.join(' ');
     return Tooltip(
       message: failed
@@ -3481,7 +3478,14 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter o) =>
-      o.wave != wave || o.offset != offset || o.length != length || o.pxPerSec != pxPerSec || o.gain != gain || o.color != color || o.visible != visible || o.cell != cell;
+      o.wave != wave ||
+      o.offset != offset ||
+      o.length != length ||
+      o.pxPerSec != pxPerSec ||
+      o.gain != gain ||
+      o.color != color ||
+      o.visible != visible ||
+      o.cell != cell;
 }
 
 class _FadePainter extends CustomPainter {

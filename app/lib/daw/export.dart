@@ -173,6 +173,8 @@ class _ExportDialogState extends State<ExportDialog> {
     }
 
     for (final t in _doc.tracks) {
+      // congelada: os efeitos já estão no áudio renderizado e não soam mais
+      if (t.frozen != null) continue;
       scan(t.name, t.effects);
     }
     scan('master', _doc.masterEffects);

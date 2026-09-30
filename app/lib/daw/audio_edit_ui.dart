@@ -314,6 +314,9 @@ class _SplitState extends State<SplitTransientsDialog> {
   List<double> _cuts = const [];
   String? _done, _error;
 
+  /// A análise passou de um limite (grade densa demais): o texto no lugar da contagem.
+  String? _limit;
+
   @override
   void initState() {
     super.initState();
@@ -322,19 +325,27 @@ class _SplitState extends State<SplitTransientsDialog> {
 
   void _recompute() {
     final s = _s;
-    _cuts = s.error != null
-        ? const []
-        // a distância mínima é do detector de transientes: fatias iguais e grade cortam onde foi pedido
-        : detectCuts(
-            s.range!,
-            s.clip!,
-            widget.c.doc,
-            mode: _mode,
-            sensitivity: _sensitivity,
-            count: _count,
-            grid: _grid,
-            minGap: _mode == CutMode.transients ? _minGap : 0,
-          );
+    _limit = null;
+    if (s.error != null) {
+      _cuts = const [];
+      return;
+    }
+    try {
+      // a distância mínima é do detector de transientes: fatias iguais e grade cortam onde foi pedido
+      _cuts = detectCuts(
+        s.range!,
+        s.clip!,
+        widget.c.doc,
+        mode: _mode,
+        sensitivity: _sensitivity,
+        count: _count,
+        grid: _grid,
+        minGap: _mode == CutMode.transients ? _minGap : 0,
+      );
+    } on CutLimitException catch (e) {
+      _cuts = const [];
+      _limit = e.message;
+    }
   }
 
   void _set(VoidCallback f) => setState(() {
@@ -412,12 +423,15 @@ class _SplitState extends State<SplitTransientsDialog> {
           ClipPreview(c: widget.c, clip: s.clip!, cuts: _cuts),
           const SizedBox(height: 6),
           Text(
-            _cuts.isEmpty
+            _limit != null
+                ? _limit!
+                : _cuts.isEmpty
                 ? (_mode == CutMode.transients
                       ? 'Nenhum transiente achado: tente mais sensibilidade, fatias iguais ou a grade.'
                       : 'Nenhum corte cai dentro do clipe.')
                 : n > maxEditPieces
-                ? 'Fatias demais ($n; o máximo é $maxEditPieces). ${_mode == CutMode.transients ? 'Diminua a sensibilidade.' : _mode == CutMode.equal ? 'Use menos fatias.' : 'Use uma grade maior.'}'
+                // fatias iguais vão até 96, abaixo do teto: só transientes e grade passam dele
+                ? 'Fatias demais ($n; o máximo é $maxEditPieces). ${_mode == CutMode.transients ? 'Diminua a sensibilidade.' : 'Use uma grade maior.'}'
                 : '$n fatias, com emendas de 2 ms que não mudam o som.',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),

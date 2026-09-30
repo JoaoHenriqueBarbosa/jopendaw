@@ -1307,9 +1307,11 @@ class DawController extends ChangeNotifier {
     final id = spec == null ? null : _warp.idOf(spec);
     if (spec == null || id == null) return (id: orig, offset: c.offset, length: len, fadeIn: c.fadeIn, fadeOut: c.fadeOut);
     final k = spec.ratio;
-    // invertido, o que era o fim do trecho passa a ser o começo
-    final total = _decoded[orig]?.duration ?? (c.offset + len);
-    final offset = spec.reverse ? math.max(0.0, total - c.offset - len) : c.offset;
+    // invertido, o que era o fim do trecho passa a ser o começo. Em loop, cada repetição toca o trecho invertido
+    // desde o começo (a última, parcial, é só o começo dele): a conta usa o trecho inteiro, não o pedaço.
+    final seg = c.looping ? c.loopLength! : len;
+    final total = _decoded[orig]?.duration ?? (c.offset + seg);
+    final offset = spec.reverse ? math.max(0.0, total - c.offset - seg) : c.offset;
     return (id: id, offset: offset * k, length: len * k, fadeIn: c.fadeIn * k, fadeOut: c.fadeOut * k);
   }
 
@@ -1341,7 +1343,16 @@ class DawController extends ChangeNotifier {
   void setClipWarp(String clipId, {bool? warp, double? sourceBpm, bool clearSourceBpm = false, double? pitch, bool? reverse}) {
     final f = _findClip(clipId);
     if (f == null || _blockedByRecording('mudar o warp')) return;
-    editAs('Detectar andamento do clipe', (_) {
+    final label = reverse != null && reverse != f.$2.reverse
+        ? 'Inverter o áudio do clipe'
+        : pitch != null && pitch.clamp(-24.0, 24.0) != f.$2.pitch
+        ? 'Mudar a altura do clipe'
+        : warp != null && warp != f.$2.warp
+        ? (warp ? 'Esticar o clipe no tempo' : 'Desligar o warp do clipe')
+        : sourceBpm != null || clearSourceBpm
+        ? 'Ajustar o andamento do clipe'
+        : 'Mudar o warp do clipe';
+    editAs(label, (_) {
       final c = f.$2;
       if (warp != null) c.warp = warp;
       if (clearSourceBpm) c.sourceBpm = null;
@@ -1352,14 +1363,17 @@ class DawController extends ChangeNotifier {
   }
 
   /// Liga ou desliga o mudo do clipe (uma edição desfazível). Mudo não apaga nada: o clipe fica no
-  /// arranjo e só deixa de soar.
+  /// arranjo e só deixa de soar. Vale também durante a gravação (diferente de [setClipWarp] e [setClipLoop]):
+  /// mudo e fase só mudam o ganho e se o clipe vai ao motor, sem trocar o som derivado nem a quantidade de
+  /// clipes, então não atrapalham a passada que está sendo gravada.
   void setClipMuted(String clipId, bool muted) {
     final f = _findClip(clipId);
     if (f == null || f.$2.muted == muted) return;
     editAs(muted ? 'Silenciar clipe' : 'Reativar clipe', (_) => f.$2.muted = muted);
   }
 
-  /// Inverte a polaridade do clipe (troca o sinal do áudio; soma com o original e cancela).
+  /// Inverte a polaridade do clipe (troca o sinal do áudio; soma com o original e cancela). Como o mudo, vale
+  /// durante a gravação (só troca o sinal do ganho).
   void setClipInvert(String clipId, bool invert) {
     final f = _findClip(clipId);
     if (f == null || f.$2.invert == invert) return;
@@ -1466,7 +1480,9 @@ class DawController extends ChangeNotifier {
             final r = _clipSound(c, d.bpm, length: len);
             if (r == null) break;
             final first = k == 0, last = k == place.length - 1;
-            calls.add(['clip_add', i, r.id, at, r.offset, r.length, c.engineGain, first ? r.fadeIn : 0.0, last ? r.fadeOut : 0.0]);
+            // o fade cabe na repetição em que está: maior que ela, acabaria depois da emenda e daria um degrau
+            final fin = first ? math.min(r.fadeIn, r.length) : 0.0, fout = last ? math.min(r.fadeOut, r.length) : 0.0;
+            calls.add(['clip_add', i, r.id, at, r.offset, r.length, c.engineGain, fin, fout]);
             final si = first ? c.fadeInShape : FadeShape.linear, so = last ? c.fadeOutShape : FadeShape.linear;
             if (si != FadeShape.linear || so != FadeShape.linear) calls.add(['clip_fade_shape', si.index, so.index]);
           }
@@ -1743,10 +1759,7 @@ class DawController extends ChangeNotifier {
       final slots = _modSlots.putIfAbsent(track < 0 ? '' : doc.tracks[track].id, () => {});
       final shown = m.sources.take(maxModSources).toList();
       // a chave é o id (um id repetido, de um documento estranho, ganha o índice na chave para não dividir o modulador)
-      final keys = <String>[
-        for (var i = 0; i < shown.length; i++)
-          shown.indexWhere((x) => x.id == shown[i].id) == i ? shown[i].id : '${shown[i].id}#$i',
-      ];
+      final keys = <String>[for (var i = 0; i < shown.length; i++) shown.indexWhere((x) => x.id == shown[i].id) == i ? shown[i].id : '${shown[i].id}#$i'];
       slots.removeWhere((key, _) => !keys.contains(key));
       for (final key in keys) {
         if (slots.containsKey(key)) continue;
@@ -2488,11 +2501,54 @@ class DawController extends ChangeNotifier {
 
   /// Muda sem entrar no histórico (os passos de um arraste).
   void mutate(void Function(DawDoc d) fn) {
+    final frozenBefore = {
+      for (final t in doc.tracks)
+        if (t.frozen != null) t.id: soundFingerprint(t),
+    };
     fn(doc);
+    if (frozenBefore.isNotEmpty || _frozenWarned.isNotEmpty) _noteFrozenEdits(frozenBefore);
+    _noteLoopCap();
     _prune();
     _sync();
     _scheduleSave();
     notifyListeners();
+  }
+
+  /// Clipes em loop que já avisaram do teto de repetições.
+  final Set<String> _loopCapWarned = {};
+
+  /// Avisa (em [notice]) quando um clipe em loop pede mais que [maxLoopRepeats] repetições: o que passa do teto
+  /// não toca. Uma vez por clipe, até ele voltar para dentro do teto.
+  void _noteLoopCap() {
+    for (final t in doc.tracks) {
+      for (final c in t.clips) {
+        if (c.loopLength == null) continue;
+        if (!c.loopCapped) {
+          _loopCapWarned.remove(c.id);
+        } else if (_loopCapWarned.add(c.id)) {
+          notice = 'O loop do clipe passa de $maxLoopRepeats repetições: o que passa disso não toca. Aumente o trecho do loop ou encurte o clipe.';
+        }
+      }
+    }
+  }
+
+  /// Faixas congeladas que já avisaram que a edição só soa ao descongelar (uma vez por congelamento: não repete
+  /// a cada nota movida).
+  final Set<String> _frozenWarned = {};
+
+  /// Avisa (em [notice]) quando a edição mexeu no que a faixa congelada tocaria (notas, instrumento, efeitos,
+  /// clipes e a automação deles): o áudio congelado não muda. [before] são as impressões de antes da edição.
+  void _noteFrozenEdits(Map<String, String> before) {
+    // quem descongelou ou sumiu pode avisar de novo no próximo congelamento
+    _frozenWarned.removeWhere((id) => !doc.tracks.any((t) => t.id == id && t.frozen != null));
+    for (final t in doc.tracks) {
+      final was = before[t.id];
+      if (was == null || t.frozen == null || _frozenWarned.contains(t.id)) continue;
+      if (soundFingerprint(t) != was) {
+        _frozenWarned.add(t.id);
+        notice = 'Faixa congelada: a alteração só soa ao descongelar.';
+      }
+    }
   }
 
   void undo() => _travel(_undo, _redo);
@@ -2745,6 +2801,9 @@ class DawController extends ChangeNotifier {
   }) async {
     final f = _findClip(clipId);
     if (f == null) throw StateError('O clipe não existe mais.');
+    if (f.$2.looping) {
+      throw StateError('Este clipe está em loop: a conversão em notas lê o trecho uma vez só. Desligue o loop do clipe antes de converter.');
+    }
     if (!_canSync()) throw StateError('Entre na sua conta para converter áudio em notas.');
     final clip = f.$2;
     onProgress?.call('Enviando o áudio…', null);
@@ -3065,16 +3124,8 @@ class DawController extends ChangeNotifier {
           t.clips.remove(o);
         } else if (o.start < s && oEnd > e) {
           final cut = d.sourceSeconds(o, o.start, e);
-          t.clips.add(
-            AudioClip.fromJson(o.toJson())
-              ..id = newId()
-              ..start = e
-              ..offset = o.offset + cut
-              ..length = o.length - cut
-              ..fadeIn = 0
-              // o fade zerado não é mais o do crossfade: sem a marca, o reconcile não o "devolve"
-              ..autoFadeIn = null,
-          );
+          // o fade zerado não é mais o do crossfade: sem a marca, o reconcile não o "devolve"
+          t.clips.addAll(_clipRemainder(d, o, e, cut, newId()));
           o
             ..length = d.sourceSeconds(o, o.start, s)
             ..fadeOut = 0
@@ -3085,13 +3136,12 @@ class DawController extends ChangeNotifier {
             ..length = keep
             ..fadeOut = math.min(o.fadeOut, keep);
         } else {
+          // apara o começo: o que sobra começa em [e]; num clipe em loop a fase é levada em conta
           final cut = d.sourceSeconds(o, o.start, e);
-          o
-            ..start = e
-            ..offset = o.offset + cut
-            ..length = o.length - cut
-            ..fadeIn = 0
-            ..autoFadeIn = null;
+          final at = t.clips.indexOf(o);
+          t.clips
+            ..removeAt(at)
+            ..insertAll(at, _clipRemainder(d, o, e, cut, o.id));
         }
       }
       reconcileAutoFades();
@@ -3333,6 +3383,49 @@ class DawController extends ChangeNotifier {
     final real = c.stretches ? src * c.sourceBpm! / d.bpm : src;
     final t = d.tempo;
     return t.isSingle ? from + real * d.bpm / 60 : t.beatAt(t.secondsAt(from) + real);
+  }
+
+  /// O que sobra do clipe [c] depois de consumir [secs] segundos da origem, começando na batida [at]: um clipe só
+  /// (primeiro com o id [firstId]), sem fade de entrada. Num clipe em loop o corte cai numa fase do trecho, e o
+  /// offset avançado tem de ser tomado módulo o trecho: sobra um clipe sem loop com o resto da repetição e, se
+  /// ainda há o que repetir, outro em loop recomeçando do trecho inteiro (o mesmo que o [splitAtPlayhead] faz).
+  List<AudioClip> _clipRemainder(DawDoc d, AudioClip c, double at, double secs, String firstId) {
+    final cell = c.looping ? c.loopLength! : null;
+    final rest = c.length - secs;
+    final first = AudioClip.fromJson(c.toJson())
+      ..id = firstId
+      ..start = at
+      ..fadeIn = 0
+      ..autoFadeIn = null;
+    if (cell == null) {
+      return [
+        first
+          ..offset = c.offset + secs
+          ..length = rest,
+      ];
+    }
+    var phase = secs % cell;
+    if (cell - phase < 1e-6) phase = 0;
+    if (phase < 1e-6) {
+      // o corte cai na emenda de uma repetição: o loop segue inteiro
+      return [first..length = rest];
+    }
+    first
+      ..offset = c.offset + phase
+      ..length = math.min(cell - phase, rest);
+    if (rest <= cell - phase + 1e-6) return [first..loopLength = null];
+    final tail = AudioClip.fromJson(c.toJson())
+      ..id = newId()
+      ..start = _afterSourceSeconds(d, c, at, cell - phase)
+      ..length = rest - (cell - phase)
+      ..fadeIn = 0
+      ..autoFadeIn = null;
+    first
+      ..loopLength = null
+      ..fadeOut = 0
+      ..autoFadeOut = null
+      ..fadeOutShape = FadeShape.linear;
+    return [first, tail];
   }
 
   /// Corta no cursor de reprodução: o clipe selecionado, ou tudo o que ele cruza na faixa atual.
@@ -5254,7 +5347,14 @@ class DawController extends ChangeNotifier {
       // a ele. Antes só havia fade se sobrasse áudio depois (e sem a espera da latência, que é o que
       // garante essa sobra, a emenda ficava seca).
       final fade = math.min(punchFade, secs / 3);
-      out.add((start: s, seconds: secs, pieces: pieces, active: active, fadeIn: s > plan.start + 1e-9 ? fade : 0.0, fadeOut: e >= punch.$2 - 1e-9 ? fade : 0.0));
+      out.add((
+        start: s,
+        seconds: secs,
+        pieces: pieces,
+        active: active,
+        fadeIn: s > plan.start + 1e-9 ? fade : 0.0,
+        fadeOut: e >= punch.$2 - 1e-9 ? fade : 0.0,
+      ));
     }
     return out;
   }
@@ -5753,7 +5853,13 @@ class DawController extends ChangeNotifier {
   /// muda, e dobrariam); os pós-fader ficam nela também (calam com o mudo). O sidechain que a
   /// original alimenta continua (a chave é pós-inserts, antes do mudo).
   Future<void> bounceTrack(int track, {void Function(double progress)? onProgress}) async {
-    if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('congelar')) return;
+    if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('renderizar')) return;
+    final why = freezeBlocker(this, track, verb: 'renderizar', allowBus: true);
+    if (why != null) {
+      error = '${doc.tracks[track].name}: $why.';
+      notifyListeners();
+      return;
+    }
     await _renderTrack(track, _bounceTail, 'O congelamento', 'Congelando', onProgress, (r, i) {
       checkpoint('Congelar faixa');
       mutate((d) {
@@ -5831,11 +5937,22 @@ class DawController extends ChangeNotifier {
   }
 
   /// Descongela: a faixa volta a tocar o conteúdo dela, exatamente como estava (nada foi tocado no congelamento;
-  /// o que se editou nela enquanto congelada vale agora). O áudio renderizado fica na lista do projeto.
+  /// o que se editou nela enquanto congelada vale agora). O áudio renderizado sai da lista do projeto se nada mais
+  /// o usa (senão contaria como áudio em uso; o desfazer devolve tudo).
   void unfreezeTrack(int track) {
     if (track < 0 || track >= doc.tracks.length || doc.tracks[track].frozen == null || _blockedByRecording('descongelar')) return;
-    editAs('Descongelar faixa', (d) => d.tracks[track].frozen = null);
+    editAs('Descongelar faixa', (d) {
+      final hash = d.tracks[track].frozen!.sample;
+      d.tracks[track].frozen = null;
+      if (!_sampleUsed(d, hash)) d.samples.remove(hash);
+    });
   }
+
+  /// Alguma faixa ainda toca [hash] (clipe, tomada, sampler, zona ou áudio congelado).
+  static bool _sampleUsed(DawDoc d, String hash) => d.tracks.any(
+    (t) =>
+        t.frozen?.sample == hash || t.sample == hash || t.zones.any((z) => z.sample == hash) || t.clips.any((c) => c.sample == hash || c.takes.contains(hash)),
+  );
 
   /// Converte a faixa em áudio no lugar ("bounce in place"): o instrumento, as notas, os efeitos e a automação
   /// deles saem e ficam um clipe de áudio só com o som renderizado; a faixa vira de áudio. Fader, pan, mudo, solo,
@@ -5844,7 +5961,7 @@ class DawController extends ChangeNotifier {
   Future<void> convertToAudio(int track, {double tail = kDefaultFreezeTail, void Function(double progress)? onProgress}) async {
     if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('converter')) return;
     final frozen = doc.tracks[track].frozen;
-    final why = freezeBlocker(this, track, needsRender: frozen == null);
+    final why = freezeBlocker(this, track, needsRender: frozen == null, verb: 'converter');
     if (why != null) {
       error = '${doc.tracks[track].name}: $why.';
       notifyListeners();
@@ -5875,27 +5992,39 @@ class DawController extends ChangeNotifier {
       commit(frozen.sample, frozen.start, frozen.length, track);
       return;
     }
-    await _renderTrack(track, clampFreezeTail(tail), 'A conversão', 'Convertendo', onProgress, (r, i) => commit(r.hash, r.from, r.seconds, i));
+    await _renderTrack(
+      track,
+      clampFreezeTail(tail),
+      'A conversão',
+      'Convertendo',
+      onProgress,
+      (r, i) => commit(r.hash, r.from, r.seconds, i),
+      verb: 'converter',
+      during: 'convertia',
+    );
   }
 
   /// O render de uma faixa para áudio, com tudo em volta: valida o conteúdo, renderiza fora de tempo real de
   /// [from] ao fim da faixa mais [tail] (aparando o silêncio depois), guarda o áudio (sha-256, no guardado local e
   /// registrado no motor, como a importação) e chama [apply] com o resultado e o índice que a faixa tem AGORA.
   /// Nada é feito se a faixa foi apagada, ou teve o som mudado, durante o render (o áudio já nasceria velho).
-  /// [what] e [ing] entram nas mensagens ("O congelamento não terminou", "Congelando X…").
+  /// [what] e [ing] entram nas mensagens ("O congelamento não terminou", "Congelando X…"); [verb] e [during]
+  /// ("congelar"/"congelava", "converter"/"convertia") também.
   Future<void> _renderTrack(
     int track,
     double tail,
     String what,
     String ing,
     void Function(double progress)? onProgress,
-    void Function(({String hash, double from, double seconds}) r, int index) apply,
-  ) async {
+    void Function(({String hash, double from, double seconds}) r, int index) apply, {
+    String verb = 'congelar',
+    String during = 'congelava',
+  }) async {
     final src = doc.tracks[track];
     final id = src.id, label = src.name;
     final (from, to) = _bounceRange(src);
     if (!(to > from + 1e-9)) {
-      error = 'A faixa "$label" está vazia: nada para congelar.';
+      error = 'A faixa "$label" está vazia: nada para $verb.';
       notifyListeners();
       return;
     }
@@ -5922,7 +6051,7 @@ class DawController extends ChangeNotifier {
       if (_disposed) return;
       var channels = result.isEmpty ? const <Float32List>[] : result.first;
       if (channels.isEmpty || _peak(channels) == 0) {
-        error = 'A faixa "$label" não soou nada: nada para congelar.';
+        error = 'A faixa "$label" não soou nada: nada para $verb.';
         return;
       }
       channels = _trimTail(channels, ((doc.secondsAt(to) - doc.secondsAt(from)) * rate).ceil());
@@ -5936,7 +6065,7 @@ class DawController extends ChangeNotifier {
       }
       final i = doc.tracks.indexWhere((t) => t.id == id);
       if (i < 0) {
-        error = 'A faixa "$label" foi apagada enquanto congelava.';
+        error = 'A faixa "$label" foi apagada enquanto $during.';
         return;
       }
       if (soundFingerprint(doc.tracks[i]) != fingerprint) {
@@ -5963,6 +6092,7 @@ class DawController extends ChangeNotifier {
     var from = double.infinity, to = 0.0;
     if (t.kind == TrackKind.audio) {
       for (final c in t.clips) {
+        if (c.muted) continue;
         from = math.min(from, c.start);
         to = math.max(to, doc.clipEnd(c));
       }

@@ -72,11 +72,16 @@ class AudioEditResult {
   const AudioEditResult(this.ok, this.message, [this.ids = const []]);
 }
 
-/// Por que [reason]: o clipe não pode ser editado por fatias (null: pode).
+/// Por que [reason]: o clipe não pode ser editado por fatias (null: pode). Vale para dividir, remover silêncio e
+/// quantizar; a conversão em notas tem a própria recusa do clipe em loop no controlador.
 String? sliceEditBlocker(AudioClip clip) {
   if (clip.processed) {
     return 'Este clipe usa warp, transposição ou inversão. A edição por fatias trabalha no áudio original e ignora o warp; '
         'desligue o processamento em “Warp e altura…” antes de editar.';
+  }
+  if (clip.looping) {
+    return 'Este clipe está em loop: a edição por fatias trabalha no trecho que o clipe toca uma vez só e não enxerga as repetições. '
+        'Desligue o loop do clipe antes de editar.';
   }
   return null;
 }
@@ -176,18 +181,35 @@ List<double> detectCuts(
 
 /// As linhas de grade de [gridBeats] batidas dentro do clipe, em segundos do sample. O clipe sem
 /// warp toca em tempo real, então o tempo do sample é o do mapa de andamento.
+///
+/// Lança [CutLimitException] se o clipe tem mais que [maxGridLines] linhas (antes isso truncava em silêncio).
 List<double> gridCuts(AudioClip clip, DawDoc doc, double gridBeats) {
   if (!(gridBeats > 0)) return const [];
   final t0 = doc.secondsAt(clip.start);
   final endBeat = doc.beatAtSeconds(t0 + clip.length);
   final out = <double>[];
   var k = (clip.start / gridBeats).floor() + 1;
-  for (var guard = 0; guard < 20000; guard++, k++) {
+  while (true) {
     final b = k * gridBeats;
     if (b >= endBeat - 1e-9) break;
+    if (out.length >= maxGridLines) {
+      throw CutLimitException('Linhas de grade demais neste clipe (mais de $maxGridLines). Use uma grade maior ou divida o clipe antes.');
+    }
     out.add(clip.offset + (doc.secondsAt(b) - t0));
+    k++;
   }
   return out;
+}
+
+/// O máximo de linhas de grade que [gridCuts] varre.
+const int maxGridLines = 20000;
+
+/// A análise dos cortes passou de um limite: [message] está pronta para a tela.
+class CutLimitException implements Exception {
+  final String message;
+  CutLimitException(this.message);
+  @override
+  String toString() => message;
 }
 
 /// Tira o que não serve de corte: fora do trecho, repetido, perto demais de outro corte ([minGap]) ou a
