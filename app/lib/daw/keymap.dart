@@ -103,6 +103,7 @@ final List<KeyAction> keyCatalog = [
   KeyAction('edit.duplicate', 'Duplicar o clipe', KeyCategory.edit, KeyContext.arrangement, ['Mod+D']),
   KeyAction('edit.split', 'Cortar no cursor', KeyCategory.edit, KeyContext.arrangement, ['S']),
   KeyAction('edit.mute', 'Silenciar o clipe', KeyCategory.edit, KeyContext.arrangement, ['0'], help: 'Liga ou desliga o mudo do clipe de áudio selecionado'),
+  KeyAction('edit.comp', 'Comp por trecho (tomadas)', KeyCategory.edit, KeyContext.arrangement, [], help: 'Abre ou fecha o comp do clipe gravado em loop: escolha, trecho a trecho, a tomada que soa'),
   KeyAction('edit.delete', 'Apagar o clipe', KeyCategory.edit, KeyContext.arrangement, ['Delete', 'Backspace']),
   KeyAction('edit.import', 'Importar áudio ou MIDI', KeyCategory.edit, KeyContext.global, ['Mod+I']),
   KeyAction('history.open', 'Abrir o histórico', KeyCategory.edit, KeyContext.global, ['Mod+Shift+H'], help: 'Histórico de desfazer e versões do projeto'),

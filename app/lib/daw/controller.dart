@@ -33,6 +33,7 @@ import '../widgets/theme.dart';
 import 'audio_to_midi.dart';
 import 'automation_math.dart';
 import 'automation_record.dart';
+import 'comp.dart';
 import 'effects.dart';
 import 'export_options.dart';
 import 'freeze.dart';
@@ -5691,6 +5692,190 @@ class DawController extends ChangeNotifier {
     final clip = f.$2;
     if (clip.sample == sampleHash || !clip.takes.contains(sampleHash)) return;
     editAs('Trocar de take', (_) => clip.sample = sampleHash);
+  }
+
+  // ------------------------------------------------------------------ comp por trecho
+
+  /// O modo comp: a faixa e a chave (tomadas e alinhamento) do grupo que está aberto. Estado de tela, fora do
+  /// documento e do histórico; o grupo é sempre derivado dos clipes ([compGroupByKey]), então desfazer, dividir,
+  /// duplicar ou reabrir o projeto não deixam nada para trás.
+  ({String track, List<String> takes, double origin})? _comp;
+
+  /// O grupo do comp aberto (nulo com o modo desligado ou se os clipes sumiram).
+  CompGroup? get compGroup {
+    final k = _comp;
+    if (k == null) return null;
+    final t = doc.tracks.where((t) => t.id == k.track).firstOrNull;
+    return t == null ? null : compGroupByKey(doc, t, k.takes, k.origin);
+  }
+
+  bool get compOn => compGroup != null;
+
+  /// Os trechos do comp aberto (em segundos da linha do tempo), como o usuário os vê.
+  List<CompSeg> get compSegs {
+    final g = compGroup;
+    return g == null ? const [] : compView(doc, g);
+  }
+
+  /// Abre o modo comp no clipe [clipId] (o selecionado se nulo). Devolve se abriu; se não, diz por quê em [error].
+  bool startComp([String? clipId]) {
+    final f = _findClip(clipId ?? selectedClip ?? '');
+    if (f == null) {
+      error = 'Selecione um clipe gravado em loop (com tomadas) para fazer o comp.';
+      notifyListeners();
+      return false;
+    }
+    final (t, clip) = f;
+    if (clip.takes.length < 2) {
+      error = 'Este clipe não tem tomadas: o comp é para a gravação em loop, que guarda uma tomada por volta.';
+      notifyListeners();
+      return false;
+    }
+    final g = compGroupOf(doc, t, clip);
+    if (g == null) {
+      error = 'O comp não funciona num clipe com warp, reverso, transposição ou loop: desligue isso primeiro.';
+      notifyListeners();
+      return false;
+    }
+    _comp = (track: t.id, takes: g.takes, origin: g.origin);
+    final i = doc.tracks.indexOf(t);
+    if (i >= 0) selectedTrack = i;
+    notifyListeners();
+    return true;
+  }
+
+  void endComp() {
+    if (_comp == null) return;
+    _comp = null;
+    notifyListeners();
+  }
+
+  /// Liga o comp no clipe selecionado ou desliga se já está ligado (o atalho e o menu).
+  void toggleComp() {
+    if (compOn) {
+      endComp();
+    } else {
+      startComp();
+    }
+  }
+
+  /// Escolhe a tomada [take] (índice em `takes`) no trecho de [fromBeat] a [toBeat] (batidas, qualquer ordem), dentro do que o
+  /// comp cobre. O que sobra vira clipes do mesmo áudio com os offsets certos: onde a tomada muda há uma emenda com o crossfade
+  /// automático (o mesmo dos clipes sobrepostos), e cada pedaço segue um clipe comum, editável. Um passo de desfazer.
+  void compPick(int take, double fromBeat, double toBeat) {
+    final g = compGroup;
+    if (g == null || take < 0 || take >= g.takes.length) return;
+    if (missing.contains(g.takes[take])) {
+      error = 'A tomada ${take + 1} não está neste aparelho: não dá para escolhê-la.';
+      notifyListeners();
+      return;
+    }
+    final tm = doc.tempo;
+    final view = compView(doc, g);
+    final lo = view.first.s, hi = view.last.e;
+    final a = math.max(lo, math.min(tm.secondsAt(fromBeat), tm.secondsAt(toBeat)));
+    final b = math.min(hi, math.max(tm.secondsAt(fromBeat), tm.secondsAt(toBeat)));
+    if (b - a < compMinSeg) return;
+    // já toca essa tomada inteira no trecho: nada a fazer (não gasta passo de desfazer)
+    var at = a;
+    for (final s in view) {
+      if (s.e <= at + 1e-9) continue;
+      if (s.s > at + 1e-9 || s.take != take) break;
+      at = s.e;
+      if (at >= b - 1e-9) return;
+    }
+    editAs('Comp: escolher trecho', (d) => _compRebuild(d, g, a, b, take));
+  }
+
+  /// A tomada [take] em todo o comp.
+  void compPickAll(int take) {
+    final g = compGroup;
+    if (g == null) return;
+    final view = compView(doc, g);
+    final tm = doc.tempo;
+    compPick(take, tm.beatAt(view.first.s), tm.beatAt(view.last.e));
+  }
+
+  void _compRebuild(DawDoc d, CompGroup g, double a, double b, int take) {
+    for (final c in g.clips) {
+      compNormalize(d, c);
+    }
+    final segs = compApply(compSegments(d, g), a, b, take);
+    final next = <AudioClip>[];
+    for (final s in segs) {
+      if (!s.dirty && s.clip != null) {
+        next.add(s.clip!);
+        continue;
+      }
+      final base = s.clip ?? g.clips.first;
+      final c = AudioClip.fromJson(base.toJson())
+        ..id = newId()
+        ..sample = g.takes[s.take]
+        ..start = d.tempo.beatAt(s.s)
+        ..offset = math.max(0.0, s.s - g.origin)
+        ..length = s.e - s.s;
+      // o fade do usuário só fica na borda que continua sendo a do clipe de onde este veio
+      if ((s.s - clipStartSec(d, base)).abs() > 1e-9) {
+        c
+          ..fadeIn = 0
+          ..autoFadeIn = null;
+      }
+      if ((s.e - clipEndSec(d, base)).abs() > 1e-9) {
+        c
+          ..fadeOut = 0
+          ..autoFadeOut = null;
+      }
+      if (c.fadeIn + c.fadeOut > c.length) {
+        c.fadeIn = math.min(c.fadeIn, c.length);
+        c.fadeOut = math.min(c.fadeOut, c.length - c.fadeIn);
+      }
+      next.add(c);
+    }
+    final t = g.track;
+    final at = t.clips.indexOf(g.clips.first);
+    t.clips.removeWhere(g.clips.contains);
+    t.clips.insertAll(math.min(at, t.clips.length), next);
+    for (var i = 0; i + 1 < next.length; i++) {
+      _compSeam(d, next[i], next[i + 1]);
+    }
+    reconcileAutoFades();
+  }
+
+  /// Emenda entre duas tomadas diferentes coladas: cada lado avança metade de [compFade] sobre o outro (se o áudio dele tem esse
+  /// pedaço) e vira o crossfade automático de sempre. Sem espaço no áudio ou com fade do usuário na borda, fica o corte seco.
+  void _compSeam(DawDoc d, AudioClip a, AudioClip b) {
+    final tm = d.tempo;
+    if (a.sample == b.sample || (clipEndSec(d, a) - clipStartSec(d, b)).abs() > 1e-6) return;
+    final xf = math.min(compFade, math.min(a.length, b.length) / 2), h = xf / 2;
+    final total = d.samples[a.sample]?.duration;
+    if (xf < 1e-4 || total == null || a.offset + a.length + h > total + 1e-9 || b.offset < h - 1e-9) return;
+    final (bStart, bOffset, bLength, aLength) = (b.start, b.offset, b.length, a.length);
+    a.length += h;
+    b
+      ..start = tm.beatAt(tm.secondsAt(bStart) - h)
+      ..offset = bOffset - h
+      ..length = bLength + h;
+    if (!_tryCrossfade(a, b, oEnd: d.clipEnd(a), topEnd: d.clipEnd(b))) {
+      a.length = aLength;
+      b
+        ..start = bStart
+        ..offset = bOffset
+        ..length = bLength;
+    }
+  }
+
+  /// Achata o comp: fecha o modo e os clipes ficam como estão (mesmas emendas e crossfades), mas sem a lista de tomadas, então o
+  /// comp deixa de poder ser refeito e as tomadas que não entraram deixam de pesar no projeto. Desfazível.
+  void flattenComp() {
+    final g = compGroup;
+    if (g == null) return;
+    editAs('Comp: achatar', (_) {
+      for (final c in g.clips) {
+        c.takes = [];
+      }
+    });
+    _comp = null;
+    notifyListeners();
   }
 
   /// Não deixa [what] no meio de uma gravação (avisa em [error]).

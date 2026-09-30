@@ -22,6 +22,7 @@ import '../widgets/theme.dart';
 import 'audio_edit_ui.dart';
 import 'automation_lane.dart';
 import 'clip_gain_dialog.dart';
+import 'comp_ui.dart';
 import 'controller.dart';
 import 'freeze.dart';
 import 'fade_length_dialog.dart';
@@ -114,6 +115,14 @@ class Timeline extends StatelessWidget {
       c: c,
       track: r.track,
       lane: r.lane!,
+      color: _trackColor(c, r.track),
+      height: r.height,
+      compact: compact,
+    ),
+    _RowKind.comp => CompLaneHeader(
+      key: ValueKey('comp:${c.doc.tracks[r.track].id}:${r.take}'),
+      c: c,
+      take: r.take,
       color: _trackColor(c, r.track),
       height: r.height,
       compact: compact,
@@ -289,7 +298,7 @@ class Timeline extends StatelessWidget {
 
 // ---------------------------------------------------------------------- disposição vertical
 
-enum _RowKind { track, lane, add, master }
+enum _RowKind { track, lane, comp, add, master }
 
 /// Uma linha da lista vertical: faixa, sub-raia de automação, "+ Faixa" ou master.
 class _Row {
@@ -299,7 +308,10 @@ class _Row {
   final int track;
   final AutoLane? lane;
   final double top, height;
-  const _Row(this.kind, this.track, this.top, this.height, [this.lane]);
+
+  /// Índice da tomada, nas raias do comp.
+  final int take;
+  const _Row(this.kind, this.track, this.top, this.height, [this.lane, this.take = 0]);
 }
 
 /// Onde cada linha fica. Cabeçalhos e raias saem da mesma conta, então andam alinhados; cada
@@ -315,6 +327,7 @@ class _Layout {
     final rows = <_Row>[];
     final tops = <double>[], ends = <double>[];
     var y = 0.0;
+    final comp = c.compGroup;
     void lanes(int track, List<AutoLane> list) {
       for (final l in list) {
         if (!l.open) continue;
@@ -332,6 +345,12 @@ class _Layout {
       }
       rows.add(_Row(_RowKind.track, i, y, laneHeight));
       y += laneHeight;
+      if (comp != null && identical(comp.track, c.doc.tracks[i])) {
+        for (var k = 0; k < comp.takes.length; k++) {
+          rows.add(_Row(_RowKind.comp, i, y, compLaneHeight, null, k));
+          y += compLaneHeight;
+        }
+      }
       lanes(i, c.doc.tracks[i].lanes);
       ends.add(y);
     }
@@ -2258,6 +2277,16 @@ class _LanesState extends State<_Lanes> {
                   ),
                 ),
               for (final r in layout.rows)
+                if (r.kind == _RowKind.comp)
+                  Positioned(
+                    key: ValueKey('comp-lane:${tracks[r.track].id}:${r.take}'),
+                    left: 0,
+                    right: 0,
+                    top: r.top,
+                    height: r.height,
+                    child: CompLaneView(c: c, take: r.take, color: _trackColor(c, r.track)),
+                  ),
+              for (final r in layout.rows)
                 if (r.lane != null)
                   Positioned(
                     key: ValueKey('auto:${r.lane!.id}'),
@@ -2280,7 +2309,7 @@ enum _Band { track, bus, lane, add, master }
 
 _Band _bandOf(_Row r, List<DawTrack> tracks) => switch (r.kind) {
   _RowKind.track => tracks[r.track].kind == TrackKind.bus ? _Band.bus : _Band.track,
-  _RowKind.lane => _Band.lane,
+  _RowKind.lane || _RowKind.comp => _Band.lane,
   _RowKind.add => _Band.add,
   _RowKind.master => _Band.master,
 };
@@ -2888,6 +2917,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
             ],
           ),
         ),
+        _menuItem('comp', Icons.content_cut, c.compOn ? 'Fechar o comp' : 'Comp por trecho', shortcut: shortcutLabel('edit.comp')),
         const PopupMenuDivider(),
       ],
       _menuItem('duplicate', Icons.copy_all, 'Duplicar', shortcut: shortcutLabel('edit.duplicate')),
@@ -2925,6 +2955,8 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     switch (v) {
       case 'takes':
         await _takesMenu(at);
+      case 'comp':
+        c.compOn ? c.endComp() : c.startComp(widget.clip.id);
       case 'warp':
         await showWarpDialog(context, c, widget.clip.id);
       case final f when f.startsWith('fin:'):
