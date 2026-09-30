@@ -95,6 +95,7 @@ A faixa usa o sintetizador padrão. Troque o som pelo painel do instrumento (`I`
 | Mensagem | Quando |
 |---|---|
 | `O clipe não existe mais.` | O clipe foi apagado antes de começar |
+| `Este clipe está em loop: a conversão em notas lê o trecho uma vez só. Desligue o loop do clipe antes de converter.` | O clipe está em loop (o loop ligado e a duração além do trecho que repete; fase 24, `ebea0b1`). A recusa vem ao tocar `Converter`, antes de qualquer envio e mesmo sem conta (a mensagem de sessão é a seguinte na ordem); nada é criado. Até a fase 23 o app convertia o áudio corrido a partir do `offset`, não as repetições `(testado só por testes automáticos)` |
 | `Entre na sua conta para converter áudio em notas.` | Sem sessão |
 | `Formato de áudio não suportado (aceitos: WAV, FLAC, MP3, OGG Vorbis e AAC/M4A, mono ou estéreo).` | O arquivo não é de um dos formatos acima, está com lixo no lugar do áudio, tem mais de 2 canais ou mudou de taxa/canais no meio |
 | `End: obrigatório quando há start (o trecho tem no máximo 10 minutos).` | O servidor recusa (`400`) um pedido com início do trecho maior que zero e sem fim. O app nunca manda assim (sempre envia o início e o fim do trecho do clipe juntos), então só aparece se algo mandar o pedido por fora do app; resolvido em `1180152` (antes o pedido entrava na fila e só falhava na decodificação, se o trecho até o fim do arquivo passasse de 10 minutos). `(testado só por testes automáticos do servidor)` |

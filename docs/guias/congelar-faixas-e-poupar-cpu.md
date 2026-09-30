@@ -29,7 +29,7 @@ O que vale para os três cenários:
 Um projeto com a faixa `Baixo` (`Sintetizador`) com notas, e na cadeia um `Distorção` (sobreamostragem `4×`), um `Compressor` e um `Reverb` de preset `Sala` (`Decaimento` 1,4 s).
 
 1. Toque o projeto e confirme que o `Baixo` soa como você quer: depois de congelar, o timbre fica preso.
-2. No cabeçalho do `Baixo`, abra `Opções da faixa` (três pontos) e toque em `Congelar faixa…`. A legenda do item deve dizer `Toca o áudio renderizado; o conteúdo fica guardado`; se estiver desligado, leia o motivo (`A faixa está vazia`, ou o sidechain de outra faixa).
+2. No cabeçalho do `Baixo`, abra `Opções da faixa` (três pontos) e toque em `Congelar faixa…`. A legenda do item deve dizer `Toca o áudio renderizado; o conteúdo fica guardado`; se estiver desligado, leia o motivo (`A faixa está vazia`, `A faixa só tem clipes mudos`, ou o sidechain de outra faixa).
 3. No diálogo `Congelar "Baixo"`, ajuste `Cauda dos efeitos` para 3 s: o `Reverb` `Sala` tem `Decaimento` de 1,4 s e leva cerca de 2,3 s para chegar perto do silêncio (100/60 do `Decaimento`, uma estimativa, não medida). O valor é um máximo: o silêncio no fim é aparado. Toque em **Congelar**.
 4. Espere `Preparando…` e o `N%`. O render roda fora de tempo real, sem precisar tocar, e é mais rápido do que tocar `(quanto não foi medido)`.
 5. Confira: o cabeçalho do `Baixo` ganhou o floco azul e a raia uma faixa azul sobre o trecho. Toque: deve soar igual.
@@ -38,11 +38,11 @@ Um projeto com a faixa `Baixo` (`Sintetizador`) com notas, e na cadeia um `Disto
 
 ### Cenário 2: congelar e descongelar para mudar uma nota
 
-1. Com o `Baixo` congelado (cenário 1), você percebe uma nota errada no compasso 5. Dê duplo clique no clipe de notas e mude a nota: **nada muda no som**, porque a faixa toca o áudio congelado. É esperado.
+1. Com o `Baixo` congelado (cenário 1), você percebe uma nota errada no compasso 5. Dê duplo clique no clipe de notas e mude a nota: **nada muda no som**, porque a faixa toca o áudio congelado. É esperado, e o app avisa: `Faixa congelada: a alteração só soa ao descongelar.` (uma vez por congelamento; a segunda nota que você mexer não repete o aviso).
 2. Abra `Opções da faixa` e toque em `Descongelar` (legenda `Volta o instrumento, as notas e os efeitos`). O floco e a faixa azul somem e o instrumento toca de novo, já com a nota nova. Se você acabou de congelar e ainda não mexeu em mais nada, `Ctrl+Z` também serve.
 3. Ajuste o que quiser (nota, `Corte` do sintetizador, um efeito) e ouça.
 4. Volte a `Congelar faixa…`, com a mesma `Cauda dos efeitos`. O app renderiza de novo e grava outro áudio.
-5. O áudio do primeiro congelamento **continua na lista de áudios do projeto** e, como o documento o cita, a nuvem o conta como em uso: a cota de 4 GB carrega os dois `(lido do código; não testado)`. Um baixo de 4 minutos em estéreo a 48 kHz tem cerca de 92 MB (23 MB por minuto). Não congele e descongele sem parar em faixas longas.
+5. O áudio do primeiro congelamento **saiu da lista de áudios do projeto** no `Descongelar` (e o `Ctrl+Z` o devolve). Na nuvem ele só deixa de contar como em uso depois que o projeto sincroniza: aí aparece como `sem uso` em `Conta` e você pode apagá-lo de lá. Até apagar, a cota de 4 GB carrega os dois `(lido do código; não testado)`. Um baixo de 4 minutos em estéreo a 48 kHz tem cerca de 92 MB (23 MB por minuto). Não congele e descongele sem parar em faixas longas sem passar de vez em quando por `Limpar áudios sem uso` (a limpeza em massa poupa o que subiu há menos de 1 hora).
 
 ### Cenário 3: converter em áudio e cortar (ou esticar)
 
@@ -73,12 +73,13 @@ Um pad de `Sintetizador` de 8 compassos com `Reverb` que você quer cortar ao me
 
 | Sintoma | Causa provável | O que fazer |
 |---|---|---|
-| Mexo no instrumento ou num efeito e nada muda | A faixa está congelada (floco no cabeçalho) | `Descongelar`, ajuste e congele de novo |
-| O item `Congelar faixa…` está desligado | A legenda diz o motivo: `A faixa está vazia`, `Pare a gravação antes`, ou `Um efeito usa o sidechain de "nome": tire a chave antes de congelar` | Escreva notas ou clipes; pare a gravação; volte o `Sidechain` do efeito a `Própria entrada` e congele (religue depois do `Descongelar`) |
+| Mexo no instrumento ou num efeito e nada muda | A faixa está congelada (floco no cabeçalho). Ao editar notas, clipes ou a cadeia de efeitos o app avisa `Faixa congelada: a alteração só soa ao descongelar.`; girar um knob do instrumento ou de um efeito não avisa | `Descongelar`, ajuste e congele de novo |
+| O item `Congelar faixa…` está desligado | A legenda diz o motivo: `A faixa está vazia`, `A faixa só tem clipes mudos`, `Pare a gravação antes`, ou `Um efeito usa o sidechain de "nome": tire a chave antes de congelar` | Escreva notas ou clipes; tire o mudo de algum clipe; pare a gravação; volte o `Sidechain` do efeito a `Própria entrada` e congele (religue depois do `Descongelar`) |
+| `Converter em áudio…` desligado com `... tire a chave antes de converter` (ou `Renderizar em faixa nova` com `... antes de renderizar`) | Mesmo sidechain de outra faixa; a frase troca o verbo conforme o item | O mesmo: `Própria entrada` no `Sidechain`, ou converta a faixa-chave antes |
 | Não vejo o item `Converter em áudio…` | A faixa é de áudio comum (já é áudio) ou um barramento | Congele a faixa de áudio antes (aparece na faixa congelada) |
 | O reverb corta de repente no fim | `Cauda dos efeitos` curta demais | Desfaça e congele com uma cauda maior (até 30 s) |
-| O reverb some quando exporto | O fim do arquivo é o fim do último clipe mais a `Cauda` da exportação (0 a 10 s), e não o fim do áudio congelado | Suba a `Cauda` em `Exportar áudio` ([08](../manual/08-exportacao.md)) |
-| `A faixa "nome" mudou durante o render: o áudio já nasceria velho. Tente de novo.` | Você editou o som da faixa com o render rodando | Espere a barra terminar e congele de novo |
-| `A faixa "nome" não soou nada: nada para congelar.` | O render saiu mudo (clipes mudos, instrumento sem volume, `Gate` fechado) | Confira a faixa tocando e congele de novo |
-| Uma faixa congelada fica muda em outro aparelho | O áudio congelado não chegou a esse aparelho `(lido do código; não testado)` | Espere a sincronização, ou `Descongelar` para voltar ao instrumento |
-| A cota de 4 GB encheu | Cada congelamento é um WAV de 32 bits float (cerca de 23 MB por minuto em estéreo a 48 kHz) | [01b, Cotas e limites](../manual/01b-nuvem-e-sincronizacao.md#cotas-e-limites); `Descongelar` não apaga o áudio renderizado |
+| O reverb congelado não aparece inteiro na exportação | Desde a fase 24 (`ebea0b1`) `Música inteira` vai até o fim do áudio congelado, cauda incluída; se ainda corta, a cauda já estava curta no congelamento | Congele de novo com `Cauda dos efeitos` maior. (Antes da fase 24 o fim do arquivo era o do último clipe mais a `Cauda` da exportação, 0 a 10 s.) |
+| `A faixa "nome" mudou durante o render: o áudio já nasceria velho. Tente de novo.` | Você editou o som da faixa (inclusive a automação ou a modulação do instrumento e dos efeitos) com o render rodando | Espere a barra terminar e congele de novo |
+| `A faixa "nome" não soou nada: nada para congelar.` (na conversão, `... nada para converter.`) | O render saiu mudo (instrumento sem volume, `Gate` fechado). Faixa só com clipes mudos nem começa: a legenda diz `A faixa só tem clipes mudos` | Confira a faixa tocando e congele de novo |
+| Uma faixa congelada fica muda em outro aparelho | O áudio congelado não chegou a esse aparelho: a raia da faixa fica vermelha com `áudio fora deste aparelho` `(lido do código; não testado)` | Espere a sincronização, ou `Descongelar` para voltar ao instrumento |
+| A cota de 4 GB encheu | Cada congelamento é um WAV de 32 bits float (cerca de 23 MB por minuto em estéreo a 48 kHz) | [01b, Cotas e limites](../manual/01b-nuvem-e-sincronizacao.md#cotas-e-limites); `Descongelar` tira o áudio da lista do projeto, mas ele só libera a cota quando você o apaga em `Conta` (vira `sem uso` depois de sincronizar) |

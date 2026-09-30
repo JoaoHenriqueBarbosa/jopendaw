@@ -162,7 +162,7 @@ Aplicar o mesmo preset duas vezes cria dois moduladores que **somam** no mesmo c
 
 - Um controle pode ter raia de automação **e** modulação: a curva move a base e a modulação balança por cima.
 - O que grava a [gravação de automação](07-automacao.md#gravar-automação) (`Escrever`, `Toque`, `Trava`) é o movimento da sua mão no controle, isto é, a base. A modulação não vira pontos, e a raia não a desenha `(lido do código; não confirmado em uso)`.
-- Exportar e [congelar](08-exportacao.md#congelar-uma-faixa): a exportação leva a modulação inteira. Em `Renderizar em faixa nova` (antigo `Congelar em áudio`), a modulação de `Volume`, `Pan` e envios vai junto para a faixa nova (como a automação desses); a de instrumento e de efeitos vira som no arquivo. Em `Congelar faixa…` (no lugar), a modulação de `Volume`, `Pan` e envios segue viva na faixa e a de instrumento e de efeitos não é enviada ao motor até o `Descongelar` ([02e](02e-congelar-faixa.md)).
+- Exportar e [congelar](08-exportacao.md#congelar-uma-faixa): a exportação leva a modulação inteira. Em `Renderizar em faixa nova` (antigo `Congelar em áudio`), a modulação de `Volume`, `Pan` e envios vai junto para a faixa nova (como a automação desses); a de instrumento e de efeitos vira som no arquivo. Em `Congelar faixa…` (no lugar), a modulação de `Volume`, `Pan` e envios segue viva na faixa e a de instrumento e de efeitos não é enviada ao motor até o `Descongelar` ([02e](02e-congelar-faixa.md)). Desde a fase 24 (`ebea0b1`) a modulação de instrumento e de efeitos também conta como "o som da faixa": mudá-la durante o render invalida o congelamento e mudá-la depois avisa `Faixa congelada: a alteração só soa ao descongelar.`; a de `Volume`, `Pan` e envios não.
 
 ### MIDI learn
 

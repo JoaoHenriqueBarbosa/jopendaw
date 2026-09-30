@@ -67,7 +67,7 @@ No **canto direito** do cabeçalho fica o **indicador de nuvem** (ícone sem tex
 | `Seguir o cursor na reprodução` | A janela rola atrás do cursor tocando | Ligado por padrão | Também no menu `Visão` |
 | Menu `Visão` (`Visão: enquadrar, altura das faixas, seguir o cursor`) | `Enquadrar tudo (Z)`, `Enquadrar a seleção (Shift+Z)`, `Faixas pequenas`, `Faixas médias`, `Faixas grandes`, `Seguir o cursor`, `Régua em minutos e segundos`, e, abaixo de um traço, `Histórico… (N)` (painel dos passos do desfazer; também `Ctrl+Shift+H`) e `Versões…` (cópias nomeadas do projeto) | Altura padrão: média | Histórico e versões: [capítulo 02d](02d-historico-e-versoes.md) |
 | Menu de bandeira (`Seções e marcadores (M cria um no cursor)`) | Lista de marcadores (clicar leva o cursor), `Marcador no cursor (M)`, `Loop entre marcadores`, `Loop desta seção`, `Loop no clipe selecionado (Shift+L)` | `Nenhum marcador ainda` quando vazio | A bandeira fica ciano com marcadores |
-| Duração (texto cinza, ex.: `0:08`) | Duração do projeto em minutos e segundos; tooltip `Duração do projeto: ... (N compassos)` | **Só em janelas de 1640 px ou mais** (some abaixo disso, inclusive no celular) | Conta até o fim do último clipe |
+| Duração (texto cinza, ex.: `0:08`) | Duração do projeto em minutos e segundos; tooltip `Duração do projeto: ... (N compassos)` | **Só em janelas de 1640 px ou mais** (some abaixo disso, inclusive no celular) | Conta até o fim do último clipe (inclui a cauda de uma faixa congelada) |
 
 **Grupo 3: painéis de baixo**
 
