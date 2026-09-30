@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../api/client.dart';
 import '../audio/engine.dart';
+import '../daw/project_file.dart' show ProjectFileException;
+import '../daw/project_file_ui.dart';
 import '../daw/templates.dart';
 import '../models/project.dart';
 import '../widgets/api_state.dart';
@@ -10,6 +12,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/feedback.dart';
 import '../widgets/format.dart';
 import '../widgets/page.dart';
+import '../widgets/responsive_scaffold.dart' show isDesktop;
 import '../widgets/theme.dart';
 
 /// Os projetos da conta: uma grade que se ajusta à largura (uma coluna no celular, várias no
@@ -46,6 +49,37 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
     if (mounted) context.go('/projetos/${p.id}');
   }
 
+  /// Escolhe um `.jopendaw` e cria um projeto novo com ele (nunca sobrescreve um existente).
+  Future<void> _importFile() async {
+    setState(() {
+      busy = true;
+      error = null;
+      info = null;
+    });
+    try {
+      final picked = await pickProjectFile();
+      if (picked == null) return;
+      final importer = ProjectImporter(
+        existingNames: () => [for (final p in _projects ?? const <Project>[]) p.name],
+        createProject: _api.createProject,
+        patchProject: _api.patchProject,
+        deleteProject: _api.deleteProject,
+        store: LocalStore.instance,
+      );
+      final created = await importer.import(picked.$2, onStatus: (s) => mounted ? setState(() => info = s) : null);
+      if (mounted) context.go('/projetos/${created.id}');
+    } on ProjectFileException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => error = 'Não deu para importar o projeto: ${describeError(e)}');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _export(Project p) =>
+      showExportProjectDialog(context, name: p.name, loadDoc: () => loadDocLocalOrServer(p.id), loadSample: loadSampleLocalOrServer);
+
   Future<void> _rename(Project p) async {
     final name = await promptText(context, title: 'Renomear projeto', label: 'Nome', initial: p.name, action: 'Salvar', maxLength: 120);
     if (name == null || name.isEmpty || name == p.name) return;
@@ -64,6 +98,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
       icon: Icons.library_music_outlined,
       title: 'Projetos',
       subtitle: list == null ? null : plural(list.length, 'projeto'),
+      actions: [
+        if (isDesktop(context))
+          TextButton.icon(onPressed: busy ? null : _importFile, icon: const Icon(Icons.upload_file), label: const Text('Importar projeto'))
+        else
+          IconButton(tooltip: 'Importar projeto', onPressed: busy ? null : _importFile, icon: const Icon(Icons.upload_file)),
+      ],
       primary: (icon: Icons.add, label: 'Novo projeto', onPressed: busy ? null : _create),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -82,7 +122,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
         icon: Icons.graphic_eq,
         title: 'Nenhum projeto ainda',
         message: 'Um projeto guarda as faixas, os clipes e a mixagem de uma música.',
-        action: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('Criar o primeiro')),
+        action: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('Criar o primeiro')),
+            OutlinedButton.icon(onPressed: busy ? null : _importFile, icon: const Icon(Icons.upload_file), label: const Text('Importar projeto')),
+          ],
+        ),
       );
     }
     return RefreshIndicator(
@@ -96,6 +144,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
           color: trackColorAt(i),
           onOpen: () => context.go('/projetos/${list[i].id}'),
           onRename: () => _rename(list[i]),
+          onExport: () => _export(list[i]),
           onDelete: () => _delete(list[i]),
         ),
       ),
@@ -106,8 +155,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
 class _ProjectCard extends StatelessWidget {
   final Project project;
   final Color color;
-  final VoidCallback onOpen, onRename, onDelete;
-  const _ProjectCard({required this.project, required this.color, required this.onOpen, required this.onRename, required this.onDelete});
+  final VoidCallback onOpen, onRename, onExport, onDelete;
+  const _ProjectCard({
+    required this.project,
+    required this.color,
+    required this.onOpen,
+    required this.onRename,
+    required this.onExport,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +195,7 @@ class _ProjectCard extends StatelessWidget {
                     onSelected: (f) => f(),
                     itemBuilder: (_) => [
                       PopupMenuItem(value: onRename, child: const Text('Renomear')),
+                      PopupMenuItem(value: onExport, child: const Text('Exportar projeto…')),
                       PopupMenuItem(value: onDelete, child: const Text('Apagar')),
                     ],
                   ),
