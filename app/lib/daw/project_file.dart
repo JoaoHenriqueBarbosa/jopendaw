@@ -91,6 +91,7 @@ Set<String> projectHashes(DawDoc d) => {
   ...d.samples.keys,
   for (final t in d.tracks) ...[
     ?t.sample,
+    ?t.frozen?.sample,
     for (final c in t.clips) ...[c.sample, ...c.takes],
   ],
 };

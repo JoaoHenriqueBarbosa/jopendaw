@@ -35,6 +35,7 @@ import 'automation_math.dart';
 import 'automation_record.dart';
 import 'effects.dart';
 import 'export_options.dart';
+import 'freeze.dart';
 import 'history.dart';
 import 'instruments.dart';
 import 'keymap.dart' show Keymap;
@@ -1450,8 +1451,10 @@ class DawController extends ChangeNotifier {
     for (var i = 0; i < d.tracks.length; i++) {
       final t = d.tracks[i];
       calls.add(['track', i, t.gain, t.pan, t.mute, t.solo]);
-      if (t.kind != TrackKind.audio) continue;
-      for (final c in t.clips) {
+      final frozen = t.frozen;
+      // congelada: só o áudio renderizado, seja qual for o tipo (os clipes originais ficam mudos no documento)
+      if (t.kind != TrackKind.audio && frozen == null) continue;
+      for (final c in frozen != null ? [frozen.clip] : t.clips) {
         // clipe mudo não vai ao motor: ao vivo e no render (as mesmas chamadas) ele não soa
         if (c.muted) continue;
         if (c.looping) {
@@ -1486,24 +1489,26 @@ class DawController extends ChangeNotifier {
     for (var i = 0; i < d.tracks.length; i++) {
       final t = d.tracks[i];
       var s = i < sent.length ? sent[i] : null;
-      final fresh = s == null || s.kind != t.kind;
+      // a faixa congelada é de áudio para o motor: o instrumento calado, sem notas ao vivo
+      final kind = engineKindOf(t);
+      final fresh = s == null || s.kind != kind;
       if (s == null || fresh) {
-        s = _SentTrack(t.kind);
+        s = _SentTrack(kind);
         if (i < sent.length) {
           sent[i] = s;
         } else {
           sent.add(s);
         }
-        calls.add(['track_kind', i, t.kind.index]);
+        calls.add(['track_kind', i, kind.index]);
       }
-      for (final p in t.kind.params) {
+      for (final p in kind.params) {
         final v = t.param(p.id);
         if (fresh || s.params[p.id] != v) {
           calls.add(['param', i, p.id, v]);
           s.params[p.id] = v;
         }
       }
-      if (t.kind == TrackKind.sampler) {
+      if (kind == TrackKind.sampler) {
         final sample = _sampleIds[t.sample] ?? 0;
         if (fresh || s.sample != sample) {
           calls.add(['instrument_sample', i, sample]);
@@ -1514,7 +1519,8 @@ class DawController extends ChangeNotifier {
     }
     if (sent.length > d.tracks.length) sent.length = d.tracks.length;
     for (var i = 0; i < d.tracks.length; i++) {
-      _syncChain(calls, i, d.tracks[i].effects, sent[i].fx);
+      // os efeitos de uma faixa congelada já estão no áudio dela
+      _syncChain(calls, i, d.tracks[i].frozen != null ? const [] : d.tracks[i].effects, sent[i].fx);
     }
     _syncChain(calls, -1, d.masterEffects, c.master);
     final index = _trackIndex();
@@ -1535,7 +1541,8 @@ class DawController extends ChangeNotifier {
       c.mod = mod;
     }
     calls.addAll(observe);
-    final notes = flattenNotes(d.tracks);
+    final live = soundingTracks(d.tracks);
+    final notes = flattenNotes(live);
     if (c.notes == null || !listEquals(notes, c.notes)) {
       calls.add(['notes_clear']);
       for (final n in notes) {
@@ -1543,7 +1550,7 @@ class DawController extends ChangeNotifier {
       }
       c.notes = notes;
     }
-    final ccs = flattenControls(d.tracks);
+    final ccs = flattenControls(live);
     if (c.ccs == null || !listEquals(ccs, c.ccs)) {
       calls.add(['cc_clear']);
       for (final e in ccs) {
@@ -1700,6 +1707,7 @@ class DawController extends ChangeNotifier {
     void add(int track, List<AutoLane> lanes) {
       for (final l in lanes) {
         if (l.points.isEmpty || autoRec.isRecording(track, l.target)) continue;
+        if (_frozenSkips(track, l.target)) continue;
         final r = _resolve(track, l.target, sends: track >= 0 ? sends[track] : const []);
         if (r == null) continue;
         final points = _sortedPoints(l.points);
@@ -1731,6 +1739,7 @@ class DawController extends ChangeNotifier {
         final dests = <List<Object>>[];
         for (var di = 0; di < src.dests.length && di < maxModDests; di++) {
           final d = src.dests[di];
+          if (_frozenSkips(track, d.target)) continue;
           final r = _resolve(track, d.target, sends: track >= 0 ? sends[track] : const []);
           if (r == null || r.spec?.curve == Curve.choice || r.spec?.curve == Curve.integer) continue;
           final scale = r.code == 0 || r.code == 4 ? 2 : (r.spec?.curve == Curve.log ? 1 : 0);
@@ -1762,6 +1771,11 @@ class DawController extends ChangeNotifier {
     add(-1, doc.masterModulation);
     return out;
   }
+
+  /// Faixa congelada: a automação e a modulação do instrumento e dos efeitos já estão no áudio e não vão ao motor
+  /// (a de volume, pan e envios continua, é depois do áudio).
+  bool _frozenSkips(int track, AutoTarget target) =>
+      track >= 0 && track < doc.tracks.length && doc.tracks[track].frozen != null && (target.kind == AutoKind.instrument || target.kind == AutoKind.effect);
 
   /// O alvo existe e a modulação sabe movê-lo (opções e inteiros não se modulam).
   bool _modTargetOk(int track, AutoTarget target) {
@@ -2587,6 +2601,7 @@ class DawController extends ChangeNotifier {
     ...d.samples.keys,
     for (final t in d.tracks) ...[
       ?t.sample,
+      ?t.frozen?.sample,
       for (final z in t.zones) z.sample,
       for (final c in t.clips) ...[c.sample, ...c.takes],
     ],
@@ -2910,11 +2925,7 @@ class DawController extends ChangeNotifier {
   }
 
   /// Id do parâmetro de sidechain do efeito, se ele tem.
-  static int? _sidechainParam(EffectKind k) => switch (k) {
-    EffectKind.compressor => 10,
-    EffectKind.gate => 6,
-    _ => null,
-  };
+  static int? _sidechainParam(EffectKind k) => sidechainParamOf(k);
 
   void selectTrack(int i) {
     _select(i);
@@ -5696,54 +5707,7 @@ class DawController extends ChangeNotifier {
   /// original alimenta continua (a chave é pós-inserts, antes do mudo).
   Future<void> bounceTrack(int track, {void Function(double progress)? onProgress}) async {
     if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('congelar')) return;
-    final src = doc.tracks[track];
-    final id = src.id, label = src.name;
-    final (from, to) = _bounceRange(src);
-    if (!(to > from + 1e-9)) {
-      error = 'A faixa "$label" está vazia: nada para congelar.';
-      notifyListeners();
-      return;
-    }
-    final rate = engineRate;
-    await _settleWarp();
-    if (_disposed) return;
-    final calls = _callsFor(_bounceDoc(track));
-    final samples = _samplesFor(_usedHashes());
-    _rendering = true;
-    status = 'Congelando $label…';
-    notifyListeners();
-    try {
-      final result = await _engine.renderOffline(
-        calls: calls,
-        samples: samples,
-        fromBeat: from,
-        toBeat: to,
-        tailSeconds: _bounceTail,
-        outputs: [track],
-        rate: rate,
-        onProgress: onProgress == null ? null : (p) => onProgress((p.isFinite ? p.clamp(0.0, 1.0) : 0.0) * 0.95),
-      );
-      if (_disposed) return;
-      var channels = result.isEmpty ? const <Float32List>[] : result.first;
-      if (channels.isEmpty || _peak(channels) == 0) {
-        error = 'A faixa "$label" não soou nada: nada para congelar.';
-        return;
-      }
-      channels = _trimTail(channels, ((doc.secondsAt(to) - doc.secondsAt(from)) * rate).ceil());
-      if (channels.length == 2 && _same(channels[0], channels[1])) channels = [channels[0]];
-      final bytes = encodeWav(channels, rate.round(), ExportFormat.wav32f);
-      final hash = await _engine.sha256Hex(bytes);
-      if (!waveforms.containsKey(hash)) {
-        await _store.put('sample:$hash', bytes);
-        if (_disposed) return;
-        _register(hash, DecodedAudio(channels, rate));
-      }
-      final i = doc.tracks.indexWhere((t) => t.id == id);
-      if (i < 0) {
-        error = 'A faixa "$label" foi apagada enquanto congelava.';
-        return;
-      }
-      final seconds = channels.first.length / rate;
+    await _renderTrack(track, _bounceTail, 'O congelamento', 'Congelando', onProgress, (r, i) {
       checkpoint('Congelar faixa');
       mutate((d) {
         final src = d.tracks[i];
@@ -5772,14 +5736,14 @@ class DawController extends ChangeNotifier {
                   points: [for (final p in l.points) AutoPoint(beat: p.beat, value: p.value, curve: p.curve)],
                 ),
           ],
-          clips: [AudioClip(id: newId(), sample: hash, start: from, length: seconds)],
+          clips: [AudioClip(id: newId(), sample: r.hash, start: r.from, length: r.seconds)],
           // a modulação de volume, pan e envios vai junto (a do instrumento e dos efeitos já está no áudio)
           modulation: TrackModulation([
             for (final m in src.modulation.sources)
               if (m.dests.any((x) => moves.contains(x.target.kind))) m.copy(id: newId())..dests.removeWhere((x) => !moves.contains(x.target.kind)),
           ]),
         );
-        d.samples[hash] = SampleInfo('${src.name} (congelada).wav', seconds);
+        d.samples[r.hash] = SampleInfo('${src.name} (congelada).wav', r.seconds);
         final pre = {
           for (final s in src.sends)
             if (s.pre) s.target,
@@ -5794,11 +5758,151 @@ class DawController extends ChangeNotifier {
         _select(i + 1);
         selectedClip = frozen.clips.first.id;
       });
+    });
+  }
+
+  /// Congela a faixa NO LUGAR: renderiza como o [bounceTrack] (mesmas regras de fader, pan, mudo e solo) com a
+  /// cauda de [tail] segundos (reverb e delay que passam do fim; o silêncio do fim é aparado) e a faixa passa a
+  /// tocar esse áudio. O instrumento, os clipes, os efeitos e a automação deles ficam no documento, calados,
+  /// até o [unfreezeTrack]. Um passo do desfazer. Recusas em [freezeBlocker] (vão para [error]).
+  Future<void> freezeTrack(int track, {double tail = kDefaultFreezeTail, void Function(double progress)? onProgress}) async {
+    if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('congelar')) return;
+    final why = freezeBlocker(this, track);
+    if (why != null) {
+      error = '${doc.tracks[track].name}: $why.';
+      notifyListeners();
+      return;
+    }
+    final margin = clampFreezeTail(tail);
+    await _renderTrack(track, margin, 'O congelamento', 'Congelando', onProgress, (r, i) {
+      editAs('Congelar faixa', (d) {
+        final src = d.tracks[i];
+        d.samples[r.hash] = SampleInfo('${src.name} (congelada).wav', r.seconds);
+        src.frozen = FrozenTrack(sample: r.hash, start: r.from, length: r.seconds, tail: margin);
+      });
+    });
+  }
+
+  /// Descongela: a faixa volta a tocar o conteúdo dela, exatamente como estava (nada foi tocado no congelamento;
+  /// o que se editou nela enquanto congelada vale agora). O áudio renderizado fica na lista do projeto.
+  void unfreezeTrack(int track) {
+    if (track < 0 || track >= doc.tracks.length || doc.tracks[track].frozen == null || _blockedByRecording('descongelar')) return;
+    editAs('Descongelar faixa', (d) => d.tracks[track].frozen = null);
+  }
+
+  /// Converte a faixa em áudio no lugar ("bounce in place"): o instrumento, as notas, os efeitos e a automação
+  /// deles saem e ficam um clipe de áudio só com o som renderizado; a faixa vira de áudio. Fader, pan, mudo, solo,
+  /// saída, envios e a automação deles ficam. Uma faixa congelada aproveita o áudio que já tem, sem renderizar.
+  /// Um passo do desfazer (volta tudo, inclusive o instrumento).
+  Future<void> convertToAudio(int track, {double tail = kDefaultFreezeTail, void Function(double progress)? onProgress}) async {
+    if (!ready || track < 0 || track >= doc.tracks.length || _busyFor('converter')) return;
+    final frozen = doc.tracks[track].frozen;
+    final why = freezeBlocker(this, track, needsRender: frozen == null);
+    if (why != null) {
+      error = '${doc.tracks[track].name}: $why.';
+      notifyListeners();
+      return;
+    }
+    void commit(String hash, double from, double seconds, int i) {
+      editAs('Converter em áudio', (d) {
+        final t = d.tracks[i];
+        d.samples[hash] ??= SampleInfo('${t.name} (convertida).wav', seconds);
+        t
+          ..frozen = null
+          ..kind = TrackKind.audio
+          ..params = defaultParams(TrackKind.audio)
+          ..sample = null
+          ..zones = []
+          ..midi = []
+          ..effects = []
+          ..monitor = false
+          ..clips = [AudioClip(id: newId(), sample: hash, start: from, length: seconds)];
+        // a automação e a modulação do instrumento e dos efeitos não têm mais a que se aplicar
+        t.lanes.removeWhere((l) => l.target.kind == AutoKind.instrument || l.target.kind == AutoKind.effect);
+        t.modulation.prune((x) => x.kind != AutoKind.instrument && x.kind != AutoKind.effect);
+        selectedClip = t.clips.first.id;
+      });
+    }
+
+    if (frozen != null) {
+      commit(frozen.sample, frozen.start, frozen.length, track);
+      return;
+    }
+    await _renderTrack(track, clampFreezeTail(tail), 'A conversão', 'Convertendo', onProgress, (r, i) => commit(r.hash, r.from, r.seconds, i));
+  }
+
+  /// O render de uma faixa para áudio, com tudo em volta: valida o conteúdo, renderiza fora de tempo real de
+  /// [from] ao fim da faixa mais [tail] (aparando o silêncio depois), guarda o áudio (sha-256, no guardado local e
+  /// registrado no motor, como a importação) e chama [apply] com o resultado e o índice que a faixa tem AGORA.
+  /// Nada é feito se a faixa foi apagada, ou teve o som mudado, durante o render (o áudio já nasceria velho).
+  /// [what] e [ing] entram nas mensagens ("O congelamento não terminou", "Congelando X…").
+  Future<void> _renderTrack(
+    int track,
+    double tail,
+    String what,
+    String ing,
+    void Function(double progress)? onProgress,
+    void Function(({String hash, double from, double seconds}) r, int index) apply,
+  ) async {
+    final src = doc.tracks[track];
+    final id = src.id, label = src.name;
+    final (from, to) = _bounceRange(src);
+    if (!(to > from + 1e-9)) {
+      error = 'A faixa "$label" está vazia: nada para congelar.';
+      notifyListeners();
+      return;
+    }
+    final rate = engineRate;
+    await _settleWarp();
+    if (_disposed) return;
+    final fingerprint = soundFingerprint(src);
+    final calls = _callsFor(_bounceDoc(track));
+    final samples = _samplesFor(_usedHashes());
+    _rendering = true;
+    status = '$ing $label…';
+    notifyListeners();
+    try {
+      final result = await _engine.renderOffline(
+        calls: calls,
+        samples: samples,
+        fromBeat: from,
+        toBeat: to,
+        tailSeconds: tail,
+        outputs: [track],
+        rate: rate,
+        onProgress: onProgress == null ? null : (p) => onProgress((p.isFinite ? p.clamp(0.0, 1.0) : 0.0) * 0.95),
+      );
+      if (_disposed) return;
+      var channels = result.isEmpty ? const <Float32List>[] : result.first;
+      if (channels.isEmpty || _peak(channels) == 0) {
+        error = 'A faixa "$label" não soou nada: nada para congelar.';
+        return;
+      }
+      channels = _trimTail(channels, ((doc.secondsAt(to) - doc.secondsAt(from)) * rate).ceil());
+      if (channels.length == 2 && _same(channels[0], channels[1])) channels = [channels[0]];
+      final bytes = encodeWav(channels, rate.round(), ExportFormat.wav32f);
+      final hash = await _engine.sha256Hex(bytes);
+      if (!waveforms.containsKey(hash)) {
+        await _store.put('sample:$hash', bytes);
+        if (_disposed) return;
+        _register(hash, DecodedAudio(channels, rate));
+      }
+      final i = doc.tracks.indexWhere((t) => t.id == id);
+      if (i < 0) {
+        error = 'A faixa "$label" foi apagada enquanto congelava.';
+        return;
+      }
+      if (soundFingerprint(doc.tracks[i]) != fingerprint) {
+        error = 'A faixa "$label" mudou durante o render: o áudio já nasceria velho. Tente de novo.';
+        return;
+      }
+      final seconds = channels.first.length / rate;
+      apply((hash: hash, from: from, seconds: seconds), i);
       onProgress?.call(1);
     } on RenderCanceled {
       // quem cancelou já sabe: não é falha
     } catch (e) {
-      if (!_disposed) error = 'O congelamento não terminou: ${_renderError(e)}';
+      if (!_disposed) error = '$what não terminou: ${_renderError(e)}';
     } finally {
       _rendering = false;
       status = null;
@@ -5856,6 +5960,7 @@ class DawController extends ChangeNotifier {
   /// Os áudios que o documento toca (clipes das faixas de áudio e o áudio dos samplers).
   Set<String> _usedHashes() => {
     for (final t in doc.tracks) ...[
+      ?t.frozen?.sample,
       if (t.kind == TrackKind.audio)
         for (final c in t.clips) c.sample,
       if (t.kind == TrackKind.sampler && t.sample != null) t.sample!,

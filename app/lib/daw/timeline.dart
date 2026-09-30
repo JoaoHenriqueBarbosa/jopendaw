@@ -23,6 +23,7 @@ import 'audio_edit_ui.dart';
 import 'automation_lane.dart';
 import 'clip_gain_dialog.dart';
 import 'controller.dart';
+import 'freeze.dart';
 import 'fade_length_dialog.dart';
 import 'instruments.dart';
 import 'marker.dart';
@@ -87,6 +88,9 @@ double _snapDrag(DawController c, double b) => HardwareKeyboard.instance.isAltPr
 
 /// Passo da grade em batidas (0 = livre).
 double _gridBeats(DawController c, [double at = 0]) => c.snap == Snap.bar ? c.doc.meter.barBeatsAt(math.max(0.0, at)) : c.snap.beats;
+
+/// O azul-gelo da faixa congelada (ícone no cabeçalho e faixa sobre o trecho congelado).
+const _frozenColor = Color(0xFF7CC4F0);
 
 class Timeline extends StatelessWidget {
   final DawController c;
@@ -990,6 +994,14 @@ class _TrackHeaderState extends State<_TrackHeader> {
                             children: [
                               // no celular o ícone desce para a linha do M/S: o nome precisa do espaço
                               if (!compact) ...[_KindButton(c: c, index: index, color: color), const SizedBox(width: 4)],
+                              if (t.frozen != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Tooltip(
+                                    message: 'Congelada: toca o áudio renderizado ("Descongelar" no menu devolve o conteúdo)',
+                                    child: Icon(Icons.ac_unit, key: ValueKey('frozen:${t.id}'), size: 14, color: _frozenColor),
+                                  ),
+                                ),
                               Expanded(
                                 child: Text(
                                   dragging ? 'Mover para a posição ${_dragTo! + 1}' : t.name,
@@ -1331,6 +1343,12 @@ class _TrackMenu extends StatelessWidget {
             c.setMonitor(index, !c.doc.tracks[index].monitor);
           case 'bounce':
             await _bounce(context, c, index);
+          case 'freeze':
+            await _freezeAsking(context, c, index, convert: false);
+          case 'unfreeze':
+            c.unfreezeTrack(index);
+          case 'convert':
+            await _freezeAsking(context, c, index, convert: true);
           case 'color':
             final t = c.doc.tracks[index];
             c.editAs('Mudar a cor da faixa', (_) => t.color = (t.color + 1) % Palette.tracks.length);
@@ -1355,6 +1373,8 @@ class _TrackMenu extends StatelessWidget {
       itemBuilder: (context) {
         final t = c.doc.tracks[index];
         final why = _cannotBounce(c, t);
+        final frozen = t.frozen != null;
+        final whyFreeze = frozen ? freezeBlocker(c, index, needsRender: false) : freezeBlocker(c, index);
         final caption = Theme.of(context).textTheme.labelSmall!.copyWith(color: Colors.white38);
         return [
           if (t.kind.isInstrument) const PopupMenuItem(value: 'instrument', child: Text('Abrir o instrumento')),
@@ -1362,15 +1382,54 @@ class _TrackMenu extends StatelessWidget {
           if (t.kind == TrackKind.audio) CheckedPopupMenuItem(value: 'monitor', checked: t.monitor, child: const Text('Monitorar a entrada')),
           const PopupMenuItem(value: 'rename', child: Text('Renomear')),
           const PopupMenuItem(value: 'duplicate', child: Text('Duplicar a faixa')),
+          if (frozen)
+            PopupMenuItem(
+              value: 'unfreeze',
+              enabled: !c.recording,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Descongelar'),
+                  Text('Volta o instrumento, as notas e os efeitos', style: caption),
+                ],
+              ),
+            )
+          else if (t.kind != TrackKind.bus)
+            PopupMenuItem(
+              value: 'freeze',
+              enabled: whyFreeze == null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Congelar faixa…'),
+                  Text(whyFreeze ?? 'Toca o áudio renderizado; o conteúdo fica guardado', style: caption),
+                ],
+              ),
+            ),
+          if (t.kind != TrackKind.bus && (frozen || t.kind != TrackKind.audio))
+            PopupMenuItem(
+              value: 'convert',
+              enabled: whyFreeze == null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Converter em áudio…'),
+                  Text(whyFreeze ?? 'Troca o conteúdo por um clipe de áudio', style: caption),
+                ],
+              ),
+            ),
           PopupMenuItem(
             value: 'bounce',
-            enabled: why == null,
+            enabled: why == null && !frozen,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Congelar em áudio'),
-                Text(why ?? 'Vira uma faixa de áudio nova; esta fica muda', style: caption),
+                const Text('Renderizar em faixa nova'),
+                Text(frozen ? 'Descongele antes' : (why ?? 'Vira uma faixa de áudio nova; esta fica muda'), style: caption),
               ],
             ),
           ),
@@ -1396,12 +1455,89 @@ String? _cannotBounce(DawController c, DawTrack t) {
   return null;
 }
 
+/// Congelar ou converter: pergunta a margem de cauda (reverb e delay) e roda o render com o progresso. Faixa já
+/// congelada convertida não renderiza de novo, então não pergunta nada.
+Future<void> _freezeAsking(BuildContext context, DawController c, int index, {required bool convert}) async {
+  if (!context.mounted || index >= c.doc.tracks.length) return;
+  final t = c.doc.tracks[index];
+  final reuse = convert && t.frozen != null;
+  if (freezeBlocker(c, index, needsRender: !reuse) != null) return;
+  var tail = t.frozen?.tail ?? kDefaultFreezeTail;
+  if (!reuse) {
+    final picked = await showDialog<double>(
+      context: context,
+      builder: (_) => _FreezeOptionsDialog(name: t.name, convert: convert, tail: tail),
+    );
+    if (picked == null || !context.mounted || index >= c.doc.tracks.length) return;
+    tail = picked;
+  }
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _BounceDialog(c: c, track: index, name: t.name, mode: convert ? _FreezeMode.convert : _FreezeMode.freeze, tail: tail),
+  );
+}
+
+enum _FreezeMode { copy, freeze, convert }
+
+/// A margem de cauda do congelamento: o tanto que o som da faixa pode passar do fim do último clipe.
+class _FreezeOptionsDialog extends StatefulWidget {
+  final String name;
+  final bool convert;
+  final double tail;
+  const _FreezeOptionsDialog({required this.name, required this.convert, required this.tail});
+
+  @override
+  State<_FreezeOptionsDialog> createState() => _FreezeOptionsDialogState();
+}
+
+class _FreezeOptionsDialogState extends State<_FreezeOptionsDialog> {
+  late double _tail = widget.tail.clamp(0.0, 30.0).roundToDouble();
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.convert ? 'Converter "${widget.name}" em áudio' : 'Congelar "${widget.name}"'),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.convert
+                ? 'O instrumento, as notas e os efeitos da faixa saem e ficam um clipe de áudio só (dá para desfazer). O fader, o pan e os envios continuam.'
+                : 'A faixa passa a tocar o áudio renderizado, com o instrumento e os efeitos. O conteúdo original fica guardado: "Descongelar" devolve tudo. O fader, o pan e os envios continuam vivos.',
+          ),
+          const SizedBox(height: 16),
+          Text('Cauda dos efeitos: ${_tail.round()} s', style: Theme.of(context).textTheme.labelLarge),
+          Slider(
+            value: _tail,
+            min: 0,
+            max: 30,
+            divisions: 30,
+            label: '${_tail.round()} s',
+            onChanged: (v) => setState(() => _tail = v),
+          ),
+          Text(
+            'Quanto o reverb e o delay podem soar depois do fim do último clipe. O silêncio no fim é aparado.',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+      FilledButton(onPressed: () => Navigator.of(context).pop(_tail), child: Text(widget.convert ? 'Converter' : 'Congelar')),
+    ],
+  );
+}
+
 Future<void> _bounce(BuildContext context, DawController c, int index) async {
   if (!context.mounted || index >= c.doc.tracks.length || _cannotBounce(c, c.doc.tracks[index]) != null) return;
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _BounceDialog(c: c, track: index, name: c.doc.tracks[index].name),
+    builder: (_) => _BounceDialog(c: c, track: index, name: c.doc.tracks[index].name, mode: _FreezeMode.copy),
   );
 }
 
@@ -1421,7 +1557,9 @@ class _BounceDialog extends StatefulWidget {
   final DawController c;
   final int track;
   final String name;
-  const _BounceDialog({required this.c, required this.track, required this.name});
+  final _FreezeMode mode;
+  final double tail;
+  const _BounceDialog({required this.c, required this.track, required this.name, required this.mode, this.tail = kDefaultFreezeTail});
 
   @override
   State<_BounceDialog> createState() => _BounceDialogState();
@@ -1444,7 +1582,14 @@ class _BounceDialogState extends State<_BounceDialog> {
     // o controlador não lança: a falha chega no error dele, que começa limpo
     c.clearError();
     try {
-      await c.bounceTrack(widget.track, onProgress: _onProgress);
+      switch (widget.mode) {
+        case _FreezeMode.copy:
+          await c.bounceTrack(widget.track, onProgress: _onProgress);
+        case _FreezeMode.freeze:
+          await c.freezeTrack(widget.track, tail: widget.tail, onProgress: _onProgress);
+        case _FreezeMode.convert:
+          await c.convertToAudio(widget.track, tail: widget.tail, onProgress: _onProgress);
+      }
       if (!mounted) return;
       final said = c.error;
       if (said != null && !_canceled) {
@@ -1477,7 +1622,7 @@ class _BounceDialogState extends State<_BounceDialog> {
     return PopScope(
       canPop: error != null,
       child: AlertDialog(
-        title: Text(error == null ? 'Congelando "${widget.name}"' : 'Não deu para congelar'),
+        title: Text(error == null ? '${widget.mode == _FreezeMode.convert ? 'Convertendo' : 'Congelando'} "${widget.name}"' : 'Não deu para ${widget.mode == _FreezeMode.convert ? 'converter' : 'congelar'}'),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: error != null
@@ -1486,7 +1631,11 @@ class _BounceDialogState extends State<_BounceDialog> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('A faixa vira áudio com o instrumento e os efeitos, numa faixa nova logo abaixo; esta fica muda.'),
+                    Text(switch (widget.mode) {
+                      _FreezeMode.copy => 'A faixa vira áudio com o instrumento e os efeitos, numa faixa nova logo abaixo; esta fica muda.',
+                      _FreezeMode.freeze => 'A faixa é renderizada com o instrumento e os efeitos e passa a tocar o áudio.',
+                      _FreezeMode.convert => 'A faixa é renderizada e vira um clipe de áudio.',
+                    }),
                     const SizedBox(height: 16),
                     LinearProgressIndicator(value: _progress > 0 ? _progress : null),
                     const SizedBox(height: 8),
@@ -2066,6 +2215,30 @@ class _LanesState extends State<_Lanes> {
                         height: laneHeight - 4,
                         child: _ClipView(c: c, clip: clip, track: ti, laneHeight: laneHeight, layout: layout),
                       ),
+                  if (tracks[ti].frozen case final f?)
+                    Positioned(
+                      key: ValueKey('frozen-band:${tracks[ti].id}'),
+                      left: (f.start - c.scrollBeat) * c.pxPerBeat,
+                      top: layout.trackTop[ti] + 2,
+                      width: math.max(4, doc.clipBeats(f.clip) * c.pxPerBeat),
+                      height: laneHeight - 4,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: _frozenColor.withValues(alpha: 0.14),
+                            border: Border.all(color: _frozenColor.withValues(alpha: 0.6)),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Icon(Icons.ac_unit, size: 12, color: _frozenColor),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   for (final clip in tracks[ti].midi)
                     if (shown(clip.id, clip.start, clip.end))
                       Positioned(

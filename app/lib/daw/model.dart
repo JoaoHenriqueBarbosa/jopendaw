@@ -488,6 +488,10 @@ class DawTrack {
   /// Pasta recolhida (estado de arranjo guardado no documento): as filhas somem da linha do tempo.
   bool collapsed;
 
+  /// Faixa congelada (ver [FrozenTrack]): o motor toca o áudio renderizado no lugar do instrumento, dos
+  /// clipes e dos efeitos, que seguem aqui intactos para o "Descongelar". Null = faixa normal.
+  FrozenTrack? frozen;
+
   DawTrack({
     required this.id,
     required this.name,
@@ -512,6 +516,7 @@ class DawTrack {
     this.isGroup = false,
     this.groupId,
     this.collapsed = false,
+    this.frozen,
   }) : params = params ?? defaultParams(kind),
        zones = zones ?? [],
        clips = clips ?? [],
@@ -545,7 +550,9 @@ class DawTrack {
       // documento sem pastas (versão anterior): nenhuma faixa é pasta nem filha
       isGroup = (j['group'] as bool? ?? false) && TrackKind.parse(j['kind']) == TrackKind.bus,
       groupId = j['group_id'] as String?,
-      collapsed = j['collapsed'] as bool? ?? false;
+      collapsed = j['collapsed'] as bool? ?? false,
+      // documento sem congelamento (versão anterior): nenhuma faixa é congelada
+      frozen = FrozenTrack.tryParse(j['frozen']);
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -574,6 +581,8 @@ class DawTrack {
     if (isGroup) 'group': true,
     if (groupId != null) 'group_id': groupId,
     if (isGroup && collapsed) 'collapsed': true,
+    // só congelada: um documento sem congelamento sai igual ao de antes
+    if (frozen != null) 'frozen': frozen!.toJson(),
   };
 
   /// Valor de um parâmetro do instrumento (o padrão da tabela se não foi mexido).
@@ -585,6 +594,37 @@ class DawTrack {
     }
     return 0;
   }
+}
+
+/// O áudio que uma faixa congelada toca no lugar do conteúdo dela (renderizado pela faixa: instrumento,
+/// clipes e efeitos, sem fader, pan nem mudo). Só números de ponto flutuante e texto, nada de inteiros
+/// grandes: o documento passa por dart2js.
+class FrozenTrack {
+  /// sha-256 do áudio renderizado (uma chave de `DawDoc.samples`, sobe ao servidor como os outros).
+  final String sample;
+
+  /// Onde o áudio começa (batidas) e quanto dura (segundos, cauda incluída).
+  final double start, length;
+
+  /// A margem de cauda pedida no congelamento (segundos): informativa, o [length] já a contém.
+  final double tail;
+
+  const FrozenTrack({required this.sample, required this.start, required this.length, this.tail = 0});
+
+  /// Lê o que o documento guarda; campo faltando ou torto é "não congelada" (o conteúdo original está
+  /// intacto, então nada se perde).
+  static FrozenTrack? tryParse(Object? j) {
+    if (j is! Map) return null;
+    final sample = j['sample'], start = j['start'], length = j['length'], tail = j['tail'];
+    if (sample is! String || sample.isEmpty || start is! num || length is! num) return null;
+    if (!start.isFinite || !length.isFinite || length <= 0) return null;
+    return FrozenTrack(sample: sample, start: start.toDouble(), length: length.toDouble(), tail: tail is num && tail.isFinite ? tail.toDouble() : 0);
+  }
+
+  Map<String, dynamic> toJson() => {'sample': sample, 'start': start, 'length': length, 'tail': tail};
+
+  /// O clipe que o motor toca (não entra na lista de clipes do documento).
+  AudioClip get clip => AudioClip(id: 'frozen', sample: sample, start: start, length: length);
 }
 
 /// O que se sabe de um áudio importado sem abrir o arquivo.
