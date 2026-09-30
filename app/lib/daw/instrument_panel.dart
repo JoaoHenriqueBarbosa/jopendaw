@@ -759,9 +759,12 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   List<_Section> _samplerSections(_Ctx x) {
     final t = x.t;
     double v(int id) => t.param(id);
-    // com zonas o Modo do cartão Áudio não vale (cada zona tem o dela): o envelope é o das zonas sustentadas
+    // com zonas o Modo do cartão Áudio não vale (cada zona tem o dela): sem nenhuma zona sustentada só o
+    // Ataque do envelope vale (Decaimento, Sustentação e Soltura ficam apagados); numa mistura só as
+    // sustentadas seguem o envelope inteiro e a legenda avisa
     final zoned = t.zones.isNotEmpty;
-    final oneShot = !zoned && v(SamplerId.oneShot) >= 0.5;
+    final oneShot = zoned ? t.zones.every((z) => z.oneShot) : v(SamplerId.oneShot) >= 0.5;
+    final someOneShot = zoned && !oneShot && t.zones.any((z) => z.oneShot);
     final byGroup = <String, List<ParamSpec>>{};
     for (final p in samplerParams) {
       (byGroup[p.group] ??= []).add(p);
@@ -784,10 +787,17 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
       _Section(
         'Envelope',
         display: _Display(
-          painter: _EnvelopePainter(v(SamplerId.attack), v(SamplerId.decay), v(SamplerId.sustain), oneShot ? 0.001 : v(SamplerId.release), x.color),
-          caption: oneShot ? 'até o fim: a soltura não entra' : null,
+          painter: oneShot
+              ? _EnvelopePainter(v(SamplerId.attack), 0.001, 1, 0.001, x.color)
+              : _EnvelopePainter(v(SamplerId.attack), v(SamplerId.decay), v(SamplerId.sustain), v(SamplerId.release), x.color),
+          caption: oneShot
+              ? (zoned ? 'todas as zonas até o fim: só o ataque vale' : 'até o fim: só o ataque vale')
+              : (someOneShot ? 'zonas até o fim só usam o ataque' : null),
         ),
-        controls: [for (final p in byGroup['Envelope']!) x.knob(p, dimmed: oneShot && p.id == SamplerId.release)],
+        controls: [
+          for (final p in byGroup['Envelope']!)
+            x.knob(p, dimmed: oneShot && (p.id == SamplerId.decay || p.id == SamplerId.sustain || p.id == SamplerId.release)),
+        ],
       ),
       _Section('Geral', controls: [for (final p in byGroup['Geral']!) x.knob(p)]),
       _Section(
@@ -882,6 +892,11 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
   }
 
   Widget _sampleDisplay(_Ctx x) {
+    final zones = x.t.zones.length;
+    // com zonas quem toca são elas (cada uma com o seu áudio e a sua nota base): o visor não sugere a nota do cartão
+    if (zones > 0) {
+      return _Display(child: _Hint('Usando $zones ${zones == 1 ? 'zona' : 'zonas'}: cada uma toca o seu áudio (cartão Zonas).', icon: Icons.piano_outlined));
+    }
     final hash = x.t.sample;
     if (hash == null) {
       return _Display(

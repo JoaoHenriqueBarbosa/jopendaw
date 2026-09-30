@@ -15,6 +15,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../widgets/feedback.dart';
 import 'controller.dart';
@@ -133,9 +134,11 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
     String? notice;
     void say(String text) => notice = text;
     final z = value == _importItem ? await c.addZoneFromFile(widget.track, onNotice: say) : c.addZone(widget.track, value, onNotice: say);
-    if (z != null && mounted) {
+    if (!mounted) return;
+    // sem zona nova (não coube) o motivo também aparece
+    if (z != null || notice != null) {
       setState(() {
-        _selected = z.id;
+        if (z != null) _selected = z.id;
         _notice = notice;
       });
     }
@@ -143,8 +146,10 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
 
   Widget _addButton() {
     final samples = c.doc.samples.entries.toList()..sort((a, b) => a.value.name.toLowerCase().compareTo(b.value.name.toLowerCase()));
+    final blocked = c.zoneAddBlockerOf(widget.track);
     return PopupMenuButton<String>(
-      tooltip: 'Acrescentar um áudio como zona',
+      tooltip: blocked ?? 'Acrescentar um áudio como zona',
+      enabled: blocked == null,
       position: PopupMenuPosition.under,
       constraints: const BoxConstraints(minWidth: 240, maxWidth: 360, maxHeight: 420),
       onSelected: _add,
@@ -162,7 +167,7 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
           child: Row(children: [Icon(Icons.upload_file, size: 16), SizedBox(width: 8), Text('Importar um arquivo…')]),
         ),
       ],
-      child: _ChipButton(icon: Icons.add, label: 'Adicionar sample como zona', color: widget.color),
+      child: _ChipButton(icon: Icons.add, label: 'Adicionar sample como zona', color: widget.color, enabled: blocked == null),
     );
   }
 
@@ -231,11 +236,15 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
               onGone: () => setState(() => _selected = null),
               onDuplicate: () => setState(() => _selected = c.duplicateZone(widget.track, sel.id)?.id ?? _selected),
               onLayers: (n) {
+                final (from, to) = (sel.vlo, sel.vhi);
+                final parts = velocityLayers(n, lo: from, hi: to).length;
                 final made = c.splitZoneLayers(widget.track, sel.id, n);
                 setState(
                   () => _notice = made.isEmpty
-                      ? 'Não coube: as zonas já estão no limite de $maxZones.'
-                      : '${made.length} ${made.length == 1 ? 'cópia criada' : 'cópias criadas'} logo depois desta zona, cada uma com a sua faixa de velocidade. Selecione cada uma e troque o áudio.',
+                      ? (parts < 2
+                            ? 'A faixa de velocidade desta zona ($from a $to) tem um valor só: não dá para dividir.'
+                            : 'Não coube: as zonas já estão no limite de $maxZones.')
+                      : '${made.length} ${made.length == 1 ? 'cópia criada' : 'cópias criadas'} logo depois desta zona, dividindo a velocidade $from a $to em partes iguais${parts < n ? ' (a faixa só comporta $parts camadas)' : ''}. Selecione cada uma e troque o áudio.',
                 );
               },
             ),
@@ -264,10 +273,13 @@ class _ChipButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _ChipButton({required this.icon, required this.label, required this.color});
+  final bool enabled;
+  const _ChipButton({required this.icon, required this.label, required this.color, this.enabled = true});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Opacity(opacity: enabled ? 1 : 0.4, child: _body());
+
+  Widget _body() => Container(
     height: 28,
     padding: const EdgeInsets.symmetric(horizontal: 9),
     decoration: BoxDecoration(
@@ -599,11 +611,11 @@ class _ZoneEditor extends StatelessWidget {
     final has = wave != null && !c.missing.contains(z.sample);
     final end = z.end > 0 ? z.end : dur;
     final controls = <Widget>[
-      _Stepper(label: 'Nota base', value: noteName(z.root), parse: parseNoteInput, hint: 'C4 ou 60', onSet: (n) => _edit((z) => z.root = n)),
-      _Stepper(label: 'Notas de', value: noteName(z.lo), parse: parseNoteInput, hint: 'C4 ou 60', onSet: (n) => _edit((z) => z.lo = n)),
-      _Stepper(label: 'até', value: noteName(z.hi), parse: parseNoteInput, hint: 'C4 ou 60', onSet: (n) => _edit((z) => z.hi = n)),
-      _Stepper(label: 'Velocidade de', value: '${z.vlo}', parse: _parseVelocity, hint: '1 a 127', onSet: (n) => _edit((z) => z.vlo = n)),
-      _Stepper(label: 'até', value: '${z.vhi}', parse: _parseVelocity, hint: '1 a 127', onSet: (n) => _edit((z) => z.vhi = n)),
+      _Stepper(label: 'Nota base', value: noteName(z.root), parse: parseNoteInput, hint: 'C4 ou 60', error: _noteError, onSet: (n) => _edit((z) => z.root = n)),
+      _Stepper(label: 'Notas de', value: noteName(z.lo), parse: parseNoteInput, hint: 'C4 ou 60', error: _noteError, onSet: (n) => _edit((z) => z.lo = n)),
+      _Stepper(label: 'até', value: noteName(z.hi), parse: parseNoteInput, hint: 'C4 ou 60', error: _noteError, onSet: (n) => _edit((z) => z.hi = n)),
+      _Stepper(label: 'Velocidade de', value: '${z.vlo}', parse: _parseVelocity, hint: '1 a 127', error: _velocityError, onSet: (n) => _edit((z) => z.vlo = n)),
+      _Stepper(label: 'até', value: '${z.vhi}', parse: _parseVelocity, hint: '1 a 127', error: _velocityError, onSet: (n) => _edit((z) => z.vhi = n)),
       _slider(context, 'Afinação', z.cents, -100, 100, '${z.cents.round()} ct', (v) => _edit((z) => z.cents = v.roundToDouble(), undoable: false)),
       _slider(context, 'Ganho', z.gainDb, -24, 12, '${z.gainDb.toStringAsFixed(1)} dB', (v) => _edit((z) => z.gainDb = (v * 2).round() / 2, undoable: false)),
       _slider(
@@ -712,6 +724,14 @@ class _ZoneEditor extends StatelessWidget {
           Wrap(spacing: 14, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: controls),
           const SizedBox(height: 6),
           Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [mode, group, layers]),
+          if (z.oneShot)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Até o fim: do envelope só o Ataque vale nesta zona. Decaimento, Sustentação e Soltura não entram (soltar a tecla não faz nada).',
+                style: TextStyle(fontSize: 11.5, color: Colors.white54),
+              ),
+            ),
           const SizedBox(height: 8),
           if (!has || dur <= 0)
             const Text(
@@ -807,18 +827,22 @@ class _ZoneEditor extends StatelessWidget {
   );
 }
 
+const _noteError = 'Nota inválida: use C4, C#3, 60';
+const _velocityError = 'Velocidade inválida: use 1 a 127';
+
 int? _parseVelocity(String text) {
   final n = int.tryParse(text.trim());
   return n != null && n >= 1 && n <= 127 ? n : null;
 }
 
-/// Um valor inteiro com Menos/Mais de 1 em 1 e, tocando no número, digitação (o [parse] devolve null
-/// para o que não entendeu: o campo volta ao valor de antes).
+/// Um valor inteiro com Menos/Mais de 1 em 1 e, tocando no número, digitação. O [parse] devolve null para o
+/// que não entendeu: aparece [error] embaixo do campo e o texto digitado fica até corrigir (Enter ou sair do
+/// campo confirmam de novo) ou cancelar (Esc, ou Menos/Mais, que voltam ao valor da zona).
 class _Stepper extends StatefulWidget {
-  final String label, value, hint;
+  final String label, value, hint, error;
   final int? Function(String text) parse;
   final void Function(int n) onSet;
-  const _Stepper({required this.label, required this.value, required this.parse, required this.onSet, required this.hint});
+  const _Stepper({required this.label, required this.value, required this.parse, required this.onSet, required this.hint, required this.error});
 
   @override
   State<_Stepper> createState() => _StepperState();
@@ -827,6 +851,7 @@ class _Stepper extends StatefulWidget {
 class _StepperState extends State<_Stepper> {
   late final TextEditingController _text = TextEditingController(text: widget.value);
   final _focus = FocusNode();
+  bool _invalid = false;
 
   @override
   void initState() {
@@ -839,7 +864,7 @@ class _StepperState extends State<_Stepper> {
   @override
   void didUpdateWidget(_Stepper old) {
     super.didUpdateWidget(old);
-    if (!_focus.hasFocus && _text.text != widget.value) _text.text = widget.value;
+    if (!_focus.hasFocus && !_invalid && _text.text != widget.value) _text.text = widget.value;
   }
 
   @override
@@ -851,51 +876,86 @@ class _StepperState extends State<_Stepper> {
 
   void _commit() {
     final n = widget.parse(_text.text);
-    if (n != null && n != widget.parse(widget.value)) widget.onSet(n);
-    // o que não valeu, ou o valor já normalizado pelo modelo, volta a aparecer na próxima montagem
+    if (n == null) {
+      // o texto fica como foi digitado, com o erro à vista
+      if (!_invalid) setState(() => _invalid = true);
+      return;
+    }
+    if (_invalid) setState(() => _invalid = false);
+    if (n != widget.parse(widget.value)) widget.onSet(n);
+    // o valor já normalizado pelo modelo volta a aparecer na próxima montagem
     _text.text = widget.value;
   }
 
-  /// Passo de 1 sobre o valor atual (lido do texto mostrado).
+  /// Volta ao valor da zona e tira o erro.
+  void _cancel() {
+    setState(() => _invalid = false);
+    _text.text = widget.value;
+  }
+
+  /// Passo de 1 sobre o valor atual da zona.
   void _bump(int d) {
     final cur = widget.parse(widget.value);
+    if (_invalid) _cancel();
     if (cur != null) widget.onSet(cur + d);
   }
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(widget.label, style: const TextStyle(fontSize: 11.5, color: Colors.white60)),
-      IconButton(
-        tooltip: 'Menos',
-        visualDensity: VisualDensity.compact,
-        iconSize: 16,
-        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-        onPressed: () => _bump(-1),
-        icon: const Icon(Icons.remove),
-      ),
-      SizedBox(
-        width: 46,
-        child: TextField(
-          controller: _text,
-          focusNode: _focus,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-          decoration: InputDecoration(isDense: true, hintText: widget.hint, contentPadding: const EdgeInsets.symmetric(vertical: 6)),
-          onSubmitted: (_) => _commit(),
+  Widget build(BuildContext context) {
+    final red = Theme.of(context).colorScheme.error;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.label, style: const TextStyle(fontSize: 11.5, color: Colors.white60)),
+            IconButton(
+              tooltip: 'Menos',
+              visualDensity: VisualDensity.compact,
+              iconSize: 16,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              onPressed: () => _bump(-1),
+              icon: const Icon(Icons.remove),
+            ),
+            SizedBox(
+              width: 46,
+              child: CallbackShortcuts(
+                bindings: {const SingleActivator(LogicalKeyboardKey.escape): _cancel},
+                child: TextField(
+                  controller: _text,
+                  focusNode: _focus,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: widget.hint,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                    enabledBorder: _invalid ? UnderlineInputBorder(borderSide: BorderSide(color: red)) : null,
+                    focusedBorder: _invalid ? UnderlineInputBorder(borderSide: BorderSide(color: red, width: 2)) : null,
+                  ),
+                  onChanged: (_) {
+                    if (_invalid) setState(() => _invalid = false);
+                  },
+                  onSubmitted: (_) => _commit(),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Mais',
+              visualDensity: VisualDensity.compact,
+              iconSize: 16,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              onPressed: () => _bump(1),
+              icon: const Icon(Icons.add),
+            ),
+          ],
         ),
-      ),
-      IconButton(
-        tooltip: 'Mais',
-        visualDensity: VisualDensity.compact,
-        iconSize: 16,
-        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-        onPressed: () => _bump(1),
-        icon: const Icon(Icons.add),
-      ),
-    ],
-  );
+        if (_invalid) Text(widget.error, style: TextStyle(fontSize: 11, color: red)),
+      ],
+    );
+  }
 }
 
 /// A forma de onda do áudio com o trecho da zona claro, o resto apagado, e o loop marcado.

@@ -255,11 +255,24 @@ Set<int> zoneCoveredNotes(Iterable<SamplerZone> zones) => {
     for (var n = z.lo; n <= z.hi; n++) n,
 };
 
-/// As faixas de velocidade de [n] camadas iguais sobre 1..127, sem lacuna nem sobreposição
-/// (2: 1–63 e 64–127; 3: 1–42, 43–84, 85–127; 4: 1–31, 32–63, 64–95, 96–127). [n] fora de 1..127 é limitado.
-List<(int, int)> velocityLayers(int n) {
-  final k = n.clamp(1, 127);
-  return [for (var i = 0; i < k; i++) (1 + (127 * i) ~/ k, (127 * (i + 1)) ~/ k)];
+/// Por que não dá para criar outra zona (null: dá). Só há duas causas e a mensagem é uma só: o limite de
+/// [maxZones] ou o teclado todo já ocupado por zonas de uma nota só (sem lacuna nem zona para dividir).
+String? zoneAddBlocker(Iterable<SamplerZone> zones) {
+  if (zones.length >= maxZones || nextZoneRange(zones).overlaps) {
+    return 'Não dá para criar outra zona: o limite é de $maxZones zonas ou o teclado já está todo ocupado por zonas de uma nota só. Apague alguma antes.';
+  }
+  return null;
+}
+
+/// As faixas de velocidade de [n] camadas iguais dentro de [lo]..[hi] (padrão 1..127), sem lacuna nem
+/// sobreposição (2 sobre 1..127: 1–63 e 64–127; 3: 1–42, 43–84, 85–127; 4: 1–31, 32–63, 64–95, 96–127).
+/// [n] fora de 1..127 é limitado e nunca passa do número de valores da faixa (uma faixa de 3 valores dá
+/// no máximo 3 camadas); faixa invertida ou fora de 1..127 é ajustada.
+List<(int, int)> velocityLayers(int n, {int lo = 1, int hi = 127}) {
+  final a = math.min(lo, hi).clamp(1, 127), b = math.max(lo, hi).clamp(1, 127);
+  final span = b - a + 1;
+  final k = n.clamp(1, 127).clamp(1, span);
+  return [for (var i = 0; i < k; i++) (a + (span * i) ~/ k, a + (span * (i + 1)) ~/ k - 1)];
 }
 
 /// Lê uma nota digitada: número 0..127 ou nome ("C4", "c#3", "Db-1", "F♯2"; C4 = 60, como nos rótulos do
@@ -285,13 +298,15 @@ String zoneNoteName(int n) {
 // ------------------------------------------------------------------------------------ fatiamento
 
 /// Como escolher os cortes: [count] fatias iguais ou, sem ele, um corte em cada transiente
-/// ([sensitivity] 0..1).
-List<double> slicePoints(DecodedAudio a, {int? count, double sensitivity = 0.5}) {
+/// ([sensitivity] 0..1). Por transientes, [limit] é o máximo de pontos devolvidos (padrão [maxSlices], os
+/// mais fortes; a paridade com o motor vale com o padrão): o diálogo passa um limite alto para saber
+/// quantos ataques há de verdade e avisar quando passam do que vira nota.
+List<double> slicePoints(DecodedAudio a, {int? count, double sensitivity = 0.5, int limit = maxSlices}) {
   // sem `1 << 62`: na web (dart2js) o deslocamento é de 32 bits e dava 0, então nada era fatiado
   if (a.channels.isEmpty) return const [];
   final n = a.channels.map((c) => c.length).reduce(math.min);
   if (n == 0 || !(a.rate.isFinite && a.rate > 0)) return const [];
-  final frames = count != null ? _equalCuts(n, count) : _transientCuts(a.channels, n, a.rate, sensitivity);
+  final frames = count != null ? _equalCuts(n, count) : _transientCuts(a.channels, n, a.rate, sensitivity, limit);
   return [for (final f in frames) f / a.rate];
 }
 
@@ -315,7 +330,7 @@ double _f32(double v) => (Float32List(1)..[0] = v)[0];
 /// envelope em log da energia do sinal e da derivada a cada 5 ms; o fluxo positivo contra a média
 /// local e o maior pico; máximos locais a 50 ms um do outro; o corte refinado no áudio e recuado
 /// ao cruzamento de zero).
-List<int> _transientCuts(List<Float32List> channels, int n, double rate, double sensitivity) {
+List<int> _transientCuts(List<Float32List> channels, int n, double rate, double sensitivity, int limit) {
   final points = <int>[0];
   final hop = math.max(1, (rate * _hopSecs).round());
   final nf = n ~/ hop;
@@ -380,9 +395,9 @@ List<int> _transientCuts(List<Float32List> channels, int n, double rate, double 
     }
   }
   kept.removeWhere((c) => !(c.$1 > edge && c.$1 + edge < n));
-  if (kept.length > maxSlices - 1) {
+  if (kept.length > limit - 1) {
     kept.sort((x, y) => y.$2.compareTo(x.$2));
-    kept.removeRange(maxSlices - 1, kept.length);
+    kept.removeRange(math.max(0, limit - 1), kept.length);
     kept.sort((x, y) => x.$1.compareTo(y.$1));
   }
   return points..addAll(kept.map((c) => c.$1));

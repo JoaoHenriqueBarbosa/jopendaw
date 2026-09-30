@@ -160,7 +160,7 @@ Toque num bloco para abrir o editor da fatia:
 ### Variações
 
 - **Kit por peça.** Fatie com `Por transientes`, depois apague as zonas que não quer e mantenha só bumbo, caixa e chimbal: o teclado fica limpo.
-- **Loop com mais de 96 golpes.** O máximo é 96 fatias (C1 a B8). Por transientes, o app guarda o começo do áudio e os 95 ataques mais fortes (não os 95 primeiros) e o resumo já mostra `96 fatias: C1 a B8, ...`; o aviso `Passa do limite de 96 fatias: só as primeiras viram nota.` existe no código, mas hoje não chega a aparecer. Baixe a `Sensibilidade` para ficar só com os golpes fortes.
+- **Loop com mais de 96 golpes.** O máximo é 96 fatias (C1 a B8). Por transientes, se o áudio tem mais ataques, o diálogo avisa `N fatias achadas; só as 96 primeiras viram nota.` (as fatias além da 96ª aparecem apagadas na forma de onda). Use o botão `Menos sensibilidade` (ou baixe a `Sensibilidade`) até o aviso sumir e ficar só com os golpes fortes.
 - **Reordenar as fatias.** O `Legato`, o `Staccato` e as outras ferramentas de duração não mudam nada aqui (cada fatia toca até o fim); `Inverter na altura` e `Reverter a ordem das notas` trocam quais fatias tocam. Ver [05b Ferramentas MIDI](../manual/05b-ferramentas-midi.md).
 - **Trocar o andamento.** Fatias não se esticam: com um andamento mais lento, as notas se afastam e você ouve as caudas; mais rápido, as fatias se sobrepõem (elas são `Até o fim`: a seguinte não corta a anterior, as duas soam juntas). Para não misturar as caudas, espace as notas ou use menos fatias.
 

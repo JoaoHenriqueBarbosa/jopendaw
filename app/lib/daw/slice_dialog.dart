@@ -34,6 +34,10 @@ class _SliceDialogState extends State<SliceDialog> {
   int _count = 8;
   List<double>? _points;
 
+  /// Por transientes o cálculo devolve todos os ataques achados (até aqui), não só os [maxSlices] que viram
+  /// nota: assim o diálogo pode dizer quantos passaram do limite.
+  static const _foundLimit = 100000;
+
   DawController get c => widget.c;
 
   @override
@@ -47,7 +51,7 @@ class _SliceDialogState extends State<SliceDialog> {
 
   void _recompute() {
     final s = _sample;
-    _points = s == null ? null : c.slicePreview(s, count: _transients ? null : _count, sensitivity: _sensitivity);
+    _points = s == null ? null : c.slicePreview(s, count: _transients ? null : _count, sensitivity: _sensitivity, limit: _foundLimit);
   }
 
   Future<void> _create() async {
@@ -187,7 +191,7 @@ class _SliceDialogState extends State<SliceDialog> {
                       borderRadius: BorderRadius.circular(6),
                       child: CustomPaint(
                         size: Size.infinite,
-                        painter: _SlicePainter(wave, audio.duration, points ?? const [], Theme.of(context).colorScheme.primary),
+                        painter: _SlicePainter(wave, audio.duration, points ?? const [], n, Theme.of(context).colorScheme.primary),
                       ),
                     ),
                   ),
@@ -200,8 +204,29 @@ class _SliceDialogState extends State<SliceDialog> {
                         : '$n ${n == 1 ? 'fatia' : 'fatias'}: ${noteName(firstSliceNote)} a ${noteName(firstSliceNote + n - 1)}, uma nota cada, tocando até o fim de cada trecho.',
                     style: const TextStyle(fontSize: 12, color: Colors.white70),
                   ),
-                  if (points != null && points.length > maxSlices)
-                    Text('Passa do limite de $maxSlices fatias: só as primeiras viram nota.', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                  if (points != null && points.length > n)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${points.length} fatias achadas; só as $n primeiras viram nota.',
+                              style: const TextStyle(fontSize: 12, color: Colors.amberAccent),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _sensitivity > 0
+                                ? () => setState(() {
+                                    _sensitivity = math.max(0, _sensitivity - 0.15);
+                                    _recompute();
+                                  })
+                                : null,
+                            child: const Text('Menos sensibilidade'),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (zones.isNotEmpty)
                     const Padding(
                       padding: EdgeInsets.only(top: 6),
@@ -226,8 +251,11 @@ class _SlicePainter extends CustomPainter {
   final Waveform wave;
   final double duration;
   final List<double> points;
+
+  /// Quantos pontos viram nota: os seguintes aparecem apagados.
+  final int used;
   final Color color;
-  _SlicePainter(this.wave, this.duration, this.points, this.color);
+  _SlicePainter(this.wave, this.duration, this.points, this.used, this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -255,9 +283,13 @@ class _SlicePainter extends CustomPainter {
     final line = Paint()
       ..color = color
       ..strokeWidth = 1.5;
-    for (var i = 0; i < points.length && i < maxSlices; i++) {
+    final unused = Paint()
+      ..color = Colors.white24
+      ..strokeWidth = 1;
+    for (var i = 0; i < points.length; i++) {
       final x = (points[i] / duration).clamp(0.0, 1.0) * size.width;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), i < used ? line : unused);
+      if (i >= used) continue;
       final tp = TextPainter(
         text: TextSpan(
           text: '${i + 1}',
@@ -270,5 +302,5 @@ class _SlicePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SlicePainter o) => o.points != points || o.wave != wave || o.color != color;
+  bool shouldRepaint(_SlicePainter o) => o.points != points || o.used != used || o.wave != wave || o.color != color;
 }

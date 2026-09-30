@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jopendaw_app/audio/engine.dart';
 import 'package:jopendaw_app/daw/controller.dart';
@@ -205,6 +206,41 @@ void main() {
       }
     });
 
+    test('camadas de velocidade dentro de uma faixa qualquer', () {
+      expect(velocityLayers(2, lo: 40, hi: 100), [(40, 69), (70, 100)]);
+      expect(velocityLayers(3, lo: 64, hi: 127), [(64, 84), (85, 105), (106, 127)]);
+      expect(velocityLayers(4, lo: 10, hi: 12), [(10, 10), (11, 11), (12, 12)], reason: 'nunca mais camadas que valores');
+      expect(velocityLayers(2, lo: 50, hi: 50), [(50, 50)]);
+      expect(velocityLayers(2, lo: 100, hi: 40), velocityLayers(2, lo: 40, hi: 100), reason: 'faixa invertida');
+      for (var lo = 1; lo <= 127; lo += 13) {
+        for (var hi = lo; hi <= 127; hi += 11) {
+          for (final n in [2, 3, 5]) {
+            final l = velocityLayers(n, lo: lo, hi: hi);
+            expect(l.first.$1, lo);
+            expect(l.last.$2, hi);
+            for (var i = 1; i < l.length; i++) {
+              expect(l[i].$1, l[i - 1].$2 + 1);
+              expect(l[i].$1, lessThanOrEqualTo(l[i].$2));
+            }
+          }
+        }
+      }
+    });
+
+    test('quando não dá para criar outra zona há uma mensagem só', () {
+      expect(zoneAddBlocker(const []), isNull);
+      expect(
+        zoneAddBlocker([SamplerZone(id: 'a', sample: 'h')]),
+        isNull,
+        reason: 'dá para dividir',
+      );
+      final singles = [for (var n = 0; n < 128; n++) SamplerZone(id: 'z$n', sample: 'h', lo: n, hi: n)];
+      final atLimit = zoneAddBlocker(singles)!;
+      expect(atLimit, contains('$maxZones'));
+      final wide = [for (var i = 0; i < maxZones; i++) SamplerZone(id: 'w$i', sample: 'h')];
+      expect(zoneAddBlocker(wide), atLimit, reason: 'o limite dá a mesma mensagem');
+    });
+
     test('camadas de velocidade iguais, sem lacuna nem sobreposição', () {
       expect(velocityLayers(2), [(1, 63), (64, 127)]);
       expect(velocityLayers(3), [(1, 42), (43, 84), (85, 127)]);
@@ -295,6 +331,17 @@ void main() {
       }
     });
 
+    test('por transientes o limite de pontos é ajustável: com folga mostra quantos ataques há de verdade', () {
+      final many = bursts([for (var i = 0; i < 150; i++) (0.1 + i * 0.08, 0.8)], 13);
+      final capped = slicePoints(audio([many]), sensitivity: 0.7);
+      final all = slicePoints(audio([many]), sensitivity: 0.7, limit: 100000);
+      expect(capped, hasLength(maxSlices));
+      expect(all.length, greaterThan(maxSlices), reason: '${all.length}');
+      expect(slicePoints(audio([many]), sensitivity: 0.7, limit: 10), hasLength(10));
+      // sem passar do limite o resultado é o mesmo
+      expect(slicePoints(audio([many]), sensitivity: 0.7, limit: all.length), all);
+    });
+
     test('zonas de fatias: uma nota cada a partir de C1, só o trecho, até o fim', () {
       var n = 0;
       final z = sliceZones('h', [0, 0.25, 0.5, 0.75], () => 'z${n++}');
@@ -374,6 +421,62 @@ void main() {
       }
       expect(c.zonesOf(1), hasLength(maxZones));
       expect(c.duplicateZone(1, c.zonesOf(1).first.id), isNull, reason: 'no limite');
+    });
+
+    test('a zona dividida pela nova mantém a nota base dentro da faixa e o aviso diz', () async {
+      final (c, _, hash) = await sampler();
+      c.doc.tracks[1].zones.add(SamplerZone(id: 'z', sample: hash, root: 100));
+      String? notice;
+      final n = c.addZone(1, hash, onNotice: (s) => notice = s)!;
+      final z = c.zonesOf(1).first;
+      expect((z.lo, z.hi, n.lo, n.hi), (0, 63, 64, 127));
+      expect(z.root, 63, reason: 'ficava em 100, fora de 0 a 63');
+      expect(notice, allOf(contains('foi dividida'), contains('E7'), contains('D#4')));
+      // nota base que já cabe não muda nem aparece no aviso
+      c.clearZones(1);
+      c.doc.tracks[1].zones.add(SamplerZone(id: 'z', sample: hash, root: 40));
+      c.addZone(1, hash, onNotice: (s) => notice = s);
+      expect(c.zonesOf(1).first.root, 40);
+      expect(notice, isNot(contains('nota base')));
+    });
+
+    test('sem espaço para outra zona: recusa com o motivo, também antes de importar o arquivo', () async {
+      final (c, _, hash) = await sampler();
+      for (var n = 0; n < 128; n++) {
+        c.doc.tracks[1].zones.add(SamplerZone(id: 'z$n', sample: hash, lo: n, hi: n));
+      }
+      c.mutate((_) {});
+      expect(c.zoneAddBlockerOf(1), isNotNull);
+      final notices = <String>[];
+      expect(c.addZone(1, hash, onNotice: notices.add), isNull);
+      expect(await c.addZoneFromFile(1, onNotice: notices.add), isNull, reason: 'nem abre o seletor');
+      expect(notices, [c.zoneAddBlockerOf(1), c.zoneAddBlockerOf(1)]);
+      expect(c.zonesOf(1), hasLength(128));
+      c.removeZone(1, 'z5');
+      expect(c.zoneAddBlockerOf(1), isNull);
+      expect(c.zoneAddBlockerOf(0), isNull, reason: 'faixa que não é sampler');
+    });
+
+    test('camadas dividem a faixa de velocidade ATUAL da zona', () async {
+      final (c, e, hash) = await sampler();
+      c.doc.tracks[1].zones.add(SamplerZone(id: 'z', sample: hash, lo: 40, hi: 60, vlo: 40, vhi: 100));
+      c.mutate((_) {});
+      e.log!.clear();
+      final made = c.splitZoneLayers(1, 'z', 2);
+      expect(made, hasLength(1));
+      expect(c.zonesOf(1).map((z) => (z.lo, z.hi, z.vlo, z.vhi)), [(40, 60, 40, 69), (40, 60, 70, 100)]);
+      expect(e.sent('zone_add'), hasLength(2));
+      // faixa de um valor só: nada a dividir
+      c.editZone(1, 'z', (z) => z.vlo = z.vhi = 50);
+      expect(c.splitZoneLayers(1, 'z', 3), isEmpty);
+      // faixa estreita: menos camadas que o pedido
+      c.editZone(1, 'z', (z) {
+        z.vlo = 10;
+        z.vhi = 11;
+      });
+      expect(c.splitZoneLayers(1, 'z', 4), hasLength(1));
+      c.undo();
+      expect((c.zonesOf(1).first.vlo, c.zonesOf(1).first.vhi), (10, 11));
     });
 
     test('o áudio único vira a primeira zona; duplicar; apagar tudo', () async {
@@ -610,11 +713,34 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
       expect(z.root, 61);
-      await tester.enterText(fields.at(0), 'lixo');
+      expect(find.textContaining('inválida'), findsNothing);
+      for (final bad in ['lixo', 'H4', '128', '-1']) {
+        await tester.enterText(fields.at(0), bad);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pump();
+        expect(z.root, 61, reason: '"$bad" não muda nada');
+        expect(tester.widget<TextField>(fields.at(0)).controller!.text, bad, reason: 'o texto digitado fica');
+        expect(find.text('Nota inválida: use C4, C#3, 60'), findsOneWidget);
+      }
+      // corrigir tira o erro e vale
+      await tester.enterText(fields.at(0), 'D4');
+      await tester.pump();
+      expect(find.textContaining('inválida'), findsNothing);
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
-      expect(z.root, 61, reason: 'o que não entendeu não muda nada');
-      expect(tester.widget<TextField>(fields.at(0)).controller!.text, 'C#4', reason: 'e o campo volta ao valor');
+      expect(z.root, 62);
+      expect(tester.widget<TextField>(fields.at(0)).controller!.text, 'D4');
+      // Esc cancela e volta ao valor da zona
+      await tester.enterText(fields.at(0), 'zzz');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(find.text('Nota inválida: use C4, C#3, 60'), findsOneWidget);
+      await tester.tap(fields.at(0));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.textContaining('inválida'), findsNothing);
+      expect(tester.widget<TextField>(fields.at(0)).controller!.text, 'D4');
       await tester.enterText(fields.at(3), '64');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
@@ -623,6 +749,8 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
       expect(z.vlo, 64, reason: 'velocidade 0 não vale');
+      expect(find.text('Velocidade inválida: use 1 a 127'), findsOneWidget);
+      expect(tester.widget<TextField>(fields.at(3)).controller!.text, '0');
       // Menos/Mais andam de 1 em 1 (velocidade de: o quarto stepper)
       await tester.tap(find.byTooltip('Mais').at(3));
       await tester.pump();
@@ -780,16 +908,84 @@ void main() {
         ),
       );
       Set<int> marks() => (tester.widget(find.byWidgetPredicate((w) => w.runtimeType.toString() == '_PianoKeys')) as dynamic).marks as Set<int>;
-      expect(find.text('até o fim: a soltura não entra'), findsOneWidget, reason: 'sem zonas o Modo vale');
+      expect(find.text('até o fim: só o ataque vale'), findsOneWidget, reason: 'sem zonas o Modo vale');
       expect(marks(), {55}, reason: 'sem zonas: a nota base do cartão');
+      expect(find.textContaining('Usando'), findsNothing);
+      expect(find.byTooltip('Segure para ouvir na nota base'), findsOneWidget);
       c.doc.tracks[1].zones
         ..add(SamplerZone(id: 'a', sample: c.doc.tracks[1].sample!, lo: 40, hi: 44))
         ..add(SamplerZone(id: 'b', sample: c.doc.tracks[1].sample!, lo: 60, hi: 61));
       c.mutate((_) {});
       await tester.pump();
-      expect(find.text('até o fim: a soltura não entra'), findsNothing, reason: 'com zonas o Modo do cartão não vale');
+      expect(find.text('até o fim: só o ataque vale'), findsNothing, reason: 'com zonas o Modo do cartão não vale');
+      expect(find.textContaining('só o ataque'), findsNothing, reason: 'zonas sustentadas: envelope inteiro');
       expect(marks(), {40, 41, 42, 43, 44, 60, 61});
+      // o visor do cartão Áudio deixa de sugerir a nota base do cartão
+      expect(find.textContaining('Usando 2 zonas'), findsOneWidget);
+      expect(find.byTooltip('Segure para ouvir na nota base'), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+
+    panelTest('envelope: os knobs que as zonas até o fim ignoram ficam apagados e a legenda explica', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      late DawController c;
+      await tester.runAsync(() async {
+        (c, _, _) = await sampler();
+      });
+      final h = c.doc.tracks[1].sample!;
+      c.doc.tracks[1].zones
+        ..add(SamplerZone(id: 'a', sample: h, lo: 40, hi: 44, oneShot: true))
+        ..add(SamplerZone(id: 'b', sample: h, lo: 60, hi: 61));
+      c.mutate((_) {});
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: c,
+              builder: (_, _) => InstrumentPanel(c: c),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('zonas até o fim só usam o ataque'), findsOneWidget, reason: 'mistura: só um aviso');
+      c.editZone(1, 'b', (z) => z.oneShot = true);
+      await tester.pump();
+      expect(find.text('todas as zonas até o fim: só o ataque vale'), findsOneWidget);
+      expect(find.text('zonas até o fim só usam o ataque'), findsNothing);
+      c.editZone(1, 'a', (z) => z.oneShot = false);
+      await tester.pump();
+      expect(find.text('zonas até o fim só usam o ataque'), findsOneWidget, reason: 'voltou à mistura');
+      expect(find.textContaining('só o ataque vale'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    panelTest('a zona até o fim explica o que o envelope ignora', (tester) async {
+      final (c, _, _) = await mount(
+        tester,
+        zones: (h) => [SamplerZone(id: 'z', sample: h, lo: 0, hi: 127)],
+      );
+      await tester.tapAt(mapOrigin(tester) + const Offset(500, 60));
+      await tester.pump();
+      expect(find.textContaining('do envelope só o Ataque vale'), findsNothing);
+      await tester.tap(find.text('Até o fim'));
+      await tester.pump();
+      expect(find.textContaining('do envelope só o Ataque vale'), findsOneWidget);
+      expect(c.doc.tracks[1].zones.single.oneShot, isTrue);
+    });
+
+    panelTest('no limite de zonas o botão de adicionar fica desabilitado com a dica', (tester) async {
+      await mount(
+        tester,
+        zones: (h) => [for (var n = 0; n < 128; n++) SamplerZone(id: 'z$n', sample: h, lo: n, hi: n)],
+      );
+      final reason = zoneAddBlocker([for (var n = 0; n < 128; n++) SamplerZone(id: 'z$n', sample: 'h', lo: n, hi: n)])!;
+      expect(find.byTooltip(reason), findsOneWidget);
+      await tester.tap(find.text('Adicionar sample como zona'));
+      await tester.pumpAndSettle();
+      expect(find.text('loop.wav'), findsNothing, reason: 'o menu não abre');
     });
 
     panelTest('diálogo de fatiar: prévia, criar e substituir as zonas', (tester) async {
@@ -821,6 +1017,37 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.doc.tracks[1].zones, hasLength(4));
       expect(c.doc.tracks[1].zones.first.start, 0);
+    });
+
+    panelTest('diálogo de fatiar: mais ataques que o limite avisa e o botão baixa a sensibilidade', (tester) async {
+      tester.view.physicalSize = const Size(900, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      late DawController c;
+      await tester.runAsync(() async {
+        (c, _, _) = await sampler(x: bursts([for (var i = 0; i < 150; i++) (0.1 + i * 0.08, 0.8)], 13));
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(body: SliceDialog(c: c, track: 1)),
+        ),
+      );
+      Finder warning() => find.textContaining(RegExp(r'\d+ fatias achadas; só as 96 primeiras viram nota'));
+      // a sensibilidade padrão já acha mais de 96 ataques nesse áudio? senão sobe a 100%
+      if (warning().evaluate().isEmpty) {
+        await tester.drag(find.byType(Slider), const Offset(600, 0));
+        await tester.pump();
+      }
+      expect(warning(), findsOneWidget);
+      expect(find.textContaining('96 fatias: C1 a B8'), findsOneWidget);
+      final before = tester.widget<Slider>(find.byType(Slider)).value;
+      await tester.tap(find.text('Menos sensibilidade'));
+      await tester.pump();
+      expect(tester.widget<Slider>(find.byType(Slider)).value, lessThan(before));
+      await tester.tap(find.text('N fatias iguais'));
+      await tester.pump();
+      expect(warning(), findsNothing, reason: 'fatias iguais param em 96');
     });
 
     panelTest('diálogo de fatiar sem áudio no projeto ou com o áudio ausente do aparelho', (tester) async {
