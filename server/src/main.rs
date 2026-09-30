@@ -10,12 +10,14 @@ mod storage;
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use axum::http::{HeaderValue, header};
 use axum::{Router, extract::FromRef};
 use sea_orm::DatabaseConnection;
 use sqlx::PgPool;
 use tower_http::{
     cors::CorsLayer,
     services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
 
@@ -109,7 +111,15 @@ async fn serve(state: AppState, static_dir: String, port: u16) -> anyhow::Result
 
     // CORS aberto: a autenticação vai no cabeçalho Authorization, não em cookie, então outra
     // origem não tem credencial nenhuma para aproveitar
-    let app = app.layer(CorsLayer::permissive()).layer(TraceLayer::new_for_http());
+    let app = app
+        .layer(CorsLayer::permissive())
+        // os arquivos do Flutter não têm hash no nome (main.dart.js, engine/host.js, engine.wasm):
+        // sem `Cache-Control` o navegador guarda por tempo heurístico (só há Last-Modified) e depois
+        // de uma atualização o app novo roda com o host, o worklet ou o wasm velhos. `no-cache` faz
+        // revalidar a cada carga (304 quando nada mudou), como o nginx de produção. A API já define
+        // o próprio Cache-Control (no-store; os samples, immutable) e este só entra onde falta.
+        .layer(SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("no-cache")))
+        .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("escutando em http://{addr}");

@@ -259,6 +259,12 @@ pub fn detect_bpm(channels: &[Vec<f32>], rate: f64) -> Tempo {
     if energy < 1e-6 {
         return NONE;
     }
+    // Sem batidas não há andamento: um pad, um tom sustentado ou um ruído sempre têm *algum* pico de
+    // periodicidade (a confiança relativa abaixo o destaca de qualquer jeito), então antes se exige
+    // que existam onsets de verdade, isto é, picos do envelope claros e em quantidade.
+    if !has_onsets(&env, fps, n as f64 / rate) {
+        return NONE;
+    }
 
     // autocorrelação normalizada até o quádruplo do maior período (60 BPM = 1 s)
     let max_lag = (fps * 4.0) as usize + 2;
@@ -302,7 +308,37 @@ pub fn detect_bpm(channels: &[Vec<f32>], rate: f64) -> Tempo {
     if best.1 <= 0.0 {
         return NONE;
     }
+    // periodicidade de verdade: batidas regulares dão de 0,5 a 0,9 na autocorrelação normalizada,
+    // ruído fica perto de 0,05; abaixo de 0,25 o pico é só acaso
+    let strength = get(fps * 60.0 / best.0);
+    if strength < 0.25 {
+        return NONE;
+    }
     Tempo { bpm: best.0, confidence: ((best.1 - mean) / best.1).clamp(0.0, 1.0) }
+}
+
+/// Há onsets de verdade no envelope: o maior pico se destaca muito da média (ritmos dão 50 a 60,
+/// um pad com batimentos, 11), e há picos locais a pelo menos um quarto dele, separados por 80 ms, em
+/// quantidade razoável (no mínimo 8 e 0,3 por segundo; música esparsa em meio tempo passa) e sem
+/// virar uma chuva de picos (ruído, mais de 12 por segundo).
+fn has_onsets(env: &[f64], fps: f64, secs: f64) -> bool {
+    let top = env.iter().cloned().fold(0.0, f64::max);
+    let mean = env.iter().sum::<f64>() / env.len() as f64;
+    if top <= 0.0 || mean <= 0.0 || top / mean < 25.0 {
+        return false;
+    }
+    let gap = ((fps * 0.08) as usize).max(1);
+    let mut peaks = 0usize;
+    let mut last: Option<usize> = None;
+    for f in 1..env.len().saturating_sub(1) {
+        let v = env[f];
+        if v >= 0.25 * top && v >= env[f - 1] && v > env[f + 1] && last.is_none_or(|l| f - l >= gap) {
+            peaks += 1;
+            last = Some(f);
+        }
+    }
+    let per_s = peaks as f64 / secs;
+    peaks >= 8 && (0.3..=12.0).contains(&per_s)
 }
 
 #[cfg(test)]
@@ -450,5 +486,115 @@ mod tests {
         let out = stretch(&[clicks(120.0, 10.0)], RATE, 1.2, 0.0);
         let t = detect_bpm(&out, RATE);
         assert!((t.bpm - 100.0).abs() <= 2.0, "veio {}", t.bpm);
+    }
+
+    /// Faixa sintética: bumbo em todo tempo, caixa nos contratempos e chimbal em colcheias.
+    fn beat_track(bpm: f64, secs: f64) -> Vec<f32> {
+        let n = (RATE * secs) as usize;
+        let mut out = vec![0.0f32; n];
+        let mut seed = 12345u32;
+        let mut noise = move || {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed >> 8) as f32 / (1 << 23) as f32 - 1.0
+        };
+        let beat = 60.0 / bpm;
+        let mut put = |t: f64, sig: &[f32]| {
+            let i0 = (t * RATE) as usize;
+            for (k, v) in sig.iter().enumerate() {
+                if i0 + k < n {
+                    out[i0 + k] += v;
+                }
+            }
+        };
+        let kick: Vec<f32> = {
+            let mut ph = 0.0f64;
+            (0..(0.28 * RATE) as usize)
+                .map(|i| {
+                    let t = i as f64 / RATE;
+                    ph += 2.0 * PI * (50.0 + 110.0 * (-t * 22.0).exp()) / RATE;
+                    (0.9 * ph.sin() * (-t * 11.0).exp()) as f32
+                })
+                .collect()
+        };
+        let snare: Vec<f32> = (0..(0.16 * RATE) as usize).map(|i| 0.5 * noise() * (-(i as f64 / RATE) * 26.0).exp() as f32).collect();
+        let hat: Vec<f32> = {
+            let mut prev = 0.0f32;
+            (0..(0.05 * RATE) as usize)
+                .map(|i| {
+                    let x = noise();
+                    let y = x - prev;
+                    prev = x;
+                    0.25 * y * (-(i as f64 / RATE) * 70.0).exp() as f32
+                })
+                .collect()
+        };
+        for b in 0..(secs / beat) as usize {
+            let t = b as f64 * beat;
+            put(t, &kick);
+            if b % 2 == 1 {
+                put(t, &snare);
+            }
+            put(t + beat / 2.0, &hat);
+        }
+        out
+    }
+
+    #[test]
+    fn tempo_in_the_common_range_is_exact_on_long_clips() {
+        for bpm in [75.0, 90.0, 100.0, 120.0, 140.0] {
+            let t = detect_bpm(&[beat_track(bpm, 30.0)], RATE);
+            assert!((t.bpm - bpm).abs() < 0.5, "{bpm} BPM deu {}", t.bpm);
+            assert!(t.confidence > 0.8, "{bpm} BPM: confiança {}", t.confidence);
+        }
+    }
+
+    #[test]
+    fn tempo_at_the_extremes_may_be_off_by_an_octave_but_never_by_anything_else() {
+        // ambiguidade de batida contra meio tempo: o usuário corrige com ÷2 e ×2
+        for bpm in [65.0, 170.0, 190.0] {
+            let got = detect_bpm(&[beat_track(bpm, 30.0)], RATE).bpm;
+            let octave = [bpm, bpm * 2.0, bpm / 2.0].iter().any(|c| (got - c).abs() < 0.6);
+            assert!(octave, "{bpm} BPM deu {got}");
+        }
+    }
+
+    #[test]
+    fn no_tempo_without_beats() {
+        let mut seed = 99u32;
+        let noise: Vec<f32> = (0..(RATE * 20.0) as usize)
+            .map(|_| {
+                seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                (seed >> 8) as f32 / (1 << 23) as f32 - 1.0
+            })
+            .collect();
+        let pad: Vec<f32> = (0..(RATE * 20.0) as usize)
+            .map(|i| {
+                let t = i as f64 / RATE;
+                (0.1 * ((2.0 * PI * 220.0 * t).sin() + (2.0 * PI * 277.0 * t).sin() + (2.0 * PI * 330.0 * t).sin())) as f32
+            })
+            .collect();
+        for (name, sig) in [("tom puro", sine(440.0, 20.0)), ("ruído branco", noise), ("pad de acorde", pad)] {
+            let t = detect_bpm(&[sig], RATE);
+            assert_eq!(t.bpm, 0.0, "{name} não tem andamento, mas deu {}", t.bpm);
+        }
+    }
+
+    #[test]
+    fn swung_syncopated_pattern_keeps_its_tempo() {
+        // a fase muda mas o andamento é o mesmo: bumbo extra fora do tempo a cada quatro batidas
+        let mut x = beat_track(90.0, 28.0);
+        let extra: Vec<f32> =
+            (0..(0.2 * RATE) as usize).map(|i| 0.7 * (2.0 * PI * 70.0 * i as f64 / RATE).sin() as f32 * (-(i as f64 / RATE) * 14.0).exp() as f32).collect();
+        let beat = 60.0 / 90.0;
+        for b in (2..(28.0 / beat) as usize).step_by(4) {
+            let i0 = ((b as f64 + 0.75) * beat * RATE) as usize;
+            for (k, v) in extra.iter().enumerate() {
+                if i0 + k < x.len() {
+                    x[i0 + k] += v;
+                }
+            }
+        }
+        let t = detect_bpm(&[x], RATE);
+        assert!((t.bpm - 90.0).abs() < 0.5, "deu {}", t.bpm);
     }
 }
