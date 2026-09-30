@@ -25,6 +25,39 @@ pub struct Config {
     /// Onde ficam os áudios (`blobs/`) e os temporários de upload. Lido aqui, no setup frio, e
     /// levado pelo estado: a parte quente do hot-patch não lê o ambiente.
     pub data_dir: std::path::PathBuf,
+    /// Com `S3_ENDPOINT` definido, os blobs vão para o bucket em vez de `DATA_DIR/blobs`.
+    pub s3: Option<S3Config>,
+}
+
+#[derive(Clone)]
+pub struct S3Config {
+    pub endpoint: String,
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub region: String,
+    /// `endpoint/bucket/chave` (MinIO) em vez de `bucket.endpoint/chave`.
+    pub path_style: bool,
+}
+
+impl S3Config {
+    pub fn from_env() -> anyhow::Result<Option<Self>> {
+        let Some(endpoint) = var("S3_ENDPOINT") else { return Ok(None) };
+        let need = |k: &str| var(k).with_context(|| format!("falta {k} (S3_ENDPOINT está definido)"));
+        let path_style = match var("S3_PATH_STYLE").map(|v| v.to_lowercase()).as_deref() {
+            None | Some("true" | "1") => true,
+            Some("false" | "0") => false,
+            Some(v) => bail!("S3_PATH_STYLE: true ou false, não {v:?}"),
+        };
+        Ok(Some(S3Config {
+            endpoint: endpoint.trim_end_matches('/').to_string(),
+            bucket: need("S3_BUCKET")?,
+            access_key: need("S3_ACCESS_KEY")?,
+            secret_key: need("S3_SECRET_KEY")?,
+            region: var("S3_REGION").unwrap_or_else(|| "us-east-1".into()),
+            path_style,
+        }))
+    }
 }
 
 /// Cliente OAuth de `{PREFIX}_CLIENT_ID` e `{PREFIX}_CLIENT_SECRET`: os dois, ou nenhum.
@@ -49,6 +82,7 @@ impl Config {
         let jmail_api_key = var("JMAIL_API_KEY").context("falta JMAIL_API_KEY (chave do app jopendaw no jmail)")?;
         let trim = |s: String| s.trim_end_matches('/').to_string();
         Ok(Config {
+            s3: S3Config::from_env()?,
             data_dir: var("DATA_DIR").unwrap_or_else(|| "./data".into()).into(),
             jwt_secret: jwt_secret.into_bytes(),
             app_base_url: trim(var("APP_BASE_URL").unwrap_or_else(|| "http://localhost:8080".into())),

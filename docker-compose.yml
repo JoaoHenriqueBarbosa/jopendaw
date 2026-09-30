@@ -11,6 +11,32 @@ services:
     volumes:
       - jopendaw-pgdata:/var/lib/postgresql/data
 
+  # S3 local para desenvolvimento (em produção é o MinIO da VPS). API em :9000, console em :9001.
+  # Credenciais só de dev. A imagem é a do Chainguard: o minio/minio do Docker Hub e o do quay.io
+  # deixaram de ser publicados. O `minio-init` cria o bucket `jopendaw` e sai; a imagem não tem shell,
+  # então ele simplesmente tenta de novo (`on-failure`) até o MinIO responder.
+  minio:
+    image: chainguard/minio
+    container_name: jopendaw-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: jopendaw
+      MINIO_ROOT_PASSWORD: jopendaw-minio-dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - jopendaw-minio:/data
+
+  minio-init:
+    image: chainguard/minio-client
+    depends_on:
+      - minio
+    environment:
+      MC_HOST_local: http://jopendaw:jopendaw-minio-dev@minio:9000
+    command: mb --ignore-existing local/jopendaw
+    restart: on-failure
+
   api:
     build:
       context: .
@@ -29,10 +55,17 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      # áudios no MinIO local; sem estas linhas a API cairia no disco (DATA_DIR=/data)
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: jopendaw
+      S3_ACCESS_KEY: jopendaw
+      S3_SECRET_KEY: jopendaw-minio-dev
     volumes:
+      # só serve ao fallback em disco e aos temporários de upload; com S3 pode ser efêmero
       - jopendaw-data:/data
     depends_on:
       - db
+      - minio-init
     ports:
       - "8080:8080"
 
@@ -48,3 +81,4 @@ services:
 volumes:
   jopendaw-pgdata:
   jopendaw-data:
+  jopendaw-minio:

@@ -9,6 +9,15 @@
 //! docker exec -i jopendaw-pg psql -U jopendaw -d jopendaw_test < server/schema.sql
 //! TEST_DATABASE_URL=postgres://jopendaw:jopendaw@localhost:5432/jopendaw_test cargo test -p jopendaw-server
 //! ```
+//!
+//! O armazenamento dos áudios é o disco por padrão. Com `S3_ENDPOINT` (e `S3_BUCKET`,
+//! `S3_ACCESS_KEY`, `S3_SECRET_KEY`) no ambiente, os mesmos testes rodam contra o S3, por exemplo o
+//! MinIO do `docker-compose up -d minio minio-init`:
+//!
+//! ```bash
+//! S3_ENDPOINT=http://localhost:9000 S3_BUCKET=jopendaw S3_ACCESS_KEY=jopendaw S3_SECRET_KEY=jopendaw-minio-dev \
+//!   TEST_DATABASE_URL=... cargo test -p jopendaw-server
+//! ```
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
@@ -55,9 +64,11 @@ async fn env() -> Option<Env> {
         discord: None,
         review: None,
         data_dir: data_dir(),
+        s3: crate::config::S3Config::from_env().expect("S3_* do teste"),
     };
+    let store = Arc::new(storage::Store::from_config(&cfg).unwrap());
     let mailer = Arc::new(Mailer::new(&cfg.jmail_url, &cfg.jmail_api_key).unwrap());
-    let state = AppState { db, pool, cfg: Arc::new(cfg), mailer, job_wake: Arc::new(tokio::sync::Notify::new()) };
+    let state = AppState { db, pool, cfg: Arc::new(cfg), store, mailer, job_wake: Arc::new(tokio::sync::Notify::new()) };
     tokio::spawn(routes::jobs::worker(state.clone()));
     Some(Env { app: routes::router(state.clone()), state })
 }
@@ -337,25 +348,105 @@ async fn samples_limites_de_tamanho_e_cota() {
 #[tokio::test]
 async fn faxina_apaga_so_o_que_nao_tem_registro() {
     let e = env_or_skip!();
+    let store = &e.state.store;
     let a = user(&e).await;
     let kept = Uuid::new_v4().into_bytes().to_vec();
     let (kept_hash, _) = upload(&e, &a, &kept).await;
     let orphan = Uuid::new_v4().into_bytes().to_vec();
     let orphan_hash = storage::hex_sha256(&orphan);
-    storage::store_bytes(&data_dir(), &orphan_hash, &orphan).await.unwrap();
-    let old = std::time::SystemTime::now() - Duration::from_secs(2 * 3600);
-    for h in [&kept_hash, &orphan_hash] {
-        std::fs::File::options().write(true).open(storage::blob_path(&data_dir(), h)).unwrap().set_modified(old).unwrap();
-    }
-    // um órfão recente fica (pode estar entre a gravação e o registro)
+    store.store_bytes(&orphan_hash, &orphan).await.unwrap();
+    // o S3 não deixa forjar a data do objeto: em vez de `set_modified`, o corte da faxina fica entre
+    // o que já existe e o órfão "recente", criado depois de uma pausa (a data do S3 tem resolução
+    // de milissegundos ou segundos, conforme o servidor)
+    tokio::time::sleep(Duration::from_millis(2200)).await;
+    let cutoff = std::time::SystemTime::now();
+    tokio::time::sleep(Duration::from_millis(2200)).await;
     let fresh = Uuid::new_v4().into_bytes().to_vec();
     let fresh_hash = storage::hex_sha256(&fresh);
-    storage::store_bytes(&data_dir(), &fresh_hash, &fresh).await.unwrap();
+    store.store_bytes(&fresh_hash, &fresh).await.unwrap();
 
-    storage::cleanup(&e.state.pool, &data_dir()).await.unwrap();
-    assert!(storage::blob_path(&data_dir(), &kept_hash).exists());
-    assert!(!storage::blob_path(&data_dir(), &orphan_hash).exists());
-    assert!(storage::blob_path(&data_dir(), &fresh_hash).exists());
+    storage::cleanup_before(&e.state.pool, store, cutoff).await.unwrap();
+    assert!(store.exists(&kept_hash).await.unwrap(), "com registro fica");
+    assert!(!store.exists(&orphan_hash).await.unwrap(), "sem registro e antigo sai");
+    assert!(store.exists(&fresh_hash).await.unwrap(), "sem registro mas recente fica");
+
+    // a faxina de verdade (1 hora) não mexe em nada recente
+    storage::cleanup(&e.state.pool, store).await.unwrap();
+    assert!(store.exists(&fresh_hash).await.unwrap());
+    store.delete(&fresh_hash).await.unwrap();
+}
+
+#[tokio::test]
+async fn armazenamento_operacoes_basicas() {
+    let e = env_or_skip!();
+    let store = &e.state.store;
+    let bytes = Uuid::new_v4().into_bytes().repeat(1000);
+    let hash = storage::hex_sha256(&bytes);
+    assert!(!store.exists(&hash).await.unwrap());
+    assert!(store.open(&hash).await.unwrap().is_none());
+    assert!(store.read(&hash).await.unwrap().is_none());
+
+    store.store_bytes(&hash, &bytes).await.unwrap();
+    // gravar de novo o mesmo conteúdo é idempotente
+    store.store_bytes(&hash, &bytes).await.unwrap();
+    assert!(store.exists(&hash).await.unwrap());
+    assert_eq!(store.read(&hash).await.unwrap().unwrap(), bytes);
+    assert_eq!(store.open(&hash).await.unwrap().unwrap().len, Some(bytes.len() as u64));
+    assert!(store.list().await.unwrap().iter().any(|b| b.hash == hash));
+
+    store.delete(&hash).await.unwrap();
+    store.delete(&hash).await.unwrap(); // apagar o que não existe também passa
+    assert!(!store.exists(&hash).await.unwrap());
+    assert!(!store.list().await.unwrap().iter().any(|b| b.hash == hash));
+}
+
+#[tokio::test]
+async fn upload_nao_deixa_temporario_para_tras() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let tmp = data_dir().join("tmp");
+    // os testes rodam em paralelo e dividem a pasta: só conta o que tem o conteúdo deste teste
+    let marker = Uuid::new_v4().into_bytes().repeat(64);
+    let leftovers = |marker: &[u8]| -> usize {
+        std::fs::read_dir(&tmp).map(|rd| rd.flatten().filter(|f| std::fs::read(f.path()).is_ok_and(|b| b.starts_with(marker))).count()).unwrap_or(0)
+    };
+    let (_, ok) = upload(&e, &a, &marker).await;
+    assert_eq!(ok.status, StatusCode::NO_CONTENT);
+    let hash = storage::hex_sha256(&marker);
+    let bad = call(&e, Method::PUT, &format!("/api/samples/{}", storage::hex_sha256(b"outro-hash")), Some(&a.token), marker.clone(), &[]).await;
+    assert_eq!(bad.status, StatusCode::BAD_REQUEST);
+    // já existe no armazenamento (outra conta): o corpo é conferido e o temporário some sem regravar
+    let b = user(&e).await;
+    assert_eq!(upload(&e, &b, &marker).await.1.status, StatusCode::NO_CONTENT);
+    assert_eq!(leftovers(&marker), 0);
+    assert_eq!(get(&e, &format!("/api/samples/{hash}"), &b).await.body, marker);
+}
+
+#[tokio::test]
+async fn migracao_do_disco_para_o_s3_e_idempotente() {
+    let e = env_or_skip!();
+    let store = &e.state.store;
+    if store.kind() != "S3" {
+        eprintln!("sem S3_ENDPOINT: teste da migração pulado");
+        return;
+    }
+    // um DATA_DIR antigo, só em disco
+    let old = std::env::temp_dir().join(format!("jopendaw-migra-{}", Uuid::new_v4()));
+    let disk = storage::Store::from_config(&Config { s3: None, data_dir: old.clone(), ..(*e.state.cfg).clone() }).unwrap();
+    let blobs: Vec<Vec<u8>> = (0..3).map(|_| Uuid::new_v4().into_bytes().repeat(100)).collect();
+    for b in &blobs {
+        disk.store_bytes(&storage::hex_sha256(b), b).await.unwrap();
+    }
+    assert_eq!(store.import_from_disk(&old).await.unwrap(), (3, 0));
+    for b in &blobs {
+        assert_eq!(store.read(&storage::hex_sha256(b)).await.unwrap().unwrap(), *b);
+    }
+    // segunda rodada: nada a copiar
+    assert_eq!(store.import_from_disk(&old).await.unwrap(), (0, 3));
+    for b in &blobs {
+        store.delete(&storage::hex_sha256(b)).await.unwrap();
+    }
+    std::fs::remove_dir_all(old).unwrap();
 }
 
 // ---------------------------------------------------------------- jobs

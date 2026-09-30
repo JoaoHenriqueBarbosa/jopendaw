@@ -25,7 +25,10 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin jopendaw \
     && mkdir -p /data && chown jopendaw /data
 USER jopendaw
 
-# os áudios dos usuários moram aqui: monte um volume persistente em /data (sem ele somem a cada deploy)
+# Produção: os áudios vão para o S3/MinIO (S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY) e
+# /data só guarda os temporários de upload, então não precisa de volume persistente.
+# Sem S3_ENDPOINT o servidor cai no disco: aí os áudios moram em /data e o volume é obrigatório
+# (sem ele somem a cada deploy).
 ENV PORT=8080 DATA_DIR=/data
 VOLUME /data
 EXPOSE 8080

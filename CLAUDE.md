@@ -98,7 +98,7 @@ teste de novo.
   filtrando pelo dono). Schema em `server/schema.sql`; sem migrations automáticas: mudança vai no
   schema e num script idempotente em `db/migrations/`.
 - Fase 6 (servidor): documento versionado do projeto (`routes/docs.rs`, 409 com o doc do servidor se a
-  `base_version` for velha), áudios endereçados por SHA-256 em `DATA_DIR/blobs/` com cota de 4 GB por
+  `base_version` for velha), áudios endereçados por SHA-256 (`blobs/<2 hex>/<hash>`) em disco (`DATA_DIR`) ou, com `S3_ENDPOINT`, num bucket S3/MinIO (`storage::Store`; `docker-compose up -d minio minio-init` para o local; `jopendaw-server migrate-blobs-to-s3` copia o disco para o bucket; testes contra o S3 com as `S3_*` no ambiente) com cota de 4 GB por
   conta (`routes/samples.rs`, `storage.rs`) e fila de tarefas (`routes/jobs.rs`: worker tokio sobre a
   tabela `jobs`, FLAC e áudio→MIDI em `audio.rs`). Testes de rota: `TEST_DATABASE_URL=... cargo test -p
   jopendaw-server` (banco à parte com o `schema.sql`; sem a variável eles se pulam).

@@ -21,7 +21,7 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 once_cell = "1"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
 # contas: o SQL de auth fala direto com o pool do SeaORM pelo sqlx
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "derive", "json"] }
 # tokens aleatórios, hash para guardar, JWT curto de acesso
@@ -33,6 +33,7 @@ dotenvy = "0.15"
 flacenc = "0.5.1"
 futures-util = "0.3.34"
 tokio-util = { version = "0.7.19", features = ["io"] }
+rusty-s3 = "0.10.2"
 
 [dev-dependencies]
 http-body-util = "0.1.5"

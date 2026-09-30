@@ -177,10 +177,9 @@ enum Output {
     Result(Value),
 }
 
-/// O trabalho pesado, síncrono: ler o blob, decodificar, processar. Roda em `spawn_blocking`.
-fn compute(kind: &str, path: &std::path::Path, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
+/// O trabalho pesado, síncrono: decodificar e processar o áudio já lido do armazenamento. Roda em `spawn_blocking`.
+fn compute(kind: &str, bytes: Vec<u8>, params: Option<&Value>, progress: &AtomicU32) -> Result<Output, String> {
     let set = |p: f32| progress.store(p.to_bits(), Ordering::Relaxed);
-    let bytes = std::fs::read(path).map_err(|_| "áudio não encontrado no armazenamento".to_string())?;
     let pcm = audio::decode_wav(&bytes)?;
     drop(bytes);
     set(0.1);
@@ -226,9 +225,18 @@ async fn finish(pool: &PgPool, id: Uuid, outcome: Result<Value, String>) {
 
 async fn run(s: &AppState, job: Claimed) {
     let progress = Arc::new(AtomicU32::new(0f32.to_bits()));
-    let path = storage::blob_path(&s.cfg.data_dir, &job.sample_hash);
+    // o áudio vem do armazenamento (disco ou S3) antes da thread de cálculo, que é síncrona
+    let bytes = match s.store.read(&job.sample_hash).await {
+        Ok(Some(b)) => b,
+        other => {
+            if let Err(e) = other {
+                tracing::error!(job = %job.id, error = %e, "falha ao ler o áudio do armazenamento");
+            }
+            return finish(&s.pool, job.id, Err("áudio não encontrado no armazenamento".into())).await;
+        }
+    };
     let (kind, params, prog) = (job.kind.clone(), job.params.map(|p| p.0), progress.clone());
-    let mut handle = tokio::task::spawn_blocking(move || compute(&kind, &path, params.as_ref(), &prog));
+    let mut handle = tokio::task::spawn_blocking(move || compute(&kind, bytes, params.as_ref(), &prog));
 
     // enquanto a thread trabalha, o progresso dela vai para o banco duas vezes por segundo
     let mut tick = tokio::time::interval(Duration::from_millis(500));
@@ -256,7 +264,7 @@ async fn run(s: &AppState, job: Claimed) {
 /// O FLAC gerado entra no armazenamento da conta como qualquer outro áudio (e conta na cota).
 async fn save_flac(s: &AppState, owner: Uuid, bytes: Vec<u8>) -> Result<Value, String> {
     let hash = storage::hex_sha256(&bytes);
-    storage::store_bytes(&s.cfg.data_dir, &hash, &bytes).await.map_err(|e| {
+    s.store.store_bytes(&hash, &bytes).await.map_err(|e| {
         tracing::error!(error = %e, "falha ao gravar o FLAC");
         "erro interno ao gravar o arquivo".to_string()
     })?;

@@ -28,6 +28,8 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub pool: PgPool,
     pub cfg: Arc<Config>,
+    /// Onde os áudios moram (disco ou S3), criado no setup frio a partir do `Config`.
+    pub store: Arc<storage::Store>,
     pub mailer: Arc<Mailer>,
     /// Acorda o worker das tarefas quando entra uma nova (`routes/jobs.rs`).
     pub job_wake: Arc<tokio::sync::Notify>,
@@ -61,7 +63,9 @@ async fn setup() -> anyhow::Result<Setup> {
     tracing::info!("banco conectado");
     let mailer = Arc::new(Mailer::new(&cfg.jmail_url, &cfg.jmail_api_key)?);
 
-    let state = AppState { db, pool: pool.clone(), cfg: Arc::new(cfg), mailer, job_wake: Arc::new(tokio::sync::Notify::new()) };
+    let store = Arc::new(storage::Store::from_config(&cfg)?);
+    tracing::info!(backend = store.kind(), "armazenamento dos áudios");
+    let state = AppState { db, pool: pool.clone(), cfg: Arc::new(cfg), store, mailer, job_wake: Arc::new(tokio::sync::Notify::new()) };
 
     // tarefas que estavam rodando quando o processo caiu voltam para a fila, e o worker começa
     routes::jobs::requeue_orphans(&pool).await?;
@@ -69,7 +73,7 @@ async fn setup() -> anyhow::Result<Setup> {
 
     // faxina de tokens vencidos e de áudios sem registro, uma vez por hora
     let cleanup_pool = pool.clone();
-    let data_dir = state.cfg.data_dir.clone();
+    let cleanup_store = state.store.clone();
     tokio::spawn(async move {
         loop {
             if let Err(e) = auth::cleanup(&cleanup_pool).await {
@@ -78,7 +82,7 @@ async fn setup() -> anyhow::Result<Setup> {
             if let Err(e) = oauth::cleanup(&cleanup_pool).await {
                 tracing::warn!(error = %e, "faxina das entradas por provedor falhou");
             }
-            if let Err(e) = storage::cleanup(&cleanup_pool, &data_dir).await {
+            if let Err(e) = storage::cleanup(&cleanup_pool, &cleanup_store).await {
                 tracing::warn!(error = %e, "faxina dos áudios falhou");
             }
             tokio::time::sleep(Duration::from_secs(3600)).await;
@@ -114,9 +118,30 @@ async fn serve(state: AppState, static_dir: String, port: u16) -> anyhow::Result
     Ok(())
 }
 
+/// `jopendaw-server migrate-blobs-to-s3`: copia `DATA_DIR/blobs` para o bucket (idempotente) e
+/// sai, sem subir a API nem tocar no banco. Só precisa de `DATA_DIR` e das variáveis `S3_*`.
+async fn migrate_blobs_to_s3() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
+    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into())).init();
+    let s3 = config::S3Config::from_env()?.ok_or_else(|| anyhow::anyhow!("defina S3_ENDPOINT (e S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY) para migrar"))?;
+    let data_dir: std::path::PathBuf = std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".into()).into();
+    let store = storage::Store::from_s3(s3, data_dir.clone())?;
+    let (copied, skipped) = store.import_from_disk(&data_dir).await?;
+    tracing::info!(copied, skipped, "migração concluída");
+    Ok(())
+}
+
+/// Subcomando de linha de comando que roda no lugar do servidor.
+fn is_migration() -> bool {
+    std::env::args().nth(1).as_deref() == Some("migrate-blobs-to-s3")
+}
+
 #[cfg(not(feature = "hot"))]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if is_migration() {
+        return migrate_blobs_to_s3().await;
+    }
     let s = setup().await?;
     serve(s.state, s.static_dir, s.port).await
 }
@@ -124,6 +149,9 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(feature = "hot")]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if is_migration() {
+        return migrate_blobs_to_s3().await;
+    }
     let s = setup().await?;
     let args = (s.state, s.static_dir, s.port);
     dioxus_devtools::serve_subsecond_with_args(args, |(state, static_dir, port)| async move {

@@ -1,5 +1,5 @@
 //! Áudios da conta, endereçados pelo SHA-256 do conteúdo. O app pergunta quais faltam, manda só
-//! esses e depois lê de volta por hash. Os bytes ficam em disco (`storage.rs`), o registro e a
+//! esses e depois lê de volta por hash. Os bytes ficam no armazenamento (`storage.rs`: disco ou S3), o registro e a
 //! cota no banco.
 
 use axum::{
@@ -14,7 +14,6 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
-use tokio_util::io::ReaderStream;
 
 use super::{ApiError, ApiResult, err};
 use crate::{
@@ -78,10 +77,9 @@ pub async fn upload(State(s): State<AppState>, auth: Auth, Path(hash): Path<Stri
         return Err(quota_error());
     }
 
-    // em streaming: cada pedaço vai para o disco e para o hash, sem segurar o arquivo na RAM. Os
+    // em streaming: cada pedaço vai para um temporário local e para o hash, sem segurar o arquivo na RAM. Os
     // tetos valem pelo que realmente chega, não pelo Content-Length, que o cliente pode mentir.
-    let dir = &s.cfg.data_dir;
-    let tmp = storage::new_tmp(dir).await.map_err(ApiError::internal)?;
+    let tmp = s.store.new_tmp().await.map_err(ApiError::internal)?;
     let mut guard = TmpGuard::new(&tmp);
     let mut file = tokio::fs::File::create(&tmp).await.map_err(ApiError::internal)?;
     let mut hasher = Sha256::new();
@@ -104,12 +102,13 @@ pub async fn upload(State(s): State<AppState>, auth: Auth, Path(hash): Path<Stri
     if size == 0 {
         return Err(err(StatusCode::BAD_REQUEST, "corpo vazio"));
     }
-    // mesmo que o arquivo já exista no disco (de outra conta), o conteúdo mandado é conferido: senão
+    // mesmo que o arquivo já exista no armazenamento (de outra conta), o conteúdo mandado é conferido: senão
     // bastaria saber um hash para "ter" o áudio de outra pessoa
     if storage::hex(&hasher.finalize()) != hash {
         return Err(err(StatusCode::BAD_REQUEST, "o SHA-256 do corpo não confere com o hash da URL"));
     }
-    storage::commit_tmp(dir, &tmp, &hash).await.map_err(ApiError::internal)?;
+    // no S3 isto faz o HEAD (já existe: pula) e o PUT; em disco, o rename. Consome o temporário
+    s.store.commit_tmp(&tmp, &hash).await.map_err(ApiError::internal)?;
     guard.keep();
     match storage::register(&s.pool, auth.user_id, &hash, size as i64).await {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
@@ -127,14 +126,14 @@ pub async fn download(State(s): State<AppState>, auth: Auth, Path(hash): Path<St
         return Err(ApiError::not_found());
     }
     let rec = Sample::find_by_id((auth.user_id, hash.clone())).one(&s.db).await?.ok_or_else(ApiError::not_found)?;
-    let file = tokio::fs::File::open(storage::blob_path(&s.cfg.data_dir, &hash)).await.map_err(|e| {
-        tracing::error!(hash = %hash, error = %e, "registro sem arquivo em disco");
+    let blob = s.store.open(&hash).await.map_err(ApiError::internal)?.ok_or_else(|| {
+        tracing::error!(hash = %hash, "registro sem arquivo no armazenamento");
         ApiError::not_found()
     })?;
-    let mut res = Response::new(Body::from_stream(ReaderStream::new(file)));
+    let mut res = Response::new(blob.body);
     let h = res.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
-    h.insert(header::CONTENT_LENGTH, HeaderValue::from(rec.size as u64));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(blob.len.unwrap_or(rec.size as u64)));
     // o endereço é o hash do conteúdo: nunca muda, então o navegador pode guardar para sempre (e
     // `private` impede cache compartilhado, já que só o dono lê)
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=31536000, immutable"));
