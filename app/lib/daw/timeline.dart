@@ -2290,7 +2290,13 @@ mixin _DragEdit<T extends StatefulWidget> on State<T> {
   DawController get ctl;
   bool _dirty = false;
 
-  void beginEdit() => _dirty = false;
+  /// O gesto só mexeu num fade: não reacomoda os clipes da faixa (nem cria crossfade).
+  bool _fadeOnly = false;
+
+  void beginEdit() {
+    _dirty = false;
+    _fadeOnly = false;
+  }
 
   void ensureCheckpoint() {
     if (_dirty) return;
@@ -2311,7 +2317,9 @@ mixin _DragEdit<T extends StatefulWidget> on State<T> {
   void _endDrag() {
     if (!_dirty) return;
     _dirty = false;
-    ctl.mutate((_) => ctl.placeOnTop(editedClipId));
+    if (_fadeOnly) return;
+    // travessia de borda vira crossfade (de potência constante) em vez de aparar o de baixo
+    ctl.mutate((_) => ctl.placeOnTop(editedClipId, crossfade: true));
   }
 }
 
@@ -2330,6 +2338,18 @@ PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {Stri
       const SizedBox(width: 12),
       Expanded(child: Text(label)),
       if (shortcut != null) ...[const SizedBox(width: 16), Text(shortcut, style: const TextStyle(fontSize: 12, color: Colors.white54))],
+    ],
+  ),
+);
+
+/// Item de menu com marca no valor atual (as curvas de fade).
+PopupMenuItem<String> _checkItem(String value, String label, bool checked) => PopupMenuItem(
+  value: value,
+  child: Row(
+    children: [
+      SizedBox(width: 18, child: checked ? const Icon(Icons.check, size: 18) : null),
+      const SizedBox(width: 12),
+      Expanded(child: Text(label)),
     ],
   ),
 );
@@ -2418,10 +2438,22 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         if (len != clip.length) change(() => clip.length = len);
       case _Grab.fadeIn:
         final f = (_orig.fadeIn + total.dx / c.pxPerBeat * 60 / tb).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeOut));
-        if (f != clip.fadeIn) change(() => clip.fadeIn = f);
+        _fadeOnly = true;
+        if (f != clip.fadeIn) {
+          change(() {
+            clip.fadeIn = f;
+            clip.autoFadeIn = null; // mexido à mão: deixa de ser automático
+          });
+        }
       case _Grab.fadeOut:
         final f = (_orig.fadeOut - total.dx / c.pxPerBeat * 60 / tb).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeIn));
-        if (f != clip.fadeOut) change(() => clip.fadeOut = f);
+        _fadeOnly = true;
+        if (f != clip.fadeOut) {
+          change(() {
+            clip.fadeOut = f;
+            clip.autoFadeOut = null;
+          });
+        }
     }
   }
 
@@ -2448,6 +2480,11 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: 'S'),
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
+      const PopupMenuDivider(),
+      for (final shape in FadeShape.values) _checkItem('fin:${shape.index}', 'Fade de entrada: ${shape.label}', widget.clip.fadeInShape == shape),
+      for (final shape in FadeShape.values) _checkItem('fout:${shape.index}', 'Fade de saída: ${shape.label}', widget.clip.fadeOutShape == shape),
+      _menuItem('crossfade', Icons.compare_arrows, 'Crossfade nas sobreposições'),
+      const PopupMenuDivider(),
       _menuItem('to_midi', Icons.piano, 'Converter em notas (MIDI)'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
     ]);
@@ -2459,10 +2496,16 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         await _takesMenu(at);
       case 'warp':
         await showWarpDialog(context, c, widget.clip.id);
+      case final f when f.startsWith('fin:'):
+        c.setFadeShapes(widget.clip.id, fadeIn: FadeShape.values[int.parse(f.substring(4))]);
+      case final f when f.startsWith('fout:'):
+        c.setFadeShapes(widget.clip.id, fadeOut: FadeShape.values[int.parse(f.substring(5))]);
       case 'gain':
         await showClipGainDialog(context, c, widget.clip.id);
       case 'to_midi':
         await showConvertToMidi(context, c, widget.clip.id);
+      case 'crossfade':
+        c.crossfadeOverlaps(widget.clip.id);
       case 'duplicate':
         c.duplicateSelected();
       case 'split':
@@ -2551,7 +2594,12 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
               ),
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _FadePainter(fadeIn: clip.fadeIn * pxPerSec, fadeOut: clip.fadeOut * pxPerSec),
+                  painter: _FadePainter(
+                    fadeIn: clip.fadeIn * pxPerSec,
+                    fadeOut: clip.fadeOut * pxPerSec,
+                    inShape: clip.fadeInShape,
+                    outShape: clip.fadeOutShape,
+                  ),
                 ),
               ),
               Positioned(
@@ -2961,7 +3009,15 @@ class _WavePainter extends CustomPainter {
 
 class _FadePainter extends CustomPainter {
   final double fadeIn, fadeOut;
-  _FadePainter({required this.fadeIn, required this.fadeOut});
+  final FadeShape inShape, outShape;
+  _FadePainter({required this.fadeIn, required this.fadeOut, this.inShape = FadeShape.linear, this.outShape = FadeShape.linear});
+
+  /// O contorno do fade de [width] px visto da borda do clipe para dentro: o ganho da curva vira a
+  /// altura (1 = topo do clipe). A saída é a mesma curva olhada da borda direita.
+  List<Offset> _curve(FadeShape shape, double width, double height) {
+    final n = math.max(4, math.min(48, (width / 3).ceil()));
+    return [for (var i = 0; i <= n; i++) Offset(width * i / n, height * (1 - shape.gain(i / n)))];
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2971,26 +3027,26 @@ class _FadePainter extends CustomPainter {
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
     if (fadeIn > 0) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(0, 0)
-          ..lineTo(fadeIn, 0)
-          ..lineTo(0, size.height)
-          ..close(),
-        shade,
-      );
-      canvas.drawLine(Offset(0, size.height), Offset(fadeIn, 0), line);
+      final pts = _curve(inShape, fadeIn, size.height);
+      // o que o fade tira (acima da curva) escurece; a curva é o ganho sobre a onda
+      final area = Path()..moveTo(0, 0);
+      area.lineTo(fadeIn, 0);
+      for (final p in pts.reversed) {
+        area.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(area..close(), shade);
+      canvas.drawPath(Path()..addPolygon(pts, false), line);
     }
     if (fadeOut > 0) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(size.width, 0)
-          ..lineTo(size.width - fadeOut, 0)
-          ..lineTo(size.width, size.height)
-          ..close(),
-        shade,
-      );
-      canvas.drawLine(Offset(size.width - fadeOut, 0), Offset(size.width, size.height), line);
+      // a saída é a entrada vista de trás: o ganho cai de 1 (esquerda) a 0 (borda direita)
+      final pts = [for (final p in _curve(outShape, fadeOut, size.height)) Offset(size.width - p.dx, p.dy)];
+      final area = Path()..moveTo(size.width, 0);
+      area.lineTo(size.width - fadeOut, 0);
+      for (final p in pts.reversed) {
+        area.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(area..close(), shade);
+      canvas.drawPath(Path()..addPolygon(pts, false), line);
     }
     // alças de fade nos cantos de cima
     final knob = Paint()..color = Colors.white;
@@ -2999,5 +3055,5 @@ class _FadePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FadePainter o) => o.fadeIn != fadeIn || o.fadeOut != fadeOut;
+  bool shouldRepaint(_FadePainter o) => o.fadeIn != fadeIn || o.fadeOut != fadeOut || o.inShape != inShape || o.outShape != outShape;
 }

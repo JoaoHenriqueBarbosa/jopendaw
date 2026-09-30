@@ -164,6 +164,8 @@ A linha **Nova faixa** (botão `+ Faixa` com uma seta) fica logo depois da últi
 | Arrastar a borda direita | Apara o fim. No áudio, estica até o fim do arquivo, no máximo. No clipe de notas, alonga ou encurta o clipe. | Mesmos mínimos. | O cursor do mouse vira setas nas bordas. |
 | Arrastar o canto superior esquerdo (14 × 14 px) | Ajusta o fade in do clipe de áudio. O canto ganha uma bolinha branca e um triângulo sombreado mostra a rampa. | 0 até a duração do clipe menos o fade out. Sem encaixe. | Só em clipe de áudio. Ver [Áudio e clipes](03-audio-e-clipes.md). |
 | Arrastar o canto superior direito | Ajusta o fade out. | 0 até a duração menos o fade in. | |
+| Menu do clipe: `Fade de entrada: …` e `Fade de saída: …` | Escolhe a curva de cada fade: Linear, Potência constante, Exponencial ou S (seno cosseno); a atual leva a marca. A rampa desenhada no clipe segue a curva. | Padrão: Linear (o envelope de sempre). | Desfazível. Potência constante é a indicada para crossfade. |
+| Menu do clipe: `Crossfade nas sobreposições` | Nos clipes da mesma faixa que se cruzam pela borda, põe fade de saída no anterior e de entrada no posterior, com o tamanho da sobreposição e potência constante. | | Um passo do desfazer. |
 | Botão direito, ou toque longo no celular | Abre o menu do clipe (tabelas abaixo). | | |
 | Duplo clique num clipe de notas | Abre o clipe no editor. | | Em clipe de áudio não faz nada. |
 
@@ -201,6 +203,7 @@ Os atalhos do menu são escritos `Ctrl` mesmo no Mac (vale o Cmd).
 - **Duplicar (Ctrl+D):** a cópia começa onde o original termina e fica selecionada.
 - **Apagar (Delete ou Backspace):** apaga o clipe selecionado e deixa o vão.
 - **Copiar e colar clipes:** a timeline não tem (Ctrl+C e Ctrl+V só existem no piano roll, para notas). Use Duplicar.
+- **Crossfade automático:** ao terminar um arraste (mover ou aparar), se o clipe que você mexeu só cruza a borda de outro (entra na cauda ou na cabeça dele, cobrindo no máximo metade do menor dos dois e sem passar por fades que você mesmo pôs), o outro não é cortado: o anterior ganha fade de saída e o posterior fade de entrada, do tamanho da sobreposição e com curva de potência constante. Mover o clipe de novo até a sobreposição sumir devolve esses fades ao que eram; um fade que você ajustou ou cuja curva escolheu deixa de ser automático. Nos outros casos vale a regra abaixo.
 - **Sobreposição:** um clipe nunca toca somado com outro da mesma faixa. Ao terminar um arraste (mover ou aparar) e ao duplicar, o clipe que você mexeu fica por cima e o que ele cobre dos outros é cortado: o outro encurta, perde o começo, é partido em dois (se o seu clipe cai no meio dele) ou some (se fica todo coberto). Tudo isso é um passo só do desfazer. Áudio e notas seguem a mesma regra. Nos pedaços que sobram, o fade do lado cortado é zerado; só quando o seu clipe cobre o fim de outro, o fade de saída desse outro apenas é limitado ao novo tamanho.
 
 ### Rolagem e zoom

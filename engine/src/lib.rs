@@ -568,6 +568,8 @@ pub struct Engine {
     loop_end: f64,
     samples: HashMap<u32, Arc<Sample>>,
     clips: Vec<Clip>,
+    /// Curva de fade (entrada, saída) de cada clipe de `clips`, em paralelo (ver [`fade_curve`]); zero = padrão.
+    clip_shapes: Vec<(u8, u8)>,
     tracks: Vec<Track>,
     /// Paralelos a `tracks`: instrumento e notas, roteamento e inserts, o buffer de trabalho do
     /// bloco (o barramento acumula nele o que chega) e a última saída pós-inserts (chave de
@@ -697,6 +699,7 @@ impl Engine {
             loop_end: 0.0,
             samples: HashMap::new(),
             clips: Vec::new(),
+            clip_shapes: Vec::new(),
             tracks: Vec::new(),
             lanes: Vec::new(),
             strips: Vec::new(),
@@ -1024,10 +1027,22 @@ impl Engine {
 
     pub fn clear_clips(&mut self) {
         self.clips.clear();
+        self.clip_shapes.clear();
     }
 
     pub fn add_clip(&mut self, clip: Clip) {
         self.clips.push(clip);
+        self.clip_shapes.push((0, 0));
+    }
+
+    /// Curvas de fade do ÚLTIMO clipe acrescentado por `add_clip`: entrada e saída, cada uma um dos
+    /// `FADE_*` (valor desconhecido vale [`FADE_DEFAULT`]). Sem clipe, não faz nada. É relativa ao
+    /// último clipe (e não a um índice) para sobreviver a quem filtra a lista de chamadas, como o
+    /// render offline, que descarta clipes depois do fim.
+    pub fn set_clip_fade_shape(&mut self, fade_in: u32, fade_out: u32) {
+        if let Some(s) = self.clip_shapes.last_mut() {
+            *s = (fade_in.min(255) as u8, fade_out.min(255) as u8);
+        }
     }
 
     // ---------------------------------------------------------------- instrumentos e notas
@@ -2083,8 +2098,8 @@ impl Engine {
         br.fill(0.0);
         let mut sounded = false;
         if self.playing {
-            sounded = render_clips(&self.clips, &self.samples, t, bl, br, self.pos, &self.tempo, self.rate);
-        } else if self.tail > 0 && render_clips(&self.clips, &self.samples, t, bl, br, self.tail_pos, &self.tempo, self.rate) {
+            sounded = render_clips(&self.clips, &self.clip_shapes, &self.samples, t, bl, br, self.pos, &self.tempo, self.rate);
+        } else if self.tail > 0 && render_clips(&self.clips, &self.clip_shapes, &self.samples, t, bl, br, self.tail_pos, &self.tempo, self.rate) {
             sounded = true;
             let len = self.tail_len as f32;
             for (i, (l, r)) in bl.iter_mut().zip(br.iter_mut()).enumerate() {
@@ -2239,6 +2254,7 @@ fn silence_through(chain: &mut Chain, buf: &mut Stereo, frames: usize, keys: &[S
 #[allow(clippy::too_many_arguments)]
 fn render_clips(
     clips: &[Clip],
+    shapes: &[(u8, u8)],
     samples: &HashMap<u32, Arc<Sample>>,
     track: usize,
     bl: &mut [f32],
@@ -2250,7 +2266,8 @@ fn render_clips(
     let n = bl.len();
     let (start, end) = (pos, pos + n as f64);
     let mut sounded = false;
-    for clip in clips.iter().filter(|c| c.track == track) {
+    for (ci, clip) in clips.iter().enumerate().filter(|(_, c)| c.track == track) {
+        let (shape_in, shape_out) = shapes.get(ci).copied().unwrap_or((0, 0));
         let Some(sample) = samples.get(&clip.sample) else { continue };
         let c_start = tempo.to_frames(clip.start);
         let c_end = c_start + clip.length * rate;
@@ -2265,7 +2282,7 @@ fn render_clips(
         for i in from..to.min(n) {
             let t = start + i as f64 - c_start; // quadros desde o início do clipe
             let secs = t / rate;
-            let env = fade(secs, clip.length, clip.fade_in, clip.fade_out) * clip.gain;
+            let env = fade(secs, clip.length, clip.fade_in, clip.fade_out, shape_in, shape_out) * clip.gain;
             let sp = clip.offset * sample.rate + t * step;
             let l = sample.at_cubic(0, sp);
             let r = if stereo { sample.at_cubic(1, sp) } else { l };
@@ -2276,17 +2293,45 @@ fn render_clips(
     sounded
 }
 
-/// Envelope de fade de entrada e saída (lineares em amplitude, curva de potência quadrática).
-fn fade(t: f64, length: f64, fade_in: f64, fade_out: f64) -> f32 {
+/// Curvas de fade (o valor de `clip_fade_shape`). O padrão, 0, é o envelope histórico do motor
+/// (`x²`, o de todo projeto que ainda não escolheu curva): mantê-lo preserva o som dos projetos
+/// antigos. As demais são curvas de amplitude sobre `x` (0 a 1 = progresso da entrada; a saída usa
+/// o mesmo desenho espelhado).
+pub const FADE_DEFAULT: u32 = 0;
+/// Potência constante: `sin(x·π/2)`. Dois clipes sem correlação num crossfade somam potência 1.
+pub const FADE_EQUAL_POWER: u32 = 1;
+/// Exponencial (`(e^{4x}−1)/(e^4−1)`): na saída cai depressa e some suave no fim; na entrada
+/// sobe devagar e acelera.
+pub const FADE_EXP: u32 = 2;
+/// S (seno cosseno): `(1−cos πx)/2`, suave nas duas pontas.
+pub const FADE_S: u32 = 3;
+
+/// Ganho de amplitude da curva `shape` no progresso `x` (0 a 1, fora disso é limitado). Vale
+/// exatamente 0 em 0 e 1 em 1, e não decresce. Sem alocação.
+pub fn fade_curve(shape: u32, x: f64) -> f64 {
+    let x = x.clamp(0.0, 1.0);
+    match shape {
+        FADE_EQUAL_POWER => (x * std::f64::consts::FRAC_PI_2).sin(),
+        FADE_EXP => {
+            const K: f64 = 4.0;
+            ((K * x).exp() - 1.0) / (K.exp() - 1.0)
+        }
+        FADE_S => (1.0 - (x * std::f64::consts::PI).cos()) * 0.5,
+        _ => x * x,
+    }
+}
+
+/// Envelope de fade de entrada e saída do clipe, no instante `t` (segundos desde o início).
+fn fade(t: f64, length: f64, fade_in: f64, fade_out: f64, shape_in: u8, shape_out: u8) -> f32 {
     let mut g = 1.0;
     if fade_in > 0.0 && t < fade_in {
-        g *= t / fade_in;
+        g *= fade_curve(shape_in as u32, t / fade_in);
     }
     let left = length - t;
     if fade_out > 0.0 && left < fade_out {
-        g *= (left / fade_out).max(0.0);
+        g *= fade_curve(shape_out as u32, (left / fade_out).max(0.0));
     }
-    (g * g) as f32
+    g as f32
 }
 
 #[cfg(test)]
@@ -2318,6 +2363,147 @@ mod tests {
             e.process(cl, cr);
         }
         (l, r)
+    }
+
+    #[test]
+    fn curvas_de_fade_nos_quartos_e_nas_pontas() {
+        let xs = [0.0, 0.25, 0.5, 0.75, 1.0];
+        let s2 = std::f64::consts::FRAC_1_SQRT_2;
+        let expect: [(u32, [f64; 5]); 4] = [
+            (FADE_DEFAULT, [0.0, 0.0625, 0.25, 0.5625, 1.0]),
+            (FADE_EQUAL_POWER, [0.0, (std::f64::consts::PI / 8.0).sin(), s2, (3.0 * std::f64::consts::PI / 8.0).sin(), 1.0]),
+            (FADE_EXP, [0.0, (1f64.exp() - 1.0) / (4f64.exp() - 1.0), (2f64.exp() - 1.0) / (4f64.exp() - 1.0), (3f64.exp() - 1.0) / (4f64.exp() - 1.0), 1.0]),
+            (FADE_S, [0.0, (1.0 - s2) / 2.0, 0.5, (1.0 + s2) / 2.0, 1.0]),
+        ];
+        for (shape, want) in expect {
+            for (x, w) in xs.iter().zip(want) {
+                assert!((fade_curve(shape, *x) - w).abs() < 1e-12, "curva {shape} em {x}: {} != {w}", fade_curve(shape, *x));
+            }
+            // pontas exatas, fora do intervalo limitado, monótona e sem passar de 1
+            assert_eq!(fade_curve(shape, 0.0), 0.0);
+            assert_eq!(fade_curve(shape, 1.0), 1.0);
+            assert_eq!(fade_curve(shape, -3.0), 0.0);
+            assert_eq!(fade_curve(shape, 7.0), 1.0);
+            let mut prev = 0.0;
+            for i in 0..=10_000 {
+                let g = fade_curve(shape, i as f64 / 10_000.0);
+                assert!(g >= prev && g <= 1.0, "curva {shape} não monótona em {i}");
+                prev = g;
+            }
+        }
+        // valor desconhecido = padrão
+        assert_eq!(fade_curve(99, 0.5), fade_curve(FADE_DEFAULT, 0.5));
+    }
+
+    /// Clipe de DC (1,0) de 1 s com os fades e as curvas pedidos; devolve o canal esquerdo de 1 s.
+    fn render_faded(fade_in: f64, fade_out: f64, shapes: Option<(u32, u32)>) -> Vec<f32> {
+        let mut e = engine();
+        e.set_tempo(120.0, 4);
+        e.set_track_count(1);
+        e.track_mut(0).unwrap().pan = 0.0;
+        e.load_sample(1, Sample::new(vec![vec![1.0; 96_000]], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 1.0, gain: 1.0, fade_in, fade_out });
+        if let Some((a, b)) = shapes {
+            e.set_clip_fade_shape(a, b);
+        }
+        e.play();
+        run(&mut e, 48_000).0
+    }
+
+    #[test]
+    fn clipe_aplica_a_curva_escolhida_em_cada_lado() {
+        let base = render_faded(0.0, 0.0, None);
+        let full = base[24_000]; // ganho da faixa com pan central
+        assert!(full > 0.5);
+        let f = 0.5; // 24000 quadros de fade nos dois lados
+        for shape in [FADE_DEFAULT, FADE_EQUAL_POWER, FADE_EXP, FADE_S] {
+            let l = render_faded(f, f, Some((shape, shape)));
+            for i in [0usize, 6000, 12_000, 18_000, 23_999] {
+                let want = fade_curve(shape, i as f64 / 24_000.0) as f32 * full;
+                assert!((l[i] - want).abs() < 1e-4, "curva {shape} entrada em {i}: {} != {want}", l[i]);
+            }
+            for i in [24_000usize, 30_000, 36_000, 42_000] {
+                let left = (48_000 - i) as f64 / 24_000.0;
+                let want = fade_curve(shape, left) as f32 * full;
+                assert!((l[i] - want).abs() < 1e-4, "curva {shape} saída em {i}: {} != {want}", l[i]);
+            }
+            assert_eq!(l[0], 0.0);
+            assert!(l[47_999] < 1e-3 * full);
+        }
+        // lados independentes: entrada equal-power, saída padrão
+        let l = render_faded(f, f, Some((FADE_EQUAL_POWER, FADE_DEFAULT)));
+        assert!((l[6000] - fade_curve(FADE_EQUAL_POWER, 0.25) as f32 * full).abs() < 1e-4);
+        assert!((l[42_000] - fade_curve(FADE_DEFAULT, 0.25) as f32 * full).abs() < 1e-4);
+        // sem a chamada nova, o som é o histórico (x²)
+        let old = render_faded(f, f, None);
+        assert!((old[12_000] - 0.25 * full).abs() < 1e-4);
+    }
+
+    #[test]
+    fn fade_de_zero_amostra_e_sem_fade_em_qualquer_curva() {
+        let base = render_faded(0.0, 0.0, None);
+        for shape in [FADE_DEFAULT, FADE_EQUAL_POWER, FADE_EXP, FADE_S] {
+            assert_eq!(render_faded(0.0, 0.0, Some((shape, shape))), base, "curva {shape}");
+        }
+    }
+
+    #[test]
+    fn curva_sem_clipe_ou_de_clipe_limpo_nao_estraga_nada() {
+        let mut e = engine();
+        e.set_clip_fade_shape(1, 1); // sem clipe: ignora
+        e.set_track_count(1);
+        e.load_sample(1, Sample::new(vec![vec![1.0; 100]], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 0.001, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        e.set_clip_fade_shape(FADE_S, FADE_S);
+        e.clear_clips();
+        e.set_clip_fade_shape(1, 1);
+        assert!(e.clip_shapes.is_empty());
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 0.001, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        assert_eq!(e.clip_shapes, vec![(0, 0)]);
+    }
+
+    /// Dois clipes de tons sem correlação, com sobreposição de 0,5 s e crossfade da mesma duração.
+    fn crossfade_power(shape: u32) -> Vec<f64> {
+        let tone = |hz: f64| -> Vec<f32> { (0..96_000).map(|i| (2.0 * std::f64::consts::PI * hz * i as f64 / RATE).sin() as f32).collect() };
+        let mut e = engine();
+        e.set_tempo(120.0, 4);
+        e.set_track_count(1);
+        e.track_mut(0).unwrap().pan = 0.0;
+        e.load_sample(1, Sample::new(vec![tone(100.0)], RATE));
+        e.load_sample(2, Sample::new(vec![tone(150.0)], RATE));
+        // A: 0 a 1 s, sai em 0,5 s; B: 0,5 s a 1,5 s, entra em 0,5 s (1 batida = 0,5 s)
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 1.0, gain: 1.0, fade_in: 0.0, fade_out: 0.5 });
+        e.set_clip_fade_shape(shape, shape);
+        e.add_clip(Clip { track: 0, sample: 2, start: 1.0, offset: 0.0, length: 1.0, gain: 1.0, fade_in: 0.5, fade_out: 0.0 });
+        e.set_clip_fade_shape(shape, shape);
+        e.play();
+        let (l, _) = run(&mut e, 72_000);
+        // potência média em 5 janelas de 4800 quadros (ciclos inteiros dos dois tons) na sobreposição
+        (0..5).map(|k| l[24_000 + k * 4800..24_000 + (k + 1) * 4800].iter().map(|&x| (x as f64).powi(2)).sum::<f64>() / 4800.0).collect()
+    }
+
+    #[test]
+    fn crossfade_de_potencia_constante_mantem_a_potencia() {
+        let solo = {
+            let mut e = engine();
+            e.set_tempo(120.0, 4);
+            e.set_track_count(1);
+            e.track_mut(0).unwrap().pan = 0.0;
+            e.load_sample(1, Sample::new(vec![(0..96_000).map(|i| (2.0 * std::f64::consts::PI * 100.0 * i as f64 / RATE).sin() as f32).collect()], RATE));
+            e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 1.0, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+            e.play();
+            let (l, _) = run(&mut e, 4800);
+            l.iter().map(|&x| (x as f64).powi(2)).sum::<f64>() / 4800.0
+        };
+        assert!(solo > 0.1);
+        let eq = crossfade_power(FADE_EQUAL_POWER);
+        for (k, p) in eq.iter().enumerate() {
+            assert!((p / solo - 1.0).abs() < 0.03, "janela {k}: potência {} vs {solo}", p);
+        }
+        // a curva padrão (x²) e a S afundam no meio: prova que a curva importa
+        let dip = crossfade_power(FADE_DEFAULT);
+        assert!(dip[2] < 0.8 * solo, "curva padrão não afunda: {}", dip[2] / solo);
+        assert!(crossfade_power(FADE_S)[2] < 0.9 * solo);
     }
 
     #[test]

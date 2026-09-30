@@ -1283,6 +1283,10 @@ class DawController extends ChangeNotifier {
         final r = _clipSound(c, d.bpm);
         if (r == null) continue;
         calls.add(['clip_add', i, r.id, c.start, r.offset, r.length, c.gain, r.fadeIn, r.fadeOut]);
+        // as curvas dos fades valem para o último `clip_add`; só as que fogem do padrão (motor sem a chamada ignora)
+        if (c.fadeInShape != FadeShape.linear || c.fadeOutShape != FadeShape.linear) {
+          calls.add(['clip_fade_shape', c.fadeInShape.index, c.fadeOutShape.index]);
+        }
       }
     }
     // instrumentos e notas depois do áudio: um motor que ainda não conheça estas funções para na
@@ -2501,7 +2505,12 @@ class DawController extends ChangeNotifier {
   /// O clipe [id] fica por cima: o que ele cobre dos outros clipes da mesma faixa sai (encurta,
   /// apara o começo, parte em dois ou some), como nos DAWs. Sem isso, clipes sobrepostos tocavam
   /// somados (áudio dobrado). Não faz checkpoint: vai junto da edição que o chamou.
-  void placeOnTop(String id) {
+  ///
+  /// Com [crossfade], a travessia de borda (o de cima entra na cauda ou na cabeça do outro, sem
+  /// engoli-lo) vira crossfade em vez de aparo: o de baixo mantém o pedaço coberto, com fade de
+  /// potência constante do tamanho da sobreposição ([_tryCrossfade]). Sempre reconcilia os fades
+  /// automáticos que perderam a sobreposição ([reconcileAutoFades]).
+  void placeOnTop(String id, {bool crossfade = false}) {
     final d = doc;
     final a = _findClip(id);
     if (a != null) {
@@ -2510,6 +2519,7 @@ class DawController extends ChangeNotifier {
       for (final o in t.clips.toList()) {
         if (identical(o, top) || d.clipEnd(o) <= s + 1e-9 || o.start >= e - 1e-9) continue;
         final oEnd = d.clipEnd(o);
+        if (crossfade && _tryCrossfade(o, top, oEnd: oEnd, topEnd: e)) continue;
         // segundos da origem entre as batidas (com warp, o andamento do áudio, não o do projeto;
         // com mapa de andamento, o tempo real entre elas)
         if (o.start >= s - 1e-9 && oEnd <= e + 1e-9) {
@@ -2541,6 +2551,7 @@ class DawController extends ChangeNotifier {
             ..fadeIn = 0;
         }
       }
+      reconcileAutoFades();
       return;
     }
     final m = findMidiClip(id);
@@ -2580,6 +2591,135 @@ class DawController extends ChangeNotifier {
       }
     }
     if (editingClip == null && dock == Dock.editor) dock = Dock.none;
+  }
+
+  static const _fadeEps = 1e-9;
+
+  /// A sobreposição de [early] e [late] (mesma faixa) quando é uma travessia de borda: [late]
+  /// começa dentro de [early] e termina depois dele. Em batidas; nulo se um contém o outro ou não
+  /// se tocam.
+  double? _crossing(AudioClip early, AudioClip late) {
+    final eEnd = doc.clipEnd(early), lEnd = doc.clipEnd(late);
+    if (late.start <= early.start + _fadeEps || late.start >= eEnd - _fadeEps || lEnd <= eEnd + _fadeEps) return null;
+    return eEnd - late.start;
+  }
+
+  /// Tenta transformar a sobreposição de [o] (já na faixa) com [top] em crossfade; devolve se
+  /// conseguiu. Exige travessia de borda com o pedaço coberto de no máximo metade do menor dos dois
+  /// (sem esse teto no comando do menu) e cabendo nos fades que já existem; senão o chamador apara como sempre. Com [force] (o comando
+  /// do menu) sobrepõe também os fades do usuário, que a marca guarda para o desfazer da sobreposição.
+  bool _tryCrossfade(AudioClip o, AudioClip top, {required double oEnd, required double topEnd, bool force = false}) {
+    final oFirst = o.start < top.start;
+    final early = oFirst ? o : top, late = oFirst ? top : o;
+    final overlap = _crossing(early, late);
+    if (overlap == null) return false;
+    final eBeats = oFirst ? oEnd - o.start : topEnd - top.start, lBeats = oFirst ? topEnd - top.start : oEnd - o.start;
+    if (!force && overlap > math.min(eBeats, lBeats) / 2 + _fadeEps) return false;
+    // segundos da origem de cada lado (com warp e mapa de andamento, o vigente na borda)
+    final outSecs = doc.sourceSeconds(early, late.start, late.start + overlap);
+    final inSecs = doc.sourceSeconds(late, late.start, late.start + overlap);
+    // o fade que sai/entra no lado que não é do crossfade (o do usuário) segue como está
+    if (!force && ((early.fadeOut > 0 && early.autoFadeOut == null) || (late.fadeIn > 0 && late.autoFadeIn == null))) return false;
+    if (early.fadeIn + outSecs > early.length + _fadeEps || inSecs + late.fadeOut > late.length + _fadeEps) return false;
+    early
+      ..autoFadeOut = early.autoFadeOut ?? AutoFade(early.fadeOut, early.fadeOutShape)
+      ..fadeOut = outSecs
+      ..fadeOutShape = FadeShape.equalPower;
+    late
+      ..autoFadeIn = late.autoFadeIn ?? AutoFade(late.fadeIn, late.fadeInShape)
+      ..fadeIn = inSecs
+      ..fadeInShape = FadeShape.equalPower;
+    return true;
+  }
+
+  /// Ajusta os fades que o crossfade automático gerou ao estado atual das sobreposições: o que
+  /// ainda cruza outro clipe da faixa acompanha o novo tamanho; o que perdeu a sobreposição (ou
+  /// não cabe mais) volta ao fade de antes. Fade sem marca (do usuário) nunca é tocado. Não faz
+  /// checkpoint: vai junto da edição que o chamou.
+  void reconcileAutoFades() {
+    for (final t in doc.tracks) {
+      for (final c in t.clips) {
+        final ai = c.autoFadeIn, ao = c.autoFadeOut;
+        if (ai != null) {
+          double? best;
+          for (final p in t.clips) {
+            if (identical(p, c)) continue;
+            final ov = _crossing(p, c);
+            if (ov != null && (best == null || ov > best)) best = ov;
+          }
+          final secs = best == null ? null : doc.sourceSeconds(c, c.start, c.start + best);
+          if (secs == null || secs + c.fadeOut > c.length + _fadeEps) {
+            c
+              ..fadeIn = math.min(ai.prevLength, math.max(0.0, c.length - c.fadeOut))
+              ..fadeInShape = ai.prevShape
+              ..autoFadeIn = null;
+          } else {
+            c.fadeIn = secs;
+          }
+        }
+        if (ao != null) {
+          double? best;
+          for (final p in t.clips) {
+            if (identical(p, c)) continue;
+            final ov = _crossing(c, p);
+            if (ov != null && (best == null || ov > best)) best = ov;
+          }
+          final secs = best == null ? null : doc.sourceSeconds(c, doc.clipEnd(c) - best, doc.clipEnd(c));
+          if (secs == null || secs + c.fadeIn > c.length + _fadeEps) {
+            c
+              ..fadeOut = math.min(ao.prevLength, math.max(0.0, c.length - c.fadeIn))
+              ..fadeOutShape = ao.prevShape
+              ..autoFadeOut = null;
+          } else {
+            c.fadeOut = secs;
+          }
+        }
+      }
+    }
+  }
+
+  /// Crossfade nas sobreposições da faixa do clipe [id] (o comando do menu, para clipes que já se
+  /// sobrepõem): cada travessia de borda ganha fade de saída no anterior e de entrada no posterior,
+  /// com o tamanho da sobreposição e potência constante, em um passo de desfazer. Devolve quantas
+  /// sobreposições viraram crossfade.
+  int crossfadeOverlaps(String id) {
+    final a = _findClip(id);
+    if (a == null) return 0;
+    final t = a.$1;
+    final pairs = <(AudioClip, AudioClip)>[];
+    for (final x in t.clips) {
+      for (final y in t.clips) {
+        if (!identical(x, y) && _crossing(x, y) != null) pairs.add((x, y));
+      }
+    }
+    if (pairs.isEmpty) return 0;
+    var done = 0;
+    checkpoint();
+    mutate((d) {
+      for (final (early, late) in pairs) {
+        if (_tryCrossfade(early, late, oEnd: d.clipEnd(early), topEnd: d.clipEnd(late), force: true)) done++;
+      }
+    });
+    return done;
+  }
+
+  /// Curva dos fades do clipe [id] (nulo deixa o lado como está); desfazível. Escolher a curva é
+  /// decisão do usuário: o fade deixa de ser automático (a sobreposição não o reverte mais).
+  void setFadeShapes(String id, {FadeShape? fadeIn, FadeShape? fadeOut}) {
+    final f = _findClip(id);
+    if (f == null) return;
+    final c = f.$2;
+    if ((fadeIn == null || fadeIn == c.fadeInShape) && (fadeOut == null || fadeOut == c.fadeOutShape)) return;
+    edit((_) {
+      if (fadeIn != null) {
+        c.fadeInShape = fadeIn;
+        c.autoFadeIn = null;
+      }
+      if (fadeOut != null) {
+        c.fadeOutShape = fadeOut;
+        c.autoFadeOut = null;
+      }
+    });
   }
 
   void duplicateSelected() {

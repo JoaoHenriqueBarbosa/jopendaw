@@ -188,6 +188,8 @@ O barramento (`kind: bus`) não tem clipes (`TrackKind.hasClips`), só recebe á
 | `length` | número (s) | sim | | duração do trecho, em segundos do arquivo |
 | `gain` | número | não | `1` | ganho do clipe (linear). A interface (`Ganho do clipe…`, `clip_gain_dialog.dart`) vai de −40 a +12 dB: 0 no piso (−∞) e `10^(dB/20)` acima; `setClipGain` limita a 0..`maxClipGain` (+12 dB, ≈ 3,98). Cada arraste do slider é um `checkpoint` (`onChangeStart`) seguido de `mutate`s sem histórico, ou seja, um passo do desfazer; o `Zerar (0 dB)` é um passo próprio. Vai ao motor em `clip_add` |
 | `fade_in`, `fade_out` | número (s) | não | `0` | fades, em segundos do arquivo |
+| `fade_in_shape`, `fade_out_shape` | inteiro | **(omitido se 0)** | `0` | curva de cada fade (`FadeShape`): 0 linear (o envelope histórico, `x²`), 1 potência constante, 2 exponencial, 3 S. Código desconhecido vale 0 |
+| `auto_fade_in`, `auto_fade_out` | objeto `{len, shape}` | **(omitido se nulo)** | `null` | marca de fade gerado pelo crossfade automático, com o comprimento e a curva de antes; `reconcileAutoFades` os devolve quando a sobreposição some. Fade mexido à mão perde a marca |
 | `warp` | bool | **(omitido se falso)** | `false` | esticar para seguir o andamento do projeto |
 | `source_bpm` | número ou ausente | **(omitido se nulo)** | `null` | andamento original do áudio (20..999); sem ele o warp não estica |
 | `pitch` | número (semitons) | **(omitido se 0)** | `0` | transposição, −24..24, sem mudar a duração |
@@ -410,7 +412,7 @@ edit(fn, undoable: true)
 | andamento, nº de faixas, master, loop, metrônomo | `tempo`, `tracks`, `master`, `loop_set`, `metronome` | sempre, inteiro |
 | mapa de andamento e de compassos | `tempo_clear` e `tempo_point beat bpm ramp` por ponto; `meter_clear` e `meter_point bar num den` por mudança (logo depois do `tempo`, antes de `tracks`) | só quando a assinatura (`_SyncCache.tempoSig`/`meterSig`) muda; sem mapa nada vai (o `tempo` já basta) |
 | faixa (volume, pan, mudo, solo) | `track i gain pan mute solo` | sempre |
-| clipes de áudio | `clips_clear` e `clip_add track sample start offset length gain fade_in fade_out` | sempre, a lista inteira |
+| clipes de áudio | `clips_clear` e `clip_add track sample start offset length gain fade_in fade_out`, seguido de `clip_fade_shape in out` (do último clipe) só quando alguma curva não é a linear | sempre, a lista inteira |
 | tipo da faixa | `track_kind i kind.index` (o **índice** do enum é o código do motor) | só quando o tipo daquele índice muda |
 | parâmetros do instrumento | `param i id valor` | só os que mudaram (`_SentTrack.params`) |
 | áudio do sampler | `instrument_sample i id` | só quando muda |

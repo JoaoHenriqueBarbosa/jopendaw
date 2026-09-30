@@ -160,6 +160,13 @@ pub extern "C" fn clip_add(track: usize, sample: u32, start: f64, offset: f64, l
     engine().add_clip(Clip { track, sample, start, offset, length, gain, fade_in, fade_out });
 }
 
+/// Curvas de fade (entrada, saída) do último clipe acrescentado por `clip_add` (0 padrão, 1 potência
+/// constante, 2 exponencial, 3 S). Vem depois do `clip_add`; um motor sem esta chamada ignora.
+#[unsafe(no_mangle)]
+pub extern "C" fn clip_fade_shape(fade_in: u32, fade_out: u32) {
+    engine().set_clip_fade_shape(fade_in, fade_out);
+}
+
 /// Tipo da faixa `i` (0 áudio, 1 sintetizador, 2 bateria, 3 sampler, 4 barramento, 5 FM, 6 wavetable). Mandar o
 /// mesmo tipo de novo não mexe em nada; trocar recria o instrumento nos padrões, então vem antes
 /// dos `param`.

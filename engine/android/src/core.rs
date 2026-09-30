@@ -444,6 +444,7 @@ pub(crate) mod tests {
                 fade_in: g(6),
                 fade_out: g(7),
             }),
+            "clip_fade_shape" => e.set_clip_fade_shape(g(0) as u32, g(1) as u32),
             "track_kind" => e.set_track_kind(g(0) as usize, g(1) as u32),
             "live_on" => e.live_on(g(0) as usize, g(1) as u32, g(2) as f32),
             "live_off" => e.live_off(g(0) as usize, g(1) as u32),

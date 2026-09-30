@@ -13,12 +13,63 @@ import 'midi_map.dart';
 import 'sampler_zones.dart';
 import 'tempo_map.dart';
 
+/// Curvas de fade de um clipe de áudio (o código vai ao motor por `clip_fade_shape`). A ordem é a
+/// do motor (`FADE_*` em `engine/src/lib.rs`): tipo novo só entra no fim.
+enum FadeShape {
+  /// O envelope histórico (`x²`): o de todo projeto que nunca escolheu curva.
+  linear('Linear'),
+
+  /// Potência constante (`sin`): a do crossfade, dois clipes sem correlação somam potência 1.
+  equalPower('Potência constante'),
+
+  /// Exponencial: na saída cai depressa e some suave; na entrada sobe devagar e acelera.
+  exponential('Exponencial'),
+
+  /// S (seno cosseno): suave nas duas pontas.
+  sCurve('S (seno cosseno)');
+
+  final String label;
+  const FadeShape(this.label);
+
+  static FadeShape fromCode(Object? code) => code is int && code >= 0 && code < values.length ? values[code] : linear;
+
+  /// Ganho de amplitude no progresso [x] (0 a 1) do fade de entrada; a saída usa o espelho. Espelho
+  /// exato de `fade_curve` do motor (0 em 0, 1 em 1, sem decrescer).
+  double gain(double x) {
+    x = x.clamp(0.0, 1.0);
+    return switch (this) {
+      FadeShape.linear => x * x,
+      FadeShape.equalPower => math.sin(x * math.pi / 2),
+      FadeShape.exponential => (math.exp(4 * x) - 1) / (math.exp(4) - 1),
+      FadeShape.sCurve => (1 - math.cos(x * math.pi)) / 2,
+    };
+  }
+}
+
+/// Fade que o crossfade automático gerou, com o que havia antes: desfeita a sobreposição, só o que
+/// é automático volta ao valor anterior (um fade que o usuário mexeu perde a marca).
+class AutoFade {
+  final double prevLength;
+  final FadeShape prevShape;
+  const AutoFade(this.prevLength, this.prevShape);
+
+  AutoFade.fromJson(Map<String, dynamic> j) : prevLength = (j['len'] as num? ?? 0).toDouble(), prevShape = FadeShape.fromCode(j['shape']);
+
+  Map<String, dynamic> toJson() => {'len': prevLength, 'shape': prevShape.index};
+}
+
 class AudioClip {
   String id;
 
   /// sha-256 do arquivo original: a chave do áudio no guardado local.
   String sample;
   double start, offset, length, gain, fadeIn, fadeOut;
+
+  /// Curvas dos fades de entrada e de saída.
+  FadeShape fadeInShape, fadeOutShape;
+
+  /// Marca dos fades gerados pelo crossfade automático (nulo = fade do usuário).
+  AutoFade? autoFadeIn, autoFadeOut;
 
   /// Tomadas de uma gravação em loop (sha-256 de cada passada, na ordem); a ativa é [sample].
   /// Vazia para clipe importado ou gravado sem loop.
@@ -47,6 +98,10 @@ class AudioClip {
     this.gain = 1,
     this.fadeIn = 0,
     this.fadeOut = 0,
+    this.fadeInShape = FadeShape.linear,
+    this.fadeOutShape = FadeShape.linear,
+    this.autoFadeIn,
+    this.autoFadeOut,
     List<String>? takes,
     this.warp = false,
     this.sourceBpm,
@@ -63,6 +118,10 @@ class AudioClip {
       gain = (j['gain'] as num? ?? 1).toDouble(),
       fadeIn = (j['fade_in'] as num? ?? 0).toDouble(),
       fadeOut = (j['fade_out'] as num? ?? 0).toDouble(),
+      fadeInShape = FadeShape.fromCode(j['fade_in_shape']),
+      fadeOutShape = FadeShape.fromCode(j['fade_out_shape']),
+      autoFadeIn = j['auto_fade_in'] is Map ? AutoFade.fromJson((j['auto_fade_in'] as Map).cast<String, dynamic>()) : null,
+      autoFadeOut = j['auto_fade_out'] is Map ? AutoFade.fromJson((j['auto_fade_out'] as Map).cast<String, dynamic>()) : null,
       takes = [for (final t in (j['takes'] as List?) ?? const []) t as String],
       warp = j['warp'] as bool? ?? false,
       sourceBpm = (j['source_bpm'] as num?)?.toDouble(),
@@ -79,6 +138,11 @@ class AudioClip {
     'gain': gain,
     'fade_in': fadeIn,
     'fade_out': fadeOut,
+    // curvas e marcas do crossfade só quando fogem do padrão (documento antigo fica como estava)
+    if (fadeInShape != FadeShape.linear) 'fade_in_shape': fadeInShape.index,
+    if (fadeOutShape != FadeShape.linear) 'fade_out_shape': fadeOutShape.index,
+    if (autoFadeIn != null) 'auto_fade_in': autoFadeIn!.toJson(),
+    if (autoFadeOut != null) 'auto_fade_out': autoFadeOut!.toJson(),
     // padrões omitidos: documento sem warp fica byte a byte como antes
     if (warp) 'warp': true,
     if (sourceBpm != null) 'source_bpm': sourceBpm,

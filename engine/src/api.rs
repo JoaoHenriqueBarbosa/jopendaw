@@ -78,6 +78,7 @@ pub enum Call {
     Master { gain: f32, pan: f32 },
     ClipsClear,
     ClipAdd { track: usize, sample: u32, start: f64, offset: f64, length: f64, gain: f32, fade_in: f64, fade_out: f64 },
+    ClipFadeShape { fade_in: u32, fade_out: u32 },
     TrackKind { track: usize, kind: u32 },
     Param { track: usize, id: u32, value: f32 },
     InstrumentSample { track: usize, sample: u32 },
@@ -164,6 +165,7 @@ const CALLS: &[Signature] = &[
         &[("faixa", Usize), ("sample", U32), ("início", F64), ("offset", F64), ("duração", F64), ("ganho", F32), ("fade in", F64), ("fade out", F64)],
         None,
     ),
+    sig("clip_fade_shape", &[("curva in", U32), ("curva out", U32)], None),
     sig("track_kind", &[("faixa", Usize), ("tipo", U32)], None),
     sig("param", &[("faixa", Usize), ("id", U32), ("valor", F32)], None),
     sig("instrument_sample", &[("faixa", Usize), ("sample", U32)], None),
@@ -368,6 +370,7 @@ impl Call {
                 fade_in: a.f64(6),
                 fade_out: a.f64(7),
             },
+            "clip_fade_shape" => Call::ClipFadeShape { fade_in: a.u32(0), fade_out: a.u32(1) },
             "track_kind" => Call::TrackKind { track: a.usize(0), kind: a.u32(1) },
             "param" => Call::Param { track: a.usize(0), id: a.u32(1), value: a.f32(2) },
             "instrument_sample" => Call::InstrumentSample { track: a.usize(0), sample: a.u32(1) },
@@ -466,6 +469,7 @@ impl Call {
             Call::ClipAdd { track, sample, start, offset, length, gain, fade_in, fade_out } => {
                 e.add_clip(Clip { track, sample, start, offset, length, gain, fade_in, fade_out })
             }
+            Call::ClipFadeShape { fade_in, fade_out } => e.set_clip_fade_shape(fade_in, fade_out),
             Call::TrackKind { track, kind } => e.set_track_kind(track, kind),
             Call::Param { track, id, value } => e.set_param(track, id, value),
             Call::InstrumentSample { track, sample } => e.set_instrument_sample(track, sample),
@@ -590,6 +594,13 @@ mod tests {
         e.set_metronome(true, 0.8);
         e.seek(0.9);
         e.meter_point(1, 1, 4);
+    }
+
+    /// Tocando, com um clipe de fade longo nas duas pontas (a curva do fade se ouve).
+    fn faded(e: &mut Engine) {
+        playing(e);
+        e.clear_clips();
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 0.5, gain: 1.0, fade_in: 0.2, fade_out: 0.2 });
     }
 
     fn utility(e: &mut Engine) {
@@ -871,6 +882,7 @@ mod tests {
                 |e| e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.25, length: 0.5, gain: 0.8, fade_in: 0.01, fade_out: 0.02 }),
                 Changes,
             ),
+            case(faded, "clip_fade_shape", &[1.0, 3.0], |e| e.set_clip_fade_shape(1, 3), Changes),
             case(playing, "track_kind", &[1.0, 3.0], |e| e.set_track_kind(1, kind::SAMPLER), Changes),
             case(playing, "param", &[1.0, 13.0, 300.0], |e| e.set_param(1, synth_param::CUTOFF, 300.0), Changes),
             case(playing, "instrument_sample", &[2.0, 1.0], |e| e.set_instrument_sample(2, 1), Changes),
@@ -1013,6 +1025,17 @@ mod tests {
         for name in HOST_ONLY {
             assert!(exports.iter().any(|x| x.name == *name), "{name}: em HOST_ONLY mas não existe no wasm");
         }
+    }
+
+    #[test]
+    fn clip_fade_shape_vale_para_o_ultimo_clipe() {
+        let mut e = Engine::new(RATE);
+        e.set_track_count(1);
+        apply(&mut e, "clip_add", &[0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.1, 0.1]).unwrap();
+        apply(&mut e, "clip_add", &[0.0, 1.0, 2.0, 0.0, 1.0, 1.0, 0.1, 0.1]).unwrap();
+        apply(&mut e, "clip_fade_shape", &[1.0, 3.0]).unwrap();
+        assert_eq!(e.clip_shapes, vec![(0, 0), (1, 3)]);
+        assert!(apply(&mut e, "clip_fade_shape", &[1.0]).is_err());
     }
 
     #[test]

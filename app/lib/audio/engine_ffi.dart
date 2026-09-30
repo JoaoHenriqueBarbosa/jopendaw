@@ -437,9 +437,16 @@ List<List<Object>> prepareRenderCalls(List<List<Object>> calls, double toBeat, d
   final secsPerBeat = 60 / bpm;
   final mapped = map != null && !map.isSingle ? map : null;
   final out = <List<Object>>[];
+  // `clip_fade_shape` vale para o último `clip_add`: sai junto com o clipe que saiu do trecho
+  var lastClipKept = false;
   for (final c in calls) {
     final name = c.isEmpty ? null : c.first;
     if (name is! String || renderSkip.contains(name)) continue;
+    if (name == 'clip_fade_shape') {
+      if (lastClipKept) out.add(c);
+      continue;
+    }
+    if (name == 'clip_add') lastClipKept = false;
     if (name == 'clip_add' && c.length >= 9) {
       // clip_add(faixa, amostra, início em batidas, offset s, duração s, ganho, fade in s, fade out s)
       final start = _num(c, 3), length = _num(c, 5), fadeOut = _num(c, 8);
@@ -448,6 +455,7 @@ List<List<Object>> prepareRenderCalls(List<List<Object>> calls, double toBeat, d
         continue;
       }
       if (start >= toBeat - _edgeEps) continue;
+      lastClipKept = true;
       // o clipe toca em tempo real constante: com mapa de andamento, o fim vem dos segundos
       final end = mapped == null ? start + length / secsPerBeat : mapped.beatAt(mapped.secondsAt(start) + length);
       if (end <= toBeat) {

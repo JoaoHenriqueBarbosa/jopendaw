@@ -186,13 +186,21 @@ function prepareCalls(calls, toBeat, bpm, map) {
   const secsPerBeat = 60 / bpm;
   const mapped = map && !map.single ? map : null;
   const out = [];
+  // `clip_fade_shape` vale para o último `clip_add`: sai junto com o clipe que saiu do trecho
+  let lastClipKept = false;
   for (const c of calls) {
     const name = c[0];
     if (typeof name !== 'string' || SKIP.has(name)) continue;
+    if (name === 'clip_fade_shape') {
+      if (lastClipKept) out.push(c);
+      continue;
+    }
     if (name === 'clip_add') {
+      lastClipKept = false;
       // clip_add(faixa, amostra, início em batidas, offset s, duração s, ganho, fade in s, fade out s)
       const [, track, sample, start, offset, length, gain, fadeIn, fadeOut] = c;
       if (start >= toBeat - EDGE_EPS) continue;
+      lastClipKept = true;
       // o clipe toca em tempo real constante: com mapa de andamento, o fim vem dos segundos
       const end = mapped ? mapped.beatAt(mapped.secondsAt(start) + length) : start + length / secsPerBeat;
       if (end <= toBeat) {
