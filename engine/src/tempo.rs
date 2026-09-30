@@ -236,7 +236,13 @@ impl MeterMap {
     /// Muda o compasso inicial (`num`/4) quando não há mapa; com mapa quem manda é o mapa.
     pub fn set_initial(&mut self, beats_per_bar: u32) {
         if self.pts.len() == 1 {
-            self.pts[0] = MeterPoint { bar: 1, num: beats_per_bar.clamp(1, 32), den: 4 };
+            let bpb = beats_per_bar.clamp(1, 32);
+            // o app reenvia o compasso a cada sincronização: um 6/8 ou 7/8 único já tem as mesmas
+            // batidas por compasso e não pode virar n/4
+            if (self.pts[0].bar_beats() - f64::from(bpb)).abs() < 1e-9 {
+                return;
+            }
+            self.pts[0] = MeterPoint { bar: 1, num: bpb, den: 4 };
             self.rebuild();
         }
     }
@@ -482,5 +488,24 @@ mod tests {
         let c = m8.click_at_or_after(3.0);
         assert_eq!(m8.beat_of(c), 3.0);
         assert!(m8.is_downbeat(c));
+    }
+}
+
+#[cfg(test)]
+mod meter_tests {
+    use super::*;
+
+    #[test]
+    fn compasso_unico_6_8_sobrevive_ao_tempo_reenviado_a_cada_sincronizacao() {
+        // o app manda `tempo` de novo a cada sincronização; o compasso único 6/8 (3 semínimas) não
+        // pode voltar a 3/4 e mudar o passo do metrônomo
+        let mut mapa = MeterMap::new(4);
+        mapa.insert(1, 6, 8);
+        let antes = (mapa.pts[0].num, mapa.pts[0].den);
+        mapa.set_initial(3);
+        assert_eq!((mapa.pts[0].num, mapa.pts[0].den), antes, "6/8 continua 6/8");
+        // já um compasso diferente troca, como sempre
+        mapa.set_initial(5);
+        assert_eq!((mapa.pts[0].num, mapa.pts[0].den), (5, 4));
     }
 }
