@@ -16,6 +16,8 @@ import 'mixer_panel.dart';
 import 'modulation_ops.dart';
 import 'modulation_ui.dart';
 import 'piano_roll.dart';
+import 'step_sequencer.dart';
+import 'step_sequencer_ui.dart';
 
 /// Abre o painel, ou fecha se ele já está aberto (botões da barra e atalhos).
 void toggleDock(DawController c, Dock d) {
@@ -144,6 +146,7 @@ class _DockPanelState extends State<DockPanel> {
                     Dock.instrument => InstrumentPanel(c: c),
                     Dock.effects => EffectsPanel(c: c),
                     Dock.modulation => ModulationPanel(c: c),
+                    Dock.steps => StepSequencerPanel(c: c),
                     Dock.none => const SizedBox.shrink(),
                   },
                 ),
@@ -157,7 +160,9 @@ class _DockPanelState extends State<DockPanel> {
 
   Widget _header(BuildContext context) {
     final c = widget.c;
-    final iconsOnly = MediaQuery.sizeOf(context).width < 560;
+    // com a aba Passos (bateria e sampler fatiado) são seis abas: os rótulos só cabem em janela mais larga
+    final hasSteps = c.dock == Dock.steps || (c.selectedTrack < c.doc.tracks.length && stepsAvailable(c.doc.tracks[c.selectedTrack]));
+    final iconsOnly = MediaQuery.sizeOf(context).width < (hasSteps ? 760 : 560);
     final bar = SizedBox(
       height: _barHeight,
       child: Row(
@@ -179,6 +184,15 @@ class _DockPanelState extends State<DockPanel> {
             selected: c.dock == Dock.editor,
             onTap: () => showDock(c, Dock.editor),
           ),
+          if (hasSteps)
+            _Tab(
+              icon: Icons.grid_on,
+              label: 'Passos',
+              tooltip: 'Sequenciador de passos da bateria e do sampler fatiado',
+              iconOnly: iconsOnly,
+              selected: c.dock == Dock.steps,
+              onTap: () => showDock(c, Dock.steps),
+            ),
           _Tab(
             icon: dockInstrumentIcon(c),
             label: 'Instrumento',
@@ -374,6 +388,13 @@ class _Subject extends StatelessWidget {
             _ => '${t.name} · ${t.kind.label}',
           };
           dot = trackColorAt(t.color);
+        }
+      case Dock.steps:
+        final tg = stepTarget(c);
+        if (tg != null) {
+          final clip = tg.clip;
+          text = clip == null || clip.name.isEmpty ? tg.track.name : '${clip.name} · ${tg.track.name}';
+          dot = trackColorAt(tg.track.color);
         }
       case Dock.mixer || Dock.none:
         break;

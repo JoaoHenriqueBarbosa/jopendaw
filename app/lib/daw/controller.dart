@@ -82,7 +82,7 @@ class Waveform {
 }
 
 /// O que ocupa o painel de baixo.
-enum Dock { none, mixer, editor, instrument, effects, modulation }
+enum Dock { none, mixer, editor, instrument, effects, modulation, steps }
 
 /// Grade de encaixe, em batidas (0 = livre).
 enum Snap {

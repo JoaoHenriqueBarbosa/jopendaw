@@ -154,6 +154,21 @@ A faixa `Bateria` usa o piano roll com um modo próprio: em vez de um teclado de
 - [07 Automação](07-automacao.md): dá para automatizar os knobs, mas `Afinação`, `Decaimento` e `Timbre` só valem no próximo golpe.
 - [08 Exportação](08-exportacao.md): a bateria vai inteira num único stem, porque as 12 peças são uma faixa só.
 
+## Sequenciador de passos (aba Passos)
+
+Com uma faixa de bateria (ou de sampler com zonas/fatias) selecionada, o painel de baixo ganha a aba `Passos`: a mesma batida do piano roll, desenhada como grade (uma linha por peça, um quadrado por subdivisão). Ela edita as mesmas notas do clipe, então o piano roll, a exportação MIDI e o som não mudam.
+
+- **Ligar e desligar**: clique no passo; no mouse, arrastar pinta ou apaga vários de uma vez; no celular, arrastar rola a grade e o toque longo seguido de arraste pinta. Cada gesto é um único passo do `Ctrl+Z`.
+- **Velocidade**: o preenchimento do passo mostra a intensidade. Escolha o pincel `Normal`, `Acento` ou `Fantasma`, dê dois cliques rápidos num passo para acentuá-lo, ou toque no nome da linha e arraste na faixa `Velocidade` que aparece embaixo.
+- **Resolução**: 1/4, 1/8, 1/16, 1/32, 1/64 e as tercinas (1/8 e 1/16). `Compassos` (1 a 8) é o tamanho do padrão.
+- **Swing**: o controle escolhe o valor (0 a 75%, 33% dá a tercina) e `Aplicar swing` atrasa as notas dos passos pares; `Tirar swing` devolve. O swing é um atraso das notas, não um ajuste guardado: fechando o app, as notas seguem atrasadas e aparecem como fora da grade.
+- **Fora da grade**: notas com micro-tempo (humanizadas, gravadas) aparecem no passo mais próximo com contorno âmbar e ponto, e não mudam quando você mexe em outros passos.
+- **Padrões**: o botão `Padrões` preenche as linhas com quatro no chão, rock, funk, hip-hop, trap (com rolo de chimbal em 1/32), reggaeton, bossa nova, house e shuffle. Notas de fora do kit ficam.
+- **Ações**: limpar, copiar e colar, deslocar, inverter, aleatorizar (densidade), preencher a cada N passos e `Repetir até o fim do clipe`. Com uma linha selecionada valem só para ela; sem seleção, para todas.
+- **Ouvir**: o alto-falante da linha toca a peça (com o transporte parado, ligar um passo também toca).
+
+Sem clipe sob o cursor, a aba oferece `Criar clipe aqui`.
+
 ## Limites e pegadinhas
 
 - **Uma faixa, um par estéreo.** Todas as 12 peças saem juntas na mesma faixa. Para tratar só o bumbo, por exemplo, use uma segunda faixa `Bateria`, ponha só as notas do bumbo nela e leve o `Volume` das outras peças a 0%.
