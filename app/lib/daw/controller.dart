@@ -1783,19 +1783,19 @@ class DawController extends ChangeNotifier {
   /// Muda o andamento inicial (com decimais) e os tempos por compasso do compasso INICIAL. Se o
   /// compasso inicial não é n/4 (6/8, 7/8…), só trocar os tempos por compasso o substitui por
   /// `n/4`, senão o compasso mostrado e o do motor ficariam como estavam.
-  Future<void> setTempo(num bpm, int beatsPerBar) async {
+  Future<void> setTempo(num bpm, int beatsPerBar, {bool keepMeter = false}) async {
     if (_blockedByRecording('mudar o andamento')) return;
     final v = bpm.isFinite ? bpm.toDouble().clamp(minBpm, maxBpm).toDouble() : doc.bpm;
     final bpb = beatsPerBar.clamp(1, 32);
     edit((d) {
-      final changed = bpb != d.beatsPerBar;
       d.bpm = v;
-      d.beatsPerBar = bpb;
-      // o ponto da batida 0 do mapa é o andamento inicial, e o compasso 1 n/4 é o `beatsPerBar`
+      // o ponto da batida 0 do mapa é o andamento inicial
       if (d.tempoMap.isNotEmpty) d.tempoMap = [d.tempoMap.first.copyWith(bpm: d.bpm), ...d.tempoMap.skip(1)];
-      if (d.meterMap.isNotEmpty) {
-        if (d.meterMap.first.denominator == 4 || changed) d.meterMap = [MeterChange(1, bpb, 4), ...d.meterMap.skip(1)];
-      }
+      // [keepMeter]: o compasso inicial (6/8, 7/8…) fica como está; senão os tempos escolhidos o
+      // substituem por n/4 mesmo quando n é igual ao `beatsPerBar` (um 6/8 guarda 3, um 7/8 guarda 4)
+      if (keepMeter) return;
+      d.beatsPerBar = bpb;
+      if (d.meterMap.isNotEmpty) d.meterMap = [MeterChange(1, bpb, 4), ...d.meterMap.skip(1)];
     });
     await _mirrorTempo();
   }
@@ -4122,6 +4122,7 @@ class DawController extends ChangeNotifier {
     void stopTransport() {
       _engine.calls([
         ['stop'],
+        ..._releaseControls(),
       ]);
       playing.value = false;
       _restoreCountIn();

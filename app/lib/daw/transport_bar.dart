@@ -85,7 +85,10 @@ Future<void> stopTransport(DawController c, ActionErrorSink onError) async {
 }
 
 /// Largura da barra a partir da qual importar e exportar mostram o nome ao lado do ícone (a barra
-/// inteira com os nomes mede uns 1520 px; sem eles, uns 1350).
+/// inteira com os nomes media uns 1520 px e sem eles uns 1350 quando o limite foi escolhido, medido no Chrome;
+/// os botões que apareceram depois (aprender MIDI, com a entrada ligada) somam mais, então a medida pode estar
+/// um pouco acima. No teste de widget a fonte Ahem alarga os textos e a medida não vale, por isso o número é
+/// só a referência: os nomes ocupam uns 100 px a mais que os ícones. O documento cita 1540 px.)
 const _labelsWidth = 1540.0;
 
 class TransportBar extends StatelessWidget {
@@ -285,7 +288,7 @@ class TransportBar extends StatelessWidget {
       return;
     }
     // 0 tempos: o compasso inicial não é n/4 e a pessoa o deixou como está
-    await c.setTempo(r.$1, r.$2 == 0 ? c.doc.beatsPerBar : r.$2);
+    await c.setTempo(r.$1, r.$2 == 0 ? c.doc.beatsPerBar : r.$2, keepMeter: r.$2 == 0);
   }
 }
 

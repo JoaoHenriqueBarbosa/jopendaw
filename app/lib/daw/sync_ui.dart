@@ -1,4 +1,8 @@
-/// Indicador discreto da sincronização na barra do transporte e o diálogo de conflito.
+/// Indicador discreto da sincronização no cabeçalho do projeto (ao lado do título) e o diálogo de conflito.
+///
+/// Um ícone e uma dica por fase: synced `cloud_done_outlined` "Sincronizado"; syncing `cloud_sync_outlined`
+/// "Sincronizando"; offline `cloud_off_outlined` (âmbar) "Offline (tentando de novo…)"; conflict
+/// `sync_problem_outlined` (vermelho, abre o diálogo); error `error_outline` (vermelho). Off não mostra nada.
 library;
 
 import 'package:flutter/material.dart';

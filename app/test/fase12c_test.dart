@@ -29,7 +29,7 @@ void main() {
       c.setMeterMap(const [MeterChange(1, 6, 8)]);
       expect(c.doc.meter.first, const MeterChange(1, 6, 8));
       // sem mudar os tempos por compasso, o 6/8 fica
-      await c.setTempo(100, c.doc.beatsPerBar);
+      await c.setTempo(100, c.doc.beatsPerBar, keepMeter: true);
       expect(c.doc.meter.first, const MeterChange(1, 6, 8));
       expect(c.doc.bpm, 100);
       // mudando, vira n/4 (o compasso mostrado e o do motor acompanham)

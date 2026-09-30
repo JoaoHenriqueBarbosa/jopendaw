@@ -234,6 +234,7 @@ class _SamplerZonesPanelState extends State<SamplerZonesPanel> {
               color: zoneColor(zones.indexOf(sel)),
               compact: widget.compact,
               onGone: () => setState(() => _selected = null),
+              full: zones.length >= maxZones,
               onDuplicate: () => setState(() => _selected = c.duplicateZone(widget.track, sel.id)?.id ?? _selected),
               onLayers: (n) {
                 final (from, to) = (sel.vlo, sel.vhi);
@@ -549,6 +550,9 @@ class _ZoneEditor extends StatelessWidget {
   final bool compact;
   final VoidCallback onGone, onDuplicate;
 
+  /// As zonas já estão no [maxZones]: duplicar fica desabilitado, com a dica.
+  final bool full;
+
   /// Divide a zona em N camadas de velocidade.
   final void Function(int n) onLayers;
   const _ZoneEditor({
@@ -560,6 +564,7 @@ class _ZoneEditor extends StatelessWidget {
     required this.compact,
     required this.onGone,
     required this.onDuplicate,
+    required this.full,
     required this.onLayers,
   });
 
@@ -702,10 +707,10 @@ class _ZoneEditor extends StatelessWidget {
                 ),
               ),
               IconButton(
-                tooltip: 'Duplicar a zona',
+                tooltip: full ? 'Não dá para duplicar: as zonas já estão no limite de $maxZones.' : 'Duplicar a zona',
                 visualDensity: VisualDensity.compact,
                 iconSize: 18,
-                onPressed: onDuplicate,
+                onPressed: full ? null : onDuplicate,
                 icon: const Icon(Icons.copy_outlined),
               ),
               IconButton(

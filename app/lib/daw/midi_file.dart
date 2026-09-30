@@ -112,8 +112,9 @@ class MidiFileData {
   bool get hasTempoChanges => tempoMap.any((p) => (p.bpm - tempoMap.first.bpm).abs() > 0.5);
 }
 
-/// Pontos de andamento que a importação leva para o projeto (o motor reserva 256 sem realocar).
-const midiMaxTempoPoints = 256;
+/// Pontos de andamento que a importação leva para o projeto (o mapa aceita até 4096; 1024 mantém
+/// o custo de CPU do motor baixo e cobre rampas gravadas com folga).
+const midiMaxTempoPoints = 1024;
 
 /// Diferença de BPM abaixo da qual um ponto é fundido no anterior (um arquivo com rampa gravada em
 /// dezenas de milhares de eventos vira poucas centenas de pontos).
@@ -139,11 +140,15 @@ List<TempoPoint> simplifyTempo(List<MidiTempoPoint> input, {int maxPoints = midi
 }
 
 /// O andamento que a importação deixa no documento: o BPM inicial e o mapa (vazio com um andamento
-/// só, caso em que o BPM é inteiro como o app sempre guardou). Null se o arquivo não traz andamento.
+/// só, caso em que o BPM mantém a fração, como 97,5: o mapa e o documento aceitam decimais). Null se o arquivo não traz andamento.
 ({double bpm, List<TempoPoint> points})? importedTempo(MidiFileData d) {
   final pts = d.tempoPoints;
   if (pts.isEmpty) return null;
-  if (pts.length == 1) return (bpm: appBpmFor(pts.first.bpm).toDouble(), points: const []);
+  if (pts.length == 1) {
+    // uma casa decimal, a resolução do app: o arquivo guarda microssegundos por semínima (90 BPM vira 90,00009)
+    final v = pts.first.bpm;
+    return (bpm: v.isFinite ? ((v * 10).round() / 10).clamp(minBpm, maxBpm).toDouble() : 120.0, points: const []);
+  }
   final bpm = pts.first.bpm;
   return (bpm: bpm, points: normalizeTempoPoints([pts.first.copyWith(bpm: bpm), ...pts.skip(1)], bpm));
 }
@@ -448,6 +453,10 @@ Future<MidiFileData> parseMidiFile(Uint8List bytes, {int yieldEvery = 20000}) as
         curStart += k * cur.barBeats;
         meters.add(MeterChange(cur.bar + k, num, den));
       }
+    }
+    if (meters.length > maxMeterChanges) {
+      warnings.add('O arquivo tem ${meters.length - 1} mudanças de compasso; o app aceita até ${maxMeterChanges - 1}, então as seguintes ficaram de fora.');
+      meters.removeRange(maxMeterChanges, meters.length);
     }
     if (meters.isNotEmpty) bpb = importedMeterBeats(meters.first);
     if (meterApprox) warnings.add('Uma fórmula de compasso do arquivo passa dos limites do app (denominador até 32, numerador até 64) e foi aproximada.');

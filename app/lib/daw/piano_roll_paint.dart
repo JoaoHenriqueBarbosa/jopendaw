@@ -30,7 +30,7 @@ TextPainter _text(TextStyle font, String s, double size, Color color, {bool bold
 }
 
 /// Um compasso visível na grade ou na régua: onde começa (em batidas do clipe), quanto dura, o número
-/// e as batidas dele (a unidade do compasso: 1 num n/4, 1,5 num 6/8).
+/// e as batidas dele (a unidade do compasso, `MeterChange.unit` = 4/denominador: 1 num n/4, 0,5 num 6/8 ou 7/8).
 class _Bar {
   final double start, len, unit;
   final int number;
@@ -416,7 +416,7 @@ class _RulerPainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTWH(x, h - 8, 1, 8), faint);
       }
       if (g.ppb >= 10) {
-        // um risco por tempo do compasso (a unidade dele: 1,5 batida num 6/8)
+        // um risco por tempo do compasso (a unidade dele: 0,5 batida, uma colcheia, num 6/8)
         for (var t = bar.unit; t < bar.len - 1e-6; t += bar.unit) {
           canvas.drawRect(Rect.fromLTWH((x + t * g.ppb).roundToDouble(), h - 6, 1, 6), faint);
         }
