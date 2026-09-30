@@ -13,6 +13,7 @@ import '../widgets/format.dart';
 import '../widgets/theme.dart';
 import 'controller.dart';
 import 'dock.dart';
+import 'automation_mode.dart';
 import 'export.dart';
 import 'midi_file_ui.dart' show importFiles;
 import 'mixer_panel.dart' show recordColor;
@@ -147,6 +148,7 @@ class TransportBar extends StatelessWidget {
               child: Row(children: [const Icon(Icons.grid_4x4, size: 18), const SizedBox(width: 4), Text(c.snap.label)]),
             ),
           ),
+          AutoModeMenu(c: c, compact: compact),
           IconButton(tooltip: 'Afastar', onPressed: () => c.zoom(1 / 1.5), icon: const Icon(Icons.zoom_out)),
           IconButton(tooltip: 'Aproximar', onPressed: () => c.zoom(1.5), icon: const Icon(Icons.zoom_in)),
           _Toggle(icon: Icons.my_location, on: c.follow, tooltip: 'Seguir o cursor na reprodução', onTap: c.toggleFollow),

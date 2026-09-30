@@ -22,6 +22,7 @@ import '../platform/platform.dart' show keepScreenOn, watchAudioSession;
 import '../widgets/theme.dart';
 import 'audio_to_midi.dart';
 import 'automation_math.dart';
+import 'automation_record.dart';
 import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
@@ -493,7 +494,12 @@ class DawController extends ChangeNotifier {
        _patchProject = patchProject ?? ((id, patch) => ApiClient.instance.patchProject(id, patch)),
        _store = store ?? LocalStore.instance,
        _api = api ?? ApiClient.instance,
-       _canSync = canSync ?? (() => Session.instance.signedIn);
+       _canSync = canSync ?? (() => Session.instance.signedIn) {
+    autoRec = AutoRecorder(this);
+  }
+
+  /// Gravação de automação (Escrever, Toque, Trava) ao mexer nos controles tocando.
+  late final AutoRecorder autoRec;
 
   final Future<void> Function(String id, Map<String, dynamic> patch) _patchProject;
   final AudioEngine _engine;
@@ -749,6 +755,8 @@ class DawController extends ChangeNotifier {
       _pointerIds.remove(e.pointer);
     }
     _pointersDown = _pointerIds.length;
+    // o último dedo levantou: o Toque acaba, o controle volta ao valor automatizado
+    if (_pointersDown == 0 && e is! PointerDownEvent) autoRec.releaseAll();
   }
 
   void _onEngineFailed(String message) {
@@ -996,6 +1004,7 @@ class DawController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    autoRec.dispose();
     // o motor sobrevive à tela: nada pode ficar soando nem preso para o próximo projeto, nem
     // medindo o que ninguém mais olha
     _engine.calls([
@@ -1422,7 +1431,7 @@ class DawController extends ChangeNotifier {
     var lane = 0;
     void add(int track, List<AutoLane> lanes) {
       for (final l in lanes) {
-        if (l.points.isEmpty) continue;
+        if (l.points.isEmpty || autoRec.isRecording(track, l.target)) continue;
         final r = _resolve(track, l.target, sends: track >= 0 ? sends[track] : const []);
         if (r == null) continue;
         final points = _sortedPoints(l.points);
@@ -1441,6 +1450,55 @@ class DawController extends ChangeNotifier {
     }
     add(-1, doc.masterLanes);
     return out;
+  }
+
+  /// Faixa de valores, escala e valor fixo do alvo, na unidade dele, para a gravação de automação;
+  /// null se o alvo não existe. [stepped]: opções e inteiros (a automação anda em degraus).
+  AutoInfo? autoInfo(int track, AutoTarget target) {
+    final r = _resolve(track, target);
+    if (r == null) return null;
+    final curve = r.spec?.curve;
+    return (min: r.min, max: r.max, fixed: r.value, warp: _warpOf(r), stepped: curve == Curve.choice || curve == Curve.integer);
+  }
+
+  /// A raia do alvo (mesmo vazia), ou null.
+  AutoLane? autoLaneOf(int track, AutoTarget target) => _lanes(track)?.where((l) => l.target == target).firstOrNull;
+
+  /// O documento de agora, como o histórico o guarda.
+  String autoSnapshot() => jsonEncode(doc.toJson());
+
+  /// O ponto de desfazer que o gesto de agora acabou de guardar (mesmo turno), tirado do
+  /// histórico para a gravação de automação guardar a passada inteira num só; null se não há.
+  String? autoTakeCheckpoint() {
+    if (!_ckptTurn || _undo.isEmpty) return null;
+    _ckptTurn = false;
+    return _undo.removeLast();
+  }
+
+  /// Guarda [snapshot] (o documento de antes da passada) como um passo do histórico.
+  void autoCommitUndo(String snapshot) {
+    _undo.add(snapshot);
+    if (_undo.length > 200) _undo.removeAt(0);
+    _redo.clear();
+    notifyListeners();
+  }
+
+  /// Reenvia a automação ao motor (a raia que começou a ser gravada sai dele).
+  void autoSyncNow() => _sync();
+
+  /// Troca os pontos da raia do alvo (criando a raia se falta) sem entrar no histórico: a passada
+  /// guarda o passo dela ao terminar. [fn] recebe os pontos em ordem e devolve os novos.
+  void autoApply(int track, AutoTarget target, List<AutoPoint> Function(List<AutoPoint> existing) fn) {
+    final lanes = _lanes(track);
+    if (lanes == null) return;
+    var lane = lanes.where((l) => l.target == target).firstOrNull;
+    mutate((_) {
+      if (lane == null) {
+        lane = AutoLane(id: newId(), target: target);
+        lanes.add(lane!);
+      }
+      lane!.points = fn(_sortedPoints(lane!.points));
+    });
   }
 
   /// A faixa (ou o master, −1) tem automação com pontos para volume/pan.
@@ -1479,6 +1537,8 @@ class DawController extends ChangeNotifier {
   /// do motor); parado, [fixed], como no motor. Para os controles acompanharem a automação.
   double liveTargetValue(int track, AutoTarget target, double fixed) {
     if (!playing.value) return fixed;
+    // gravando o alvo, o controle vale o que a mão pôs
+    if (autoRec.isRecording(track, target)) return fixed;
     final l = _laneFor(track, target);
     if (l == null) return fixed;
     final r = _resolve(track, l.target);
@@ -1854,10 +1914,17 @@ class DawController extends ChangeNotifier {
 
   /// Guarda o estado atual no histórico (início de um arraste, que depois só faz [mutate]).
   void checkpoint() {
+    // o gesto que a gravação de automação anunciou não guarda ponto próprio: a passada inteira
+    // entra no histórico como um passo só quando o transporte para
+    if (autoRec.consumeSwallow()) return;
     _undo.add(jsonEncode(doc.toJson()));
+    _ckptTurn = true;
+    scheduleMicrotask(() => _ckptTurn = false);
     if (_undo.length > 200) _undo.removeAt(0);
     _redo.clear();
   }
+
+  bool _ckptTurn = false;
 
   /// Muda sem entrar no histórico (os passos de um arraste).
   void mutate(void Function(DawDoc d) fn) {
@@ -2848,6 +2915,7 @@ class DawController extends ChangeNotifier {
     final v = _fit(spec, value);
     if (t.params.containsKey(id) && t.params[id] == v) return;
     if (undoable) checkpoint();
+    autoRec.value(track, AutoTarget(AutoKind.instrument, param: id), v);
     t.params[id] = v;
     _engine.calls([
       ['param', track, id, v],
@@ -3163,6 +3231,7 @@ class DawController extends ChangeNotifier {
     final v = _fit(spec, value);
     if (slot.params.containsKey(id) && slot.params[id] == v) return;
     if (undoable) checkpoint();
+    autoRec.value(track, AutoTarget(AutoKind.effect, ref: slotId, param: id), v);
     slot.params[id] = v;
     final k = chain.indexOf(slot);
     final sent = track == -1 ? _sentMaster : (track < _sent.length ? _sent[track].fx : null);
@@ -3235,6 +3304,7 @@ class DawController extends ChangeNotifier {
     final newLevel = lv ?? send.level, newPre = pre ?? send.pre;
     if (newLevel == send.level && newPre == send.pre) return true;
     if (undoable) checkpoint();
+    if (newLevel != send.level) autoRec.value(track, AutoTarget(AutoKind.send, ref: busId), newLevel);
     send
       ..level = newLevel
       ..pre = newPre;

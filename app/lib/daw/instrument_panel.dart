@@ -1039,7 +1039,11 @@ class _Ctx {
       dimmed: dimmed,
       format: format ?? (v) => _formatValue(p, v),
       optionIcon: p.curve == Curve.choice ? (i, col) => _optionGlyph(p.options[i], col) : null,
-      onChangeStart: (_) => c.checkpoint(),
+      onChangeStart: (_) {
+        c.autoRec.touch(ti, AutoTarget(AutoKind.instrument, param: p.id));
+        c.checkpoint();
+      },
+      onChangeEnd: (_) => c.autoRec.release(ti, AutoTarget(AutoKind.instrument, param: p.id)),
       onChanged: (v) => c.setParam(ti, p.id, v, undoable: p.curve == Curve.choice),
     );
     final target = AutoTarget(AutoKind.instrument, param: p.id);

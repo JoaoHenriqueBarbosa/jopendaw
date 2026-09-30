@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 
 import '../widgets/theme.dart';
 import 'automation_math.dart';
+import 'automation_mode.dart';
 import 'controller.dart';
 import 'instruments.dart';
 import 'model.dart';
@@ -265,6 +266,8 @@ class AutomationLaneHeader extends StatelessWidget {
                 ],
               ),
             ),
+            AutoLaneModeButton(c: c, lane: lane),
+            const SizedBox(width: 2),
             _HeaderIcon(
               icon: Icons.visibility_off_outlined,
               tooltip: 'Ocultar (a automação continua valendo)',

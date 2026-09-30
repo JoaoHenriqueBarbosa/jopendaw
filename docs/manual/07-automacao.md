@@ -124,7 +124,28 @@ Enquanto **toca**, todo controle com automação passa a mostrar o valor da curv
 | Knob de pan | Mixer |
 | Knobs de parâmetro | Painel de instrumento e painel de efeitos |
 
-Parado, os controles mostram o valor fixo. Arrastar um controle automatizado muda o **valor fixo** (não se ouve enquanto a curva toca; volta a valer ao parar). O knob de nível de envio, no mixer, **não** anda com a automação: quem mostra o valor é a raia.
+Parado, os controles mostram o valor fixo. Em `Ler`, arrastar um controle automatizado muda o **valor fixo** (não se ouve enquanto a curva toca; volta a valer ao parar); nos outros modos, o gesto grava. O knob de nível de envio, no mixer, **não** anda com a automação: quem mostra o valor é a raia.
+
+## Gravar a automação mexendo nos controles
+
+Com o transporte **tocando**, mexer no fader, no pan, no nível de envio e nos knobs de instrumento e de efeito pode gravar o movimento como pontos de automação. O modo vem do botão **`Automação: Ler`** da barra de ferramentas (tooltip com a descrição de cada modo) e, se quiser, de um seletor pequeno (`L`, `E`, `T`, `V`) no cabeçalho de cada raia, que vale só para ela e sobrepõe o da barra.
+
+| Modo | O que grava |
+|---|---|
+| `Ler` (padrão) | Nada: mexer no controle muda só o valor fixo, como sempre foi. |
+| `Escrever` | Grava o tempo todo, sobrescrevendo. Na raia com modo próprio `Escrever`, desde o começo da reprodução (o valor fixo do controle vira a curva); no modo da barra, desde a primeira vez que você mexe no controle, até parar. |
+| `Toque` | Só enquanto você segura o controle. Ao soltar, o valor volta ao que a automação tinha, numa rampa curta (1/4 de batida; em degrau nos parâmetros de opções e inteiros). Sem automação antes, volta ao valor fixo que o controle tinha. |
+| `Trava` | Grava enquanto você segura e mantém o último valor até o transporte parar. |
+
+Como funciona:
+- Se o controle ainda não tem raia, ela é criada na hora (aberta) e já vale.
+- Enquanto o controle está sendo gravado, a raia dele sai do motor e o controle mostra o que a sua mão pôs (não a curva); ao acabar o trecho, a raia volta, já com o gravado.
+- O movimento é afinado (Ramer-Douglas-Peucker na escala do controle, erro de no máximo 0,8% da faixa): uma senoide de 4 s vira algumas dezenas de pontos, não centenas.
+- Sobrescrever substitui os pontos da região gravada (do começo ao fim do gesto) e mantém os de fora. Nos limites entram pontos "antes" e "depois" com o valor que a curva antiga tinha ali, para a curva vizinha não se deformar. No `Escrever` e na `Trava`, se há pontos depois do fim, o valor dá um degrau de volta à curva antiga; senão a raia fica no último valor gravado.
+- Com o **loop** ligado, cada volta grava por cima: onde as voltas se cobrem, a última vale.
+- A passada inteira (todos os controles) entra no desfazer como **um passo só**, quando o transporte para.
+- Parâmetros de opções e inteiros gravam degraus. Mudo e solo não são automatizáveis e não gravam. Um controle sem automação (como o `Sidechain`) mostra um aviso inline ao lado do botão.
+- Parado, não grava. **Durante a gravação de áudio ou MIDI a automação não grava** (aviso inline): as duas gravações não se misturam.
 
 ## Passo a passo
 
@@ -164,7 +185,7 @@ Parado, os controles mostram o valor fixo. Arrastar um controle automatizado mud
 ## Limites e pegadinhas
 
 - **Parado, vale o valor fixo.** Sem tocar, o motor não aplica curva: um parâmetro de instrumento ou efeito responde pelo valor fixo do knob, e o fader, o pan e os knobs mostram o fixo. Se você toca notas ao vivo com o transporte parado, o som usa o valor fixo, não o da curva no cursor. A leitura no cabeçalho da raia, esta sim, mostra o valor da curva no cursor mesmo parado.
-- **Não existe gravar automação** (mexer num knob durante o play e gravar o movimento): a automação se desenha à mão, ponto a ponto.
+- **Gravar automação** só com o transporte tocando e fora da gravação de áudio/MIDI (ver "Gravar a automação mexendo nos controles"). O modo por raia e o da barra não vão para o projeto: voltam a `Ler` ao reabrir.
 - **Não há copiar e colar de pontos** entre raias ou trechos. `Duplicar a faixa` (menu da faixa) copia as raias junto.
 - Uma raia por alvo: escolher o mesmo alvo de novo só reabre ou oculta a existente.
 - **Apagar o efeito** apaga as raias dele; **remover um envio** ou o barramento apaga a raia do envio. Mover barramentos de posição pode desfazer envios e, com eles, as raias de envio (ver [06 Mixer](06-mixer.md)).

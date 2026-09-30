@@ -382,7 +382,11 @@ class _Fx {
       size: knob,
       color: color,
       dimmed: dim,
-      onChangeStart: (_) => begin(),
+      onChangeStart: (_) {
+        c.autoRec.touch(track, AutoTarget(AutoKind.effect, ref: slot.id, param: p.id));
+        begin();
+      },
+      onChangeEnd: (_) => c.autoRec.release(track, AutoTarget(AutoKind.effect, ref: slot.id, param: p.id)),
       onChanged: (value) => set(p.id, value, undoable: p.curve == Curve.choice),
     );
     final target = AutoTarget(AutoKind.effect, ref: slot.id, param: p.id);

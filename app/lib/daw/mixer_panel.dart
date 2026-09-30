@@ -552,6 +552,10 @@ mixin _DragValue<T extends StatefulWidget> on State<T> {
   /// Pixels de arraste para o curso todo (Shift: cinco vezes mais).
   double get travel => 150;
 
+  /// Faixa e alvo de automação que este controle move (a gravação de automação acompanha o gesto);
+  /// null: nenhum.
+  (int, AutoTarget)? get autoKey => null;
+
   @override
   void dispose() {
     _wheelIdle?.cancel();
@@ -571,6 +575,8 @@ mixin _DragValue<T extends StatefulWidget> on State<T> {
     if (!changes(norm)) return;
     if (!_changed) {
       _changed = true;
+      final k = autoKey;
+      if (k != null) c.autoRec.touch(k.$1, k.$2);
       c.checkpoint();
     }
     apply(norm);
@@ -582,6 +588,8 @@ mixin _DragValue<T extends StatefulWidget> on State<T> {
     if (!active) return;
     active = false;
     _changed = false;
+    final k = autoKey;
+    if (k != null) c.autoRec.release(k.$1, k.$2);
     if (mounted) setState(() {});
   }
 
@@ -635,7 +643,13 @@ class _FaderState extends State<_Fader> with _DragValue {
 
   double get _gain => widget.track < 0 ? c.doc.masterGain : c.doc.tracks[widget.track].gain;
 
-  void _set(double g) => c.mutate((d) => widget.track < 0 ? d.masterGain = g : d.tracks[widget.track].gain = g);
+  void _set(double g) {
+    c.autoRec.value(widget.track, const AutoTarget(AutoKind.volume), g);
+    c.mutate((d) => widget.track < 0 ? d.masterGain = g : d.tracks[widget.track].gain = g);
+  }
+
+  @override
+  (int, AutoTarget)? get autoKey => (widget.track, const AutoTarget(AutoKind.volume));
 
   @override
   double get travel => _track;
@@ -804,7 +818,13 @@ class _PanKnobState extends State<_PanKnob> with _DragValue {
 
   double get _pan => widget.track < 0 ? c.doc.masterPan : c.doc.tracks[widget.track].pan;
 
-  void _set(double p) => c.mutate((d) => widget.track < 0 ? d.masterPan = p : d.tracks[widget.track].pan = p);
+  void _set(double p) {
+    c.autoRec.value(widget.track, const AutoTarget(AutoKind.pan), p);
+    c.mutate((d) => widget.track < 0 ? d.masterPan = p : d.tracks[widget.track].pan = p);
+  }
+
+  @override
+  (int, AutoTarget)? get autoKey => (widget.track, const AutoTarget(AutoKind.pan));
 
   @override
   double get valueNorm => (_pan + 1) / 2;
@@ -1335,6 +1355,9 @@ class _SendRowState extends State<_SendRow> with _DragValue {
 
   @override
   void apply(double n) => c.setSend(widget.track, widget.bus.id, level: faderToGain(n));
+
+  @override
+  (int, AutoTarget)? get autoKey => _send == null ? null : (widget.track, AutoTarget(AutoKind.send, ref: widget.bus.id));
 
   void _create({bool pre = false}) => c.setSend(widget.track, widget.bus.id, pre: pre, undoable: true);
 
