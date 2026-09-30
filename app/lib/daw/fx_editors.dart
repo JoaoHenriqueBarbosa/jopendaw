@@ -25,6 +25,8 @@ import 'knob.dart';
 import 'midi_learn_ui.dart';
 import 'model.dart';
 
+part 'fx_editors_dyn.dart';
+
 /// Taxa de amostragem suposta para desenhar: as curvas do EQ são as do filtro digital (o que muda
 /// perto de Nyquist) e o espectro vem em faixas lineares até a metade da taxa. O motor roda na
 /// taxa do aparelho (quase sempre 48 kHz); o controlador ainda não a expõe.
@@ -191,10 +193,23 @@ bool effectParamDimmed(EffectKind kind, ParamSpec p, double Function(int id) v) 
   EffectKind.filter => (p.id == 3 || p.id == 5 || p.id == 9 || p.id == 10) && v(4) <= 0,
   EffectKind.reverb => p.id == 3 && v(9) >= 0.5,
   EffectKind.delay => p.id == 6 && v(5) >= 0.5,
+  // banda em bypass: só solo e bypass ainda mexem no som
+  EffectKind.multiband =>
+    p.id >= multibandBase &&
+        (p.id - multibandBase) % multibandStride != 5 &&
+        (p.id - multibandBase) % multibandStride != 6 &&
+        v(p.id - (p.id - multibandBase) % multibandStride + 6) >= 0.5,
+  EffectKind.imager => p.id == 7 && v(6) < 0.5,
   _ => false,
 };
 
 // ------------------------------------------------------------------------ quem o motor observa
+
+/// Um editor que pede o indicador do motor (o motor mede um efeito por vez).
+abstract interface class _MeterHost {
+  int get meterTrack;
+  String get meterSlot;
+}
 
 /// Coordena o que os editores montados pedem ao motor: um espectro (o da faixa do EQ montado mais
 /// recente) e um indicador (o do efeito de dinâmica ativo). Montar e desmontar acontece no meio do
@@ -208,10 +223,10 @@ class _Watch {
   static _Watch of(DawController c) => _all[c] ??= _Watch(c);
 
   final _eqs = <_EqEditorState>[];
-  final _dynamics = <_DynamicsEditorState>[];
+  final _dynamics = <_MeterHost>[];
 
   /// O editor de dinâmica cujo indicador o motor manda.
-  final active = ValueNotifier<_DynamicsEditorState?>(null);
+  final active = ValueNotifier<_MeterHost?>(null);
 
   int? _sentAnalyzer;
   (int, String)? _sentFx;
@@ -226,20 +241,20 @@ class _Watch {
     _schedule();
   }
 
-  void addDynamics(_DynamicsEditorState s) {
+  void addDynamics(_MeterHost s) {
     _dynamics.add(s);
     _fxDirty = true;
     _schedule();
   }
 
-  void removeDynamics(_DynamicsEditorState s) {
+  void removeDynamics(_MeterHost s) {
     _dynamics.remove(s);
     _fxDirty = true;
     _schedule();
   }
 
   /// O usuário mexeu num efeito de dinâmica: o indicador passa a ser o dele.
-  void activate(_DynamicsEditorState s) {
+  void activate(_MeterHost s) {
     if (active.value == s || !_dynamics.contains(s)) return;
     active.value = s;
     _fxDirty = true;
@@ -265,7 +280,7 @@ class _Watch {
       var a = active.value;
       if (a == null || !_dynamics.contains(a)) a = _dynamics.isEmpty ? null : _dynamics.first;
       active.value = a;
-      final want = a == null ? null : (a.widget.track, a.widget.slot.id);
+      final want = a == null ? null : (a.meterTrack, a.meterSlot);
       final sent = _sentFx;
       if (want != null) {
         _call(() => c.watchEffect(want.$1, want.$2));
@@ -305,6 +320,7 @@ class EffectEditor extends StatelessWidget {
     return switch (slot.kind) {
       EffectKind.eq => _EqEditor.widthFor(height),
       EffectKind.compressor || EffectKind.gate || EffectKind.limiter => _DynamicsEditor.widthFor(x, height),
+      EffectKind.multiband || EffectKind.deesser || EffectKind.imager => _VizEditor.widthFor(x, height),
       _ => _GenericEditor.widthFor(x, height),
     };
   }
@@ -315,6 +331,7 @@ class EffectEditor extends StatelessWidget {
     return switch (slot.kind) {
       EffectKind.eq => _EqEditor(x: x, track: track, slot: slot, desktop: desktop, height: height),
       EffectKind.compressor || EffectKind.gate || EffectKind.limiter => _DynamicsEditor(x: x, track: track, slot: slot, desktop: desktop, height: height),
+      EffectKind.multiband || EffectKind.deesser || EffectKind.imager => _VizEditor(x: x, track: track, slot: slot, desktop: desktop, height: height),
       _ => _GenericEditor(x: x, desktop: desktop, height: height),
     };
   }
@@ -1969,7 +1986,12 @@ class _DynamicsEditor extends StatefulWidget {
   State<_DynamicsEditor> createState() => _DynamicsEditorState();
 }
 
-class _DynamicsEditorState extends State<_DynamicsEditor> {
+class _DynamicsEditorState extends State<_DynamicsEditor> implements _MeterHost {
+  @override
+  int get meterTrack => widget.track;
+  @override
+  String get meterSlot => widget.slot.id;
+
   late final _watch = _Watch.of(widget.x.c);
 
   bool _changed = false;
@@ -2026,7 +2048,7 @@ class _DynamicsEditorState extends State<_DynamicsEditor> {
   Widget build(BuildContext context) {
     final values = Float64List.fromList([for (final p in _kind.params) x.v(p.id)]);
     final font = DefaultTextStyle.of(context).style.fontFamily;
-    return ValueListenableBuilder<_DynamicsEditorState?>(
+    return ValueListenableBuilder<_MeterHost?>(
       valueListenable: _watch.active,
       builder: (context, active, _) {
         final live = active == this;

@@ -93,6 +93,31 @@ void main() {
       expect(sent('fx_count').last, ['fx_count', 1, 0]);
     });
 
+    test('multibanda, de-esser e imagem estéreo: fx_set com o código novo, todos os parâmetros e fx_param depois', () {
+      final c = newController();
+      for (final (kind, code) in [(EffectKind.multiband, 13), (EffectKind.deesser, 14), (EffectKind.imager, 15)]) {
+        engine.log = [];
+        final slot = c.addEffect(1, kind);
+        expect(sent('fx_set').last, ['fx_set', 1, c.effectsOf(1).indexOf(slot), code]);
+        expect(sent('fx_param'), hasLength(kind.params.length));
+        final index = c.effectsOf(1).indexOf(slot);
+        // mexer num parâmetro manda só ele, na unidade da tabela (limitado à faixa)
+        final id = kind == EffectKind.multiband ? multibandBase + multibandStride + 4 : 2;
+        final spec = kind.params.firstWhere((p) => p.id == id);
+        engine.log = [];
+        c.setEffectParam(1, slot.id, id, 1e9);
+        expect(sent('fx_param'), [
+          ['fx_param', 1, index, id, spec.max],
+        ]);
+      }
+      // automação de parâmetro novo (largura da banda média da imagem) vai com a escala do controle
+      final imager = c.effectsOf(1).last;
+      expect(imager.kind, EffectKind.imager);
+      expect(c.targetRange(1, AutoTarget(AutoKind.effect, ref: imager.id, param: 3)), (0.0, 2.0, 1.0));
+      final mb = c.addEffect(1, EffectKind.multiband);
+      expect(c.targetRange(1, AutoTarget(AutoKind.effect, ref: mb.id, param: multibandBase + multibandStride)), (-60.0, 0.0, -22.0));
+    });
+
     test('cadeia fora da faixa: efeitos em posição, master em −1 e faixa inexistente recusada', () {
       final c = newController();
       final eq = c.addEffect(-1, EffectKind.eq);

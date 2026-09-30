@@ -50,6 +50,9 @@ pub mod kind {
     pub const TREMOLO: u32 = 10;
     pub const DISTORTION: u32 = 11;
     pub const FILTER: u32 = 12;
+    pub const MULTIBAND: u32 = 13;
+    pub const DEESSER: u32 = 14;
+    pub const IMAGER: u32 = 15;
 }
 
 /// Cria o efeito de um tipo; `None` para 0 ou tipo desconhecido.
@@ -68,6 +71,9 @@ pub fn create(kind: u32, rate: f64) -> Option<Box<dyn Effect>> {
         kind::TREMOLO => Box::new(tremolo::Tremolo::new(rate)),
         kind::DISTORTION => Box::new(distortion::Distortion::new(rate)),
         kind::FILTER => Box::new(filter::Filter::new(rate)),
+        kind::MULTIBAND => Box::new(multiband::Multiband::new(rate)),
+        kind::DEESSER => Box::new(deesser::Deesser::new(rate)),
+        kind::IMAGER => Box::new(imager::Imager::new(rate)),
         _ => return None,
     })
 }
@@ -307,6 +313,82 @@ pub mod filter_param {
     pub const NOTE: u32 = 10;
 }
 
+/// Compressor multibanda de 3 bandas (Linkwitz-Riley de 4ª ordem). A banda `b` (0 baixa, 1 média,
+/// 2 aguda) tem seus controles em `BAND_BASE + b * BAND_STRIDE + k`, com `k` os `BAND_*` abaixo.
+/// O indicador ([`Effect::meter`]) leva as três reduções de ganho empacotadas num inteiro exato de
+/// 24 bits: `gr0 + 256 * gr1 + 65536 * gr2`, cada `gr` em décimos de dB (0..255), ver
+/// [`crate::fx::multiband::pack_meter`].
+pub mod multiband_param {
+    /// Cruzamento baixa/média, Hz 40..800.
+    pub const XOVER_LOW: u32 = 0;
+    /// Cruzamento média/aguda, Hz 1000..12000.
+    pub const XOVER_HIGH: u32 = 1;
+    /// Ganho de saída conjunto, dB −24..24.
+    pub const OUTPUT: u32 = 2;
+    /// Id do primeiro controle da banda 0.
+    pub const BAND_BASE: u32 = 4;
+    /// Ids por banda.
+    pub const BAND_STRIDE: u32 = 8;
+    /// k = 0: limiar, dB −60..0.
+    pub const BAND_THRESHOLD: u32 = 0;
+    /// k = 1: razão 1..20.
+    pub const BAND_RATIO: u32 = 1;
+    /// k = 2: ataque, s 0,0001..0,25.
+    pub const BAND_ATTACK: u32 = 2;
+    /// k = 3: soltura, s 0,005..3.
+    pub const BAND_RELEASE: u32 = 3;
+    /// k = 4: ganho de compensação, dB −12..24.
+    pub const BAND_MAKEUP: u32 = 4;
+    /// k = 5: só esta banda toca (0/1); com mais de uma em solo, tocam as em solo.
+    pub const BAND_SOLO: u32 = 5;
+    /// k = 6: banda sem compressão (0/1).
+    pub const BAND_BYPASS: u32 = 6;
+    /// k = 7: joelho, dB 0..24.
+    pub const BAND_KNEE: u32 = 7;
+    pub const BANDS: usize = 3;
+}
+
+/// De-esser: compressor de uma banda de sibilância (filtro passa-banda ajustável).
+pub mod deesser_param {
+    /// Centro da banda de detecção, Hz 4000..10000.
+    pub const FREQ: u32 = 0;
+    /// Q da banda, 0,5..4.
+    pub const Q: u32 = 1;
+    /// dB, −60..0.
+    pub const THRESHOLD: u32 = 2;
+    /// 1..20.
+    pub const RATIO: u32 = 3;
+    /// s, 0,0001..0,05.
+    pub const ATTACK: u32 = 4;
+    /// s, 0,005..0,5.
+    pub const RELEASE: u32 = 5;
+    /// 0 banda dividida (comprime só a banda), 1 banda larga (comprime tudo).
+    pub const MODE: u32 = 6;
+    /// 0/1: ouve a banda de detecção no lugar do sinal.
+    pub const LISTEN: u32 = 7;
+}
+
+/// Imagem estéreo: largura do lado (side) em 3 bandas, balanço e mono nos graves. O indicador
+/// ([`Effect::meter`]) é a correlação de fase da saída, −1..1 (0 em silêncio).
+pub mod imager_param {
+    /// Cruzamento baixa/média, Hz 50..1000.
+    pub const XOVER_LOW: u32 = 0;
+    /// Cruzamento média/aguda, Hz 1000..12000.
+    pub const XOVER_HIGH: u32 = 1;
+    /// Largura da banda baixa, 0..2 (0 mono, 1 original, 2 o dobro).
+    pub const WIDTH_LOW: u32 = 2;
+    /// Largura da banda média, 0..2.
+    pub const WIDTH_MID: u32 = 3;
+    /// Largura da banda aguda, 0..2.
+    pub const WIDTH_HIGH: u32 = 4;
+    /// Balanço geral, −1..1 (só atenua o lado oposto).
+    pub const BALANCE: u32 = 5;
+    /// 0/1: mono abaixo de `MONO_FREQ`.
+    pub const BASS_MONO: u32 = 6;
+    /// Hz, 40..500.
+    pub const MONO_FREQ: u32 = 7;
+}
+
 /// Alvos de automação (`auto_lane`).
 pub mod auto_target {
     /// Volume da faixa (ganho linear).
@@ -319,4 +401,24 @@ pub mod auto_target {
     pub const EFFECT: u32 = 3;
     /// Nível do envio de índice `slot` (ganho linear).
     pub const SEND: u32 = 4;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn efeitos_novos_nascem_pelo_codigo_e_processam() {
+        for code in [kind::MULTIBAND, kind::DEESSER, kind::IMAGER] {
+            let mut fx = create(code, 48_000.0).unwrap_or_else(|| panic!("tipo {code}"));
+            for id in 0..40 {
+                fx.set_param(id, 0.5);
+            }
+            let (mut l, mut r) = (vec![0.3f32; 256], vec![-0.2f32; 256]);
+            fx.process(&mut l, &mut r);
+            assert!(l.iter().chain(&r).all(|v| v.is_finite()) && fx.meter().is_finite());
+            assert_eq!(fx.latency(), 0);
+        }
+        assert!(create(16, 48_000.0).is_none());
+    }
 }

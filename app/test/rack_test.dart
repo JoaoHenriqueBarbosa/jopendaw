@@ -621,4 +621,58 @@ void main() {
     await t.pumpAndSettle();
     expect(t.state<ScrollableState>(find.byType(Scrollable).first).position.pixels, greaterThan(offset + 50));
   });
+
+  rack('multibanda: arrastar perto do cruzamento o move (num passo de desfazer) e o indicador chega empacotado', (t) async {
+    final c = RackDaw();
+    final mb = c.addEffect(-1, EffectKind.multiband);
+    await mount(t, c, width: 1800);
+    expect(c.log, contains('watchEffect -1 ${mb.id}'));
+    c.fxMeter.value = 15 + 256 * 60 + 65536 * 0;
+    await t.pump();
+    final r = t.getRect(find.byKey(const ValueKey('fx-viz')));
+    double xOf(double f) => r.left + math.log(f / 20) / math.log(1000) * r.width;
+    c.checkpoints = 0;
+    await drag(t, Offset(xOf(150) + 3, r.center.dy), Offset(xOf(400), r.center.dy));
+    expect(mb.param(0), closeTo(400, 30));
+    expect(mb.param(1), 3000);
+    expect(c.checkpoints, 1);
+    // o cruzamento alto não passa do teto da tabela
+    await drag(t, Offset(xOf(3000), r.center.dy), Offset(r.right + 200, r.center.dy));
+    expect(mb.param(1), lessThanOrEqualTo(12000));
+    // banda em bypass apaga os controles dela, mas solo e bypass seguem mexíveis
+    c.setEffectParam(-1, mb.id, multibandBase + 6, 1, undoable: true);
+    await t.pump();
+    expect(find.text('Bypass'), findsNWidgets(3));
+  });
+
+  rack('de-esser: arrastar muda a frequência (e o Q na vertical); imagem mostra as três larguras', (t) async {
+    final c = RackDaw();
+    final ds = c.addEffect(-1, EffectKind.deesser);
+    await mount(t, c, width: 1800);
+    final r = t.getRect(find.byKey(const ValueKey('fx-viz')));
+    await drag(t, r.center, r.center + Offset(r.width / 4, 0));
+    expect(ds.param(0), greaterThan(7000));
+    c.removeEffect(-1, ds.id);
+    final im = c.addEffect(-1, EffectKind.imager);
+    await t.pump();
+    c.fxMeter.value = -0.4;
+    await t.pump();
+    expect(find.text('LARGURA'), findsOneWidget);
+    expect(find.text('Baixa'), findsOneWidget);
+    expect(im.param(3), 1);
+  });
+
+  rack('multibanda, de-esser e imagem: celular de 360 px sem estouro', (t) async {
+    final c = RackDaw()..effectsTrack = 1;
+    for (final k in [EffectKind.multiband, EffectKind.deesser, EffectKind.imager]) {
+      c.addEffect(1, k);
+    }
+    await mount(t, c, width: 360, height: 640);
+    final list = t.state<ScrollableState>(find.byType(Scrollable).first).position;
+    for (var y = 0.0; y < list.maxScrollExtent; y += 200) {
+      list.jumpTo(y);
+      await t.pump();
+    }
+    expect(t.takeException(), isNull);
+  });
 }

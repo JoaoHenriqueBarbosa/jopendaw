@@ -113,6 +113,38 @@ const _names = <EffectKind, Map<String, String>>{
     'SYNC': 'Tempo',
     'NOTE': 'Nota',
   },
+  EffectKind.deesser: {
+    'FREQ': 'Frequência',
+    'Q': 'Q',
+    'THRESHOLD': 'Limiar',
+    'RATIO': 'Razão',
+    'ATTACK': 'Ataque',
+    'RELEASE': 'Soltura',
+    'MODE': 'Modo',
+    'LISTEN': 'Ouvir banda',
+  },
+  EffectKind.imager: {
+    'XOVER_LOW': 'Cruzamento baixo/médio',
+    'XOVER_HIGH': 'Cruzamento médio/agudo',
+    'WIDTH_LOW': 'Baixa',
+    'WIDTH_MID': 'Média',
+    'WIDTH_HIGH': 'Aguda',
+    'BALANCE': 'Balanço',
+    'BASS_MONO': 'Mono nos graves',
+    'MONO_FREQ': 'Abaixo de',
+  },
+};
+
+/// Multibanda: constante por banda (k em BAND_BASE + b * BAND_STRIDE + k) → nome na tabela.
+const _multibandBand = {
+  'BAND_THRESHOLD': 'Limiar',
+  'BAND_RATIO': 'Razão',
+  'BAND_ATTACK': 'Ataque',
+  'BAND_RELEASE': 'Soltura',
+  'BAND_MAKEUP': 'Ganho',
+  'BAND_SOLO': 'Solo',
+  'BAND_BYPASS': 'Bypass',
+  'BAND_KNEE': 'Joelho',
 };
 
 /// Banda do EQ: constante do motor (k em b * 6 + k) → nome na tabela.
@@ -165,7 +197,7 @@ void main() {
     expect(labels, noteValues);
   });
 
-  for (final kind in EffectKind.values.where((k) => k != EffectKind.eq)) {
+  for (final kind in EffectKind.values.where((k) => k != EffectKind.eq && k != EffectKind.multiband)) {
     test('ids e faixas de ${kind.label} iguais aos do motor', () {
       final consts = module('${kind.name}_param');
       final names = _names[kind]!;
@@ -197,5 +229,39 @@ void main() {
     final out = eqParams.firstWhere((p) => p.id == consts['OUTPUT']!.value);
     expect(out.name, 'Saída');
     expect((out.min, out.max), docRange(consts['OUTPUT']!.doc));
+  });
+
+  test('ids e faixas do multibanda iguais aos do motor', () {
+    final consts = {for (final c in module('multiband_param')) c.name: c};
+    final base = consts['BAND_BASE']!.value, stride = consts['BAND_STRIDE']!.value;
+    expect((base, stride, consts['BANDS']!.value), (multibandBase, multibandStride, 3));
+    expect(multibandParams.length, 3 + 3 * _multibandBand.length);
+    for (final (name, label, group) in [
+      ('XOVER_LOW', 'Cruzamento baixo/médio', 'Cruzamento'),
+      ('XOVER_HIGH', 'Cruzamento médio/agudo', 'Cruzamento'),
+      ('OUTPUT', 'Saída', 'Saída'),
+    ]) {
+      final p = multibandParams.firstWhere((p) => p.id == consts[name]!.value, orElse: () => fail('multibanda sem $name'));
+      expect((p.name, p.group), (label, group), reason: name);
+      expect((p.min, p.max), docRange(consts[name]!.doc), reason: 'faixa de $name');
+    }
+    for (var b = 0; b < 3; b++) {
+      for (final e in _multibandBand.entries) {
+        final id = base + b * stride + consts[e.key]!.value;
+        final p = multibandParams.firstWhere((p) => p.id == id, orElse: () => fail('multibanda sem o id $id'));
+        expect(p.name, e.value, reason: '${e.key}, banda $b');
+        final r = docRange(consts[e.key]!.doc);
+        if (r != null && p.curve != Curve.choice) expect((p.min, p.max), r, reason: 'faixa de ${e.key}');
+      }
+    }
+    expect(multibandParams.map((p) => p.id).toSet().length, multibandParams.length);
+  });
+
+  test('indicador do multibanda desempacota como o motor empacota', () {
+    // gr0 + 256 * gr1 + 65536 * gr2, décimos de dB
+    expect(unpackMultibandMeter(15 + 256 * 123 + 65536 * 255), [1.5, 12.3, 25.5]);
+    expect(unpackMultibandMeter(0), [0, 0, 0]);
+    expect(unpackMultibandMeter(double.nan), [0, 0, 0]);
+    expect(unpackMultibandMeter(-5), [0, 0, 0]);
   });
 }

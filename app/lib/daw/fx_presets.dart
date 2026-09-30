@@ -174,6 +174,71 @@ const _filter = <EffectPreset>[
   EffectPreset('Passa-alta de transição', {0: 3, 1: 250, 2: 0.25, 4: 0, 8: 1}),
 ];
 
+/// Uma banda do multibanda nos ids do contrato (`4 + b * 8 + k`).
+Map<int, double> _mb(
+  int b, {
+  required double threshold,
+  required double ratio,
+  double attack = 0.01,
+  double release = 0.15,
+  double makeup = 0,
+  double knee = 6,
+}) => {4 + b * 8: threshold, 4 + b * 8 + 1: ratio, 4 + b * 8 + 2: attack, 4 + b * 8 + 3: release, 4 + b * 8 + 4: makeup, 4 + b * 8 + 7: knee};
+
+// multibanda: 0 cruzamento baixo/médio, 1 médio/agudo, 2 saída; bandas em 4 + b * 8 (limiar, razão,
+// ataque, soltura, ganho, solo, bypass, joelho)
+final _multiband = <EffectPreset>[
+  EffectPreset('Bateria colada', {
+    0: 120,
+    1: 4000,
+    ..._mb(0, threshold: -20, ratio: 3, attack: 0.03, release: 0.2, makeup: 1),
+    ..._mb(1, threshold: -18, ratio: 2.5, attack: 0.02, release: 0.12),
+    ..._mb(2, threshold: -22, ratio: 2, attack: 0.005, release: 0.08, makeup: 1),
+  }),
+  EffectPreset('Mix de bus', {
+    0: 150,
+    1: 3500,
+    2: 1,
+    ..._mb(0, threshold: -16, ratio: 2, attack: 0.03, release: 0.3, knee: 10),
+    ..._mb(1, threshold: -14, ratio: 1.6, attack: 0.02, release: 0.2, knee: 10),
+    ..._mb(2, threshold: -18, ratio: 1.8, attack: 0.01, release: 0.15, knee: 10),
+  }),
+  EffectPreset('Master suave', {
+    0: 100,
+    1: 5000,
+    ..._mb(0, threshold: -14, ratio: 1.8, attack: 0.04, release: 0.4, knee: 12),
+    ..._mb(1, threshold: -12, ratio: 1.4, attack: 0.03, release: 0.25, knee: 12),
+    ..._mb(2, threshold: -16, ratio: 1.5, attack: 0.015, release: 0.2, knee: 12),
+  }),
+  // graves domados e agudos contidos, o médio (a voz) quase intocado
+  EffectPreset('Controle de graves', {
+    0: 180,
+    1: 3000,
+    ..._mb(0, threshold: -26, ratio: 5, attack: 0.01, release: 0.15, knee: 3),
+    ..._mb(1, threshold: -10, ratio: 1.2),
+    ..._mb(2, threshold: -30, ratio: 3, attack: 0.002, release: 0.06, knee: 3),
+  }),
+];
+
+// de-esser: 0 frequência, 1 Q, 2 limiar, 3 razão, 4 ataque, 5 soltura, 6 modo (0 dividida, 1 larga),
+// 7 ouvir
+const _deesser = <EffectPreset>[
+  EffectPreset('Voz suave', {0: 6500, 1: 1.5, 2: -32, 3: 4, 4: 0.001, 5: 0.05, 6: 0}),
+  EffectPreset('Voz feminina', {0: 8000, 1: 1.8, 2: -30, 3: 5, 4: 0.001, 5: 0.04, 6: 0}),
+  EffectPreset('Voz masculina', {0: 5500, 1: 1.3, 2: -30, 3: 5, 4: 0.001, 5: 0.06, 6: 0}),
+  // comprime tudo quando o "s" estoura: pega os pratos e o chiado de uma vez
+  EffectPreset('Banda larga', {0: 7000, 1: 1, 2: -28, 3: 3, 4: 0.0005, 5: 0.08, 6: 1}),
+];
+
+// imagem estéreo: 0/1 cruzamentos, 2/3/4 largura baixa/média/aguda, 5 balanço, 6 mono nos graves,
+// 7 frequência do mono
+const _imager = <EffectPreset>[
+  EffectPreset('Mix de bus', {0: 200, 1: 4000, 2: 0.8, 3: 1.1, 4: 1.25, 6: 1, 7: 120}),
+  EffectPreset('Graves em mono', {0: 150, 1: 4000, 2: 0, 3: 1, 4: 1, 6: 1, 7: 150}),
+  EffectPreset('Largo', {0: 250, 1: 3000, 2: 0.6, 3: 1.4, 4: 1.7, 6: 1, 7: 100}),
+  EffectPreset('Quase mono', {0: 200, 1: 4000, 2: 0, 3: 0.4, 4: 0.6}),
+];
+
 /// Os presets de um tipo de efeito, na ordem do menu.
 List<EffectPreset> effectPresetsFor(EffectKind kind) => switch (kind) {
   EffectKind.eq => _eq,
@@ -188,6 +253,9 @@ List<EffectPreset> effectPresetsFor(EffectKind kind) => switch (kind) {
   EffectKind.tremolo => _tremolo,
   EffectKind.distortion => _distortion,
   EffectKind.filter => _filter,
+  EffectKind.multiband => _multiband,
+  EffectKind.deesser => _deesser,
+  EffectKind.imager => _imager,
 };
 
 /// O preset que bate com os parâmetros do slot agora (null se foi mexido ou é outro). O

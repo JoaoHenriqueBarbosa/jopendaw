@@ -21,7 +21,10 @@ enum EffectKind {
   phaser(9, 'Phaser', 'Filtros passa-tudo em movimento', Icons.cyclone),
   tremolo(10, 'Tremolo', 'Tremolo e autopan', Icons.vibration),
   distortion(11, 'Distorção', 'Saturação, válvula, fita, fuzz e bitcrusher', Icons.bolt),
-  filter(12, 'Filtro', 'Filtro com LFO e seguidor de envelope', Icons.filter_alt_outlined);
+  filter(12, 'Filtro', 'Filtro com LFO e seguidor de envelope', Icons.filter_alt_outlined),
+  multiband(13, 'Multibanda', 'Compressor de 3 bandas com cruzamentos ajustáveis, solo e bypass por banda', Icons.stacked_bar_chart),
+  deesser(14, 'De-esser', 'Doma a sibilância (s, x, ch) numa banda de detecção ajustável', Icons.graphic_eq),
+  imager(15, 'Imagem estéreo', 'Largura por 3 bandas, balanço, mono nos graves e medidor de fase', Icons.open_in_full);
 
   final int code;
   final String label, description;
@@ -38,7 +41,8 @@ enum EffectKind {
   /// Grupo no menu de adicionar.
   String get family => switch (this) {
     eq || filter => 'Timbre',
-    compressor || gate || limiter || utility => 'Dinâmica e utilidade',
+    compressor || gate || limiter || utility || multiband || deesser => 'Dinâmica e utilidade',
+    imager => 'Espaço',
     reverb || delay => 'Espaço',
     chorus || phaser || tremolo => 'Modulação',
     distortion => 'Saturação',
@@ -57,6 +61,9 @@ enum EffectKind {
     tremolo => tremoloParams,
     distortion => distortionParams,
     filter => filterParams,
+    multiband => multibandParams,
+    deesser => deesserParams,
+    imager => imagerParams,
   };
 }
 
@@ -205,6 +212,75 @@ const filterParams = <ParamSpec>[
   ParamSpec(4, 'Profundidade', 'LFO', 0, 6, 0, unit: 'oct'),
   ParamSpec.choice(5, 'Onda', 'LFO', ['Senoide', 'Triângulo', 'Serra', 'Quadrada', 'Aleatório']),
   ParamSpec(6, 'Envelope', 'Envelope', -6, 6, 0, unit: 'oct'),
+];
+
+/// Compressor multibanda: cruzamentos (0, 1), saída (2) e, por banda b (0 baixa, 1 média, 2 aguda),
+/// os controles em `multibandBase + b * multibandStride + k`. O indicador do motor empacota as três
+/// reduções de ganho num inteiro (ver [unpackMultibandMeter]).
+const multibandBase = 4, multibandStride = 8;
+const _multibandBandNames = ['Baixa', 'Média', 'Aguda'];
+const _multibandThresholds = [-24.0, -22.0, -20.0];
+final multibandParams = <ParamSpec>[
+  const ParamSpec(0, 'Cruzamento baixo/médio', 'Cruzamento', 40, 800, 150, unit: 'Hz', curve: Curve.log),
+  const ParamSpec(1, 'Cruzamento médio/agudo', 'Cruzamento', 1000, 12000, 3000, unit: 'Hz', curve: Curve.log),
+  const ParamSpec(2, 'Saída', 'Saída', -24, 24, 0, unit: 'dB'),
+  for (var b = 0; b < 3; b++) ...[
+    ParamSpec(multibandBase + b * multibandStride, 'Limiar', _multibandBandNames[b], -60, 0, _multibandThresholds[b], unit: 'dB'),
+    ParamSpec(multibandBase + b * multibandStride + 1, 'Razão', _multibandBandNames[b], 1, 20, 3, unit: ':1', curve: Curve.log),
+    ParamSpec(
+      multibandBase + b * multibandStride + 2,
+      'Ataque',
+      _multibandBandNames[b],
+      0.0001,
+      0.25,
+      b == 0 ? 0.02 : (b == 1 ? 0.01 : 0.004),
+      unit: 's',
+      curve: Curve.log,
+    ),
+    ParamSpec(
+      multibandBase + b * multibandStride + 3,
+      'Soltura',
+      _multibandBandNames[b],
+      0.005,
+      3,
+      b == 0 ? 0.25 : (b == 1 ? 0.15 : 0.08),
+      unit: 's',
+      curve: Curve.log,
+    ),
+    ParamSpec(multibandBase + b * multibandStride + 4, 'Ganho', _multibandBandNames[b], -12, 24, 0, unit: 'dB'),
+    ParamSpec.choice(multibandBase + b * multibandStride + 5, 'Solo', _multibandBandNames[b], _noYes),
+    ParamSpec.choice(multibandBase + b * multibandStride + 6, 'Bypass', _multibandBandNames[b], _noYes),
+    ParamSpec(multibandBase + b * multibandStride + 7, 'Joelho', _multibandBandNames[b], 0, 24, 6, unit: 'dB'),
+  ],
+];
+
+/// Desempacota o indicador do multibanda: `gr0 + 256 * gr1 + 65536 * gr2`, cada `gr` em décimos de
+/// dB (0..255). Devolve a redução de ganho (dB) das três bandas.
+List<double> unpackMultibandMeter(double v) {
+  final n = v.isFinite ? v.clamp(0, 16777215).toInt() : 0;
+  return [(n % 256) / 10, ((n ~/ 256) % 256) / 10, ((n ~/ 65536) % 256) / 10];
+}
+
+const deesserParams = <ParamSpec>[
+  ParamSpec(0, 'Frequência', 'Banda', 4000, 10000, 6500, unit: 'Hz', curve: Curve.log),
+  ParamSpec(1, 'Q', 'Banda', 0.5, 4, 1.5, curve: Curve.log),
+  ParamSpec(2, 'Limiar', 'Compressão', -60, 0, -30, unit: 'dB'),
+  ParamSpec(3, 'Razão', 'Compressão', 1, 20, 5, unit: ':1', curve: Curve.log),
+  ParamSpec(4, 'Ataque', 'Compressão', 0.0001, 0.05, 0.001, unit: 's', curve: Curve.log),
+  ParamSpec(5, 'Soltura', 'Compressão', 0.005, 0.5, 0.05, unit: 's', curve: Curve.log),
+  ParamSpec.choice(6, 'Modo', 'Saída', ['Banda dividida', 'Banda larga']),
+  ParamSpec.choice(7, 'Ouvir banda', 'Saída', _noYes),
+];
+
+const imagerParams = <ParamSpec>[
+  ParamSpec(0, 'Cruzamento baixo/médio', 'Cruzamentos', 50, 1000, 200, unit: 'Hz', curve: Curve.log),
+  ParamSpec(1, 'Cruzamento médio/agudo', 'Cruzamentos', 1000, 12000, 4000, unit: 'Hz', curve: Curve.log),
+  ParamSpec(2, 'Baixa', 'Largura', 0, 2, 1, unit: '%'),
+  ParamSpec(3, 'Média', 'Largura', 0, 2, 1, unit: '%'),
+  ParamSpec(4, 'Aguda', 'Largura', 0, 2, 1, unit: '%'),
+  ParamSpec(5, 'Balanço', 'Saída', -1, 1, 0),
+  ParamSpec.choice(6, 'Mono nos graves', 'Mono', _noYes),
+  ParamSpec(7, 'Abaixo de', 'Mono', 40, 500, 120, unit: 'Hz', curve: Curve.log),
 ];
 
 /// Todos os parâmetros de um efeito no padrão.
