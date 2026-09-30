@@ -1,10 +1,10 @@
 # Áudio e clipes
 
-> Como trazer um arquivo de áudio para o projeto e mexer no clipe que nasce dele: mover, aparar, fazer fades, cortar, duplicar e levar para outra faixa de áudio.
+> Como trazer um arquivo de áudio (ou um arquivo MIDI `.mid`) para o projeto e mexer no clipe que nasce dele: mover, aparar, fazer fades, cortar, duplicar e levar para outra faixa de áudio.
 
 ## Onde fica
 
-- **Importar:** barra do transporte (a faixa de botões em cima no computador, embaixo no celular). O botão é o ícone de arquivo com tooltip `Importar áudio (Ctrl+I)`; em janela larga (a partir de uns 1540 px, só no computador) ele mostra também o texto `Importar`. No Mac o atalho é `⌘+I`.
+- **Importar:** barra do transporte (a faixa de botões em cima no computador, embaixo no celular). O botão é o ícone de arquivo com tooltip `Importar áudio ou MIDI (Ctrl+I)`; em janela larga (a partir de uns 1540 px, só no computador) ele mostra também o texto `Importar`. No Mac o atalho é `⌘+I`.
 - **Clipes:** na linha do tempo (o arranjo), dentro da raia da faixa. Clipe de áudio só existe em **faixa de áudio** (tipo `Áudio`).
 - **Menu do clipe:** botão direito no clipe (computador) ou toque longo (celular).
 - **Nova faixa de áudio:** botão `Faixa` no pé da lista de faixas (tooltip `Nova faixa`), item `Áudio`.
@@ -15,7 +15,7 @@
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| `Importar áudio (Ctrl+I)` (ícone) / `Importar` (texto) | Abre o seletor de arquivos (título `Importar áudio`) e põe cada arquivo escolhido como um clipe, a partir do cursor de reprodução | Aceita escolher vários arquivos de uma vez | Fica desligado enquanto há outro trabalho em andamento (aparece o texto de status ao lado, com um círculo girando) e durante a gravação |
+| `Importar áudio ou MIDI (Ctrl+I)` (ícone) / `Importar` (texto) | Abre o seletor de arquivos (título `Importar áudio ou MIDI`) e põe cada arquivo de áudio escolhido como um clipe, a partir do cursor de reprodução. Os arquivos `.mid` e `.midi` seguem outro caminho: viram faixas de notas (ver [Importar um arquivo MIDI (.mid)](#importar-um-arquivo-midi-mid)) | Aceita escolher vários arquivos de uma vez, áudio e MIDI misturados: os áudios entram primeiro, depois cada `.mid`, um de cada vez | Fica desligado enquanto há outro trabalho em andamento (aparece o texto de status ao lado, com um círculo girando) e durante a gravação |
 | Posição do clipe novo | Começa no cursor, **encaixado na grade** (`Livre`, `Compasso`, `1/4`, `1/8`, `1/16`; padrão `1/4`) | Duração do clipe = duração do arquivo | Para importar em ponto exato, mova o cursor antes (clique na régua) |
 | Faixa do clipe novo | O primeiro arquivo vai na faixa **selecionada**, se ela for de áudio e estiver livre naquele trecho; senão (e sempre para o 2.º arquivo em diante) nasce uma **faixa de áudio nova**, com o nome do arquivo sem extensão (até 40 caracteres) | Cor da faixa: a próxima da paleta | Vários arquivos importados juntos começam todos no mesmo ponto, cada um na sua faixa |
 | Nome do clipe | O clipe mostra o nome do arquivo (com extensão) no canto de cima à esquerda | | O nome vem do primeiro arquivo importado com aquele conteúdo |
@@ -35,6 +35,54 @@ O seletor filtra por extensão. Quem decodifica é o navegador (web) ou o motor 
 | `opus`, `webm` | Depende do navegador | **Não** (o motor nativo não tem Opus) |
 
 O arquivo é decodificado em 1 ou 2 canais. Arquivo com mais de 2 canais fica só com os dois primeiros (esquerda e direita). Mono continua mono e sai nos dois lados. Se o arquivo não decodifica, aparece o aviso `Não deu para abrir <nome>: é um formato de áudio que este navegador decodifica?` (o texto fala em "navegador" mesmo no Android).
+
+### Importar um arquivo MIDI (.mid)
+
+O mesmo botão `Importar` (e o `Ctrl+I`) aceita os arquivos MIDI padrão, com extensão `mid` ou `midi`. Em vez de um clipe de áudio, cada arquivo vira **faixas de notas** com um clipe de notas cada, que você edita no [editor de notas](05-piano-roll.md) e nas [ferramentas MIDI](05b-ferramentas-midi.md) como qualquer outro. Enquanto lê, a barra mostra `Lendo <nome>…`. O passo a passo do outro lado (levar as notas do jopendaw para outro programa) está em [Exportação](08-exportacao.md#notas-em-midi-mid).
+
+| O que | Como fica no projeto | Valores | Dica |
+|---|---|---|---|
+| Faixas criadas | Uma **faixa nova por canal com notas**: cada trilha do arquivo vira uma faixa, e uma trilha que mistura vários canais rende uma faixa por canal. Trilhas sem nota (a de andamento, por exemplo) não viram faixa | Faixas ao fim da lista; a primeira nova fica selecionada, com o clipe dela selecionado | Cada faixa nova leva a próxima cor da paleta |
+| Tipo da faixa | `Sintetizador` para os canais 1 a 9 e 11 a 16; `Bateria` para o **canal 10** (o `9` do protocolo) | O programa (`Program Change`, o "som" escolhido no arquivo) é **ignorado**: a faixa nasce com o sintetizador padrão | Escolha o timbre depois no [painel do instrumento](04-painel-de-instrumento.md) (presets do sintetizador) |
+| Nome da faixa e do clipe | O nome da trilha no arquivo. Trilha com vários canais: `<nome> (canal N)`, ou `Canal N` se não tem nome. Sem nome nenhum, a faixa é `Sintetizador 1`, `Bateria 1`… (o primeiro número livre) e o clipe fica sem nome | Caracteres de controle são removidos do nome | Não há limite de tamanho do nome nem tratamento de nomes repetidos |
+| Onde o clipe começa | No **cursor**, encaixado na grade (como o áudio). O instante zero do arquivo cai no cursor: um silêncio no começo do arquivo é preservado | Todas as faixas do mesmo arquivo começam no mesmo ponto | Ponha o cursor no compasso onde a música deve entrar antes de importar |
+| Duração do clipe | Fecha no fim do compasso em que a última nota (ou controle) termina, com no mínimo 1 compasso | Compasso = tempos por compasso do projeto (ou os do arquivo, se você aceitou usá-los) | Dá para puxar o fim do clipe na régua do editor |
+| Notas | Altura, início, duração e velocidade (a velocidade 1–127 do arquivo vira 0–1 no app). `Note On` com velocidade 0 desliga a nota. Nota de duração zero ganha 1/32 de batida | Notas ligadas que nunca desligam fecham no fim da trilha (aviso: `N nota(s) sem desligar: fechei no fim da faixa.`) | A velocidade de soltar (`Note Off`) não é lida |
+| Pitch bend, modulação e pedal | Viram os pontos de controle do clipe: `Pitch bend`, `Modulação` (CC 1) e `Sustain` (CC 64), os mesmos da [faixa de controle](05-piano-roll.md#faixa-de-controle) do editor. O pedal vale ligado a partir de 64. Só entra um ponto quando o valor muda | Bend de −1 a 1 (o alcance em semitons é o `Alcance do bend` do instrumento, não o do arquivo) | O arquivo pode dizer outro alcance de bend (`RPN`); o app ignora isso |
+| Outros controles | **Ignorados**: volume (CC 7), pan (CC 10), expressão (CC 11), reverb e o resto dos CC, pressão do canal, `Program Change`, letras, marcadores, SysEx. Os CC 120 em diante (all notes off) são descartados sem aviso | Aviso: `Ignorei N evento(s) de controle que o app não usa (volume, pan, expressão…).` | Quem mixou no programa de origem precisa refazer volume e pan no [mixer](06-mixer.md) |
+| Bateria (canal 10) | As notas GM vão para as peças da [bateria](04b-bateria.md) pela altura. As que o app tem entram como estão: 36 `Bumbo`, 37 `Aro`, 38 `Caixa`, 39 `Palmas`, 41 `Tom grave`, 42 `Chimbal fechado`, 45 `Tom médio`, 46 `Chimbal aberto`, 48 `Tom agudo`, 49 `Prato de ataque`, 51 `Prato de condução`, 56 `Cowbell` | Aproximadas para a peça parecida: 35→36, 40→38, 43→41, 44→42, 47→45, 50→48, 52→49, 53→51, 55→49, 57→49, 59→51 (aviso com a contagem). Sem peça (por exemplo 54 pandeiro, 58 vibraslap, qualquer nota fora de 35–59): a nota **entra no clipe mas fica sem som** (aviso: `A bateria do app não tem: <lista>. Essas notas entraram, mas ficam sem som.`) | A nota sem som pode ser movida para uma peça que existe no editor da bateria |
+
+**Andamento e compasso.** Se o arquivo traz andamento (`Set Tempo`) ou compasso (`Time Signature`) e algum dos dois difere do projeto, abre a pergunta `Usar o andamento do arquivo (X BPM)?` (ou `Usar o compasso do arquivo?` quando o arquivo só tem compasso). O texto diz `O arquivo traz X BPM e compasso N/4; o projeto está em Y BPM, Z/4. As notas ficam nas mesmas batidas, só a velocidade muda.`
+
+| Botão | Efeito |
+|---|---|
+| `Usar o do arquivo` | O andamento (arredondado ao inteiro, de 20 a 400) e o compasso do arquivo passam a ser os do projeto, no mesmo passo do desfazer da importação |
+| `Manter o do projeto` (ou fechar a pergunta clicando fora) | O projeto continua como está; as notas ficam nas mesmas batidas, então a música toca mais rápida ou mais lenta |
+
+Se o andamento e o compasso do arquivo já são os do projeto, a pergunta nem aparece. O compasso do arquivo é convertido em tempos por compasso de semínima: `6/8` vira `3/4` sem aviso, `7/8` vira `4/4` com o aviso `O compasso 7/8 foi aproximado para 4/4, o mais próximo que o app tem.`; o resultado fica entre 1 e 12 tempos.
+
+**Só o primeiro andamento e o primeiro compasso valem.** Se o arquivo muda de andamento no meio, o app usa o primeiro e avisa `O arquivo muda de andamento no meio (de X a Y BPM): o app tem um andamento só, então as mudanças foram ignoradas.` (o texto do aviso está desatualizado: o projeto já tem mapa de andamento, a faixa de andamento sob a régua, mas o importador ainda não o preenche). Igualmente, `O arquivo muda de compasso no meio: o app usa só o primeiro (N/D).`
+
+**Formatos de arquivo lidos.** SMF tipo 0, 1 e 2, com qualquer resolução em pulsos por semínima (PPQ), eventos com *running status*, e também um MIDI embutido em RIFF (RMID) renomeado para `.mid`. Tipo 2 (sequências independentes) entra todo junto, cada sequência começando do início, com o aviso `Este é um MIDI tipo 2 (sequências independentes): todas as sequências entraram juntas, começando do início.` Um arquivo cortado ou com trecho corrompido importa o que deu para ler, com o aviso `O arquivo está cortado ou tem trechos corrompidos: usei só o que deu para ler.`
+
+**Avisos.** Se houve algum aviso, abre a janela `<nome>.mid importado, com avisos`, com `N faixa(s), M nota(s).`, uma linha `•` por aviso e o botão `Entendi`. Sem avisos, as faixas só aparecem, sem janela. A importação inteira (faixas, clipes e o andamento aceito) é um só passo do `Ctrl+Z`.
+
+**Erros** (aparecem no aviso vermelho abaixo da barra, sem criar nada; o texto começa com `Não deu para importar <nome>: `):
+
+| Situação | Mensagem depois do prefixo |
+|---|---|
+| Arquivo de 0 byte | `O arquivo está vazio.` |
+| Não é MIDI | `Este arquivo não é um MIDI padrão (.mid): falta o cabeçalho "MThd".` |
+| Cabeçalho incompleto | `O arquivo MIDI está cortado logo no começo (cabeçalho incompleto).` ou `O cabeçalho do arquivo MIDI está corrompido.` |
+| Tipo desconhecido | `Formato MIDI N desconhecido: só leio os tipos 0, 1 e 2.` |
+| Tempo em quadros (SMPTE) | `Este arquivo usa tempo em quadros SMPTE, que o app não lê. Salve-o de novo com tempo em pulsos por semínima (PPQ).` |
+| Zero pulsos por semínima | `O arquivo MIDI diz que tem 0 pulsos por semínima: está corrompido.` |
+| Sem trilha | `O arquivo MIDI não tem nenhuma faixa (está cortado ou corrompido).` |
+| Sem nenhuma nota | `O arquivo MIDI não tem nenhuma nota.` |
+| Qualquer outra falha | `o arquivo MIDI está corrompido.` (mensagem completa: `Não deu para importar <nome>: o arquivo MIDI está corrompido.`) |
+| Gravando | `Pare a gravação para importar MIDI.` (o botão já fica desligado gravando; a mensagem só aparece por outro caminho) |
+
+Não há limite de tamanho de arquivo nem de quantidade de notas no código; a leitura devolve o controle à tela a cada 20 mil eventos para não travar num arquivo grande (o teste automático usa 100 mil notas). O comportamento com arquivos MIDI reais de outros programas (Ableton, FL Studio, MuseScore, pacotes de acordes) `(testado só por testes automáticos)`: os testes montam os bytes à mão, nenhum arquivo exportado por esses programas foi aberto.
 
 ### O clipe na linha do tempo
 
@@ -106,6 +154,12 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 3. Toque em `Importar` (ou `Ctrl+I`) e escolha o arquivo.
 4. O clipe aparece selecionado, com a forma de onda. Ajuste a posição arrastando o miolo.
 
+**Trazer um arquivo MIDI (.mid)**
+1. Clique na régua para pôr o cursor onde a música do arquivo deve começar.
+2. Toque em `Importar` (ou `Ctrl+I`) e escolha o `.mid` (ou `.midi`).
+3. Se abrir `Usar o andamento do arquivo (X BPM)?`, escolha `Usar o do arquivo` para tocar na velocidade do arquivo ou `Manter o do projeto` para não mexer no andamento.
+4. As faixas novas aparecem no fim da lista; se abrir a janela `<nome>.mid importado, com avisos`, leia e toque em `Entendi`. `Ctrl+Z` desfaz tudo de uma vez.
+
 **Aparar e fazer fade**
 1. Arraste a borda esquerda para a direita para tirar o começo (o resto fica no lugar).
 2. Arraste a borda direita para tirar o final.
@@ -128,7 +182,9 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 - [Mixer](06-mixer.md): volume, pan, efeitos e roteamento da faixa onde o clipe está.
 - [Timeline e clipes](02b-timeline-e-clipes.md): o arranjo em geral (faixas, régua, sobreposição, menu de faixa).
 - [Transporte e barra de ferramentas](02-transporte.md): os botões `Importar`, `Cortar no cursor`, grade e as configurações.
-- [Exportação](08-exportacao.md): o que soa (inclusive o warp já processado) é o que sai no WAV.
+- [Exportação](08-exportacao.md): o que soa (inclusive o warp já processado) é o que sai no WAV; as notas saem à parte em `.mid` (`Notas em MIDI (.mid)…`).
+- [Editor de notas](05-piano-roll.md) e [Ferramentas MIDI](05b-ferramentas-midi.md): onde se mexe nas notas de um `.mid` importado (quantizar, escala, acordes).
+- [MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): levar uma melodia para outro DAW, trazer um pacote de acordes e guardar as notas em `.mid`.
 
 ## Limites e pegadinhas
 
@@ -143,6 +199,8 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 - O clipe nunca passa do fim do arquivo: aparar/estender à direita para nesse ponto.
 - Aparar não apaga nada do arquivo: o `offset` e a duração só escolhem o trecho que toca.
 - Não há arrastar-e-soltar de arquivos do sistema sobre a tela: só o botão `Importar` e `Ctrl+I`.
+- O arquivo `.mid` **não é guardado** no aparelho nem no servidor (ao contrário do áudio): só ficam as notas e os controles que viraram clipes. Importar o mesmo `.mid` duas vezes cria duas levas de faixas.
+- Importar um `.mid` não usa o sha-256, o armazenamento de áudio nem a cota de 4 GB.
 - Importar, exportar e o desfazer ficam bloqueados enquanto se grava; arrastar clipes, aparar e cortar continuam liberados na tela, mas a gravação que está rolando não leva em conta o que mudou.
 - O botão `Importar` de um instrumento **Sampler** (dentro do painel do instrumento) é outra coisa: escolhe o áudio do sampler e **não** cria clipe no arranjo.
 - Clipe com o áudio ausente deste aparelho não toca. O app tenta buscar no servidor ao abrir o projeto.
@@ -151,7 +209,7 @@ O clipe de áudio só muda para outra faixa **de áudio**; clipe de notas só pa
 
 | Tecla | Ação |
 |---|---|
-| `Ctrl+I` (`⌘+I`) | Importar áudio |
+| `Ctrl+I` (`⌘+I`) | Importar áudio ou MIDI (a janela de atalhos ainda mostra o texto `Importar áudio`) |
 | `S` | Cortar no cursor |
 | `Ctrl+D` (`⌘+D`) | Duplicar o clipe |
 | `Delete` ou `Backspace` | Apagar o clipe |

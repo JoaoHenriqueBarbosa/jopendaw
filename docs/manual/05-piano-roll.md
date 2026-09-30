@@ -123,7 +123,7 @@ A faixa de baixo da grade (a mesma de 72 px, 84 no toque, que mostra a velocidad
 | Canto esquerdo da faixa (tooltip `Faixa de controle: velocidade, pitch bend, modulação e sustain`) | Abre o menu para trocar a visão | Padrão `Velocidade` | Toque ou clique no rótulo. A escolha vale para a sessão, de um clipe para outro, e volta a `Velocidade` ao recarregar |
 | Rótulo do canto | Diz o que a faixa mostra e, nas três de controle, quantos pontos o clipe tem dela | `Vel.` (`Velocidade` na bateria); `Bend`, `Mod.`, `Pedal` (na bateria, com o teclado mais largo: `Pitch bend`, `Modulação`, `Sustain`); embaixo `N pontos` ou `1 ponto` | Só leitura |
 | Item `Velocidade`, `Pitch bend`, `Modulação`, `Sustain` (com marca na visão atual) | Troca a visão | | `Velocidade` é o painel de sempre (ver acima) |
-| Item `Linha reta (ou Shift)` (caixa de marcar) | Liga a ferramenta reta (ver abaixo) | Desligado por padrão | Só aparece nas três visões de controle |
+| Item `Linha reta (ou Shift)` (caixa de marcar) | Liga a ferramenta reta (ver abaixo) | Desligado por padrão | Só aparece em `Pitch bend` e `Modulação`. No `Sustain` o item não é oferecido, porque lá o gesto é sempre a pintura do pedal; a escolha feita nas outras visões fica guardada para quando você voltar a elas |
 | Item `Limpar pitch bend`, `Limpar modulação` ou `Limpar sustain` | Apaga todos os pontos daquele controle no clipe | Apagado (cinza) quando não há ponto; uma edição só no `Ctrl+Z` | Apaga o clipe inteiro, não só o trecho visível |
 
 #### Valores e como a curva aparece
@@ -134,11 +134,12 @@ A faixa de baixo da grade (a mesma de 72 px, 84 no toque, que mostra a velocidad
 | `Modulação` | De 0 a 100% (0 a 127 no MIDI), 0 embaixo | Guias em 25%, 50%, 75% e 100% | `NN%` |
 | `Sustain` | Só dois estados: solto (embaixo da faixa) e embaixo (em cima) | Guias como a modulação | `Pedal embaixo` ou `Pedal solto` |
 
-- O valor do ponto segue a altura do ponteiro em passos de 1/127 (a resolução do MIDI). No `Pitch bend` o centro "atrai": soltar a menos de 3% do alcance (0,03 de -1 a 1) do meio dá zero exato, para voltar ao afinado sem precisar de pontaria.
+- O valor do ponto segue a altura do ponteiro na mesma resolução que os controles ao vivo têm: a `Modulação` em passos de 1/127 (a resolução do MIDI de 7 bits) e o `Pitch bend` em passos de 1/8192 (os 14 bits do pitch bend do MIDI; na prática contínuo). O `Sustain` só tem dois valores. No `Pitch bend` o centro "atrai": soltar a menos de 0,03 (de -1 a 1) do meio dá zero exato, para voltar ao afinado sem precisar de pontaria.
 - A curva é desenhada em **degraus**: cada ponto vale até o próximo (é assim que o motor toca; o próprio motor suaviza o bend em poucos milissegundos, então não se ouve escada). Por isso o lápis põe um ponto por passo da grade, e para o bend voltar ao centro é preciso um ponto em zero.
 - Cada ponto é uma bolinha na cor da faixa com aro branco (a que você está arrastando fica maior e branca); a área sob a curva é preenchida em tom fraco. A parte antes do início e depois do fim do clipe é escurecida: pontos ali ficam guardados, mas não tocam.
 - A batida de cada ponto encaixa na grade do editor (`Alt` no gesto desliga; com a grade `Livre` não há encaixe) e fica sempre entre 0 e o fim do clipe. O passo entre os pontos do lápis é o passo da grade (1/16 se `Livre`).
-- Ao chegar ao fim do clipe, o que estiver fora do repouso volta a ele: o bend ao centro, a modulação a zero, o pedal solto. O pedal que fica embaixo não segura as notas do resto do projeto.
+- Ao chegar ao fim do clipe, o que estiver fora do repouso volta a ele: o bend ao centro, a modulação a zero, o pedal solto. O pedal que fica embaixo não segura as notas do resto do projeto. A exceção é o clipe seguinte, colado no fim deste, que segue no mesmo estado (o pedal de um clipe cortado em dois não sobe e desce na batida do corte).
+- Se o clipe foi aparado na esquerda (ou cortado), os pontos que ficaram antes do começo continuam guardados, mudos, mas o valor que estava em vigor no começo vale: a curva da faixa já nasce nele (por exemplo, o pedal que estava embaixo continua embaixo), e o motor toca esse valor desde a primeira batida do clipe.
 
 #### Ferramentas (mouse)
 
@@ -147,12 +148,12 @@ Não há botões de ferramenta: elas são gestos na faixa (o cursor vira uma mir
 | Ferramenta | Gesto | O que faz | Detalhe |
 |---|---|---|---|
 | Lápis | Arrastar no vazio (`Pitch bend` e `Modulação`) | Desenha a curva por onde o ponteiro passa | Um ponto por passo da grade entre uma posição e a seguinte; pontos que já estavam no trecho percorrido são substituídos. Um clique sem arrastar cria um ponto só |
-| Reta | `Shift` + arrastar no vazio, ou `Linha reta (ou Shift)` marcado no menu | Traça uma reta entre o ponto onde você apertou e onde está o ponteiro | A reta é refeita a cada movimento a partir do que havia antes; dá para arrastar para a esquerda. Substitui os pontos do trecho e mantém o valor que valia depois dele |
+| Reta (só `Pitch bend` e `Modulação`) | `Shift` + arrastar no vazio, ou `Linha reta (ou Shift)` marcado no menu | Traça uma reta entre o ponto onde você apertou e onde está o ponteiro | A reta é refeita a cada movimento a partir do que havia antes; dá para arrastar para a esquerda. Substitui os pontos do trecho e mantém o valor que valia depois dele |
 | Mover | Arrastar um ponto | Muda a batida (encaixa na grade) e o valor | Tolerância de 8 px em volta do ponto (16 no toque); pega o mais próximo. No `Sustain`, arrastar o ponto acima do meio da faixa o deixa "embaixo" e abaixo do meio, "solto" |
 | Apagar | Clique com o botão direito num ponto, `Alt` + clique num ponto, ou segurar o ponteiro parado sobre o ponto por 0,55 s | Apaga o ponto | Cada apagamento é um passo no `Ctrl+Z` |
 | Pedal pintado | Arrastar no vazio da visão `Sustain` | Pinta um trecho com o pedal embaixo (ou solto) | Ver abaixo |
 
-**Pedal pintado.** No `Sustain` o lápis não desenha curva: arrastar de uma batida a outra pinta um trecho. Se onde você apertou o pedal estava solto, pinta "embaixo": um ponto de descida no começo do trecho e, no fim dele, um ponto que devolve o pedal ao estado que ele tinha ali antes (solto, por exemplo). Se estava embaixo, pinta "solto" (um ponto de subida no começo) e o pedal volta a descer no fim do trecho. Os pontos de pedal que estavam dentro do trecho pintado são substituídos. Um clique sem arrastar põe um ponto só: sobre um trecho solto, o pedal desce ali e fica embaixo até o próximo ponto (ou o fim do clipe); sobre um trecho embaixo, ele sobe ali. No `Sustain`, `Shift` e `Linha reta (ou Shift)` não mudam nada (o item aparece no menu, mas o gesto é sempre a pintura).
+**Pedal pintado.** No `Sustain` o lápis não desenha curva: arrastar de uma batida a outra pinta um trecho. Se onde você apertou o pedal estava solto, pinta "embaixo": um ponto de descida no começo do trecho e, no fim dele, um ponto que devolve o pedal ao estado que ele tinha ali antes (solto, por exemplo). Se estava embaixo, pinta "solto" (um ponto de subida no começo) e o pedal volta a descer no fim do trecho. Os pontos de pedal que estavam dentro do trecho pintado são substituídos. Um clique sem arrastar põe um ponto só: sobre um trecho solto, o pedal desce ali e fica embaixo até o próximo ponto (ou o fim do clipe); sobre um trecho embaixo, ele sobe ali. No `Sustain`, `Shift` não muda nada e o menu do canto não oferece `Linha reta (ou Shift)`: o gesto é sempre a pintura.
 
 Um gesto inteiro (arrastar, desenhar, pintar) é **uma edição só** no histórico; um gesto que termina onde começou não deixa nada nele.
 
@@ -166,7 +167,11 @@ Um gesto inteiro (arrastar, desenhar, pintar) é **uma edição só** no histór
 
 #### Depois de gravar
 
-O que se toca ao vivo entra no clipe como pontos dessas mesmas visões, já "afinado" para não lotar o clipe (no máximo um ponto a cada 1/48 de batida por controle). Abra o clipe, escolha a visão e edite como qualquer ponto: mova, apague, redesenhe um trecho com o lápis por cima ou use `Limpar` e recomece. `Ferramentas > Escalar o tempo` e `Inverter no tempo` levam os pontos junto ([Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas)).
+O que se toca ao vivo entra no clipe como pontos dessas mesmas visões, já "afinado" para não lotar o clipe (no máximo um ponto a cada 1/48 de batida por controle). Abra o clipe, escolha a visão e edite como qualquer ponto: mova, apague, redesenhe um trecho com o lápis por cima ou use `Limpar` e recomece. `Ferramentas > Escalar o tempo` e `Inverter no tempo` levam os pontos junto, e `Ctrl+C`, `Ctrl+X`, `Ctrl+V` e `Ctrl+D` copiam os pontos do trecho das notas ([Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas)). Se você gravou só bend, modulação ou pedal, sem nenhuma nota, os pontos entram no clipe que estava sob o cursor ou, se não havia clipe ali, num clipe novo vazio (ver [Gravação](03c-gravacao.md)).
+
+#### Copiar, colar e duplicar com os pontos
+
+`Ctrl+C` (e `Ctrl+X`) guardam junto das notas os pontos de bend, modulação e pedal que caem entre o começo da primeira nota selecionada e o fim da última; `Ctrl+V` e `Ctrl+D` os põem de volta, na mesma posição relativa das notas coladas. Por controle, o que veio da cópia substitui os pontos que já havia no trecho colado (do primeiro ao último ponto colado). Dois cuidados que a cópia tem para o som sair igual: se o pedal (ou o bend, ou a roda) já estava fora do repouso no começo do trecho e nenhum ponto cai ali, o valor em vigor é copiado como um ponto na primeira batida; e se o controle termina fora do repouso no fim do trecho, a cópia leva um ponto de retorno ao repouso ali, para o trecho colado não segurar o pedal do resto do clipe. Se não há ponto no trecho e todos os controles estão em repouso ali, os controles do clipe não mudam. Um pedal que se estende além do fim da última nota selecionada é cortado ali na cópia (por exemplo, um acorde de uma batida com o pedal embaixo por quatro batidas dá um pedal de uma batida na cópia): estique as notas até o fim do trecho do pedal, ou redesenhe o pedal na cópia. `Ctrl+X` leva os pontos para a área de transferência, mas não os apaga do clipe (apaga só as notas).
 
 ### Zoom e rolagem
 
@@ -250,13 +255,13 @@ O zoom e a rolagem de cada clipe ficam guardados enquanto o app está aberto: ao
 - As teclas de edição valem assim que o editor abre (ele nasce ativo) e deixam de valer quando você clica fora dele; um clique de volta dentro do editor o reativa. Com o editor ativo, `Delete` nunca apaga o clipe, só notas (sem seleção não faz nada).
 - Segurar uma seta ou uma tecla repetida é uma edição só no histórico; o histórico guarda os últimos 200 passos.
 - Transpor com as setas, `Inverter na altura` e `Inserir acorde…` só respeitam a escala se `Prender na escala` **e** `Manter o encaixe ao mudar a altura` estiverem ligados (o segundo vem desligado). Sem ele, essas operações podem gerar notas fora da escala; o encaixe padrão age só em criar, mover de linha e colar. `Prender seleção na escala` funciona sozinho, sem depender dos dois. Em faixa de bateria, nada disso existe (testado só por testes automáticos).
-- **Controles são do clipe, não das notas.** Colar (`Ctrl+V`), duplicar (`Ctrl+D`), recortar e apagar notas, `Quantizar`, `Humanizar`, `Legato` e `Dividir no cursor` não movem, copiam nem cortam os pontos de bend, modulação e pedal. Só `Escalar o tempo` e `Inverter no tempo` (e, na linha do tempo, cortar, duplicar, mover e aparar o clipe) os levam junto; ver [Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas).
+- **Controles são do clipe, mas a cópia os leva.** Copiar (`Ctrl+C`), colar (`Ctrl+V`), duplicar (`Ctrl+D`) e recortar (`Ctrl+X`) levam os pontos de bend, modulação e pedal do trecho das notas (recortar não os apaga do clipe de origem). Apagar notas, `Quantizar`, `Humanizar`, `Legato` e `Dividir no cursor` (`K`, que só divide notas) não movem nem cortam os pontos: eles ficam onde estão, porque não são presos a notas. `Escalar o tempo` e `Inverter no tempo` os levam junto, e na linha do tempo cortar, duplicar, mover e aparar o clipe também; ver [Ferramentas MIDI](05b-ferramentas-midi.md#os-controles-nas-ferramentas).
 - As ferramentas do menu `Ferramentas` ficam apagadas num clipe sem notas, mesmo que ele tenha pontos de controle.
 - A faixa de controle não olha a seleção de notas: `Limpar` apaga o controle do clipe todo.
-- Em faixa de **bateria** a faixa de controle aceita pontos, mas a bateria ignora bend, modulação e pedal: nada muda no som.
+- Em faixa de **bateria** a faixa de controle ainda aceita pontos desenhados à mão, mas a bateria ignora bend, modulação e pedal: nada muda no som. Ao vivo, a bateria nem recebe esses controles (as rodas do teclado não aparecem nela) e a gravação não cria pontos nela ([Gravação](03c-gravacao.md)).
 - Em faixa de bateria: sem botão `Escala`, sem acordes e sem `Inverter na altura`; `Shift+↑/↓` move uma linha (não uma oitava); as linhas são peças, não semitons. Alturas sem peça aparecem como `sem peça` e não soam.
 - A quantização usa a grade do editor, não a do arranjo.
-- Colar sem cursor dentro do clipe põe as notas no começo da parte visível; colar de novo no mesmo ponto põe a cópia logo depois da anterior. A área de transferência de notas vale para a sessão e funciona entre clipes, mas não sobrevive ao recarregar a página.
+- Colar sem cursor dentro do clipe põe as notas no começo da parte visível; colar de novo no mesmo ponto põe a cópia logo depois da anterior. A área de transferência de notas (e dos pontos de controle que vão com elas) vale para a sessão e funciona entre clipes, mas não sobrevive ao recarregar a página.
 
 ## Atalhos
 

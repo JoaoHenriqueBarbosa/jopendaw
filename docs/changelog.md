@@ -2,6 +2,14 @@
 
 Do mais novo para o mais antigo. Cada linha diz o que muda para quem usa e onde está documentado. Detalhes técnicos por fase: [processo e histórico](dev/20-processo-e-historico.md).
 
+## 30/09/2026 (fase 10)
+
+- **Mapa de andamento e de compassos**: faixa `Andamento` sob a régua (velocímetro ao lado de `comp.`), pontos com salto ou rampa, `Digitar BPM…`, e `Mudar compasso a partir do compasso N` (3/4, 6/8, 7/8...). O botão de andamento da barra mostra o BPM do cursor. Warp e efeitos sincronizados seguem só o BPM inicial. Manual: [transporte](manual/02-transporte.md), [timeline](manual/02b-timeline-e-clipes.md), [warp](manual/03b-warp-e-altura.md). Técnico: [motor](dev/01-motor.md), [app](dev/10-app-flutter.md). Guia: [mapa de andamento e compasso](guias/mapa-de-andamento-e-compasso.md).
+- **Importar e exportar arquivos MIDI (.mid)**: `Importar` e `Ctrl+I` aceitam `.mid`/`.midi`; o diálogo Exportar áudio tem `Notas em MIDI (.mid)…` (SMF formato 1, PPQ 480). Só o primeiro andamento e o primeiro compasso viajam no arquivo. Manual: [áudio e clipes](manual/03-audio-e-clipes.md), [exportação](manual/08-exportacao.md). Guia: [MIDI de e para outros programas](guias/midi-de-e-para-outros-programas.md).
+- **Polimento do sampler multi-zona**: zona nova na maior lacuna, nota base e faixas digitáveis, `Camadas de velocidade`, round-robin até o grupo 63, arrastar o bloco só move as notas, vozes `Até o fim` empilham no retrigger. Manual: [sampler](manual/04c-sampler.md).
+- **Polimento da expressão MIDI**: knob de vibrato no sampler, gravar só controles cria um clipe, copiar/colar/duplicar levam os pontos, a bateria não grava controles, `Linha reta` só onde faz sentido. Manual: [piano roll](manual/05-piano-roll.md), [gravação](manual/03c-gravacao.md). Técnico: [expressão MIDI](dev/04-expressao-midi.md).
+- **Correção de build**: um comentário do `network_security_config.xml` quebrava o APK de debug; corrigido e coberto por teste.
+
 ## 30/09/2026 (fase 9)
 
 - **Áudio→MIDI com MP3, FLAC, OGG, AAC/M4A e ALAC**, opções `Nota mínima` e `Nível de silêncio`, e respeito ao warp do clipe. Manual: [áudio para MIDI](manual/03d-audio-para-midi.md).

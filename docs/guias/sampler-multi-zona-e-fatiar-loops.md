@@ -8,7 +8,7 @@
 |---|---|---|
 | Faixa `Sampler`, cartão `ZONAS` (mapa de teclado e editor da zona) | Espalhar áudios pelo teclado, por força do toque, e ajustar cada um | [04c Sampler](../manual/04c-sampler.md) |
 | `Fatiar sample…` | Cortar um loop em partes e dar uma nota a cada uma | [04c Sampler](../manual/04c-sampler.md#fatiar-sample) |
-| `Duplicar a zona` e `Round-robin` | Camadas e variações sem refazer tudo | [04c Sampler](../manual/04c-sampler.md#o-editor-da-zona) |
+| `Duplicar a zona`, `Camadas de velocidade` e `Round-robin` | Camadas e variações sem refazer tudo | [04c Sampler](../manual/04c-sampler.md#o-editor-da-zona) |
 | Envelope e `Sens. vel.` do sampler | Soltura natural e quanto a força do toque muda o volume | [04c Sampler](../manual/04c-sampler.md), [04 Painel de instrumento](../manual/04-painel-de-instrumento.md) |
 | Piano roll e painel `Vel.` | Escrever as notas e a força de cada uma | [05 Piano roll](../manual/05-piano-roll.md) |
 | Ferramentas MIDI (`Humanizar`, `Rampa de velocidade`) | Variar força e tempo; passear pelas camadas | [05b Ferramentas MIDI](../manual/05b-ferramentas-midi.md) |
@@ -19,7 +19,7 @@ Os números daqui são pontos de partida musicais: ajuste de ouvido. O que depen
 
 ## Antes de começar: como o sampler decide o que toca
 
-Cada nota dispara **todas as zonas** cuja faixa de notas e cuja faixa de velocidade a contêm, e cada zona ocupa uma voz (são 16). Zonas sobrepostas empilham; buraco no mapa fica mudo. A força que decide a camada é a velocidade da nota, de 1 a 127 (a bolinha do painel `Vel.` no piano roll). O `Velocidade` do cartão `GERAL` (padrão 70%) escala o volume pela força por cima disso: com 70% um toque de velocidade 64 sai cerca de 6,4 dB abaixo do máximo; com 35%, cerca de 2,6 dB. Quando as camadas já trazem a dinâmica nas próprias gravações, um `Velocidade` menor evita que a dinâmica seja aplicada duas vezes.
+Cada nota dispara **todas as zonas** cuja faixa de notas e cuja faixa de velocidade a contêm, e cada zona ocupa uma voz (são 16). Zonas sobrepostas empilham; buraco no mapa fica mudo. Zonas `Sustentado` soltam a mesma nota tocada de novo; zonas `Até o fim` não (empilham, até as 16 vozes). A força que decide a camada é a velocidade da nota, de 1 a 127 (a bolinha do painel `Vel.` no piano roll). O `Sens. vel.` do cartão `GERAL` (padrão 70%) escala o volume pela força por cima disso: com 70% um toque de velocidade 64 sai cerca de 6,4 dB abaixo do máximo; com 35%, cerca de 2,6 dB. Quando as camadas já trazem a dinâmica nas próprias gravações, um `Sens. vel.` menor evita que a dinâmica seja aplicada duas vezes.
 
 ## Receita 1: piano multi-sample com camadas de velocidade
 
@@ -54,10 +54,12 @@ Resultado: um piano com duas regiões do teclado, cada uma com uma gravação su
 
 O objetivo é: suaves cobrem as velocidades 1 a 83; fortes cobrem de 81 a 127 (uma sobreposição de 3 valores, em vez de um buraco). As duas camadas tocam juntas nesses 3 valores.
 
-1. Selecione uma zona suave. No mapa, arraste a borda **de cima** do bloco para baixo até o segundo par (`Velocidade de` / `até`) mostrar `até` perto de 83. Ajuste fino digitando o valor no campo ou com `Menos` e `Mais` (1 em 1). Para camadas iguais sem conta, `Camadas de velocidade` > `Dividir em 2 camadas iguais` (ver o manual do sampler).
+1. Selecione uma zona suave. No mapa, arraste a borda **de cima** do bloco para baixo até o segundo par (`Velocidade de` / `até`) mostrar `até` perto de 83. Ajuste fino digitando o valor no campo (`83`, Enter) ou com `Menos` e `Mais` (1 em 1).
 2. Selecione a zona forte da mesma região. Arraste a borda **de baixo** para cima até `Velocidade de` mostrar 81 (ou 1 a 3 acima do `até` da suave: sobrepor é seguro, deixar um valor sem zona o deixa mudo).
 3. Faça o mesmo para a outra região.
 4. Confira o mapa: dois andares de blocos em cada região, o de baixo (suave) e o de cima (forte), sem vão entre eles.
+
+**Atalho: camadas iguais sem conta.** Nos passos 4 e 5 você pode trocar o `Duplicar a zona` e os arrastes por `Camadas de velocidade`. Com a zona suave selecionada, `Camadas de velocidade` > `Dividir em 2 camadas iguais`: a zona fica com as velocidades 1 a 63 e uma cópia logo depois, com 64 a 127 (o aviso `1 cópia criada logo depois desta zona...` confirma). A seleção continua na zona original: selecione a cópia (toque na metade de cima do bloco, onde ficam as velocidades 64 a 127) e troque o áudio por `piano_C3_forte`. A divisão é sem lacuna e sem sobreposição, e sempre refaz a faixa de velocidade de 1 a 127, então faça-a antes de mexer nas faixas de velocidade à mão.
 
 **5b. Igualar os volumes**
 
@@ -81,14 +83,14 @@ O objetivo é: suaves cobrem as velocidades 1 a 83; fortes cobrem de 81 a 127 (u
 ### Variações
 
 - **Mais regiões e camadas.** O mesmo processo com 3 ou 4 regiões por oitava e meia soa mais natural: quanto mais perto da nota gravada, menos o timbre muda ao esticar.
-- **Três camadas.** Duplique de novo e divida a força em 1 a 50, 48 a 90 e 88 a 127 (sobreposições de 2 a 3 valores).
+- **Três camadas.** Com `Camadas de velocidade` > `Dividir em 3 camadas iguais` você ganha 1 a 42, 43 a 84 e 85 a 127 (e `4 camadas iguais`: 1 a 31, 32 a 63, 64 a 95 e 96 a 127). À mão, duplique de novo e divida a força em 1 a 50, 48 a 90 e 88 a 127 (sobreposições de 2 a 3 valores).
 - **Piano que respira.** Automatize o `Corte` de um `Filtro` (`Tipo` `Passa-baixa 24`) no clipe: o piano abre nos refrãos. Veja [07 Automação](../manual/07-automacao.md).
 - **Humanizar a interpretação.** Com as notas selecionadas, `Humanizar…` com `Tempo` 20% e `Velocidade` 20% (a variação de velocidade cruza a divisão das camadas, então nem toda nota fica na camada que você escreveu: é o efeito desejado).
 - **Zona com loop para as notas longas.** Se o arquivo é longo o bastante, no editor da zona `Sustentado` + `Loop enquanto a nota está presa` sustenta a nota para além do arquivo. Veja [04c](../manual/04c-sampler.md#sustentar-uma-nota-curta-com-loop).
 
 ### Por que funciona
 
-O mapa é um quadro de notas por força: cada arquivo ocupa um retângulo, e a nota toca o retângulo em que cai. Duas gravações da mesma nota em forças diferentes trocam o timbre (o piano forte tem harmônicos que o suave não tem), que é o que dá realismo a um teclado que só muda o volume. A sobreposição pequena entre camadas evita o buraco de força; a soma das duas ali é curta e quase inaudível `(não confirmado em uso)`. Baixar o `Velocidade` do sampler evita contar a dinâmica duas vezes.
+O mapa é um quadro de notas por força: cada arquivo ocupa um retângulo, e a nota toca o retângulo em que cai. Duas gravações da mesma nota em forças diferentes trocam o timbre (o piano forte tem harmônicos que o suave não tem), que é o que dá realismo a um teclado que só muda o volume. A sobreposição pequena entre camadas evita o buraco de força; a soma das duas ali é curta e quase inaudível `(não confirmado em uso)`. Baixar o `Sens. vel.` do sampler evita contar a dinâmica duas vezes.
 
 ### Se der errado
 
@@ -99,7 +101,7 @@ O mapa é um quadro de notas por força: cada arquivo ocupa um retângulo, e a n
 | As duas camadas soam iguais | As duas zonas apontam para o mesmo áudio | Selecione a zona e troque o áudio (`Trocar o áudio da zona`) |
 | Notas altas soam finas ou curtas | Zona esticada demais a partir da nota base | Acrescente mais gravações e encurte as regiões |
 | A região aguda sai muito acima ou abaixo da nota certa | `Nota base` errada (a nova zona nasce com a base em `C4`, ou na nota da faixa mais perto dele) | Digite a `Nota base` certa (`C5`, `A#3` ou o número) |
-| A segunda zona nasceu por cima da primeira | A primeira cobria o teclado inteiro | Encurte a primeira antes de acrescentar a próxima (passo 2.3) |
+| A primeira zona ficou mais curta sozinha e apareceu o aviso `O teclado já estava coberto: ...` | Você acrescentou uma zona com o teclado todo coberto: o app divide ao meio a zona mais larga | Encurte as zonas antes de acrescentar a próxima (passo 2.3) ou ajuste as faixas no mapa |
 | Acorde longo com camadas corta notas | Cada nota usa uma voz por camada e o limite é 16 | Use uma camada por região, ou toque menos notas juntas |
 
 ## Receita 2: kit de bateria a partir de um loop fatiado
@@ -119,7 +121,7 @@ Resultado: cada golpe de um loop de bateria vira uma tecla; com elas você refaz
 
 **2. Ouvir e nomear**
 
-1. Escolha o preset `Percussão (até o fim)`: ataque de 0,5 ms e soltura de 50 ms; o `Modo` dele não vale com zonas (cada fatia é `Até o fim` sozinha), mas o envelope curto vale.
+1. Escolha o preset `Percussão (até o fim)`: ataque de 0,5 ms e soltura de 50 ms; o `Modo` dele não vale com zonas (cada fatia é `Até o fim` sozinha). O `Ataque` curto vale; a `Sustentação` e o `Decaimento` não afetam fatias `Até o fim`, e a `Soltura` só entra quando o transporte para.
 2. Abaixe a oitava do teclado da tela até C1 (`Oitava abaixo` duas vezes a partir de C3) e toque cada tecla. Anote no papel qual fatia é qual (kick, snare, hat...): o app não dá nome às fatias.
 3. No mapa, cada fatia é uma coluna estreita; toque nas teclas embaixo do mapa para ouvir também.
 
@@ -160,7 +162,7 @@ Toque num bloco para abrir o editor da fatia:
 - **Kit por peça.** Fatie com `Por transientes`, depois apague as zonas que não quer e mantenha só bumbo, caixa e chimbal: o teclado fica limpo.
 - **Loop com mais de 96 golpes.** O máximo é 96 fatias (C1 a B8). Por transientes, o app guarda o começo do áudio e os 95 ataques mais fortes (não os 95 primeiros) e o resumo já mostra `96 fatias: C1 a B8, ...`; o aviso `Passa do limite de 96 fatias: só as primeiras viram nota.` existe no código, mas hoje não chega a aparecer. Baixe a `Sensibilidade` para ficar só com os golpes fortes.
 - **Reordenar as fatias.** O `Legato`, o `Staccato` e as outras ferramentas de duração não mudam nada aqui (cada fatia toca até o fim); `Inverter na altura` e `Reverter a ordem das notas` trocam quais fatias tocam. Ver [05b Ferramentas MIDI](../manual/05b-ferramentas-midi.md).
-- **Trocar o andamento.** Fatias não se esticam: com um andamento mais lento, as notas se afastam e você ouve as caudas; mais rápido, as fatias se sobrepõem. Ajuste a `Soltura` (50 ms) e a nota mais curta.
+- **Trocar o andamento.** Fatias não se esticam: com um andamento mais lento, as notas se afastam e você ouve as caudas; mais rápido, as fatias se sobrepõem (elas são `Até o fim`: a seguinte não corta a anterior, as duas soam juntas). Para não misturar as caudas, espace as notas ou use menos fatias.
 
 ### Por que funciona
 
@@ -174,7 +176,7 @@ Cada fatia é uma zona de uma nota só, com o trecho da fatia, modo `Até o fim`
 | Fatias demais (o chimbal virou 6 fatias) | `Sensibilidade` alta | Baixe a `Sensibilidade` até a prévia ficar com uma linha por golpe |
 | A prévia não aparece, ou `Este áudio não está neste aparelho...` | O áudio do projeto não foi carregado neste aparelho | Importe o arquivo de novo |
 | Uma fatia soa com um pedaço do golpe seguinte | O corte caiu antes do ataque | Ajuste o `Trecho` da fatia (o `fim`), ou refaça com outra `Sensibilidade` |
-| Repetir a mesma nota rápido corta a anterior | Mesma nota de novo solta a anterior com a `Soltura` (50 ms com o preset da receita) | Aumente a `Soltura`, ou espalhe as repetições em fatias duplicadas |
+| Repetir a mesma nota rápido soma as caudas e às vezes some uma nota | Fatias são `Até o fim`: a mesma nota de novo não corta a anterior, ela empilha; passando das 16 vozes a mais antiga sai em um fade de 3 ms | Espace as repetições, ou ponha a fatia em zonas duplicadas com `Sustentado` e uma `Soltura` curta se quiser que a nova corte a anterior |
 | Nada soa nas notas escritas | A nota escrita está fora de C1 em diante, ou acima do número de fatias | Confira no mapa quais notas têm bloco |
 | Perdi as zonas de antes | `Criar` substitui as zonas da faixa | Desfaça (`Ctrl+Z`) logo em seguida |
 
@@ -209,10 +211,10 @@ Resultado: uma caixa (ou qualquer golpe repetido) que alterna entre três grava�
 
 ### Variações
 
-- **Round-robin com camadas de força.** Faça 3 zonas suaves no `grupo 1` (`Velocidade de` 1 a 83) e 3 fortes no `grupo 2` (`Velocidade de` 81 a 127). Um grupo por camada mantém cada uma em ordem estrita; se todas dividissem o mesmo grupo, cada camada poderia pular gravações.
+- **Round-robin com camadas de força.** Faça 3 zonas suaves no `grupo 1` (`Velocidade de` 1 a 83) e 3 fortes no `grupo 2` (`Velocidade de` 81 a 127); há grupos de 1 a 63. Um grupo por camada mantém cada uma em ordem estrita; se todas dividissem o mesmo grupo, cada camada poderia pular gravações.
 - **Um arquivo só.** Faça três zonas com o mesmo áudio (`Duplicar a zona` sem trocar o áudio), no mesmo grupo, e varie: `Afinação` -10, 0 e +10 ct; `Trecho` começando em 0.000, 0.004 e 0.008 s; `Ganho` 0, -0.7 e -1.4 dB. A variação é sutil e ajuda pouco, mas tira o efeito de metralhadora.
 - **Vários instrumentos numa faixa.** Ponha a caixa numa região do teclado (por exemplo, a nota D2 e a `Nota base` D2, encolhendo a zona com as bordas do mapa) e outro golpe em outra, com o próprio grupo: cada peça gira sozinha.
-- **Corte diferente.** Em vez de `Até o fim`, deixe `Sustentado` e a `Soltura` do preset `Instrumento` (350 ms) para um som de nota tocada com pedal.
+- **Corte diferente.** Em vez de `Até o fim`, deixe `Sustentado` e a `Soltura` do preset `Instrumento` (350 ms) para um som de nota tocada com pedal. Nesse modo a `Sustentação` volta a valer e a mesma nota repetida solta a anterior (com a `Soltura`) em vez de empilhar.
 
 ### Por que funciona
 
@@ -227,7 +229,7 @@ Zonas do mesmo grupo que casam com a mesma nota e força dividem um contador: a 
 | Soa só uma das três | A faixa de notas ou de velocidade das outras não cobre a nota | Confira `Notas de`, `até` e as velocidades de cada uma |
 | A ordem pula uma gravação | Duas regiões ou camadas dividem o mesmo grupo | Um grupo por região e camada |
 | O rodízio recomeça na primeira depois de editar | Editar uma zona reenvia a lista e reinicia o ciclo `(não confirmado em uso)` | É esperado: toque de novo depois de editar |
-| A repetição rápida de uma nota corta a cauda da anterior | A mesma nota solta a anterior com a `Soltura` | Reduza a `Soltura` (50 ms) ou espalhe mais as notas |
+| Notas repetidas rápidas soam com cauda acumulada | Zonas `Até o fim` empilham: a mesma nota de novo não corta a anterior | Espace as notas, ou use `Sustentado` com `Soltura` curta para a nova cortar a anterior |
 
 ## Combina com
 

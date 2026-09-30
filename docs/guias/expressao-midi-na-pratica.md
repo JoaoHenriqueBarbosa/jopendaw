@@ -8,7 +8,7 @@ Os valores vêm dos presets do app e das tabelas de parâmetros do código. O qu
 
 - [Faixa de controle do piano roll](../manual/05-piano-roll.md#faixa-de-controle): as visões `Pitch bend`, `Modulação` e `Sustain` sob a grade, com lápis, reta, mover e apagar.
 - [Rodas do teclado da tela e alcance do bend](../manual/04-painel-de-instrumento.md#rodas-de-pitch-bend-e-de-modulação): os knobs `Alcance do bend` (0 a 24 st, padrão 2) e `Vibrato da roda` (0 a 2 st, padrão 1) do cartão `GERAL`.
-- [Sintetizador](../manual/04a-sintetizador.md), [FM](../manual/04d-fm.md) e [Wavetable](../manual/04e-wavetable.md): os três respondem a bend, vibrato e pedal. O [Sampler](../manual/04c-sampler.md) responde a bend e a vibrato (este com profundidade fixa de 1 st) e ao pedal. A [Bateria](../manual/04b-bateria.md) ignora os três.
+- [Sintetizador](../manual/04a-sintetizador.md), [FM](../manual/04d-fm.md) e [Wavetable](../manual/04e-wavetable.md): os três respondem a bend, vibrato e pedal. O [Sampler](../manual/04c-sampler.md) responde a bend, a vibrato e ao pedal, e também tem os knobs `Alcance do bend` e `Vibrato da roda` no cartão `GERAL` (mesmos valores: 0 a 24 st e 0 a 2 st). A [Bateria](../manual/04b-bateria.md) ignora os três: as rodas nem aparecem no painel dela e a gravação não cria pontos nela.
 - [Gravação](../manual/03c-gravacao.md): como o motor registra bend, modulação e pedal junto das notas.
 - [Painel de efeitos](../manual/06c-painel-de-efeitos.md) e [Referência dos efeitos](../manual/06d-efeitos-referencia.md): `Delay` e `Reverb`.
 - [Automação](../manual/07-automacao.md): para mover parâmetros do instrumento (como o `Corte`) junto da expressão.
@@ -18,7 +18,7 @@ Três coisas para saber antes:
 
 1. **A curva é em degraus.** Cada ponto vale até o próximo; o lápis põe um ponto por passo da grade. Para um bend que soe como deslize, use a grade `1/32` (um ponto a cada 62 ms a 120 bpm).
 2. **O bend é uma fração do alcance.** O ponto vai de -1 a +1 e o valor real é ponto × `Alcance do bend`: com o padrão de 2 st o topo da faixa é +2 st; com 12 st, é uma oitava.
-3. **Os pontos são do clipe.** Movem-se, duplicam-se e são cortados junto com ele na linha do tempo, mas não acompanham notas que você move dentro do editor.
+3. **Os pontos são do clipe.** Movem-se, duplicam-se e são cortados junto com ele na linha do tempo, mas não acompanham notas que você move dentro do editor. Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) levam os pontos do trecho delas, do começo da primeira nota ao fim da última.
 
 ## Passo a passo
 
@@ -64,6 +64,8 @@ Resultado: quatro acordes de um compasso que ressoam juntos e se limpam na hora 
 
 Variações:
 
+- **Repetir notas com o pedal:** selecione as notas e use `Ctrl+D` (ou `Ctrl+C` e `Ctrl+V` em outro ponto): os pontos de pedal (e de bend e modulação) que caem entre o começo da primeira nota e o fim da última vão junto. Cuidado: o trecho termina onde a última nota selecionada termina. Se o pedal solta depois disso (como aqui, em que cada acorde dura uma batida e o pedal quase quatro), a cópia leva um ponto de subida no fim do trecho e o pedal da cópia sobe antes do original. Para copiar o pedal inteiro, estique as notas até o fim do trecho do pedal ou redesenhe o pedal na cópia (testado só por testes automáticos).
+- **Sem reta no pedal:** o menu do canto do `Sustain` não oferece `Linha reta (ou Shift)`; o pedal só se pinta.
 - **Pedal "tardio":** feche cada trecho já no tempo do acorde seguinte (sem o quarto de tempo de folga) para uma mistura leve dos acordes, tipo pedal de igreja. Mova os pontos de subida com a ferramenta mover.
 - **Sampler ou Wavetable:** o mesmo pedal vale para um `Sampler` com áudio de piano e para `Teclas de cristal` da wavetable.
 - **FM:** `Sino elétrico` com o pedal deixa as notas se misturarem em campainhas; as solturas longas do preset já fazem isso, então reduza o trecho do pedal.
@@ -113,12 +115,12 @@ Resultado: uma frase gravada com bend, modulação e pedal, limpa e pronta para 
 3. Aperte `R`, espere o compasso de contagem e toque: uma nota longa mexendo a roda de bend, uma frase levantando a roda de modulação e um acorde com o pedal embaixo. Tudo o que você fizer na contagem fica de fora.
 4. Aperte `R`, espaço ou `Enter` para parar. As notas e os pontos caem num clipe novo. Abra-o no editor: no canto da faixa de baixo, escolha `Pitch bend`, `Modulação` e `Sustain` e veja o que veio; o rótulo diz quantos pontos há (`N pontos`).
 5. Limpeza: o motor já afinou a gravação (no máximo um ponto a cada 1/48 de tempo por controle, sem repetir valor, o pedal só nas mudanças). Se restou um tremor que você não quer, use `Limpar modulação` e redesenhe com a reta, ou apague pontos soltos com o botão direito.
-6. Regravar só o pedal: ponha o cursor no começo do clipe, arme a mesma faixa e grave só o pedal por cima (sem tocar notas). O pedal novo substitui os pontos de pedal do trecho gravado; as notas e o resto ficam. Só funciona com um clipe sob o cursor: sem clipe, nada é criado e o app não avisa.
-7. Se o pedal estava embaixo quando você parou, o clipe ganha um ponto de subida na parada; o bend e a modulação ficam onde a mão os deixou e voltam ao repouso no fim do clipe.
+6. Regravar só o pedal: ponha o cursor no começo do clipe, arme a mesma faixa e grave só o pedal por cima (sem tocar notas). O pedal novo substitui os pontos de pedal do trecho gravado; as notas e o resto ficam. Com um clipe sob o cursor, os pontos entram nele; sem clipe, nasce um clipe novo, sem notas, só com os pontos.
+7. Se o pedal estava embaixo, o bend fora do centro ou a roda levantada quando você parou, o clipe ganha um ponto de retorno ao repouso na parada (pedal solto, bend no centro, modulação em zero), e o clipe não toca o resto com o pedal preso.
 
 Variações:
 
-- **Sem teclado MIDI:** as duas rodas do teclado da tela (bend com mola e modulação sem mola) gravam do mesmo jeito, em faixa armada. Não há pedal na tela.
+- **Sem teclado MIDI:** as duas rodas do teclado da tela (bend com mola e modulação sem mola) gravam do mesmo jeito, em faixa armada, com a mesma resolução do teclado MIDI. Não há pedal na tela.
 - **FM e wavetable:** funcionam igual; no FM o bend afina os quatro operadores juntos.
 - **Em loop:** ligue o loop e grave várias passadas para as notas; só a última passada vale para os controles.
 
@@ -134,4 +136,4 @@ Se der errado:
 
 - **Nada muda de altura em nenhuma faixa:** confira se a faixa é de instrumento com afinação e não `Bateria`, e o `Alcance do bend` (0 desliga).
 - **Vibrato sem parar depois de tocar com a roda da tela:** a roda de modulação não tem mola: leve-a até embaixo.
-- **Depois de mover ou dividir notas no editor, a curva ficou no lugar antigo:** os pontos não acompanham as ferramentas de notas (só `Escalar o tempo` e `Inverter no tempo` os levam); mova os pontos também.
+- **Depois de mover ou dividir notas no editor, a curva ficou no lugar antigo:** os pontos não acompanham notas que mudam de lugar (só `Escalar o tempo`, `Inverter no tempo` e a cópia com `Ctrl+C`/`Ctrl+V`/`Ctrl+D` os levam); mova os pontos também.

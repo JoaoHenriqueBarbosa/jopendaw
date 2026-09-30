@@ -21,7 +21,7 @@ O que o diálogo faz fica guardado no clipe (não no arquivo): o áudio original
 | Linha `Detectado: …` | Mostra o resultado, por exemplo `Detectado: 120 BPM, confiança 87%` | Arredondado a 0,1 BPM; confiança em % | Abaixo de 35% de confiança, o texto acrescenta `(baixa: confira de ouvido)` |
 | `Ajustar ao andamento` | Lê o campo `BPM do áudio`, liga o warp e passa a esticar o clipe para seguir o andamento do projeto | Campo fora de 20 a 999: aviso `Digite um andamento entre 20 e 999 BPM.` | É o botão para quando você sabe o andamento e digita |
 | `Desligar o warp` (só aparece com o warp ligado) | Desliga o esticamento. O número no campo fica guardado; para religar, `Ajustar ao andamento` | | Não zera a transposição nem o reverso |
-| Texto de estado (abaixo dos botões) | Com warp: `Segue o andamento do projeto (<BPM> BPM): o áudio é esticado sem mudar a altura.` Sem warp: `Sem warp: o clipe toca na velocidade original.` | | O BPM que aparece é o do projeto |
+| Texto de estado (abaixo dos botões) | Com warp: `Segue o andamento do projeto (<BPM> BPM): o áudio é esticado sem mudar a altura.` Sem warp: `Sem warp: o clipe toca na velocidade original.` Com warp e um projeto que tem **mudanças de andamento** (faixa `Andamento`, ver [Timeline e clipes](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos)), o texto vira: `O projeto tem mudanças de andamento: o warp estica o áudio para o andamento INICIAL (<BPM> BPM) e ele toca em velocidade constante, sem acompanhar as mudanças.` | | O BPM que aparece é o do projeto (o inicial, quando há mapa) |
 
 ### Seção `ALTURA`
 
@@ -85,7 +85,8 @@ O selo no canto de cima do clipe resume o que está ligado: `W` (esticado ao and
 **Faixa de valores**
 - Razão de duração (BPM do áudio ÷ BPM do projeto): **0,25 a 4**, arredondada a 4 casas. Fora disso o valor é apertado nos limites (BPM do áudio 20 a 999, do projeto 20 a 400).
 - Transposição: **−24 a +24 semitons**, arredondada a 2 casas.
-- Com warp ligado, um segundo do áudio original passa a ocupar sempre a mesma fração de batida (a do andamento do próprio áudio), então **a largura do clipe na linha do tempo não muda** quando você muda o andamento do projeto; o som é que é refeito para caber.
+- Com warp ligado, um segundo do áudio original passa a ocupar sempre a mesma fração de batida (a do andamento do próprio áudio), então **a largura do clipe na linha do tempo não muda** quando você muda o andamento do projeto; o som é que é refeito para caber. Isso vale para um projeto de **um andamento só**.
+- **Com mapa de andamento (faixa `Andamento`), o warp só conhece o andamento inicial.** A razão é (BPM do áudio ÷ BPM **inicial**): o áudio é esticado uma vez para o andamento de partida e toca em velocidade constante, como qualquer áudio. Se o clipe cruza um ponto onde o andamento muda, ele **não acompanha** a grade dali em diante (fica adiantado ou atrasado em relação às notas e à bateria), e a largura dele na linha do tempo muda quando o mapa muda por baixo dele. Mudar só os outros pontos do mapa não refaz o warp; mudar o andamento inicial (janela **Andamento e compasso** ou o primeiro ponto) refaz. Para encaixar um loop numa parte com outro andamento, veja a receita em [Mapa de andamento e de compassos na prática](../guias/mapa-de-andamento-e-compasso.md).
 
 **Cache `warp:`**
 - Cada combinação (áudio de origem + razão + semitons + reverso) vira um áudio derivado, gerado em segundo plano (Worker no navegador; isolate no Android) **400 ms depois da última mudança**: arrastar o andamento não refaz o som a cada valor.

@@ -53,6 +53,8 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Remix com warp e altura](guias/remix-com-warp-e-altura.md) | Esticar, transpor e sobrepor |
 | [Trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md) | Nuvem, conflito, offline |
 | [Backup e levar o projeto para outro aparelho](guias/backup-e-levar-projeto-para-outro-aparelho.md) | Arquivo `.jopendaw` |
+| [Mapa de andamento e compasso](guias/mapa-de-andamento-e-compasso.md) | Virada de andamento, ritardando em rampa, 4/4 para 3/4 e 6/8 |
+| [MIDI de e para outros programas](guias/midi-de-e-para-outros-programas.md) | Exportar e importar `.mid`: melodia para outro DAW, pacote de acordes, backup das notas |
 | [Atalhos e fluxo rápido](guias/atalhos-e-fluxo-rapido.md) | Trabalhar sem tirar a mão do teclado |
 
 ## Para quem mexe no código

@@ -349,7 +349,7 @@ Só controles, em dois grupos: `DELAY` e `TIMBRE`. O controle `Tempo livre` só 
 | Batidas | 0,125 | 0,1667 | 0,25 | 0,375 | 0,3333 | 0,5 | 0,75 | 0,6667 | 1 | 1,5 | 2 | 4 |
 | Atraso a 120 BPM | 62,5 ms | 83,3 ms | 125 ms | 187,5 ms | 166,7 ms | 250 ms | 375 ms | 333,3 ms | 500 ms | 750 ms | 1000 ms | 2000 ms |
 
-(`T` = tercina; `D` = pontuada.) O tempo acompanha o andamento do projeto, inclusive quando ele muda: mudanças pequenas deslizam (no máximo ±2% de afinação) e saltos grandes fazem um crossfade de 60 ms entre a posição velha e a nova.
+(`T` = tercina; `D` = pontuada.) O tempo acompanha o andamento do projeto, inclusive quando ele muda: mudanças pequenas deslizam (no máximo ±2% de afinação) e saltos grandes fazem um crossfade de 60 ms entre a posição velha e a nova. **Com mapa de andamento** (faixa `Andamento`, ver [Timeline e clipes](02b-timeline-e-clipes.md#faixa-andamento-e-mapa-de-compassos)), o delay em `Andamento` usa só o andamento **inicial** do projeto: ele não acompanha os saltos nem as rampas do mapa (o mesmo vale para o tremolo e o filtro em `Andamento`). Só a mudança do BPM inicial, pelo botão de andamento, chega a ele.
 
 **Como funciona o ping-pong:** a entrada (soma dos dois canais) entra só na linha esquerda; o primeiro eco sai à **esquerda**, o segundo à **direita**, o terceiro à esquerda, e assim por diante, cada um com a realimentação aplicada.
 
@@ -373,6 +373,7 @@ Só controles, em dois grupos: `DELAY` e `TIMBRE`. O controle `Tempo livre` só 
 - Sem latência. A cauda de ecos continua por até 4,5 s depois do fim do som.
 - `Realimentação` acima de 90% quase não decai: com `Passa-baixa` e `Saturação` baixos o volume pode acumular; o motor limita a malha por segurança.
 - Voltar de um bypass limpa as linhas: o delay não devolve ecos de antes.
+- Projeto com mapa de andamento: em `Tempo` `Andamento` o eco fica preso ao BPM **inicial** (ver a nota acima); para um eco que caiba num trecho de outro andamento, use `Tempo` `Livre` (controle `Tempo livre`) com os milissegundos calculados à mão para aquele trecho.
 
 ---
 
@@ -476,7 +477,7 @@ Só controles, um grupo `TREMOLO`. `Taxa` só aparece com `Tempo` `Livre`; `Nota
 | `Tempo` (`TREMOLO`) | Livre em Hz ou preso ao andamento. | `Livre`, `Andamento`. Padrão `Livre`. |
 | `Nota` (`TREMOLO`) | Duração de um ciclo completo do LFO (só com `Andamento`). Mesmas figuras do delay. | 12 figuras de `1/32` a `1/1`. Padrão `1/8`. |
 
-A frequência sincronizada é `andamento ÷ 60 ÷ batidas da figura`: `1/4` = um ciclo por batida.
+A frequência sincronizada é `andamento ÷ 60 ÷ batidas da figura`: `1/4` = um ciclo por batida. O `andamento` aqui é o inicial do projeto: com mapa de andamento (faixa `Andamento`) o tremolo sincronizado não segue as mudanças (ver a nota no [Delay](#7-delay)).
 
 ### Presets
 
@@ -495,6 +496,7 @@ A frequência sincronizada é `andamento ÷ 60 ÷ batidas da figura`: `1/4` = um
 
 - Sem latência. O LFO não é realinhado ao início do compasso (a fase é livre): o ciclo acompanha o andamento, mas não necessariamente o batimento exato da timeline `(não confirmado)`.
 - `Profundidade` 100% cria vazios totais: em `Quadrada` o som some por metade do ciclo.
+- Projeto com mapa de andamento: em `Andamento` o ciclo usa só o BPM **inicial** e não segue as mudanças do mapa (ver a nota em cima, na tabela do tremolo).
 
 ---
 
@@ -599,6 +601,7 @@ O corte efetivo é `Corte` + LFO × `Profundidade` + √(nível da entrada) × `
 - Sem latência.
 - Ressonância alta com drive alto e sinal forte pode ficar estridente: reduza `Ressonância` ou `Drive`.
 - Trocar o `Tipo` faz um crossfade de 20 ms entre os dois filtros, sem estalo.
+- Com o LFO em `Andamento` e um projeto com mapa de andamento (faixa `Andamento`), a `Nota` usa só o andamento inicial: o balanço não acompanha saltos nem rampas (ver a nota no [Delay](#7-delay)).
 
 ---
 

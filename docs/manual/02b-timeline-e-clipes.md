@@ -7,7 +7,8 @@
 É a área central da tela do projeto (abra um projeto na lista). De cima para baixo:
 
 1. A **barra do transporte** (ver [Transporte](02-transporte.md)); no celular ela fica embaixo.
-2. A **régua** (30 px de altura), com o canto esquerdo mostrando a contagem de faixas (`1 faixa`, `2 faixas`...) e `comp.` ou `mm:ss`.
+2. A **régua** (30 px de altura), com o canto esquerdo mostrando a contagem de faixas (`1 faixa`, `2 faixas`...), `comp.` ou `mm:ss` e o botão de velocímetro que liga a faixa de andamento.
+   Logo abaixo da régua, quando ligada, fica a faixa `Andamento` (22 px), que edita o mapa de andamento (ver [Faixa Andamento e mapa de compassos](#faixa-andamento-e-mapa-de-compassos)).
 3. A **lista de faixas**: à esquerda os cabeçalhos (232 px no computador, 132 px no celular), à direita as raias com os clipes. As duas metades rolam juntas na vertical.
 4. No fim da lista, a linha **Nova faixa** (44 px) e a linha do **Master**.
 5. O **minimapa** `Visão geral` (28 px), fixo embaixo da lista.
@@ -23,15 +24,71 @@ Um traço branco vertical com uma ponta triangular no alto marca o cursor de rep
 |---|---|---|---|
 | Clique na régua | Posiciona o cursor naquele ponto, com encaixe na grade. | Encaixe da grade do transporte. | Alt não desliga o encaixe do clique; use a grade `Livre`. |
 | Arrastar na régua | Desenha a região do loop (do ponto onde começou ao ponto onde soltou, com encaixe) e liga o loop. | Precisa de mais de 0,01 batida de largura; menor que isso não liga. Entra no desfazer como um passo. | Redesenhe para trocar a região; não há alças nas pontas dela. |
-| Passar o mouse | Mostra um fio vertical e uma etiqueta com `compasso.tempo.dezesseis-avos · m:ss.d` do ponto sob o mouse. | | Só no computador. |
+| Passar o mouse | Mostra um fio vertical e uma etiqueta com `compasso.tempo.dezesseis-avos · m:ss.d` do ponto sob o mouse. Com mapa de compassos e de andamento, a etiqueta usa as fórmulas de compasso e o tempo real de cada trecho. | | Só no computador. |
 | Canto esquerdo (contagem de faixas, `1 faixa` ou `N faixas`, + `comp.` / `mm:ss`) | Clicar alterna a régua entre compassos e minutos:segundos. O tooltip é `Régua em compassos: clique para alternar` (ou `... minutos e segundos ...`). O texto em cor da marca é o modo atual. | Padrão: compassos. | O mesmo que **Régua em minutos e segundos** do menu Visão. |
-| Números da régua | Em compassos: número do compasso (começa em 1); a régua pula números (a cada 2, 4, 8… compassos) quando o zoom diminui. Marcas de tempo aparecem a partir de 12 px por batida. Em mm:ss: rótulos a cada 0,5, 1, 2, 5, 10, 15, 30 s, 1, 2, 5, 10, 30 min ou 1 h, o menor passo que deixa 64 px entre rótulos. | | Em mm:ss, traços curtos embaixo continuam marcando os compassos. |
+| Botão de velocímetro (à direita do `comp.` / `mm:ss`, 28 px) | Mostra ou esconde a faixa `Andamento` sob a régua. Tooltips: `Mostrar a faixa de andamento` / `Esconder a faixa de andamento`. Aceso (na cor da marca) quando a faixa está à mostra. | Escondida num projeto sem mudanças de andamento; aparece sozinha ao abrir um projeto que já tem mapa (2 pontos ou mais). | Depois que você clica, a sua escolha manda até fechar o projeto; ela não é salva com o documento. |
+| Números da régua | Em compassos: número do compasso (começa em 1); a régua pula números (a cada 2, 4, 8… compassos) quando o zoom diminui. Marcas de tempo aparecem a partir de 12 px por tempo do compasso. Onde o compasso muda (mapa de compassos), a fórmula (`3/4`, `6/8`…) aparece em cor da marca logo abaixo do número. Em mm:ss: rótulos a cada 0,5, 1, 2, 5, 10, 15, 30 s, 1, 2, 5, 10, 30 min ou 1 h, o menor passo que deixa 64 px entre rótulos (com mapa de andamento, o passo sai do andamento vigente à esquerda da janela e cada rótulo cai onde o segundo cai de fato). | | Em mm:ss, traços curtos embaixo continuam marcando os compassos. |
 | Bandeirinhas de marcador | Ver a seção Marcadores e seções. | | |
 | Selo **Contando…** | Aparece na régua, ao lado do cursor, durante a contagem antes de gravar. | | |
 
 Gravando (e na contagem), clicar e arrastar na régua não fazem nada: mexer no meio desalinharia a gravação.
 
-A grade de fundo das raias mostra uma linha por compasso (mais forte) e, com 16 px ou mais por batida, uma linha por batida.
+A grade de fundo das raias mostra uma linha por compasso (mais forte) e, com 16 px ou mais por tempo do compasso, uma linha por tempo. Com mapa de compassos, as linhas seguem a fórmula de cada trecho (em 6/8 há uma linha por colcheia, a cada meia batida do projeto).
+
+### Faixa Andamento e mapa de compassos
+
+Até aqui o projeto tinha um andamento só. Agora o andamento pode mudar no meio da música (o **mapa de andamento**) e o compasso também (o **mapa de compassos**). Toda posição do projeto (clipes, notas, automação, marcadores, loop) continua contada em **batidas**; o mapa só decide quanto tempo real dura cada batida. Por isso notas, automação e clipes de notas acompanham as mudanças sozinhos. A batida do projeto é a semínima.
+
+**Onde fica.** A faixa `Andamento` (22 px) fica logo abaixo da régua, com o rótulo `Andamento` na coluna dos cabeçalhos. Ligue com o botão de velocímetro no canto esquerdo da régua (ver tabela da régua).
+
+**O desenho.** Uma linha na cor da marca mostra o BPM ao longo da música, com um número (o BPM do ponto, `120`, `92,5`) ao lado de cada ponto e uma bolinha em cada ponto quando há mudanças. Trecho em **salto**: linha horizontal no BPM do ponto e degrau vertical no ponto seguinte. Trecho em **rampa**: reta diagonal do BPM de um ponto ao BPM do seguinte. A escala vertical vai do menor ao maior BPM dos pontos (no mínimo 20 BPM de faixa, centrada). Sem mudanças a linha fica apagada e aparece o texto `Duplo clique adiciona uma mudança de andamento`.
+
+**Como os pontos funcionam.** Um ponto é uma batida e um BPM. O primeiro ponto fica sempre na batida 0 e é o **andamento inicial** (o mesmo `BPM` da janela **Andamento e compasso**); não sai do lugar nem pode ser apagado. Cada ponto diz como chega ao próximo: em **salto** (mantém o próprio BPM até a batida do próximo e ali muda de uma vez) ou em **rampa** (o BPM anda em reta, em função da batida, até o BPM do próximo). O último ponto vale até o fim da música; nele não há para onde rampar.
+
+| Ação na faixa | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| **Duplo clique** num lugar vazio | Cria um ponto na batida do clique, encaixada na grade (Alt apertado: livre), no BPM que já vale ali, em salto. Se já há ponto nessa batida, só iguala o BPM dele. `(testado só por testes automáticos; não exercitado no Chrome)` | Ponto até 10 px do clique conta como "sobre o ponto". | Depois mude o BPM do ponto. |
+| **Duplo clique** sobre um ponto | Abre a janela `Andamento na batida N` (campo **BPM**, botão **Salvar**) para digitar o valor. `(testado só por testes automáticos; não exercitado no Chrome)` | 20 a 999, aceita vírgula ou ponto e decimais (`92,5`); vazio ou fora disso não faz nada. | O mesmo que **Digitar BPM…** do menu. |
+| **Arrastar um ponto** na vertical | Muda o BPM do ponto: para cima sobe. | 0,5 BPM por pixel (2 px por BPM; 9 px valem 4 a 5 BPM), arredondado ao inteiro; **Alt** deixa 10 vezes mais fino e arredonda a 0,1. Limites 20 a 999. | O ponto só começa a mexer se o dedo ou o mouse tocou a menos de 10 px dele. |
+| **Arrastar um ponto** na horizontal | Move o ponto no tempo, com encaixe na grade (**Alt**: livre). O ponto inicial não se move na horizontal. | Não passa dos vizinhos: fica a pelo menos 0,001 batida de cada um. | Um arraste inteiro (vertical e horizontal juntos) é **um** passo do desfazer. |
+| **Botão direito** num ponto (no celular, toque longo) | Menu do ponto (tabela abaixo). | | |
+| **Botão direito** num lugar vazio (toque longo) | Menu da faixa (tabela abaixo). A batida do ponto novo é a do clique, com encaixe na grade. | | |
+
+Menu de um ponto:
+
+| Item | O que faz | Habilitado |
+|---|---|---|
+| **Digitar BPM…** | Abre `Andamento na batida N` para digitar o BPM (20 a 999). | sempre |
+| **Rampa até o próximo ponto** (vira **Salto até o próximo ponto** quando o trecho já é rampa) | Troca o trecho que sai deste ponto entre salto e rampa linear. | só se há ponto depois deste |
+| **Apagar o ponto** | Remove o ponto; o trecho anterior passa a valer até o ponto que vinha depois. | só nos pontos depois do primeiro |
+
+Menu de um lugar vazio da faixa:
+
+| Item | O que faz | Habilitado |
+|---|---|---|
+| **Adicionar ponto aqui** | Cria um ponto na batida do clique (com encaixe), no BPM que já vale ali, em salto. | sempre |
+| **Apagar todas as mudanças de andamento** | Remove todos os pontos menos o inicial; o andamento inicial fica. | só com mais de um ponto |
+
+Todas essas edições entram no desfazer. Gravando, a faixa não responde: mexer no andamento alteraria a gravação em andamento. Cada projeto guarda até 512 pontos de andamento e 256 mudanças de compasso; o que passar disso é descartado na hora da edição (os de batida ou compasso maiores primeiro).
+
+**Rampa: o que acontece com o tempo.** O BPM muda em reta em função da batida, e o tempo real do trecho sai da conta exata (integral): `segundos = 60 × L ÷ (B − A) × ln(B ÷ A)` para `L` batidas indo de `A` a `B` BPM. Exemplo: 4 batidas indo de 60 a 120 BPM levam 4 × ln 2 ≈ 2,77 s (a 90 BPM constante levariam 2,67 s). `(testado só por testes automáticos)`
+
+**Salto: o que acontece com o tempo.** Com 120 BPM até a batida 8 e 60 BPM depois, as 8 primeiras batidas levam 4,0 s (2 batidas por segundo) e dali em diante cada batida leva 1 s. Medido no motor da web pela sessão de código (relato). No Android, o mesmo projeto mostrou 60 BPM e `0:06,14` na batida 10 (relato da sessão de código; a conta exata dá 6,0 s na batida 10, então o cursor deve ter passado um pouco dela ao ser lido, `(não confirmado)`).
+
+**Mapa de compassos.** Não tem faixa própria: edita-se pelo botão de texto do transporte, em **Mudar compasso a partir de um compasso…** (ver [Transporte](02-transporte.md#janela-mudar-compasso-a-partir-do-compasso-n)). Onde a fórmula muda, a régua mostra a nova fórmula em cor da marca, a numeração dos compassos continua de onde estava e a grade e o encaixe `Compasso` passam a seguir os novos compassos. `3/4` ocupa 3 batidas, `6/8` ocupa 3 (com um clique de metrônomo por colcheia), `7/8` ocupa 3,5, `5/4` ocupa 5.
+
+**O que segue o mapa e o que não.**
+
+| Recurso | Segue o mapa de andamento? |
+|---|---|
+| Notas e clipes de notas, automação, marcadores, loop, cursor, contador de posição, `Duração do projeto` | Sim (a posição é em batidas; o tempo real sai do mapa) |
+| Metrônomo | Sim (intervalo pelo andamento; fórmula e tempo forte pelo mapa de compassos) |
+| Clipes de áudio **sem warp** | Começam na batida deles e tocam em tempo real constante: a duração em segundos não muda, então a largura em batidas muda quando o mapa muda por baixo deles |
+| Clipes de áudio **com warp** | Não: o áudio é esticado para o andamento **inicial** e toca a velocidade constante; se o clipe atravessa uma mudança, deixa de acompanhar a grade (o diálogo de warp avisa) |
+| Delay, tremolo e filtro em modo `Andamento` | Não: usam só o andamento inicial |
+| Gravação (áudio e notas), exportação, congelar faixa | Sim: a gravação usa o mapa que valia quando começou; exportar e congelar contam o tempo pelo mapa |
+| Editor de notas (linhas de compasso, `Shift`+← →) e a conta de compassos do tooltip de `Duração do projeto` | Não: usam os tempos por compasso do compasso inicial, sem as mudanças de compasso |
+
 
 ### Cabeçalho de faixa
 
@@ -94,7 +151,7 @@ A linha **Nova faixa** (botão `+ Faixa` com uma seta) fica logo depois da últi
 | Ação | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Clique no vazio de uma raia | Desmarca o clipe, seleciona a faixa e posiciona o cursor, com encaixe (gravando, o cursor não se move). | | |
-| **Duplo clique** no vazio de uma faixa de instrumento | Cria um clipe de notas e abre o editor. O clipe começa no início do compasso clicado, dura 1 compasso e se encolhe para não montar em cima dos vizinhos (começa depois do anterior, termina antes do próximo). Nasce com o nome da faixa. | Duração: 1 compasso. | Em faixa vazia e desarmada aparece a dica `Clique duas vezes para criar um clipe de notas` (`Toque duas vezes ...` no celular). |
+| **Duplo clique** no vazio de uma faixa de instrumento | Cria um clipe de notas e abre o editor. O clipe começa no início do compasso clicado, dura 1 compasso (do compasso clicado: com mapa de compassos, 3 batidas em 3/4, 3 em 6/8) e se encolhe para não montar em cima dos vizinhos (começa depois do anterior, termina antes do próximo). Nasce com o nome da faixa. | Duração: 1 compasso. | Em faixa vazia e desarmada aparece a dica `Clique duas vezes para criar um clipe de notas` (`Toque duas vezes ...` no celular). |
 | Clique num clipe | Seleciona o clipe (borda branca) e a faixa dele. Só um clipe fica selecionado por vez. | | Selecionar um clipe de notas com o editor aberto troca o clipe do editor. |
 | Arrastar o meio do clipe | Move o clipe. O começo encaixa na grade. Vertical: muda de faixa (o clipe de áudio só vai para faixa de áudio; o de notas, para faixa de instrumento; as sub-raias abertas contam como parte da faixa de cima). | Não passa do compasso 1 (começo em 0). | **Alt** desliga o encaixe. |
 | Arrastar a borda esquerda | Apara o começo. No áudio, o som fica no lugar (o começo do trecho avança); no clipe de notas as notas ficam onde estavam na linha do tempo. | Áudio: não recua além do começo do arquivo; duração mínima 0,01 s. Notas: mínimo de um passo da grade (1/16 de batida em `Livre` ou com Alt). | Borda de 8 px (16 px com o dedo; num clipe estreito, um quarto da largura). |
@@ -241,9 +298,25 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 1. Segure o cabeçalho da faixa até ele ganhar uma borda colorida.
 2. Arraste para cima ou para baixo (o texto mostra `Mover para a posição N`) e solte.
 
+**Mudar o andamento no meio da música (salto)**
+1. Ligue a faixa: botão de velocímetro no canto esquerdo da régua (tooltip `Mostrar a faixa de andamento`).
+2. Ajuste a grade para `Compasso` no menu do transporte, para o ponto cair no começo de um compasso.
+3. Botão direito na faixa `Andamento`, no compasso onde o andamento muda: **Adicionar ponto aqui**.
+4. Botão direito no ponto novo, **Digitar BPM…**, digite o valor e **Salvar** (ou arraste o ponto na vertical).
+5. Toque a partir de antes do ponto. O botão de andamento do transporte mostra o BPM vigente no cursor.
+
+**Frear ou acelerar aos poucos (rampa)**
+1. Ponha um ponto no começo do trecho (no BPM que já vale) e outro no fim, com o BPM que quer alcançar.
+2. Botão direito no **primeiro** ponto, **Rampa até o próximo ponto**. A linha vira uma diagonal entre os dois.
+3. Depois do segundo ponto o BPM dele continua valendo.
+
+**Voltar a um andamento só**
+1. Botão direito num lugar vazio da faixa `Andamento`: **Apagar todas as mudanças de andamento**. O andamento inicial fica. Ctrl+Z desfaz.
+
 ## Combina com
 
-- [Transporte](02-transporte.md): grade, zoom, loop e enquadramento, que valem para tudo aqui.
+- [Transporte](02-transporte.md): grade, zoom, loop e enquadramento, que valem para tudo aqui, o botão de andamento e a janela **Mudar compasso a partir do compasso N**.
+- [Mapa de andamento e de compassos na prática](../guias/mapa-de-andamento-e-compasso.md): virada de andamento, ritardando e trocas de compasso, com o que fazer com warp, delay e gravação.
 - [Áudio e clipes](03-audio-e-clipes.md): importar, fades e as propriedades do clipe de áudio.
 - [Warp e altura](03b-warp-e-altura.md), [Áudio e clipes](03-audio-e-clipes.md#ganho-do-clipe) (`Ganho do clipe…`) e [Áudio para MIDI](03d-audio-para-midi.md): itens do menu do clipe de áudio.
 - [Piano roll](05-piano-roll.md): editar o clipe de notas.
@@ -259,7 +332,9 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 - **Áudio só muda para faixa de áudio; notas só para faixa de instrumento.** Soltar sobre outro tipo deixa o clipe na faixa de origem.
 - **Gravando** ficam travados: clicar e arrastar na régua e nas raias (cursor), marcadores (ir até eles), loop e o botão de armar. Faixas armadas mostram uma região vermelha crescendo (`Gravando`, ou `Tomada N` gravando em loop).
 - **Faixa só de barramento:** não tem clipes nem bolinha de gravar; a raia mostra `Barramento: recebe o som das faixas que enviam ou saem para ele`.
-- **Tudo daqui vai para o projeto** (faixas, clipes, marcadores, loop), exceto zoom, rolagem, altura das faixas, seleção e modo da régua.
+- **Tudo daqui vai para o projeto** (faixas, clipes, marcadores, loop, pontos de andamento e mudanças de compasso), exceto zoom, rolagem, altura das faixas, seleção, modo da régua e se a faixa `Andamento` está à mostra.
+- **Mapa de andamento: o warp e os efeitos sincronizados não o seguem** (ver a tabela em [Faixa Andamento e mapa de compassos](#faixa-andamento-e-mapa-de-compassos)). Importar um arquivo `.mid` também não traz o mapa do arquivo: entram só o primeiro andamento e o primeiro compasso, e o aviso da importação ainda diz que o app tem um andamento só.
+- **Um clipe de áudio sem warp muda de largura** quando você mexe no mapa antes dele, porque o áudio dura o mesmo em segundos e a batida passou a durar outra coisa. Cortar (S), aparar e sobrepor clipes contam pelos segundos reais entre as batidas.
 - **Web e Android:** o mesmo comportamento; no celular a seleção de clipes por toque usa bordas de 16 px, o menu do clipe abre com toque longo, e o duplo toque cria o clipe de notas.
 
 ## Atalhos
@@ -283,3 +358,6 @@ No celular o painel ocupa sempre 60% do espaço, sem alça nem botão de maximiz
 | Duplo clique no nome da faixa | Renomear |
 | Duplo clique na bandeirinha | Renomear o marcador |
 | Botão direito no clipe ou na bandeirinha | Menu de contexto |
+| Duplo clique na faixa `Andamento` | Criar um ponto (no vazio) ou digitar o BPM (sobre um ponto) |
+| Botão direito (ou toque longo) na faixa `Andamento` | Menu do ponto ou da faixa |
+| Alt ao arrastar um ponto de andamento | Ajuste fino do BPM (0,1) e posição livre |

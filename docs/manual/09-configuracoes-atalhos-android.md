@@ -84,7 +84,7 @@ Abre com a tecla `?` (ou `Shift+/`) ou com o botão da barra. Tem um botão `Fec
 | `Ctrl+D` | Duplicar o clipe |
 | `S` | Cortar no cursor |
 | `Delete` · `Backspace` | Apagar o clipe |
-| `Ctrl+I` | Importar áudio |
+| `Ctrl+I` | Importar áudio (a janela de atalhos diz só isso, mas o atalho abre o mesmo seletor do botão, que também aceita arquivos MIDI `.mid` e `.midi`) |
 | `=` ou `+` / `−` | Aproximar / afastar |
 | `Ctrl` + roda | Zoom no ponto do mouse |
 | `Shift` + roda | Rolar na horizontal |
@@ -158,7 +158,7 @@ Grupo novo: lista os atalhos de letra que deixam de agir (a letra vira nota, oit
 - **A oitava do teclado é uma por tipo de faixa.** O botão mostra a oitava da faixa que ele toca (a selecionada, ou a primeira faixa de instrumento armada). Cada tipo (áudio, sintetizador, bateria, sampler, FM, wavetable) guarda a sua; todas partem de `C4` (a tecla `A` é o dó central, nota 60), menos a bateria, que parte de `C2` (a tecla `A` toca a nota 36, o `Bumbo`, porque a bateria só responde às notas 35 a 59). Mudar a oitava numa bateria não muda a do sintetizador, e vice-versa; ao trocar de faixa o botão passa a mostrar a oitava do tipo novo. A oitava vai de 0 a 8 e não é gravada no projeto (volta ao padrão ao reabrir o projeto).
 - Os atalhos do **piano roll** só respondem depois que você clica dentro do editor (ele precisa ser o último lugar clicado); senão `Delete` e `Ctrl+D` continuam sendo do arranjo. `Shift+L` fora do editor faz o loop do clipe/seção; dentro dele, `Legato`.
 - **Gravando**, `Ctrl+Z`, `Ctrl+Y` e `Ctrl+I` são engolidos (não fazem nada) para não apagar ou deslocar a faixa que está recebendo o áudio. `Ctrl+R` fica para o navegador.
-- **Tooltips e menus usam o símbolo do sistema.** Os textos `Desfazer (Ctrl+Z)`, `Refazer (Ctrl+Shift+Z)`, `Duplicar (Ctrl+D)`, `Importar áudio (Ctrl+I)`, o tooltip do teclado (`Ctrl+K`), o atalho do item `Duplicar` do menu do clipe e a ajuda do piano roll passam por `withMod` (`app/lib/widgets/format.dart`): no Mac e no iOS o `Ctrl` vira `⌘` (`⌘+Z`), nos outros continua `Ctrl`.
+- **Tooltips e menus usam o símbolo do sistema.** Os textos `Desfazer (Ctrl+Z)`, `Refazer (Ctrl+Shift+Z)`, `Duplicar (Ctrl+D)`, `Importar áudio ou MIDI (Ctrl+I)`, o tooltip do teclado (`Ctrl+K`), o atalho do item `Duplicar` do menu do clipe e a ajuda do piano roll passam por `withMod` (`app/lib/widgets/format.dart`): no Mac e no iOS o `Ctrl` vira `⌘` (`⌘+Z`), nos outros continua `Ctrl`.
 
 ### Permissões
 
@@ -196,7 +196,8 @@ O app é o mesmo; o motor de áudio e o acesso ao aparelho é que mudam.
 | Microfone | Pedido do navegador, por site | Pedido do Android na hora de usar (`RECORD_AUDIO`) |
 | MIDI | Web MIDI (Chrome e Edge) | USB e aparelhos que o Android já conhece (`android.media.midi`); conecta em todas as entradas, ignora aparelhos que só recebem |
 | Exportar e salvar arquivos | Download do navegador | Janela de salvar do Android (`Salvar <nome>`); sem ela, a folha de compartilhar |
-| Importar áudio | Seletor de arquivos do navegador | Seletor de arquivos do Android |
+| Importar áudio ou MIDI (`.mid`) | Seletor de arquivos do navegador | Seletor de arquivos do Android |
+| Exportar notas em MIDI (`.mid`) | Download do navegador | Janela `Salvar <nome>` do Android (ou o compartilhar do sistema, se a janela não estiver disponível) |
 | Menu do botão direito | Usado pelo app nos clipes (o do navegador é desligado no projeto) | Não há botão direito; o toque longo faz o papel (não confirmado) |
 | Teclado | Todos os atalhos | Só com teclado físico (não confirmado) |
 | Instalar como app | Navegadores que oferecem instalar sites (o site tem manifesto `standalone` e abre a casca sem rede) | App do Android |

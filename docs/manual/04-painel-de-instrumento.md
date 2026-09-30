@@ -69,12 +69,14 @@ Ao lado esquerdo do teclado da tela, tanto no cabeçalho (painel com 1000 px ou 
 
 | Roda (tooltip) | O que faz | Valores | Como usar |
 |---|---|---|---|
-| `Pitch bend (solta e volta ao centro)` | Sobe ou desce a afinação de **todas** as notas que estão soando e das próximas, na faixa do painel | De -1 (embaixo) a +1 (em cima), com o zero no meio da roda (marcado por um traço). Vale o `Alcance do bend` do instrumento: padrão ±2 semitons. Passos de 1/64 | Clique ou toque na roda e arraste na vertical: o cursor da roda vai para onde está o dedo. **É de mola:** ao soltar, volta ao centro numa curva curta de 140 ms (não num pulo) |
-| `Modulação (vibrato)` | Liga um vibrato (oscilação de afinação) de 5,5 Hz; quanto mais alta a roda, mais fundo | De 0 (embaixo) a 1 (em cima), passos de 1/127. Profundidade máxima: o knob `Vibrato da roda` (padrão ±1 semitom) | Arraste na vertical. **Não tem mola:** fica onde você a deixou, como nos teclados de verdade. Para desligar, leve-a até embaixo |
+| `Pitch bend (solta e volta ao centro)` | Sobe ou desce a afinação de **todas** as notas que estão soando e das próximas, na faixa do painel | De -1 (embaixo) a +1 (em cima), com o zero no meio da roda (marcado por um traço). Vale o `Alcance do bend` do instrumento: padrão ±2 semitons. Passos de 1/8192 (os 14 bits do pitch bend do MIDI; na prática contínuo) | Clique ou toque na roda e arraste na vertical: o cursor da roda vai para onde está o dedo. **É de mola:** ao soltar, volta ao centro numa curva curta de 140 ms (não num pulo) |
+| `Modulação (vibrato)` | Liga um vibrato (oscilação de afinação) de 5,5 Hz; quanto mais alta a roda, mais fundo | De 0 (embaixo) a 1 (em cima), passos de 1/127. Profundidade máxima: o knob `Vibrato da roda` (0 a 2 st, padrão ±1 semitom; o sampler também tem esse knob) | Arraste na vertical. **Não tem mola:** fica onde você a deixou, como nos teclados de verdade. Para desligar, leve-a até embaixo |
 
 - Enquanto a roda está fora do repouso, a moldura e o cursor dela ficam na cor da faixa.
 - Se o painel fecha com uma roda fora do zero, o app a devolve ao repouso: o vibrato não fica ligado "por trás" do painel fechado. O mesmo vale ao trocar de aba ou de faixa, já que o painel é recriado (não confirmado na tela).
-- Com uma gravação em andamento, o que você faz nas rodas é gravado junto das notas se a faixa do painel está armada (ver [Gravação](03c-gravacao.md)).
+- Com uma gravação em andamento, o que você faz nas rodas é gravado junto das notas se a faixa do painel está armada (ver [Gravação](03c-gravacao.md)). A gravação para com o bend e a roda de volta ao repouso no clipe: se a roda de modulação ou o bend estavam fora do zero ao parar, o clipe ganha um ponto de retorno ali.
+- As rodas da tela têm a resolução única dos controles (bend em 14 bits, modulação em 1/127), a mesma do controlador MIDI e da faixa de controle do piano roll. O app lembra separadamente o que as rodas da tela e o que o controlador MIDI deixaram fora do repouso: os dois não se desfazem um ao outro.
+- A bateria ignora as rodas e o pedal: além de o painel dela não ter as rodas, o app nem manda esses controles a uma faixa de bateria.
 - O mesmo bend e a mesma modulação chegam de um teclado MIDI (mensagem de pitch bend e `CC 1`). O pedal de sustain só existe no MIDI (`CC 64`): o teclado da tela não tem pedal.
 
 #### Alcance do bend e vibrato da roda, por instrumento
@@ -86,7 +88,7 @@ Os knobs ficam no cartão `GERAL`, junto dos outros controles gerais do instrume
 | Sintetizador ([04a](04a-sintetizador.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato |
 | FM ([04d](04d-fm.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato (os quatro operadores sobem juntos, então o timbre se mantém) (não confirmado ao ouvido) |
 | Wavetable ([04e](04e-wavetable.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato |
-| Sampler ([04c](04c-sampler.md)) | 0 a 24 st, inteiro, padrão 2 st | não tem knob | Bend e vibrato; o vibrato do sampler tem profundidade fixa de 1 st (o motor usa o valor padrão) |
+| Sampler ([04c](04c-sampler.md)) | 0 a 24 st, inteiro, padrão 2 st | 0 a 2 st, padrão 1 st | Bend e vibrato (com zonas e sem elas). Os dois knobs ficam no cartão `GERAL` do sampler (ver [04c](04c-sampler.md#geral)) |
 | Bateria ([04b](04b-bateria.md)) | não tem | não tem | Ignora rodas e pedal |
 
 `Vibrato da roda` é diferente do `Vibrato` do LFO (cartão `LFO`, 0 a 12 st): o do LFO é constante e independente das rodas; o da roda só existe enquanto a roda de modulação estiver levantada (ou houver pontos de modulação no clipe) e tem frequência fixa de 5,5 Hz. Os dois somam.

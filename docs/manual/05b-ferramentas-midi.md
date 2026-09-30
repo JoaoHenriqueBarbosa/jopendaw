@@ -13,7 +13,7 @@ Regras que valem para o menu inteiro:
 - **Sobre quais notas atua.** As transformações agem na **seleção**; **sem seleção, em todas as notas do clipe**. Onde a tabela diz "só seleção", o item fica apagado enquanto nada estiver selecionado.
 - **Desfazer.** Cada ferramenta é uma edição só no histórico: um `Ctrl+Z` desfaz tudo o que ela fez. Se o resultado seria idêntico ao que já existe, nada é gravado.
 - **Depois de aplicar**, as notas resultantes ficam selecionadas e a tela rola até elas se estiverem fora de vista.
-- **Pontos de controle.** Um clipe também guarda pontos de pitch bend, modulação e sustain (faixa de controle do editor). Nenhum item novo entrou no menu por causa deles, mas dois itens passaram a levá-los junto das notas (`Escalar o tempo` e `Inverter no tempo`); o resto do menu só mexe em notas. O quadro completo está em [Os controles nas ferramentas](#os-controles-nas-ferramentas).
+- **Pontos de controle.** Um clipe também guarda pontos de pitch bend, modulação e sustain (faixa de controle do editor). Nenhum item novo entrou no menu por causa deles, mas dois itens levam os pontos junto das notas (`Escalar o tempo` e `Inverter no tempo`) e a cópia (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) leva os pontos do trecho das notas; o resto do menu só mexe em notas. O quadro completo está em [Os controles nas ferramentas](#os-controles-nas-ferramentas).
 - **Notação dos exemplos.** `C4@0(1)` é a nota C4 começando no tempo 0 do clipe, com 1 tempo de duração (1 tempo = uma semínima; um compasso 4/4 tem 4 tempos). `[C4 E4 G4]@0(4)` são três notas juntas, no tempo 0, com 4 tempos. Os nomes de nota usam sustenidos (`D#4`, nunca `Eb4`); C4 é o dó central (MIDI 60). Os números com vírgula são decimais.
 
 ## Controles
@@ -30,7 +30,7 @@ Os pontos de `Pitch bend`, `Modulação` e `Sustain` do clipe (ver [Faixa de con
 | `Unir notas iguais adjacentes`, `Remover duplicadas`, `Aparar sobrepostas` | Nada | `Aparar sobrepostas` encurta **notas** da mesma altura; não tem relação com aparar o clipe |
 | `Humanizar…`, `Rampa de velocidade`, `Legato`, `Staccato…`, `Inverter na altura`, `Reverter a ordem das notas`, `Dividir colcheias em 3 notas`, arpejo, acordes e `Prender seleção na escala` | Nada | Os pontos não acompanham notas que mudam de lugar por essas ferramentas |
 | `Quantizar` (`Q`), setas, arrastar notas | Nada | Um bend desenhado numa nota não anda com ela |
-| Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) | Nada: a área de transferência guarda só notas | Para repetir um bend junto do trecho, duplique o clipe inteiro na linha do tempo ou redesenhe |
+| Copiar, recortar, colar e duplicar notas (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D`) | **Levados junto**: a área de transferência guarda as notas e os pontos de controle do trecho delas (do começo da primeira nota selecionada ao fim da última), e colar ou duplicar os recoloca na mesma posição relativa | Por controle, o que chega substitui os pontos que havia entre o primeiro e o último ponto colados. Se o controle já estava fora do repouso no começo do trecho (pedal embaixo, por exemplo), a cópia leva o valor em vigor como um ponto na primeira batida; se ele termina fora do repouso, leva também um ponto de retorno ao repouso no fim do trecho. `Ctrl+X` copia os pontos mas só apaga as notas: os pontos ficam no clipe de origem |
 
 Como os itens de `Escalar o tempo` e `Inverter no tempo` agem sobre "as notas alvo", eles ficam apagados num clipe **sem notas**, mesmo que ele tenha pontos de controle.
 
@@ -45,7 +45,9 @@ Como os itens de `Escalar o tempo` e `Inverter no tempo` agem sobre "as notas al
 | Aparar a borda direita | Só muda a duração; pontos depois do novo fim ficam guardados e mudos |
 | Sobrepor (soltar, colar ou gravar um clipe em cima de outro) | O clipe de baixo é aparado, partido ou removido como as notas dele: a parte que sobra à esquerda mantém os pontos; se o clipe novo cai no meio, a parte da direita vira um clipe novo com os pontos deslocados; o clipe totalmente coberto some com os pontos |
 
-Ao aparar a borda esquerda e ao sobrepor, o **estado** que um controle tinha antes do novo começo não é carregado: um pedal que estava embaixo no trecho aparado não continua embaixo no que sobrou (ao contrário do `Cortar no cursor`).
+Ao aparar a borda esquerda e ao sobrepor, o **estado** que um controle tinha antes do novo começo é carregado, como no `Cortar no cursor`: um pedal que estava embaixo no trecho aparado continua embaixo no que sobrou. Na sobreposição, o clipe de baixo que perde o começo ganha um ponto na primeira batida com o valor que estava em vigor ali, e a parte da direita de um clipe partido ao meio também começa nesse valor. Ao aparar a borda esquerda com o mouse, os pontos de antes do começo ficam guardados, mudos, e é a reprodução que aplica o valor em vigor no começo (a faixa de controle já desenha a curva partindo desse valor).
+
+Na reprodução, dois clipes colados que seguem no mesmo estado (por exemplo o pedal embaixo dos dois lados de um corte) não soltam o pedal na emenda: o retorno ao repouso do fim do primeiro clipe é dispensado quando o segundo começa, na mesma batida, com o mesmo estado.
 
 ### Escala e acordes
 

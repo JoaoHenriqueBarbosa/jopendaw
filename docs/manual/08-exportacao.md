@@ -12,7 +12,7 @@
 
 ## Onde fica
 
-- **Exportar:** botão **Exportar** (ícone de disquete com seta) na barra do transporte, à direita dos painéis e das entradas de notas. Tooltip: `Exportar a música (e as faixas separadas) em WAV`. Em barra estreita ou no celular mostra só o ícone. Não tem atalho de teclado. A mesma janela leva ao arquivo do projeto (`.jopendaw`): botão `Projeto inteiro (.jopendaw)…` no rodapé, descrito na tabela abaixo.
+- **Exportar:** botão **Exportar** (ícone de disquete com seta) na barra do transporte, à direita dos painéis e das entradas de notas. Tooltip: `Exportar a música (e as faixas separadas) em WAV`. Em barra estreita ou no celular mostra só o ícone. Não tem atalho de teclado. A mesma janela leva ao arquivo do projeto (`.jopendaw`): botão `Projeto inteiro (.jopendaw)…` no rodapé, descrito na tabela abaixo, e às notas em MIDI padrão: botão `Notas em MIDI (.mid)…`, descrito na seção [Notas em MIDI (.mid)](#notas-em-midi-mid).
 - **Congelar:** menu de três pontos (**Opções da faixa**) no cabeçalho de cada faixa, item **Congelar em áudio**.
 - Os dois rodam **fora de tempo real**, em um motor separado e sem tocar: não é preciso reproduzir a música, e o render é mais rápido do que tocar (não há medida documentada de quanto, `(não confirmado)`).
 
@@ -39,6 +39,7 @@ Abre ao tocar em **Exportar**. Enquanto o projeto está gravando ou ocupado (imp
 | **Cauda** (controle deslizante, com o valor à direita) | Segundos extras depois do fim, para o reverb, o delay e a soltura das notas terminarem. Texto: `Tempo depois do fim para o reverb, o delay e a soltura das notas terminarem.` | 0 a 10 s, passo de 0,5 s, padrão 2 s. | Vale também para os stems e para o intervalo `Região do loop`. |
 | Aviso vermelho | `Não há o que exportar: grave, importe ou desenhe um clipe primeiro.` (música inteira) ou `Não há o que exportar: a região do loop não tem duração.` | | Aparece com o intervalo vazio. |
 | **Projeto inteiro (.jopendaw)…** (botão de texto com ícone de caixa, no rodapé, à esquerda de **Cancelar**) | Troca o WAV pelo arquivo do projeto editável: fecha esta janela sem exportar áudio e abre a janela `Exportar projeto` (o documento como está na tela e os áudios, num zip). Ver [Projeto em arquivo](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw). | | Não guarda as opções da tela como "últimas usadas": só o `Exportar` guarda. |
+| **Notas em MIDI (.mid)…** (botão de texto com ícone de piano, no rodapé, ao lado de **Projeto inteiro (.jopendaw)…**) | Troca o WAV pelas notas em arquivo MIDI padrão: fecha esta janela sem exportar áudio e abre a janela `Exportar MIDI (.mid)`. Ver [Notas em MIDI (.mid)](#notas-em-midi-mid). | | Também não guarda as opções da tela como "últimas usadas". Não depende do intervalo, do formato, da taxa nem da cauda desta janela. |
 | **Cancelar** | Fecha sem exportar. | | |
 | **Exportar** (com ícone) | Começa o render. Desligado com o intervalo vazio. | | |
 
@@ -183,6 +184,57 @@ O item fica desligado, com o motivo na legenda dele, em três casos: `Barramento
 
 A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). Para mudar o som, desfaça o congelamento, ajuste e congele de novo.
 
+## Notas em MIDI (.mid)
+
+O WAV leva o som; o `.mid` leva só as **notas** (e três controles), para abrir a melodia em outro programa ou guardá-la como texto musical. Vem do botão `Notas em MIDI (.mid)…` da janela **Exportar áudio**. Para o caminho de volta (importar um `.mid`), veja [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid).
+
+### Janela Exportar MIDI (.mid)
+
+| Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
+|---|---|---|---|
+| **Clipe selecionado** (opção) | Escreve só o clipe de notas selecionado na linha do tempo. O clipe **sai do começo do arquivo** (o início dele vira o instante zero), qualquer que seja a posição dele no projeto. Legenda: `<nome do clipe>, começa no início do arquivo.` (ou só `Começa no início do arquivo.` se o clipe não tem nome) | Padrão quando há um clipe de notas selecionado. Sem clipe de notas selecionado a opção fica desligada com a legenda `Selecione um clipe de notas na linha do tempo.` | Um clipe de áudio selecionado não conta: a opção continua desligada |
+| **Todas as faixas de notas** (opção) | Escreve todas as faixas de instrumento que têm notas ou controles, cada uma na **posição em que está no projeto** (o compasso 1 do projeto é o começo do arquivo). Legenda: `N faixa(s), uma por canal (bateria no canal 10), nas posições do projeto.` | Padrão quando não há clipe de notas selecionado. Sem nenhuma faixa com notas: desligada, legenda `Não há faixas com notas.` | Faixas de áudio e barramentos não entram |
+| Texto pequeno | `Leva o andamento (X BPM) e o compasso (N/4), as notas e o pitch bend, a modulação e o pedal.` | X e N são os do projeto | Ver "O que não entra": o texto vale só para o andamento e o compasso **iniciais** |
+| **Exportar** (com ícone de salvar) | Monta o arquivo e o entrega. Na web, baixa o arquivo (download do navegador, na pasta de downloads); no Android, abre a janela `Salvar <nome>` (se ela não estiver disponível, o app oferece o arquivo pelo compartilhar do sistema). Depois de salvar, o botão vira **Exportar de novo** e a janela continua aberta | Desligado enquanto trabalha, ou se não há faixa com notas nem clipe selecionado | |
+| **Cancelar** / **Fechar** | Fecha a janela (o texto vira **Fechar** depois de exportar) | | |
+| Resultado (texto abaixo dos botões) | `<nome>.mid salvo: N faixa(s), M nota(s).` e, se houve descarte, `K nota(s) fora do clipe ou de 0–127 ficaram de fora.` | | As contas são das notas; os controles descartados não entram na contagem |
+| Erro (texto vermelho) | `Não há notas para exportar: desenhe ou grave um clipe de notas primeiro.` ou `Não deu para salvar o arquivo MIDI.` | | |
+
+**Nome do arquivo.** Em `Todas as faixas de notas`, o nome do projeto; em `Clipe selecionado`, o nome do clipe (o do projeto se o clipe não tem nome), mais `.mid`. Caracteres que os sistemas de arquivo recusam (`/ \ : * ? " < > |` e os de controle) viram `_`; pontos no começo saem; o nome tem no máximo 80 caracteres; nome vazio vira `notas.mid`.
+
+### O que fica no arquivo
+
+| Item | Como sai | Valores |
+|---|---|---|
+| Tipo e resolução | SMF (arquivo MIDI padrão) **tipo 1**, **480 pulsos por semínima** | Uma batida do app = 480 ticks; posições e durações são arredondadas ao tick mais próximo (uma nota tem no mínimo 1 tick de duração) |
+| Trilha 1 (andamento) | Nome do projeto, andamento (`Set Tempo`) e compasso (`Time Signature`) | Andamento do projeto (o inicial); compasso `N/4` com N = tempos por compasso do projeto |
+| Uma trilha por faixa | Nome da faixa, e as notas e os controles de **todos os clipes dela**, cada clipe na sua posição | Em `Clipe selecionado`, uma trilha só, com o nome do clipe (ou da faixa, se o clipe não tem nome) |
+| Canal | `Bateria` sempre no canal 10; as outras faixas em ordem nos canais 1 a 9 e 11 a 16 (o 10 é pulado) | A 16ª faixa melódica em diante volta ao canal 1 e divide o canal com a primeira. Em `Clipe selecionado`: canal 10 se a faixa é `Bateria`, canal 1 nas outras |
+| Faixas que entram | `Sintetizador`, `Bateria`, `Sampler`, `FM` e `Wavetable` com pelo menos um clipe com notas ou controles | Na ordem da mesa; faixa vazia fica de fora. Mudo e solo **não são consultados**: faixa muda também sai `(lido do código; não testado em uso)` |
+| Notas | Altura como está no app (0–127), início, duração e velocidade | Velocidade do app (0–1) × 127, arredondada, entre 1 e 127. Um clipe de bateria já leva as alturas das peças do app (36, 37, 38, 39, 41, 42, 45, 46, 48, 49, 51, 56) |
+| Pitch bend | Mensagem de pitch bend de 14 bits | −1 a 1 do app vira 0 a 16383 (centro 8192) |
+| Modulação | Controle 1 | 0–1 vira 0–127 |
+| Sustain (pedal) | Controle 64 | Vale 127 a partir de 0,5; senão 0 |
+
+**Notas que ficam de fora** (e a janela conta): altura fora de 0–127, início negativo, início no fim do clipe ou depois dele, ou valores inválidos. Uma nota que começa dentro do clipe mas passa do fim dele sai com a duração inteira (o arquivo não corta no fim do clipe). Pontos de controle fora do trecho do clipe (antes do começo ou depois do fim) também não saem, mas **sem** entrar na contagem.
+
+### O que não entra
+
+- **Áudio.** Clipes de áudio, gravações, tomadas e faixas congeladas (que são áudio) não vão para o `.mid`. Para levar o som, use o WAV desta mesma janela ou os stems.
+- **Som do instrumento.** Não há `Program Change` nem parâmetros do sintetizador, da bateria, do sampler, do FM ou da wavetable: o programa que abrir o arquivo escolhe o timbre dele.
+- **Efeitos, mixer e envios.** Volume, pan, mudo, solo, envios, barramentos, efeitos e o master não saem.
+- **Automação.** As curvas de automação do mixer e dos efeitos não saem. Só os três controles do clipe (pitch bend, modulação e sustain) saem.
+- **Alcance do bend.** O `Alcance do bend` do instrumento não é escrito (nenhum `RPN`), então outro programa usa o alcance padrão dele para o mesmo pitch bend.
+- **Andamento e compasso variáveis.** O arquivo leva **um** andamento (o inicial, o número do botão `120 BPM · 4/4` no início do projeto) e **um** compasso `N/4`. As mudanças do [mapa de andamento](02-transporte.md) (faixa de andamento sob a régua) e do mapa de compassos **não são exportadas**, embora o texto da janela diga `Leva o andamento (X BPM)`. As notas continuam nas mesmas batidas: o que se perde é a mudança de velocidade e a contagem dos compassos depois dela.
+- **Escala do clipe, marcadores, loop, seções.** Não saem.
+
+Limites e pegadinhas do `.mid`:
+
+- A abertura em programas externos (Ableton Live, FL Studio, MuseScore, Logic etc.) `(testado só por testes automáticos)`: os testes escrevem o arquivo e o leem de volta com o leitor do próprio app (notas, velocidades, controles, andamento, compasso e nomes voltam iguais); nenhum programa externo abriu um arquivo do jopendaw.
+- Notas de mesma altura emendadas (o fim de uma no início da outra) não se fundem: o `Note Off` vem antes do `Note On` no mesmo instante.
+- Nada é gravado no projeto ao exportar; é só um arquivo no seu aparelho.
+- No Android, se a janela `Salvar <nome>` for cancelada, o app pode mostrar `<nome>.mid salvo` mesmo assim `(não confirmado em uso)`: o código não checa o retorno do seletor de arquivo. Na web não há o que cancelar (é um download).
+
 ## Passo a passo
 
 **Exportar a música em WAV**
@@ -207,6 +259,12 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 2. **Cauda** de 4 a 6 s se há reverb longo.
 3. Exporte; guarde a mixagem e os stems juntos (o nome da faixa fica no arquivo).
 
+**Levar uma melodia para outro programa (MIDI)**
+1. Clique no clipe de notas na linha do tempo para selecioná-lo (para levar todas as faixas de notas de uma vez, não selecione nada, ou escolha a outra opção na janela).
+2. **Exportar** > **Notas em MIDI (.mid)…**.
+3. Confira a opção (`Clipe selecionado` ou `Todas as faixas de notas`) e toque em **Exportar**. A janela conta `<nome>.mid salvo: N faixas, M notas.`
+4. No outro programa, arraste o `.mid` para uma faixa de instrumento e escolha o timbre lá. Guia completo: [MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md).
+
 **Congelar um sintetizador pesado**
 1. No cabeçalho da faixa, abra os três pontos.
 2. **Congelar em áudio**; espere o `N%`.
@@ -220,13 +278,16 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 - [Mixer](06-mixer.md) e [Painel de efeitos](06c-painel-de-efeitos.md): o que define o som do master e dos stems.
 - [Analisador e medidores](06b-analisador-e-medidores.md): as leituras `M`, `S`, `I` e `TP` do master, para conferir o mix antes de normalizar.
 - [Guia: loudness e master](../guias/loudness-e-master.md): do nível das faixas ao arquivo entregue no alvo certo.
-- [Automação](07-automacao.md): vai inteira para o arquivo.
+- [Automação](07-automacao.md): vai inteira para o arquivo (WAV); no `.mid` a automação não vai.
+- [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid): o caminho de volta, importar um `.mid` (o mesmo botão **Importar** do áudio).
+- [Editor de notas](05-piano-roll.md) e [Ferramentas MIDI](05b-ferramentas-midi.md): onde as notas exportadas são editadas.
+- [Guia: MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): melodia para outro DAW, pacote de acordes e backup das notas.
 - [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o áudio congelado é um áudio novo do projeto (`(não confirmado)` se conta na cota da nuvem).
 - Receitas: pasta [`../guias/`](../guias/).
 
 ## Limites e pegadinhas
 
-- **Só WAV.** Não há MP3, FLAC nem AAC na exportação do app. O único outro arquivo que sai desta janela é o do projeto (`Projeto inteiro (.jopendaw)…`), que não é áudio.
+- **Só WAV.** Não há MP3, FLAC nem AAC na exportação do app. Os outros arquivos que saem desta janela não são áudio: o do projeto (`Projeto inteiro (.jopendaw)…`) e o de notas (`Notas em MIDI (.mid)…`).
 - **A mixagem tem teto de −0,3 dBFS** pelo limitador do master, em qualquer formato, quando não há normalização. O texto de ajuda do WAV 32 bits float (`nem acima de 0 dB`) vale para os stems, não para a mixagem. Com **Normalizar o loudness** o teto passa a ser o **Teto de true peak** escolhido (até 0 dBTP).
 - **Normalizar** mexe em cada arquivo à parte (mixagem e stems); uma mixagem que já bate no teto é abaixada em cerca de 0,7 dB.
 - **Normalizar o loudness é só ganho.** Não comprime nem limita: se o alvo pede mais volume do que o teto permite, o arquivo sai abaixo do alvo (com aviso), e o remédio é limitar no master antes de exportar.
@@ -244,9 +305,3 @@ A faixa congelada não tem instrumento nem efeitos (eles já estão no áudio). 
 ## Atalhos
 
 Nenhum atalho de teclado abre a exportação ou o congelamento. A janela de progresso não fecha por fora (nem com Esc) enquanto trabalha; só o botão **Cancelar** a interrompe.
-
-## MIDI (.mid)
-
-**Exportar.** Na janela **Exportar**, o botão **Notas em MIDI (.mid)…** oferece o **clipe selecionado** (sai do início do arquivo) ou **todas as faixas de notas** (uma trilha por faixa, cada uma num canal; bateria no canal 10; nas posições do projeto). O arquivo é SMF tipo 1 a 480 pulsos por semínima, com o andamento e o compasso do projeto, o nome de cada faixa, as notas e os controles do clipe (pitch bend, modulação e pedal). Notas fora de 0–127 ou fora do trecho do clipe não saem, e a janela conta quantas.
-
-**Importar.** O botão **Importar** (Ctrl+I) aceita `.mid` e `.midi` junto com os áudios. Cada trilha com notas vira uma faixa de sintetizador (o canal 10 vira bateria) com um clipe no cursor; um canal por faixa. Se o arquivo traz andamento ou compasso diferentes do projeto, o app pergunta se deve usá-los. Lê tipos 0, 1 e 2 e qualquer PPQ; recusa tempo SMPTE. Limites, avisados na hora: o app usa só o primeiro andamento e o primeiro compasso; notas de bateria GM sem peça no app (pandeiro, vibraslap…) entram mas ficam sem som; volume, pan e outros controles são ignorados; arquivo cortado importa o que deu para ler.

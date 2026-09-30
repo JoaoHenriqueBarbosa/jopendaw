@@ -8,7 +8,7 @@
 2. Abra o painel de baixo na aba `Instrumento` (tecla `I`).
 3. O cabeçalho é o do [painel de instrumento](04-painel-de-instrumento.md); abaixo dele ficam quatro cartões: `ÁUDIO` (com o seletor do arquivo), `ENVELOPE`, `GERAL` e `ZONAS` (o mapa de teclado, ocupa a largura toda no celular e 640 px no computador).
 
-No teclado da tela, a nota base do cartão `ÁUDIO` aparece marcada com um ponto colorido. O teclado abre em C3, como o do sintetizador.
+No teclado da tela, as teclas marcadas com um ponto colorido dependem do modo: sem zonas, a nota base do cartão `ÁUDIO`; com zonas, **todas as notas que alguma zona cobre** (a nota base do cartão deixa de ser marcada). O teclado abre em C3, como o do sintetizador.
 
 ## Dois modos: áudio único e zonas
 
@@ -24,7 +24,7 @@ O sampler tem dois modos, e quem escolhe é a lista de zonas da faixa:
 | Ganho e pan por nota | Não | Por zona |
 | Camadas por força do toque | Não | Sim (faixa de velocidade por zona) |
 
-O que **continua valendo nos dois modos**: o cartão `ENVELOPE` inteiro (`Ataque`, `Decaimento`, `Sustentação`, `Soltura`), `Sens. vel.` e `Volume` do cartão `GERAL`, e a `Afinação` do cartão `ÁUDIO`, que **soma** com a afinação de cada zona. O que **deixa de valer** quando existe ao menos uma zona: o áudio único, o knob `Nota base` e o knob `Modo` (cada zona tem os seus). Apagar todas as zonas devolve o sampler ao modo de áudio único, com o áudio e os knobs como estavam.
+O que **continua valendo nos dois modos**: o cartão `ENVELOPE` inteiro (`Ataque`, `Decaimento`, `Sustentação`, `Soltura`), `Sens. vel.` e `Volume` do cartão `GERAL`, e a `Afinação` do cartão `ÁUDIO`, que **soma** com a afinação de cada zona. O que **deixa de valer** quando existe ao menos uma zona: o áudio único, o knob `Nota base` e o knob `Modo` (cada zona tem os seus). Com zonas, esses dois knobs aparecem apagados (mais escuros) no cartão `ÁUDIO`, embora ainda dê para movê-los; o cartão `ENVELOPE` também deixa de seguir o `Modo` do cartão (ver [Envelope](#envelope)) e o teclado da tela marca as notas das zonas. Apagar todas as zonas devolve o sampler ao modo de áudio único, com o áudio e os knobs como estavam.
 
 Um projeto salvo antes das zonas abre igual: só a faixa que tem zonas guarda a lista delas no projeto.
 
@@ -51,9 +51,9 @@ O cartão tem, ao lado do título, o botão do arquivo; abaixo, o visor; embaixo
 | `Importar um arquivo…` | Abre o seletor de arquivos (`Áudio do sampler`), lê o áudio e o faz o som do sampler | Aceita `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif` e `aiff` | Aparece o aviso `Importando nome…` enquanto decodifica |
 | `Sem áudio` | Tira o áudio do sampler | Só aparece se já há um áudio escolhido | O áudio continua no projeto, só deixa de ser o do sampler |
 | Visor da forma de onda | Mostra o áudio inteiro, ampliado pelo pico para amostras baixas aparecerem; a legenda diz a duração e a nota base (`0.84 s · C4`). Tem um ícone de play no canto | Segurar o mouse ou o dedo sobre o visor toca o áudio na nota base, com 80% de força (tooltip `Segure para ouvir na nota base`) | Serve para conferir o áudio e a nota base sem abrir o teclado. Com zonas, esse toque passa pelas zonas que cobrem a nota base `(não confirmado em uso)` |
-| Nota base | A nota em que o áudio soa na altura original | 0 a 127, inteiro, padrão C4 (60); o knob mostra o nome da nota (`C4`) | No diálogo de valor (botão direito) dá para digitar `C3`, `F#3`. Ajuste para a altura real do áudio: se o áudio é um lá 440 Hz, ponha `A4`. **Só vale no modo de áudio único** |
+| Nota base | A nota em que o áudio soa na altura original | 0 a 127, inteiro, padrão C4 (60); o knob mostra o nome da nota (`C4`) | No diálogo de valor (botão direito) dá para digitar `C3`, `F#3`. Ajuste para a altura real do áudio: se o áudio é um lá 440 Hz, ponha `A4`. **Só vale no modo de áudio único** (com zonas o knob fica apagado) |
 | Afinação | Ajuste fino da afinação de todas as notas | -100 a +100 ct, padrão +0 ct | Corrige um áudio levemente desafinado sem mexer na nota base. Com zonas, soma com a `Afinação` de cada zona |
-| Modo | Como a nota termina | Lista: `Sustenta` (padrão) e `Até o fim` | `Sustenta`: soltar a tecla dispara a `Soltura`. `Até o fim`: soltar a tecla não faz nada, o áudio toca inteiro (percussão, golpes); com esse modo a `Soltura` fica apagada no cartão `ENVELOPE`. **Só vale no modo de áudio único** (com zonas, cada zona tem o seu) |
+| Modo | Como a nota termina | Lista: `Sustenta` (padrão) e `Até o fim` | `Sustenta`: soltar a tecla dispara a `Soltura`. `Até o fim`: soltar a tecla não faz nada, o áudio toca inteiro (percussão, golpes); a nota também **ignora a `Sustentação`** do envelope e tocar a mesma nota de novo **não** solta a anterior (as vozes empilham), e com esse modo a `Soltura` fica apagada no cartão `ENVELOPE`. **Só vale no modo de áudio único** (com zonas, cada zona tem o seu, e o knob fica apagado) |
 
 Enquanto o áudio não está escolhido, o visor mostra uma orientação:
 
@@ -65,16 +65,23 @@ Se o arquivo não puder ser lido, o app avisa `Não deu para abrir nome: é um f
 
 ### Envelope
 
-Visor: o desenho do envelope (ataque em rampa; decaimento e soltura exponenciais; tempos em escala logarítmica). No modo `Até o fim`, a legenda diz `até o fim: a soltura não entra`.
+Visor: o desenho do envelope (ataque em rampa; decaimento e soltura exponenciais; tempos em escala logarítmica). Sem zonas e com o `Modo` em `Até o fim`, a legenda diz `até o fim: a soltura não entra`, a `Soltura` fica apagada e o desenho usa uma soltura de 1 ms. **Com zonas o visor e a `Soltura` seguem sempre o envelope das zonas `Sustentado`**: o `Modo` do cartão `ÁUDIO` é ignorado, então a legenda não aparece e a `Soltura` não fica apagada, mesmo que todas as zonas sejam `Até o fim`.
 
-O envelope vale para **todas as vozes**, inclusive as de zona, e tanto para zonas `Sustentado` quanto `Até o fim`.
+O envelope vale para **todas as vozes**, inclusive as de zona, mas nem todos os estágios valem para toda voz:
+
+| Voz | `Ataque` | `Decaimento` e `Sustentação` | `Soltura` |
+|---|---|---|---|
+| Sustentada (zona `Sustentado`, ou áudio único com `Modo` `Sustenta`) | Vale | Valem | Vale ao soltar a nota |
+| `Até o fim` (zona `Até o fim`, ou áudio único com `Modo` `Até o fim`) | Vale | **Ignorados**: a voz sobe no `Ataque` e fica em 100% (a `Sustentação` conta como 100%, então o `Decaimento` não muda nada) `(testado só por testes automáticos)` | Só entra quando o transporte para |
+
+Mexer na `Sustentação` com uma voz `Até o fim` soando também não a derruba `(testado só por testes automáticos)`.
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Ataque | Tempo para o volume subir do zero ao máximo no começo da nota | 0,5 ms a 10 s, logarítmico, padrão 2.0 ms | Deixe curto para não cortar o começo do áudio; longo para entrar suave |
 | Decaimento | Tempo da queda do máximo até a `Sustentação` | 1 ms a 10 s, logarítmico, padrão 500 ms | Sem efeito audível com `Sustentação` em 100% |
-| Sustentação | Nível mantido enquanto a tecla está apertada | 0 a 100%, padrão 100% | Em 0% a nota morre sozinha depois do decaimento, mesmo com a tecla apertada (pluck). **Cuidado com zonas `Até o fim`**: com `Sustentação` abaixo de 100% uma fatia ou um golpe também decai `(não confirmado em uso)` |
-| Soltura | Tempo da queda depois de soltar a tecla | 1 ms a 10 s, logarítmico, padrão 200 ms | Apagada no modo `Até o fim` do cartão `ÁUDIO` (só entra quando o transporte para). Com zonas, o desenho e o apagado seguem o `Modo` do cartão `ÁUDIO`, não o das zonas: ver [Limites e pegadinhas](#limites-e-pegadinhas) |
+| Sustentação | Nível mantido enquanto a tecla está apertada | 0 a 100%, padrão 100% | Em 0% a nota morre sozinha depois do decaimento, mesmo com a tecla apertada (pluck). **Não vale para vozes `Até o fim`** (fatias, golpes, `Modo` `Até o fim`): elas ficam em 100%. O knob não fica apagado nem o desenho mostra isso |
+| Soltura | Tempo da queda depois de soltar a tecla | 1 ms a 10 s, logarítmico, padrão 200 ms | Apagada só no `Modo` `Até o fim` do cartão `ÁUDIO` **sem zonas** (só entra quando o transporte para). Com zonas nunca fica apagada, mesmo que as zonas sejam `Até o fim`: ali ela só age nas zonas `Sustentado` |
 
 ### Geral
 
@@ -82,6 +89,8 @@ O envelope vale para **todas as vozes**, inclusive as de zona, e tanto para zona
 |---|---|---|---|
 | Sens. vel. | Sensibilidade à força do toque (velocity), não uma velocidade de reprodução | 0 a 100%, padrão 70% | Em 0% todas as notas soam com o mesmo volume; em 100% o volume cresce com o quadrado da força (metade da força dá -12 dB). Vale por cima da escolha de zona por velocidade |
 | Volume | Nível de saída do instrumento | 0 a 150%, padrão 80% | Muda sem degraus, mesmo com notas soando |
+| Alcance do bend | Quanto o pitch bend inteiro (roda no fim, ou ponto `±1` na faixa `Pitch bend` do piano roll) afina o sampler | 0 a 24 st, inteiro, padrão 2 st | Vale com zonas e sem elas. Ver [Rodas de pitch bend e de modulação](04-painel-de-instrumento.md#rodas-de-pitch-bend-e-de-modulação) |
+| Vibrato da roda | Profundidade do vibrato de 5,5 Hz que a roda de modulação (`CC 1`, ou pontos de `Modulação` no clipe) liga, com a roda toda levantada | 0 a 2 st, padrão 1 st | Em 0 a roda não faz nada. É diferente de um vibrato constante: o sampler não tem LFO, então este é o único vibrato dele. Vale com zonas e sem elas (testado só por testes automáticos) |
 
 ### Zonas: a barra do cartão
 
@@ -89,13 +98,22 @@ O cartão `ZONAS` abre com uma linha de botões e, embaixo dela, o mapa e o edit
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| `Adicionar sample como zona` (tooltip `Acrescentar um áudio como zona`) | Abre um menu com os áudios do projeto (em ordem alfabética) e, no fim, `Importar um arquivo…`. Escolher um áudio cria uma zona nova já selecionada | A zona nova ocupa a **maior lacuna** que as outras deixam no teclado, com a nota base no meio dela; a primeira zona cobre o teclado todo (0 a 127, nota base C4). Sem lacuna (teclado todo coberto), a nova vai de C4 a C5 (60 a 72) por cima das outras, nota base C4. Velocidade de 1 a 127, sem ganho, sem pan, `Sustentado`, sem loop, sem round-robin | `Importar um arquivo…` abre o seletor (`Áudio da zona`, mesmos formatos do cartão `ÁUDIO`), guarda o áudio no projeto e já o põe como zona, sem criar clipe no arranjo |
+| `Adicionar sample como zona` (tooltip `Acrescentar um áudio como zona`) | Abre um menu com os áudios do projeto (em ordem alfabética) e, no fim, `Importar um arquivo…`. Escolher um áudio cria uma zona nova já selecionada | Onde a zona nasce: a primeira cobre o teclado todo (0 a 127, `Nota base` C4). Da segunda em diante, ocupa a **maior lacuna** que as outras deixam no teclado (nunca por cima de outra), com a `Nota base` na nota da lacuna mais perto do C4 (`C4` se ele está na lacuna; senão a ponta da lacuna que fica mais perto). Sem lacuna (teclado todo coberto), ela **divide ao meio a zona de faixa mais larga**: a zona antiga fica com a metade de baixo (o `até` dela encurta) e a nova com a de cima; nesse caso o cartão mostra um aviso (ver abaixo). Velocidade de 1 a 127, sem ganho, sem pan, `Sustentado`, sem loop, sem round-robin | `Importar um arquivo…` abre o seletor (`Áudio da zona`, mesmos formatos do cartão `ÁUDIO`), guarda o áudio no projeto e já o põe como zona, sem criar clipe no arranjo. A altura real do áudio o app não sabe: acerte a `Nota base` (dá para digitar) |
 | `Fatiar sample…` | Abre o diálogo `Fatiar sample` (ver adiante) | | Substitui todas as zonas da faixa |
 | `Usar o áudio atual como zona` | Faz do áudio único do cartão `ÁUDIO` a primeira zona, com o teclado todo e a `Nota base` do cartão | Só aparece quando a faixa ainda não tem zonas e há um áudio escolhido | Caminho mais curto para começar um multi-sample a partir de um sampler que já toca |
 | Contador `1 zona` / `N zonas` | Diz quantas zonas há | Só aparece com zonas | |
 | `Apagar todas` (texto sublinhado) | Apaga todas as zonas e volta ao modo de áudio único | Só aparece com zonas; entra no desfazer | Os áudios continuam no projeto |
 
 Sem zonas, no lugar do mapa aparece o texto: `Sem zonas o sampler toca um áudio só, afinado pelas notas. Acrescente samples como zonas para espalhá-los pelo teclado (e por camadas de velocidade), ou fatie um loop: cada fatia vira uma nota, a partir do C1. Com zonas, o áudio único e a nota base do cartão Áudio deixam de valer.`
+
+**Avisos.** Acima do mapa pode aparecer um aviso dispensável (botão `Dispensar`), que some sozinho na próxima zona acrescentada sem aviso e ao usar `Apagar todas`:
+
+| Aviso (texto exato) | Quando |
+|---|---|
+| `O teclado já estava coberto: a zona "NOME" foi dividida e a nova ficou com E4 a G9. Ajuste as faixas no mapa.` | Ao acrescentar uma zona com o teclado todo coberto. `NOME` é o nome do áudio da zona dividida (`sem nome` se ele não está no projeto); a faixa da nova varia (com uma zona única de 0 a 127 é `E4 a G9`) |
+| `Não há faixa livre nem zona para dividir: a nova zona ficou por cima das outras, em C4 a C5.` | Está no código, mas **não chega a aparecer**: só valeria com 128 zonas de uma nota cada, e aí o botão já não cria mais nenhuma |
+| `N cópias criadas logo depois desta zona, cada uma com a sua faixa de velocidade. Selecione cada uma e troque o áudio.` (`1 cópia criada` no singular) | Depois de `Camadas de velocidade` (ver [O editor da zona](#o-editor-da-zona)) |
+| `Não coube: as zonas já estão no limite de 128.` | `Camadas de velocidade` sem espaço para as cópias |
 
 ### O mapa de teclado
 
@@ -115,7 +133,7 @@ O mapa desenha cada zona como um bloco colorido:
 | Arrastar a **borda direita** | Muda a nota mais aguda (`até`) | Não passa da nota mais grave | |
 | Arrastar a **borda de cima** | Muda a velocidade máxima da zona | 1 a 127; não passa da mínima | Só existe em blocos com pelo menos 21 px de altura (cerca de 23 valores de velocidade no computador, 28 no celular) |
 | Arrastar a **borda de baixo** | Muda a velocidade mínima | 1 a 127; não passa da máxima | |
-| Arrastar o **corpo** do bloco | Move o bloco inteiro: as notas, **as velocidades** e a nota base juntas | Para nos limites 0 e 127 (notas) e 1 e 127 (velocidade) | Mover na diagonal muda o intervalo de velocidade sem você querer: segure o dedo ou o mouse no mesmo nível |
+| Arrastar o **corpo** do bloco | Move o bloco só na horizontal: a faixa de notas e a `Nota base` andam juntas, o mesmo número de semitons | Para nos limites 0 e 127 (notas). **A faixa de velocidade não muda** por mais que o arraste suba ou desça | Para mudar a velocidade use as bordas de cima e de baixo, ou os campos `Velocidade de` e `até` |
 | Arrastar num lugar vazio | Rola o mapa na horizontal | | O arraste só "pega" quando começa em cima de um bloco |
 
 Um bloco com menos de 21 px de largura (cerca de três notas no zoom mínimo, como as zonas de uma nota só das fatias) não tem as bordas esquerda e direita: para mudar a faixa de notas dele use os botões do editor. Ele ainda tem as bordas de cima e de baixo, se for alto o bastante. Cada arraste inteiro é **um passo só** no desfazer.
@@ -127,22 +145,34 @@ Aparece embaixo do mapa quando uma zona está selecionada, com a borda na cor de
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Nome do áudio (tooltip `Trocar o áudio da zona`) | Abre a lista dos áudios do projeto; escolher um troca o áudio da zona, mantendo notas, velocidades e ajustes | Mostra `Áudio fora do projeto` se o áudio da zona não existe mais no projeto | Trocar o áudio **não** refaz o trecho e o loop: confira o `Trecho` |
-| `Duplicar a zona` (ícone de copiar) | Cria uma cópia logo depois da zona, com a mesma faixa de notas e de velocidade, e a seleciona | Não passa de 128 zonas | O caminho para camadas e round-robin: duplique, depois troque o áudio e a faixa de velocidade |
+| `Duplicar a zona` (ícone de copiar) | Cria uma cópia logo depois da zona, com a mesma faixa de notas e de velocidade, e a seleciona | Não passa de 128 zonas | O caminho para round-robin (duplique e troque o áudio). Para camadas de velocidade, `Camadas de velocidade` faz as cópias já com as faixas certas |
 | `Apagar a zona` (ícone de lixeira) | Remove a zona | Entra no desfazer | |
-| `Nota base` | Nota em que o áudio da zona soa na altura original | 0 a 127, um semitom por clique em `Menos` e `Mais`; mostra o nome (`C4`) | Não há campo de digitação: para uma nota longe da atual são vários cliques. Mover o bloco pelo corpo leva a nota base junto |
-| `Notas de` e `até` (primeiro par) | Nota mais grave e mais aguda da zona | 0 a 127, um semitom por clique. Se um passar do outro, os dois trocam de lugar | Mais prático arrastar as bordas do bloco |
-| `Velocidade de` e `até` (segundo par) | Velocidade mínima e máxima da zona | 1 a 127, **de 4 em 4** por clique. Se um passar do outro, trocam de lugar | Passos de 4 não fecham a conta de uma divisão limpa entre camadas: use as bordas de cima e de baixo no mapa para valores exatos |
+| `Nota base` | Nota em que o áudio da zona soa na altura original | 0 a 127; campo digitável (ver [Campos digitáveis](#campos-digitáveis)) com `Menos` e `Mais` (tooltips) de 1 semitom; mostra o nome (`C4`) | Digite `C3` ou `48` em vez de clicar 12 vezes. Mover o bloco pelo corpo leva a nota base junto. Mudar a `Nota base` não move a faixa de notas |
+| `Notas de` e `até` (primeiro par) | Nota mais grave e mais aguda da zona | 0 a 127, digitável, 1 semitom por `Menos`/`Mais`. Se um passar do outro, os dois trocam de lugar | Mais prático arrastar as bordas do bloco |
+| `Velocidade de` e `até` (segundo par) | Velocidade mínima e máxima da zona | 1 a 127, digitável, **de 1 em 1** por `Menos`/`Mais`. Se um passar do outro, trocam de lugar | Para dividir em camadas iguais sem conta, `Camadas de velocidade` |
 | `Afinação` (deslizante) | Afinação fina da zona | -100 a +100 ct, passo de 1 ct; o valor aparece como `12 ct` | Soma com a `Afinação` do cartão `ÁUDIO` |
 | `Ganho` (deslizante) | Volume da zona | -24 a +12 dB, passo de 0,5 dB, padrão `0.0 dB` | Equilibre camadas e gravações diferentes |
 | `Pan` (deslizante) | Posição da zona no estéreo | -1 a +1, passo de 0,01; mostra `C` no centro, `E30` (30% para a esquerda), `D30` (30% para a direita). Funciona como balanço: o centro não muda o nível, o extremo zera o lado oposto | Bom para espalhar zonas de bateria; diferente do pan da faixa no mixer, que se soma a ele |
-| `Sustentado` / `Até o fim` (botões) | Como a zona termina | `Sustentado` (padrão): soltar a nota dispara a `Soltura`. `Até o fim`: toca o trecho todo ignorando a nota solta (bateria, fatias) | `Até o fim` esconde o loop |
-| `Round-robin` (lista) | Grupo de alternância | `nenhum` (padrão) e `grupo 1` a `grupo 15` | Zonas do mesmo grupo que cobrem a mesma nota e a mesma força se alternam a cada nota (ver adiante) |
+| `Sustentado` / `Até o fim` (botões) | Como a zona termina | `Sustentado` (padrão): soltar a nota dispara a `Soltura`. `Até o fim`: toca o trecho todo ignorando a nota solta, a `Sustentação` do envelope e a mesma nota tocada de novo (bateria, fatias; ver [Até o fim](#até-o-fim-e-a-mesma-nota-de-novo)) | `Até o fim` esconde o loop |
+| `Camadas de velocidade` (botão com menu; tooltip `Divide esta zona em camadas de velocidade iguais: ela fica com a primeira e as outras são cópias para trocar o áudio`) | Divide a zona selecionada em camadas iguais de força do toque | Itens `Dividir em 2 camadas iguais`, `Dividir em 3 camadas iguais` e `Dividir em 4 camadas iguais`. 2: 1–63 e 64–127; 3: 1–42, 43–84 e 85–127; 4: 1–31, 32–63, 64–95 e 96–127 | A zona fica com a camada mais fraca (a primeira faixa) e as outras camadas são cópias colocadas logo depois dela (mesmo áudio, mesmas notas e mesma nota base). A divisão sempre refaz a faixa de velocidade inteira, de 1 a 127, seja qual for a faixa que a zona tinha. Depois, selecione cada cópia (a seleção não muda: continua na zona original) e troque o áudio. Não coube nas 128 zonas: nada é criado e sai o aviso `Não coube...` |
+| `Round-robin` (lista) | Grupo de alternância | `nenhum` (padrão) e `grupo 1` a `grupo 63`; a lista rola | Zonas do mesmo grupo que cobrem a mesma nota e a mesma força se alternam a cada nota (ver adiante) |
 | Forma de onda do áudio (52 px) | Mostra o áudio com o trecho da zona em cor e o resto apagado; o loop aparece como uma faixa sombreada | | Se o áudio não está neste aparelho, no lugar dela aparece `Este áudio não está neste aparelho: o trecho e o loop ficam para quando ele voltar.` |
 | `Trecho` (dois cursores) | Início e fim do trecho do áudio que a zona toca | Em segundos, com 3 casas (`0.250–1.500 s`); padrão do início 0 e do fim o fim do áudio. Levar o cursor do fim até o fim do áudio volta ao "até o fim" | Corta silêncio inicial ou cauda sem editar o arquivo |
 | `Loop enquanto a nota está presa` (caixa) | Liga o loop da zona | Só aparece em zonas `Sustentado`. Ao ligar, o loop nasce de 25% a 75% do trecho | Desligar zera o loop |
 | `Loop` (dois cursores) | Início e fim do loop | Só com o loop ligado; ficam dentro do `Trecho`; mostra `início–fim s` | Ver [Loop da zona](#loop-da-zona) |
 
-Todos os ajustes das zonas (botões, deslizantes, cursores, arrastes no mapa) entram no desfazer; um deslizante ou cursor arrastado é um passo só.
+Todos os ajustes das zonas (botões, deslizantes, cursores, campos digitados, arrastes no mapa) entram no desfazer; um deslizante ou cursor arrastado é um passo só.
+
+#### Campos digitáveis
+
+`Nota base`, `Notas de`, `até` (das notas), `Velocidade de` e `até` (das velocidades) são campos de texto entre os botões `Menos` e `Mais`. Clique no número, digite e confirme com Enter (ou saia do campo): o valor só vale ao confirmar. Com o campo vazio aparece uma dica: `C4 ou 60` nos de nota e `1 a 127` nos de velocidade.
+
+| Campo | O que aceita | Exemplos |
+|---|---|---|
+| Notas (`Nota base`, `Notas de`, `até`) | Um número de 0 a 127, ou o nome da nota: letra `A` a `G` (maiúscula ou minúscula), sustenido `#` ou `♯` ou bemol `b` ou `♭` opcional, e a oitava de um dígito (`-1` a `9`). `C4` é a nota 60, como nos rótulos do app; `C-1` é a 0 e `G9` a 127 | `60`, `C4`, `c#3` (49), `Db3` (49), `F♯2` (42), `C-1` (0), `G9` (127) |
+| Velocidades | Um número inteiro de 1 a 127 | `64`, `127` |
+
+**Não há mensagem de erro.** O que o campo não entende (`H4`, `C`, `128`, `-1`, `G#9`, `0` numa velocidade, um número com vírgula, texto vazio) é descartado em silêncio e o campo volta ao valor de antes. `Menos` e `Mais` param nas pontas (0 e 127; 1 e 127). Se `Notas de` passar de `até` (ou o contrário), os dois trocam de lugar. Um campo que acaba de ser digitado mostra o valor normalizado (por exemplo `Db3` vira `C#3`).
 
 ### Loop da zona
 
@@ -159,6 +189,18 @@ Round-robin serve para o mesmo golpe (um bumbo, uma nota) não soar igual toda h
 - O grupo só alterna entre as zonas **que casam com a nota tocada** (faixa de notas e de velocidade): as que ficam de fora da nota ou da força não entram no revezamento. O contador é um só por grupo e anda a cada nota que casa com alguma zona dele. Para uma alternância estritamente em ordem (1, 2, 3, 1, 2, 3...), use **um grupo por região do teclado e por camada de velocidade**; se várias regiões ou camadas dividirem o mesmo grupo, a ordem de cada uma pode pular gravações, embora nunca toque duas zonas do grupo ao mesmo tempo.
 - Zonas com `nenhum` não alternam: todas as que casam tocam juntas.
 - Editar qualquer zona reenvia a lista ao motor, e o ciclo recomeça na primeira zona do grupo `(não confirmado em uso)`.
+- Há 63 grupos (`grupo 1` a `grupo 63`), o que sobra para um grupo por região do teclado e por camada de velocidade. O menu mostra o número do grupo da zona qualquer que ele seja.
+
+### Até o fim e a mesma nota de novo
+
+Vozes `Até o fim` (zona `Até o fim`, ou o áudio único com `Modo` `Até o fim`) se comportam diferente das sustentadas quando a mesma nota é tocada de novo enquanto a anterior ainda soa:
+
+- **Sustentadas:** a nova nota solta as anteriores da mesma nota (com a `Soltura`) e começa uma voz nova.
+- **`Até o fim`:** as anteriores **não são soltas**; a nova voz empilha por cima e cada uma toca o seu trecho até o fim. Isso vale para uma fatia repetida rápido: a cauda da anterior segue soando.
+- O empilhamento vai até o limite de 16 vozes; passando dele, a voz mais antiga sai em um fade curto de 3 ms (ver [Limites e pegadinhas](#limites-e-pegadinhas)).
+- Essas vozes também ignoram a `Sustentação` do envelope (ver [Envelope](#envelope)).
+
+`(testado só por testes automáticos)`: os testes do motor tocam a mesma nota várias vezes e conferem que nenhuma voz `Até o fim` entra em soltura e que o total nunca passa de 16 vozes.
 
 ### Fatiar sample
 
@@ -189,7 +231,7 @@ O seletor de presets (categoria `SAMPLER`) tem cinco ajustes de envelope. Nenhum
 |---|---|---|
 | Inicial | Tudo nos padrões | Ponto de partida: ataque de 2 ms, sustentação 100%, soltura de 200 ms |
 | Instrumento | Ataque 3 ms, decaimento 500 ms, sustentação 100%, soltura 350 ms, `Sens. vel.` 80% | Áudio de uma nota tocado como teclado: soltura um pouco mais longa e resposta à força |
-| Percussão (até o fim) | `Modo` `Até o fim`, ataque 0,5 ms, soltura 50 ms, `Sens. vel.` 80% | Golpes e vozes curtas: a nota sempre toca inteira, com ataque instantâneo. Com zonas, o `Modo` dele não vale, mas o envelope curto vale |
+| Percussão (até o fim) | `Modo` `Até o fim`, ataque 0,5 ms, soltura 50 ms, `Sens. vel.` 80% | Golpes e vozes curtas: a nota sempre toca inteira, com ataque instantâneo. Com zonas, o `Modo` dele não vale (cada zona tem o seu); o `Ataque` curto vale, e a `Soltura` curta vale nas zonas `Sustentado` |
 | Pad lento | Ataque 0,8 s, decaimento 1 s, sustentação 90%, soltura 1,8 s, `Sens. vel.` 30% | Áudio longo que entra e sai devagar; pouca resposta à força |
 | Pluck | Ataque 1 ms, decaimento 350 ms, sustentação 0%, soltura 250 ms, `Sens. vel.` 80% | Nota curta e seca, mesmo com tecla apertada |
 
@@ -219,6 +261,7 @@ O rótulo do seletor compara só os parâmetros de timbre: como a `Nota base` e 
 2. Escolha o preset `Percussão (até o fim)`.
 3. No piano roll, escreva o ritmo sempre na `Nota base` (C4 por padrão): a duração da nota não corta o áudio, só o começo importa.
 4. Para variar o timbre, use notas mais agudas (a batida fica mais aguda e mais curta) ou graves (mais grave e mais longa).
+5. Golpes repetidos na mesma nota não se cortam: com o `Modo` `Até o fim` cada golpe toca inteiro e o seguinte empilha por cima.
 
 ### Um pad a partir de um som longo
 
@@ -237,7 +280,7 @@ O rótulo do seletor compara só os parâmetros de timbre: como a `Nota base` e 
 2. Importe o loop: no cartão `ZONAS`, `Adicionar sample como zona` > `Importar um arquivo…`. (O loop entra no projeto e vira uma zona provisória que cobre o teclado; o passo seguinte a substitui.)
 3. Clique em `Fatiar sample…`. Em `ÁUDIO` confira o loop, deixe `Por transientes` e mexa em `Sensibilidade` até a prévia mostrar uma linha em cada golpe que você quer separar (um loop de 1 compasso em colcheias costuma dar 8 fatias; se sobrar corte no meio de uma nota, baixe a sensibilidade; se faltar chimbal, suba). Para um corte regular, use `N fatias iguais` e `16`.
 4. Confira o resumo (`8 fatias: C1 a G1, uma nota cada, ...`) e clique em `Criar`. O mapa passa a mostrar uma coluna estreita por fatia, de C1 em diante.
-5. Escolha o preset `Percussão (até o fim)`: ataque instantâneo e soltura curta de 50 ms, para uma fatia repetida cortar a anterior sem cauda longa.
+5. Escolha o preset `Percussão (até o fim)`: ataque instantâneo. As fatias são `Até o fim`, então a `Sustentação` e a nota solta não as afetam, e a mesma fatia repetida rápido **não corta a anterior**: as duas soam juntas (até 16 vozes). A `Soltura` de 50 ms só entra quando o transporte para.
 6. Ouça: no teclado da tela desça duas vezes com `Oitava abaixo` (de C3 para C1) e toque; ou toque as teclas embaixo do mapa. Cada tecla é uma fatia, na ordem em que aparecem no loop.
 7. No piano roll, escreva as notas nas linhas C1, C#1, D1, ...: para refazer o loop original, uma nota por batida na ordem 1, 2, 3, ...; para reorganizar, embaralhe a ordem, repita uma fatia, tire outra. A duração da nota não corta a fatia.
 8. Ajuste cada fatia que precise: clique no bloco dela e mexa em `Ganho` (por exemplo -3 dB no chimbal), `Pan` ou `Afinação`.
@@ -248,12 +291,14 @@ O exemplo usa três gravações da mesma nota em alturas diferentes (um piano em
 
 1. `Nova faixa` > `Sampler`; painel `Instrumento` (`I`).
 2. `Adicionar sample como zona` > `Importar um arquivo…` e escolha a gravação grave (C2). A zona nasce cobrindo o teclado inteiro (de C-1 a G9), com `Nota base` C4.
-3. Ajuste a `Nota base` dessa zona para a nota real do arquivo: `Menos` até `C2` (24 cliques a partir de C4).
+3. Ajuste a `Nota base` dessa zona para a nota real do arquivo: clique no campo `Nota base`, digite `C2` (ou `36`) e aperte Enter.
 4. Encolha a zona: arraste a borda direita do bloco até a nota 47 (B2). Confira em `até` do primeiro par (`B2`). A zona grave cobre de C-1 a B2, e a região livre passa a ser o resto do teclado.
-5. `Adicionar sample como zona` > `Importar um arquivo…` com o arquivo do meio (C4). A zona nasce **na maior lacuna** (de C3 a G9), com `Nota base` no meio dela: leve a `Nota base` para `C4` com `Menos`/`Mais`, e arraste a borda direita até a nota 71 (B4).
-6. Repita com o arquivo agudo (C6): a lacuna que sobra é de C5 a G9; ajuste a `Nota base` para `C6`.
+5. `Adicionar sample como zona` > `Importar um arquivo…` com o arquivo do meio (C4). A zona nasce **na maior lacuna** (de C3 a G9, sem invadir a zona grave), com a `Nota base` em `C4`, que já é a nota real desse arquivo: confira o campo. Arraste a borda direita do bloco até a nota 71 (B4).
+6. Repita com o arquivo agudo (C6): a lacuna que sobra é de C5 a G9 e a zona nasce com a `Nota base` em `C5` (a nota da lacuna mais perto do C4); digite `C6` no campo `Nota base`.
 7. Confira no teclado embaixo do mapa: todas as teclas de C-1 a G9 devem estar claras (cobertas). Toque uma tecla em cada região para ouvir e compare a emenda entre elas (B2/C3 e B4/C5): se a mudança de timbre incomodar, use o `Ganho` de cada zona para igualar o volume.
 8. Escolha o preset `Instrumento` (ataque de 3 ms, soltura de 350 ms) para uma soltura natural.
+
+Se você acrescentar uma zona sem ter encolhido as outras (o teclado todo coberto), o app divide ao meio a zona mais larga e mostra o aviso `O teclado já estava coberto: ...` (ver [Avisos](#zonas-a-barra-do-cartão)): confira as faixas no mapa.
 
 Para dar camadas de força do toque a esse instrumento (um piano macio e um forte), ver o guia [Sampler multi-zona e fatiar loops](../guias/sampler-multi-zona-e-fatiar-loops.md).
 
@@ -280,13 +325,13 @@ Para dar camadas de força do toque a esse instrumento (um piano macio e um fort
 ## Limites e pegadinhas
 
 - **Sem zonas, sem loop e sem recorte.** No modo de áudio único o áudio toca inteiro, uma vez. Para loop, trecho, camadas ou fatias, use zonas.
-- **Com zonas, o cartão `ÁUDIO` não manda mais.** O áudio único, a `Nota base` e o `Modo` do cartão são ignorados; só a `Afinação` do cartão continua, somada à de cada zona. O teclado da tela continua marcando a `Nota base` do cartão com o ponto colorido, e o `Modo` do cartão ainda apaga a `Soltura` e desenha o envelope curto, mesmo que as zonas estejam em outro modo: ignore esses avisos quando usar zonas `(inconsistência da interface)`.
+- **Com zonas, o cartão `ÁUDIO` não manda mais.** O áudio único, a `Nota base` e o `Modo` do cartão são ignorados (os knobs `Nota base` e `Modo` ficam apagados); só a `Afinação` do cartão continua, somada à de cada zona. O teclado da tela marca as notas que as zonas cobrem, e o cartão `ENVELOPE` não segue mais o `Modo` do cartão (a `Soltura` não fica apagada nem o desenho encurta). O visor de forma de onda do cartão `ÁUDIO` continua mostrando o áudio único e a `Nota base` do cartão, e segurá-lo toca essa nota pelas zonas: ele não é o som das zonas.
 - **Até 128 zonas por faixa.** Passar disso não faz nada: o botão de adicionar e o de duplicar deixam de criar. O motor também ignora zonas além de 128.
-- **A primeira zona cobre o teclado inteiro.** Por isso a segunda nasce por cima dela (C4 a C5), não numa lacuna: encolha a primeira antes de acrescentar a próxima.
+- **A primeira zona cobre o teclado inteiro; as seguintes ocupam a maior lacuna.** Sem lacuna, a zona mais larga é dividida ao meio e o app avisa (o `até` da zona antiga encurta, mas a `Nota base` dela não muda: pode ficar fora da faixa nova). Uma zona nova nasce com a `Nota base` perto do C4 e não na altura real do áudio: digite a nota certa.
 - **Zonas sobrepostas empilham, lacunas calam.** Duas zonas com a mesma nota e força tocam juntas; uma nota ou uma força que nenhuma zona cobre não soa. Ao dividir por velocidade, garanta que a mínima de uma seja a máxima da outra mais um (ou uma sobreposição pequena): um buraco de um valor deixa aquela força muda.
 - **Velocidade nunca é 0.** A faixa é 1 a 127, e a velocidade que decide a zona é a do toque arredondada para 1 a 127.
-- **Round-robin: 15 grupos na tela.** O menu oferece de `grupo 1` a `grupo 15`; o projeto e o motor aceitam até o 63, mas um grupo maior que 15 mostra `grupo 15` no menu.
-- **16 vozes.** Cada zona que dispara consome uma voz: uma nota com 3 camadas usa 3 vozes, então acordes com camadas gastam as 16 vozes depressa. Ao passar disso, a voz mais antiga (de preferência já solta) sai em um fade de 3 ms. Tocar a mesma nota de novo solta as anteriores (que fazem a `Soltura`, mesmo as `Até o fim`) e começa novas.
+- **Round-robin: 63 grupos.** O menu tem `nenhum` e `grupo 1` a `grupo 63`; um projeto com grupo acima de 63 é limitado a 63 ao abrir.
+- **16 vozes.** Cada zona que dispara consome uma voz: uma nota com 3 camadas usa 3 vozes, então acordes com camadas gastam as 16 vozes depressa. Ao passar disso, a voz mais antiga (de preferência já solta) sai em um fade de 3 ms. Tocar a mesma nota de novo solta as anteriores **sustentadas** (que fazem a `Soltura`) e começa novas; as vozes `Até o fim` **não são soltas**, empilham até o limite das 16 (ver [Até o fim e a mesma nota de novo](#até-o-fim-e-a-mesma-nota-de-novo)). Uma fatia ou um golpe repetido muito rápido pode, portanto, gastar as vozes e roubar as mais antigas.
 - **Mexer nas zonas com notas soando não corta nada**: cada voz guarda o áudio e o trecho da zona que a disparou. Um áudio que sai do projeto também deixa a voz terminar; o que muda é a próxima nota.
 - **Zona sem áudio fica muda.** Se o áudio da zona não está neste aparelho (projeto aberto em outro aparelho), a zona não soa até ele chegar ou ser importado de novo; o mapa e o editor continuam mostrando a zona, e o editor avisa `Este áudio não está neste aparelho: o trecho e o loop ficam para quando ele voltar.`
 - **Fatiar substitui as zonas atuais** da faixa (com aviso no diálogo; dá para desfazer). Fatia é sempre `Até o fim`, uma nota cada, a partir do C1, no máximo 96 (C1 a B8, notas 24 a 119). Com menos fatias o mapa acaba antes (94 fatias vão de C1 a A8): as notas abaixo do C1 e acima da última fatia não têm zona e ficam mudas.
@@ -294,11 +339,11 @@ Para dar camadas de força do toque a esse instrumento (um piano macio e um fort
 - **A prévia e o corte por transiente são calculados neste aparelho, no app.** O áudio precisa estar no aparelho; um áudio muito longo demora um pouco mais para a prévia (`(não confirmado)` o tempo em áudios longos).
 - **Altura e duração andam juntas.** Tocar mais agudo encurta a nota; tocar mais grave a alonga. Acima de cerca de quatro oitavas da nota base (com o áudio na mesma taxa do motor), a velocidade de leitura para de subir, e as notas ainda mais agudas soam todas na mesma altura.
 - **Formatos.** A decodificação depende do navegador (ou do aparelho, no Android); um formato não suportado produz o aviso de erro acima.
-- **`Até o fim` ignora a nota solta.** Nem o fim da nota no piano roll nem soltar a tecla cortam o áudio. Parar o transporte solta tudo com a `Soltura`, mesmo nesse modo.
+- **`Até o fim` ignora a nota solta e a `Sustentação`.** Nem o fim da nota no piano roll nem soltar a tecla cortam o áudio, e a voz não decai com a `Sustentação` abaixo de 100%. Parar o transporte solta tudo com a `Soltura`, mesmo nesse modo.
 - **Áudio fora do aparelho.** Um projeto aberto em outro aparelho pode mostrar `Este áudio não está neste aparelho. Importe o arquivo de novo para ouvi-lo.` até que o áudio chegue ou seja importado de novo. `(não confirmado)`: se ele chega sozinho pela sincronização.
 - **O que é salvo.** O áudio escolhido, a `Nota base`, a `Afinação`, o resto dos knobs e as zonas de cada faixa (áudio, notas, velocidades, nota base, afinação, ganho, pan, modo, grupo, trecho e loop) são guardados no projeto. O nome do preset não é. As zonas entram no desfazer.
 - **O visor pode confundir**: a forma de onda é normalizada pelo pico, então um áudio muito baixo parece cheio; o volume real é o do arquivo.
-- **Não testado em uso.** Este capítulo foi escrito lendo o código; o comportamento ouvido (emendas de loop, transientes em loops reais, arrastes no celular) está marcado `(não confirmado)` onde só foi deduzido.
+- **Não testado em uso.** Este capítulo foi escrito lendo o código; o comportamento ouvido (emendas de loop, transientes em loops reais, arrastes no celular) está marcado `(não confirmado)` onde só foi deduzido. Só têm teste automático (widget e Rust), sem uso real no Chrome ou no Android, `(testado só por testes automáticos)`: a zona nova numa lacuna ou dividindo a existente, os campos digitáveis, `Camadas de velocidade`, o arraste do corpo sem mexer na velocidade, a `Sustentação` ignorada e o empilhamento das vozes `Até o fim`, o grupo de round-robin até 63.
 
 ## Atalhos
 
@@ -307,6 +352,8 @@ Para dar camadas de força do toque a esse instrumento (um piano macio e um fort
 | `I` | Abre e fecha o painel `Instrumento` |
 | `Ctrl+K` | Liga o teclado do computador (`A` a `P` tocam a partir da oitava mostrada no botão da barra; `Z`/`X` mudam a oitava) |
 | Segurar o visor da forma de onda | Toca o áudio na nota base |
-| Botão direito no knob `Nota base` | Digitar o valor (aceita `C4`, `F#3`) |
+| Botão direito no knob `Nota base` (cartão `ÁUDIO`) | Digitar o valor (aceita `C4`, `F#3`) |
 | Tocar ou segurar uma tecla embaixo do mapa | Ouve a nota, com 80% de força |
-| Arrastar borda ou corpo de um bloco do mapa | Muda a faixa de notas ou de velocidade da zona; move a zona |
+| Enter num campo de nota ou de velocidade do editor da zona | Confirma o valor digitado (sair do campo também confirma) |
+| Arrastar borda de um bloco do mapa | Muda a faixa de notas (bordas esquerda e direita) ou de velocidade (bordas de cima e de baixo) da zona |
+| Arrastar o corpo de um bloco do mapa | Move a zona só na horizontal (notas e `Nota base`); a velocidade não muda |

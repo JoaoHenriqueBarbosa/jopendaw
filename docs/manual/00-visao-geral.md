@@ -85,7 +85,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 
 | Controle | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
-| `Importar áudio (Ctrl+I)` (rótulo `Importar` quando há largura) | Abre o seletor de arquivos de áudio | `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff` | Desligado gravando ou com trabalho em andamento |
+| `Importar áudio ou MIDI (Ctrl+I)` (rótulo `Importar` quando há largura) | Abre o seletor de arquivos de áudio ou MIDI | áudio: `wav`, `mp3`, `ogg`, `oga`, `flac`, `m4a`, `aac`, `opus`, `webm`, `aif`, `aiff`; MIDI: `mid`, `midi` | Desligado gravando ou com trabalho em andamento |
 | `Exportar a música (e as faixas separadas) em WAV` (rótulo `Exportar`) | Abre a janela de exportação ([capítulo 08](08-exportacao.md)) | | Tooltip vira `Pare a gravação para exportar` gravando |
 | `Configurações: entrada de áudio, latência e contagem` | Abre `Configurações` | | [Capítulo 09](09-configuracoes-atalhos-android.md) |
 | `Atalhos do teclado (?)` | Abre `Atalhos do teclado` | | Também a tecla `?` |
@@ -94,7 +94,7 @@ Faixa fina no topo: seta de voltar, o nome do projeto e, embaixo do nome, `120 B
 
 O rótulo `Importar` / `Exportar` só aparece por extenso quando a barra tem 1540 px ou mais e o layout é o de computador; abaixo disso ficam só os ícones.
 
-Nesta tabela os tooltips aparecem com `Ctrl`; no Mac e no iOS o app troca `Ctrl` por `⌘` nos tooltips de `Desfazer`, `Refazer`, `Duplicar`, `Importar áudio` e do teclado do computador (por exemplo `Desfazer (⌘+Z)`), e no atalho do item `Duplicar` do menu do clipe.
+Nesta tabela os tooltips aparecem com `Ctrl`; no Mac e no iOS o app troca `Ctrl` por `⌘` nos tooltips de `Desfazer`, `Refazer`, `Duplicar`, `Importar áudio ou MIDI` e do teclado do computador (por exemplo `Desfazer (⌘+Z)`), e no atalho do item `Duplicar` do menu do clipe.
 
 ### Linha do tempo (o arranjo)
 
@@ -234,7 +234,7 @@ O layout troca em **800 px de largura** (`kDesktopBreakpoint`). Celular deitado 
 ## Passo a passo
 
 1. **Primeira música pronta em um minuto.** Entre, toque em `Novo projeto`, dê um nome, deixe `Batida eletrônica` marcado e toque em `Criar`. Espere o estúdio abrir e aperte a barra de espaço (ou o botão de tocar). Ver o que o modelo cria: [capítulo 01](01-projetos-modelos-conta.md).
-2. **Trazer um áudio.** No estúdio, aperte `Importar áudio (Ctrl+I)`, escolha um arquivo e ele cai numa faixa a partir do cursor.
+2. **Trazer um áudio ou um MIDI.** No estúdio, aperte `Importar áudio ou MIDI (Ctrl+I)`, escolha um arquivo: o áudio cai numa faixa a partir do cursor e um `.mid` vira faixas de instrumento com clipes de notas.
 3. **Abrir um painel.** Tecle `X`, `E`, `I` ou `F` (ou toque nos botões do grupo de painéis) para abrir mixer, editor, instrumento ou efeitos; `Esc` fecha.
 4. **Ver todas as teclas.** Tecle `?`: a janela `Atalhos do teclado` lista tudo ([capítulo 09](09-configuracoes-atalhos-android.md)).
 5. **Levar para outro aparelho.** Entre com a mesma conta lá e abra o projeto; espere o ícone de nuvem ficar `Sincronizado` ([capítulo 01b](01b-nuvem-e-sincronizacao.md)).
