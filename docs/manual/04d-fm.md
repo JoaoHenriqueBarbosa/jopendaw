@@ -270,7 +270,7 @@ Os números de algoritmo abaixo são os do painel (`Algoritmo 1` a `8`).
 ## Limites e pegadinhas
 
 - **Sem forma de onda escolhível**: todo operador é uma senoide. Não existe filtro, ruído nem uníssono no FM.
-- **Saída mono**: o instrumento envia a mesma voz para os dois lados. Use Chorus, Reverb ou o Utilitário para abrir o estéreo.
+- **Saída mono**: o instrumento envia a mesma voz para os dois lados. Para abrir o estéreo use Chorus, Reverb ou Delay em ping-pong; a `Largura` do Utilitário não ajuda aqui, porque ela age na diferença entre os lados (S), que é zero quando os dois lados são iguais.
 - **O `Nível` muda de significado** conforme o papel do operador no algoritmo. Ao trocar de algoritmo, um operador que virou modulador pode soar de repente muito brilhante.
 - **Sustentação 0% é "pluck"**: se todos os portadores têm `Sustentação` 0%, a nota decai até o silêncio mesmo com a tecla presa, e a voz nem é calculada depois disso. Para notas longas suba a `Sustentação` de pelo menos um portador.
 - **Notas agudas escurecem** (o índice é limitado para não gerar aliasing) e operadores com frequência acima de 40% da taxa de amostragem somem. Não é defeito: é o anti-aliasing do motor.

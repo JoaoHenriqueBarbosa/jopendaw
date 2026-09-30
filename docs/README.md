@@ -37,7 +37,7 @@ Comece por aqui, na ordem:
 
 ### Guias de combinações
 
-Receitas que juntam vários recursos, com valores concretos (`guias/`):
+Receitas que juntam vários recursos, com valores concretos (`guias/`). Para achar o guia certo, ou para saber o que combina com o quê e o que evitar juntos, comece pelo [mapa de combinações](guias/README.md): objetivos por guia, matrizes recurso × recurso, combinações que atrapalham e receitas de uma linha.
 
 | Guia | Resultado |
 |---|---|
