@@ -779,17 +779,27 @@ class _Ctx {
 
   ParamSpec spec(int id) => t.kind.params.firstWhere((p) => p.id == id);
 
-  Widget knob(ParamSpec p, {bool dimmed = false, String Function(double)? format, double? size}) => Knob(
-    spec: p,
-    value: t.param(p.id),
-    size: size ?? knobSize,
-    color: color,
-    dimmed: dimmed,
-    format: format ?? (v) => _formatValue(p, v),
-    optionIcon: p.curve == Curve.choice ? (i, col) => _optionGlyph(p.options[i], col) : null,
-    onChangeStart: (_) => c.checkpoint(),
-    onChanged: (v) => c.setParam(ti, p.id, v, undoable: p.curve == Curve.choice),
-  );
+  Widget knob(ParamSpec p, {bool dimmed = false, String Function(double)? format, double? size}) {
+    Knob build(double value, Color color) => Knob(
+      spec: p,
+      value: value,
+      size: size ?? knobSize,
+      color: color,
+      dimmed: dimmed,
+      format: format ?? (v) => _formatValue(p, v),
+      optionIcon: p.curve == Curve.choice ? (i, col) => _optionGlyph(p.options[i], col) : null,
+      onChangeStart: (_) => c.checkpoint(),
+      onChanged: (v) => c.setParam(ti, p.id, v, undoable: p.curve == Curve.choice),
+    );
+    final target = AutoTarget(AutoKind.instrument, param: p.id);
+    if (!c.automatedTarget(ti, target)) return build(t.param(p.id), color);
+    // com automação e tocando, o knob segue a curva (mexer muda o valor fixo, que volta a valer
+    // quando para)
+    return ValueListenableBuilder<double>(
+      valueListenable: c.beat,
+      builder: (_, _, _) => build(c.liveTargetValue(ti, target, t.param(p.id)), c.playing.value ? automationColor : color),
+    );
+  }
 }
 
 // ------------------------------------------------------------------------ cartões

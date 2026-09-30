@@ -21,6 +21,7 @@ import 'effects.dart';
 import 'export_options.dart';
 import 'instruments.dart';
 import 'model.dart';
+import 'templates.dart';
 import 'wav.dart';
 
 /// Resumo de um áudio para desenhar a onda: mínimo e máximo a cada [bucket] quadros.
@@ -494,7 +495,7 @@ class DawController extends ChangeNotifier {
       engineRate = await _engine.start();
       _engine.onState = _onEngineState;
       final saved = await _store.get(_docKey);
-      doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : _fresh();
+      doc = saved is String ? DawDoc.fromJson(jsonDecode(saved)) : await _fromTemplate();
       // o andamento e a fórmula de compasso moram no servidor; o local segue
       doc.bpm = project.bpm.toDouble();
       doc.beatsPerBar = project.beatsPerBar;
@@ -554,6 +555,15 @@ class DawController extends ChangeNotifier {
       scrollBeat = math.max(0, s.beat - visible * 0.05);
       notifyListeners();
     }
+  }
+
+  /// Primeira abertura: o modelo escolhido ao criar o projeto (guardado no aparelho), ou o vazio.
+  Future<DawDoc> _fromTemplate() async {
+    final key = 'template:${project.id}';
+    final chosen = await _store.get(key);
+    if (chosen is! String) return _fresh();
+    await _store.delete(key);
+    return ProjectTemplate.parse(chosen).build(bpm: project.bpm.toDouble(), beatsPerBar: project.beatsPerBar);
   }
 
   DawDoc _fresh() => DawDoc(
@@ -913,29 +923,46 @@ class DawController extends ChangeNotifier {
   }
 
   /// A faixa (ou o master, −1) tem automação com pontos para volume/pan.
-  bool automated(int track, AutoKind kind) {
-    if (track >= doc.tracks.length) return false;
-    final lanes = track < 0 ? doc.masterLanes : doc.tracks[track].lanes;
-    return lanes.any((l) => l.target.kind == kind && l.points.isNotEmpty);
-  }
+  bool automated(int track, AutoKind kind) => automatedTarget(track, AutoTarget(kind));
 
-  /// O volume ou pan que a faixa tem agora: tocando e com automação, o valor da curva no cursor
-  /// (a mesma conta do motor); parado, o valor fixo, como no motor. Para o fader e o pan
+  /// O volume ou pan que a faixa tem agora (ver [liveTargetValue]). Para o fader e o pan
   /// acompanharem a automação.
   double liveValue(int track, AutoKind kind) {
-    final master = track < 0;
-    if (!master && track >= doc.tracks.length) return 0;
-    final t = master ? null : doc.tracks[track];
+    if (track >= doc.tracks.length) return 0;
+    final t = track < 0 ? null : doc.tracks[track];
     final fixed = kind == AutoKind.pan ? (t?.pan ?? doc.masterPan) : (t?.gain ?? doc.masterGain);
-    if (!playing.value) return fixed;
-    final lanes = master ? doc.masterLanes : t!.lanes;
+    return liveTargetValue(track, AutoTarget(kind), fixed);
+  }
+
+  /// Automação com pontos para o alvo. Volume e pan valem pelo tipo; parâmetro de instrumento e
+  /// de efeito, pelo parâmetro (e pelo slot).
+  bool automatedTarget(int track, AutoTarget target) => _laneFor(track, target) != null;
+
+  AutoLane? _laneFor(int track, AutoTarget target) {
+    if (track >= doc.tracks.length) return null;
+    final lanes = track < 0 ? doc.masterLanes : doc.tracks[track].lanes;
     for (final l in lanes) {
-      if (l.target.kind != kind || l.points.isEmpty) continue;
-      final r = _resolve(track, l.target);
-      if (r == null) return fixed;
-      return autoValueAt(_sortedPoints(l.points), beat.value, fixed, warp: _warpOf(r)).clamp(r.min, r.max).toDouble();
+      if (l.points.isEmpty || l.target.kind != target.kind) continue;
+      final same = switch (target.kind) {
+        AutoKind.volume || AutoKind.pan => true,
+        AutoKind.instrument => l.target.param == target.param,
+        AutoKind.effect => l.target.ref == target.ref && l.target.param == target.param,
+        AutoKind.send => l.target.ref == target.ref,
+      };
+      if (same) return l;
     }
-    return fixed;
+    return null;
+  }
+
+  /// O valor que o alvo tem agora: tocando e com automação, o da curva no cursor (a mesma conta
+  /// do motor); parado, [fixed], como no motor. Para os controles acompanharem a automação.
+  double liveTargetValue(int track, AutoTarget target, double fixed) {
+    if (!playing.value) return fixed;
+    final l = _laneFor(track, target);
+    if (l == null) return fixed;
+    final r = _resolve(track, l.target);
+    if (r == null) return fixed;
+    return autoValueAt(_sortedPoints(l.points), beat.value, fixed, warp: _warpOf(r)).clamp(r.min, r.max).toDouble();
   }
 
   /// A escala em que a automação do alvo anda entre pontos (a mesma da raia): curva do fader no

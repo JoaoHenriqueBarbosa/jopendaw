@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/client.dart';
+import '../audio/engine.dart';
+import '../daw/templates.dart';
 import '../models/project.dart';
 import '../widgets/api_state.dart';
 import '../widgets/dialogs.dart';
@@ -32,11 +34,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> with ApiState {
   Future<void> reload() => fetch(_api.projects(), (v) => _projects = v);
 
   Future<void> _create() async {
-    final name = await promptText(context, title: 'Novo projeto', label: 'Nome', action: 'Criar', maxLength: 120);
-    if (name == null || name.isEmpty) return;
+    final choice = await showDialog<(String, ProjectTemplate)>(context: context, builder: (_) => const _NewProjectDialog());
+    if (choice == null) return;
+    final (name, template) = choice;
     Project? created;
     await run(() async => created = await _api.createProject(name), reloadAfter: false);
-    if (created != null && mounted) context.go('/projetos/${created!.id}');
+    final p = created;
+    if (p == null) return;
+    // o documento mora no aparelho: o modelo escolhido vira o documento na primeira abertura
+    if (template != ProjectTemplate.empty) await LocalStore.instance.put('template:${p.id}', template.name);
+    if (mounted) context.go('/projetos/${p.id}');
   }
 
   Future<void> _rename(Project p) async {
@@ -141,6 +148,116 @@ class _ProjectCard extends StatelessWidget {
               Text('${project.bpm} BPM · ${project.meter} · ${(project.sampleRate / 1000).toStringAsFixed(1)} kHz', style: muted),
               const SizedBox(height: 2),
               Text('Mexido ${timeAgo(project.updatedAt)}', style: muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Nome do projeto e o modelo com que ele começa.
+class _NewProjectDialog extends StatefulWidget {
+  const _NewProjectDialog();
+  @override
+  State<_NewProjectDialog> createState() => _NewProjectDialogState();
+}
+
+class _NewProjectDialogState extends State<_NewProjectDialog> {
+  final _name = TextEditingController();
+  var _template = ProjectTemplate.beat;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Dê um nome ao projeto.');
+      return;
+    }
+    Navigator.pop(context, (name, _template));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Novo projeto'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _name,
+                autofocus: true,
+                maxLength: 120,
+                decoration: InputDecoration(labelText: 'Nome', errorText: _error),
+                onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 8),
+              Text('Começar com', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 8),
+              for (final t in ProjectTemplate.values)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _TemplateTile(template: t, selected: t == _template, onTap: () => setState(() => _template = t)),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(onPressed: _submit, child: const Text('Criar')),
+      ],
+    );
+  }
+}
+
+class _TemplateTile extends StatelessWidget {
+  final ProjectTemplate template;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TemplateTile({required this.template, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+    return Material(
+      color: selected ? accent.withValues(alpha: 0.12) : theme.colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: selected ? accent : Colors.transparent),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(template.icon, color: selected ? accent : null),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(template.label, style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(template.description, style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60)),
+                  ],
+                ),
+              ),
+              if (selected) Icon(Icons.check_circle, color: accent, size: 20),
             ],
           ),
         ),

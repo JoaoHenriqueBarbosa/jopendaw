@@ -368,17 +368,25 @@ class _Fx {
       );
     }
     final width = p.curve == Curve.choice ? choiceCellWidth(knob, options: p.options, style: base.merge(_choiceText)) : knobCellWidth(knob);
+    Knob build(double value, Color color) => Knob(
+      spec: p,
+      value: value,
+      size: knob,
+      color: color,
+      dimmed: dim,
+      onChangeStart: (_) => begin(),
+      onChanged: (value) => set(p.id, value, undoable: p.curve == Curve.choice),
+    );
+    final target = AutoTarget(AutoKind.effect, ref: slot.id, param: p.id);
     return _Cell(
       width,
-      Knob(
-        spec: p,
-        value: v(p.id),
-        size: knob,
-        color: color,
-        dimmed: dim,
-        onChangeStart: (_) => begin(),
-        onChanged: (value) => set(p.id, value, undoable: p.curve == Curve.choice),
-      ),
+      // com automação e tocando, o knob segue a curva, em laranja
+      c.automatedTarget(track, target)
+          ? ValueListenableBuilder<double>(
+              valueListenable: c.beat,
+              builder: (_, _, _) => build(c.liveTargetValue(track, target, v(p.id)), c.playing.value ? automationColor : color),
+            )
+          : build(v(p.id), color),
     );
   }
 
