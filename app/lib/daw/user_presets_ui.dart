@@ -42,6 +42,16 @@ class ImportUserPreset extends UserPresetChoice {
   const ImportUserPreset();
 }
 
+/// "Restaurar presets do backup…": tenta recuperar os presets da cópia do arquivo ilegível.
+class RestoreUserPresets extends UserPresetChoice {
+  const RestoreUserPresets();
+}
+
+/// Dispensar o aviso de carga (informativo) do topo do menu.
+class DismissUserPresetNotice extends UserPresetChoice {
+  const DismissUserPresetNotice();
+}
+
 /// Octet-stream de propósito (como o `.jopendaw`): com um tipo específico o seletor do Android pode
 /// acrescentar uma extensão.
 const userPresetMime = 'application/octet-stream';
@@ -58,13 +68,18 @@ Future<(String, Uint8List)?> pickUserPresetFile() async {
 /// Terminam num divisor, que já separa dos de fábrica. Os valores são [UserPresetChoice].
 /// [checkWidth] é a largura da coluna do visto, para alinhar com os itens de fábrica.
 ///
-/// [problem] (`UserPresets.problem`): aviso inline, em vermelho, quando os presets não estão sendo guardados neste aparelho.
+/// [problem] (`UserPresets.problem`): aviso inline, em vermelho, quando os presets NÃO estão sendo
+/// guardados neste aparelho (falha de gravação). [notice] (`UserPresets.infoNotice`): aviso de
+/// carga, só informativo (o arquivo ilegível foi guardado à parte e tudo grava normalmente); toque
+/// nele para dispensar. [hasBackup] (`UserPresets.hasBackup`): oferece "Restaurar presets do backup…".
 List<PopupMenuEntry<Object>> userPresetEntries({
   required List<UserPreset> presets,
   UserPreset? current,
   required Color color,
   double checkWidth = 24,
   String? problem,
+  String? notice,
+  bool hasBackup = false,
 }) {
   return [
     if (problem != null)
@@ -73,6 +88,21 @@ List<PopupMenuEntry<Object>> userPresetEntries({
         enabled: false,
         height: 44,
         child: Text(problem, style: const TextStyle(fontSize: 12, color: Palette.danger)),
+      ),
+    if (notice != null)
+      PopupMenuItem<Object>(
+        key: const ValueKey('user-preset-notice'),
+        value: const DismissUserPresetNotice(),
+        height: 56,
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, size: 16, color: Colors.white54),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('$notice (toque para dispensar)', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+            ),
+          ],
+        ),
       ),
     PopupMenuItem<Object>(
       enabled: false,
@@ -139,6 +169,19 @@ List<PopupMenuEntry<Object>> userPresetEntries({
         ],
       ),
     ),
+    if (hasBackup)
+      const PopupMenuItem<Object>(
+        key: ValueKey('user-preset-restore'),
+        value: RestoreUserPresets(),
+        height: 38,
+        child: Row(
+          children: [
+            Icon(Icons.restore, size: 18, color: Colors.white70),
+            SizedBox(width: 12),
+            Text('Restaurar presets do backup…'),
+          ],
+        ),
+      ),
     const PopupMenuDivider(height: 8),
   ];
 }
@@ -161,6 +204,36 @@ Future<void> handleUserPresetChoice(
   switch (choice) {
     case ApplyUserPreset():
       return;
+    case DismissUserPresetNotice():
+      store.dismissLoadNotice();
+    case RestoreUserPresets():
+      final ok = await confirmPresetDialog(
+        context,
+        title: 'Restaurar do backup?',
+        text:
+            'Na abertura, o arquivo dos seus presets estava ilegível e uma cópia dele foi guardada. Vou tentar recuperar os presets dessa cópia e somá-los '
+            'aos que você tem agora (os que têm o mesmo nome no mesmo tipo ficam como estão). A cópia continua guardada.',
+        confirm: 'Restaurar',
+      );
+      if (!ok || !context.mounted) return;
+      try {
+        final r = await store.restoreFromBackup();
+        final skipped = r.skipped == 0
+            ? ''
+            : ' ${r.skipped} já existia${r.skipped == 1 ? '' : 'm'} (mesmo nome) e ficou${r.skipped == 1 ? '' : 'ram'} como estava${r.skipped == 1 ? '' : 'm'}.';
+        if (context.mounted) {
+          await showPresetMessage(
+            context,
+            r.restored == 0 ? 'Nada novo para restaurar' : 'Presets restaurados',
+            r.restored == 0
+                ? 'Todos os presets da cópia já estão na sua lista.$skipped'
+                : '${r.restored} preset${r.restored == 1 ? '' : 's'} restaurado${r.restored == 1 ? '' : 's'}.$skipped',
+          );
+        }
+      } on PresetFormatException catch (e) {
+        if (context.mounted) await showPresetMessage(context, 'Não foi possível restaurar', e.message);
+      }
+      if (context.mounted) await _warnIfNotStored(context, store);
     case SaveUserPreset():
       final name = await askPresetName(context, title: 'Salvar como preset', confirm: 'Salvar');
       if (name == null || !context.mounted) return;
@@ -178,6 +251,7 @@ Future<void> handleUserPresetChoice(
         }
       } on PresetFormatException catch (e) {
         if (context.mounted) await showPresetMessage(context, 'Não foi possível salvar', e.message);
+        return; // nada foi para o guardado: não há o que avisar sobre gravação
       }
       if (context.mounted) await _warnIfNotStored(context, store);
     case ImportUserPreset():
@@ -235,6 +309,7 @@ Future<void> handleUserPresetChoice(
             }
           } on PresetFormatException catch (e) {
             if (context.mounted) await showPresetMessage(context, 'Não foi possível renomear', e.message);
+            return;
           }
           if (context.mounted) await _warnIfNotStored(context, store);
         case _MoreAction.delete:
@@ -261,7 +336,8 @@ Future<void> handleUserPresetChoice(
   }
 }
 
-/// Espera a gravação local e, se ela falhou, avisa que o preset só vale até fechar o app (o menu mostra o mesmo aviso).
+/// Espera a gravação local e, se ela falhou (ou o guardado é só leitura), avisa que o preset só vale
+/// até fechar o app (o menu mostra o mesmo aviso). Um aviso de carga informativo não entra aqui.
 Future<void> _warnIfNotStored(BuildContext context, UserPresets store) async {
   await store.flush();
   final problem = store.problem;

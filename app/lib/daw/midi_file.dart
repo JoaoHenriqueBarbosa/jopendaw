@@ -169,7 +169,8 @@ List<TempoPoint> simplifyTempo(List<MidiTempoPoint> input, {int maxPoints = midi
 bool midiTempoDiffers(MidiFileData d, DawDoc doc) {
   final t = importedTempo(d);
   if (t != null) {
-    if (t.bpm.round() != doc.bpm.round() || t.points.length != doc.tempoMap.length) return true;
+    // a fração do andamento é preservada: 97,5 num projeto em 98 difere (tolerância de 0,05 BPM)
+    if ((t.bpm - doc.bpm).abs() > 0.05 || t.points.length != doc.tempoMap.length) return true;
     for (var i = 0; i < t.points.length; i++) {
       if (t.points[i] != doc.tempoMap[i]) return true;
     }

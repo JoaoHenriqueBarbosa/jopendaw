@@ -32,7 +32,7 @@ const int maxMeterChanges = 1024;
 
 /// Mensagens de limite: quem chama põe no aviso da tela em vez de descartar em silêncio.
 const String tempoPointsFullMessage = 'O mapa de andamento chegou ao limite de $maxTempoPoints pontos.';
-const String meterChangesFullMessage = 'O mapa de compassos chegou ao limite de $maxMeterChanges mudanças.';
+const String meterChangesFullMessage = 'O mapa de compassos chegou ao limite: o compasso inicial mais ${maxMeterChanges - 1} mudanças.';
 
 /// Um ponto do mapa de andamento.
 class TempoPoint {

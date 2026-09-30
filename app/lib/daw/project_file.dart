@@ -419,6 +419,8 @@ void remapDocIds(DawDoc doc) {
         if (trackIds.containsKey(s.target)) Send(target: trackIds[s.target]!, level: s.level, pre: s.pre),
     ];
     t.output = t.output == null ? null : trackIds[t.output];
+    // a pasta também vai pelo id: sem reapontar, a filha ficaria órfã (e sem a pasta a que pertence)
+    t.groupId = t.groupId == null ? null : trackIds[t.groupId];
     t.lanes = lanes(t.lanes);
   }
   doc.masterLanes = lanes(doc.masterLanes);

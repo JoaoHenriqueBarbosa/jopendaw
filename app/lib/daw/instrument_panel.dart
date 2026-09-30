@@ -288,7 +288,16 @@ class _InstrumentPanelState extends State<InstrumentPanel> {
     }
 
     // "Meus presets" e salvar/importar no topo, acima dos de fábrica
-    final entries = <PopupMenuEntry<Object>>[...userPresetEntries(presets: userList, current: userCurrent, color: x.color, problem: _userPresets.problem)];
+    final entries = <PopupMenuEntry<Object>>[
+      ...userPresetEntries(
+        presets: userList,
+        current: userCurrent,
+        color: x.color,
+        problem: _userPresets.problem,
+        notice: _userPresets.infoNotice,
+        hasBackup: _userPresets.hasBackup,
+      ),
+    ];
     String? section;
     for (final p in list) {
       if (p.category != section) {

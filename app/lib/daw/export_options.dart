@@ -16,6 +16,14 @@ enum ExportFormat {
   final int bits;
   const ExportFormat(this.label, this.bits);
 
+  /// O nome curto, para frases ("A mixagem foi salva (MP3)"): o [label] traz um complemento entre
+  /// parênteses que, dentro de outros parênteses, ficava duplo.
+  String get shortLabel => switch (this) {
+    flac => 'FLAC',
+    mp3 => 'MP3',
+    _ => label,
+  };
+
   /// Passa pelo servidor (FLAC ou MP3).
   bool get compressed => this == flac || this == mp3;
 

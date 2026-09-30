@@ -10,8 +10,9 @@
 ///   "antes" e "depois" para a curva vizinha não se deformar (um trecho curvo cortado ao meio é
 ///   reamostrado, porque a curva de um trecho é medida do começo ao fim dele).
 /// - [AutoRecorder]: acompanha o transporte e os controles. Só grava com o transporte tocando (e
-///   fora da gravação de áudio/MIDI) e só depois de um toque no controle; cada gesto vira um trecho que entra na automação quando o
-///   gesto acaba; o que a passada inteira mudou vai ao histórico como um passo só.
+///   fora da gravação de áudio/MIDI) e só depois de o controle mudar de valor (agarrar sem mexer
+///   não grava nada: não se apaga a curva por um clique); cada gesto vira um trecho que entra na
+///   automação quando o gesto acaba; o que a passada inteira mudou vai ao histórico como um passo só.
 ///
 /// A raia que está sendo gravada sai do motor (o controle vale o que a mão pôs) e o controle mostra
 /// o valor fixo em vez da curva; ao acabar o trecho ela volta, já com o que foi gravado.
@@ -237,7 +238,8 @@ class _Live {
   /// O último valor que o controle teve.
   double last;
 
-  /// O controle está seguro (Toque e Trava).
+  /// O controle está seguro (Toque e Trava). No Toque a volta do loop o põe em falso: o trecho só
+  /// reabre num gesto novo (`touch`), mesmo que o dedo siga se mexendo.
   bool held = false;
 
   /// O trecho em gravação (null: tocou no controle e ainda não mudou nada).
@@ -357,6 +359,9 @@ class AutoRecorder extends ChangeNotifier {
     final fresh = !_live.containsKey(_key(track, target));
     final e = _entryFor(track, target, m);
     if (e == null) return;
+    // o Toque que a volta do loop fechou só reabre com um gesto novo ([touch]): o dedo que segue
+    // se mexendo desde antes da volta não regrava
+    if (!fresh && e.mode == AutoMode.touch && !e.held) return;
     if (fresh) {
       // sem `touch` antes: o ponto de desfazer que o gesto acabou de guardar é o de antes de tudo
       final popped = c.autoTakeCheckpoint();
@@ -427,7 +432,10 @@ class AutoRecorder extends ChangeNotifier {
       final goOn = e.mode == AutoMode.write || (e.mode == AutoMode.latch && e.held);
       e.seg = goOn ? (_Seg()..add(b, e.last)) : null;
       _apply(e, seg, wrapped: true);
-      if (!goOn && e.mode == AutoMode.touch) _restoreFixed(e);
+      if (!goOn && e.mode == AutoMode.touch) {
+        _restoreFixed(e);
+        e.held = false; // até agarrar o controle de novo ([touch]) ou soltá-lo ([release])
+      }
       if (!goOn) notifyListeners();
     }
   }

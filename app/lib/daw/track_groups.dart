@@ -248,23 +248,24 @@ extension DawGroupsController on DawController {
     return (folder: folder, error: null);
   }
 
-  /// Desfaz a pasta: as filhas ficam como faixas comuns (a saída que ia para a pasta volta ao
-  /// master) e o barramento é apagado se não tem efeitos, automação nem rota de outras faixas; se
-  /// tem, ele fica como barramento comum (nada do que o usuário montou nele se perde).
+  /// Desfaz a pasta: as filhas ficam como faixas comuns e o barramento é apagado se não tem
+  /// efeitos, automação, envios nem rota de outras faixas.
+  ///
+  /// Se o barramento faz algo com o sinal das filhas (efeitos, automação ou envios dele), ele fica
+  /// como barramento comum e as filhas continuam saindo nele: mandá-las para o Master deixaria o
+  /// efeito da pasta sem entrada e mudaria o som. Sem isso (o barramento só recebia de outras
+  /// faixas, ou estava vazio), a saída que ia para a pasta volta ao master.
   UngroupResult ungroup(String folderId) {
     final fi = doc.tracks.indexWhere((t) => t.isGroup && t.id == folderId);
     if (fi < 0) return UngroupResult.none;
     final folder = doc.tracks[fi];
-    final kept =
-        folder.effects.isNotEmpty ||
-        folder.lanes.any((l) => l.points.isNotEmpty) ||
-        folder.sends.isNotEmpty ||
-        doc.tracks.any((t) => t.groupId != folderId && (t.output == folderId || t.sends.any((s) => s.target == folderId)));
+    final processes = ungroupKeepsRoutes(folder);
+    final kept = processes || doc.tracks.any((t) => t.groupId != folderId && (t.output == folderId || t.sends.any((s) => s.target == folderId)));
     edit((d) {
       for (final t in d.tracks) {
         if (t.groupId != folderId) continue;
         t.groupId = null;
-        if (t.output == folderId) t.output = null;
+        if (t.output == folderId && !processes) t.output = null;
       }
       if (kept) {
         folder
@@ -281,6 +282,59 @@ extension DawGroupsController on DawController {
     return kept ? UngroupResult.keptAsBus : UngroupResult.removed;
   }
 
+  /// O barramento da pasta trata o sinal das filhas (efeitos, automação ou envios): ao desagrupar,
+  /// as filhas seguem apontando para ele.
+  bool ungroupKeepsRoutes(DawTrack folder) => folder.effects.isNotEmpty || folder.lanes.any((l) => l.points.isNotEmpty) || folder.sends.isNotEmpty;
+
+  /// A faixa [t] sai da pasta [folder] dentro de uma edição em curso (sem checkpoint): desce para
+  /// logo depois do bloco, para o bloco seguir contíguo. Não mexe na saída.
+  void takeOutOfFolder(DawTrack t, DawTrack folder) {
+    final order = [...doc.tracks]..remove(t);
+    var end = order.indexOf(folder) + 1;
+    while (end < order.length && order[end].groupId == folder.id) {
+      end++;
+    }
+    order.insert(end, t);
+    t.groupId = null;
+    setTrackOrder(order);
+  }
+
+  /// A pasta de que a faixa [track] sairia se a saída dela passasse a ser [busId] (null: master):
+  /// a pasta dela, quando o destino é outro. Null quando a faixa não sai de nenhuma.
+  DawTrack? folderLeftByOutput(int track, String? busId) {
+    if (track < 0 || track >= doc.tracks.length) return null;
+    final f = doc.folderOf(track);
+    if (f < 0 || doc.tracks[f].id == busId) return null;
+    return doc.tracks[f];
+  }
+
+  String _nameOf(String? id) => doc.tracks.where((t) => t.id == id).firstOrNull?.name ?? '';
+
+  /// O que muda na saída da faixa [trackId] ao tirá-la da pasta (vazio: nada; a saída dela não ia
+  /// para a pasta).
+  List<String> leaveGroupNotes(String trackId) {
+    final i = doc.tracks.indexWhere((t) => t.id == trackId);
+    if (i < 0) return const [];
+    final f = doc.folderOf(i);
+    final t = doc.tracks[i];
+    if (f < 0 || t.output != doc.tracks[f].id) return const [];
+    return ['a saída de "${t.name}" para a pasta "${doc.tracks[f].name}" (volta ao master)'];
+  }
+
+  /// O que muda na saída da faixa [trackId] ao movê-la para a pasta [folderId].
+  List<String> joinGroupNotes(String trackId, String folderId) {
+    final t = doc.tracks.where((x) => x.id == trackId).firstOrNull;
+    if (t == null || t.output == null || t.output == folderId) return const [];
+    final fname = _nameOf(folderId);
+    return ['a saída de "${t.name}" para "${_nameOf(t.output)}" (passa a ir para a pasta "$fname")'];
+  }
+
+  /// O que muda nas saídas das faixas [ids] ao agrupá-las (as que já saíam para outro lugar).
+  List<String> groupNotes(Iterable<String> ids) => [
+    for (final t in doc.tracks)
+      if (ids.contains(t.id) && t.output != null) 'a saída de "${t.name}" para "${_nameOf(t.output)}" (passa a ir para a pasta nova)',
+  ];
+
   /// Tira a faixa da pasta: ela desce para logo depois do bloco e a saída volta ao master (se era
   /// a pasta).
   bool leaveGroup(String trackId) {
@@ -289,15 +343,8 @@ extension DawGroupsController on DawController {
     final t = doc.tracks[i];
     final folder = doc.tracks[doc.folderOf(i)];
     edit((d) {
-      final order = [...d.tracks]..remove(t);
-      var end = order.indexOf(folder) + 1;
-      while (end < order.length && order[end].groupId == folder.id) {
-        end++;
-      }
-      order.insert(end, t);
-      t.groupId = null;
+      takeOutOfFolder(t, folder);
       if (t.output == folder.id) t.output = null;
-      setTrackOrder(order);
     });
     return true;
   }

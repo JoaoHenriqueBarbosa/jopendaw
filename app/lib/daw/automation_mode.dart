@@ -13,15 +13,15 @@ enum AutoMode {
   /// Só toca a automação (padrão): mexer no controle muda o valor fixo, como sempre foi.
   read('Ler', 'L', 'Só toca a automação; mexer no controle não grava.'),
 
-  /// Depois do primeiro toque no controle grava o tempo todo enquanto toca, sobrescrevendo (na barra ou no modo
-  /// próprio da raia: sem mexer no controle não se apaga a curva antiga).
-  write('Escrever', 'E', 'Depois do primeiro toque no controle, grava até parar, sobrescrevendo o que já havia.'),
+  /// Depois da primeira mudança de valor no controle grava o tempo todo enquanto toca, sobrescrevendo (na barra
+  /// ou no modo próprio da raia: sem mexer no controle não se apaga a curva antiga).
+  write('Escrever', 'E', 'Começa ao mexer no controle (só agarrar não basta): grava até parar, sobrescrevendo o que já havia.'),
 
   /// Grava só enquanto o controle está seguro; ao soltar, volta ao valor automatizado com uma rampa curta.
-  touch('Toque', 'T', 'Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.'),
+  touch('Toque', 'T', 'Começa ao mexer no controle (só agarrar não basta) e grava enquanto você o segura; ao soltar, volta ao valor automatizado.'),
 
   /// Grava enquanto o controle está seguro e mantém o último valor até parar.
-  latch('Trava', 'V', 'Grava enquanto você segura o controle e mantém o último valor até parar.');
+  latch('Trava', 'V', 'Começa ao mexer no controle (só agarrar não basta) e grava enquanto você o segura; mantém o último valor até parar.');
 
   final String label, short, hint;
   const AutoMode(this.label, this.short, this.hint);

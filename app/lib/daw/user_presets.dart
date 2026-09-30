@@ -241,13 +241,31 @@ class UserPresets extends ChangeNotifier {
   String? saveError;
 
   /// Aviso do carregamento: arquivo ilegível (guardado à parte) ou de versão mais nova (só leitura).
+  /// Só informa o que houve na abertura; se os presets estão sendo guardados agora é [problem].
   String? loadNotice;
 
   /// O arquivo local é de uma versão mais nova (ou não deu para lê-lo): nada é gravado por cima dele.
   bool _readOnly = false;
 
-  /// O que a tela deve avisar agora (falha de gravação ou aviso do carregamento), ou null.
-  String? get problem => saveError ?? loadNotice;
+  /// Existe uma cópia do arquivo que não deu para ler (`userpresets.bak`): dá para tentar
+  /// recuperar os presets dela ([restoreFromBackup]).
+  bool hasBackup = false;
+
+  /// O que a tela deve mostrar como PROBLEMA agora: os presets NÃO estão sendo guardados (a última
+  /// gravação falhou, ou o arquivo local é só leitura). Um arquivo ilegível que foi guardado à parte
+  /// com sucesso não é problema: a gravação funciona; ele é só um aviso ([infoNotice]).
+  String? get problem => saveError ?? (_readOnly ? loadNotice : null);
+
+  /// O aviso de carga que é só informação (dispensável): o arquivo ilegível foi guardado à parte e
+  /// os presets estão sendo gravados normalmente. Null quando não há, ou quando é [problem].
+  String? get infoNotice => _readOnly ? null : loadNotice;
+
+  /// Dispensa o aviso de carga informativo (não mexe em nada guardado).
+  void dismissLoadNotice() {
+    if (_readOnly || loadNotice == null) return;
+    loadNotice = null;
+    notifyListeners();
+  }
 
   /// O preset pelo id, ou null (apagado).
   UserPreset? byId(String id) {
@@ -295,7 +313,109 @@ class UserPresets extends ChangeNotifier {
       final have = {for (final p in _items) p.id};
       _items.insertAll(0, r.presets.where((p) => !have.contains(p.id) && !exists(p.family, p.kind, p.name)));
     }
+    try {
+      hasBackup = (await _storage.readBackup()) != null;
+    } catch (_) {
+      hasBackup = false;
+    }
     notifyListeners();
+  }
+
+  /// Tenta recuperar os presets da cópia do arquivo que não deu para ler (`userpresets.bak`) e os
+  /// soma aos atuais: os que já existem (mesmo nome no tipo) ou que passariam do limite ficam de
+  /// fora. Lê o que der mesmo de um arquivo cortado ao meio (preset por preset). Lança
+  /// [PresetFormatException] se não há cópia, se ela não rende nenhum preset ou se o guardado atual
+  /// é só leitura (o que se restaurasse não seria gravado). A cópia continua lá.
+  Future<({int restored, int skipped})> restoreFromBackup() async {
+    await load();
+    if (_readOnly) throw PresetFormatException('Os presets deste aparelho estão só para leitura agora; restaurar não seria gravado.');
+    String? raw;
+    try {
+      raw = await _storage.readBackup();
+    } catch (_) {}
+    if (raw == null || raw.trim().isEmpty) throw PresetFormatException('Não há cópia de presets neste aparelho.');
+    final found = salvage(raw);
+    if (found.isEmpty) throw PresetFormatException('Não consegui recuperar nenhum preset da cópia: o arquivo está danificado demais.');
+    var restored = 0, skipped = 0;
+    for (final p in found) {
+      if (exists(p.family, p.kind, p.name) || of(p.family, p.kind).length >= maxUserPresetsPerKind) {
+        skipped++;
+        continue;
+      }
+      _items.add(byId(p.id) == null ? p : UserPreset(id: _newId(), family: p.family, kind: p.kind, name: p.name, values: p.values, created: p.created));
+      restored++;
+    }
+    if (restored > 0) {
+      loadNotice = null;
+      _changed();
+    }
+    return (restored: restored, skipped: skipped);
+  }
+
+  /// Os presets que dá para ler de [raw], mesmo com o JSON quebrado: primeiro pelo caminho normal;
+  /// se falhar, varre o texto atrás de cada objeto de preset completo (um arquivo cortado ao meio
+  /// ainda rende os que vieram inteiros). Entradas inválidas ficam de fora.
+  @visibleForTesting
+  static List<UserPreset> salvage(String raw) {
+    if (raw.length > 8 * 1024 * 1024) return const [];
+    final out = <UserPreset>[];
+    final ids = <String>{};
+    void add(Object? e) {
+      try {
+        final p = _fromMap(e, strict: false)?.$1;
+        if (p != null && ids.add(p.id)) out.add(p);
+      } catch (_) {}
+    }
+
+    try {
+      final j = jsonDecode(raw);
+      if (j is Map && j['presets'] is List) {
+        (j['presets'] as List).forEach(add);
+        return out;
+      }
+    } catch (_) {}
+    var i = 0;
+    while (i < raw.length) {
+      final start = raw.indexOf('{', i);
+      if (start < 0) break;
+      final end = _objectEnd(raw, start);
+      if (end > 0) {
+        Object? o;
+        try {
+          o = jsonDecode(raw.substring(start, end));
+        } catch (_) {}
+        if (o is Map && o['params'] is Map && o['kind'] is String) {
+          add(o);
+          i = end;
+          continue;
+        }
+      }
+      i = start + 1;
+    }
+    return out;
+  }
+
+  /// O índice logo depois da `}` que fecha o objeto aberto em [start], ou −1 se o texto acaba antes.
+  static int _objectEnd(String s, int start) {
+    var depth = 0;
+    var inString = false;
+    for (var i = start; i < s.length; i++) {
+      final c = s.codeUnitAt(i);
+      if (inString) {
+        if (c == 0x5c) {
+          i++;
+        } else if (c == 0x22) {
+          inString = false;
+        }
+      } else if (c == 0x22) {
+        inString = true;
+      } else if (c == 0x7b) {
+        depth++;
+      } else if (c == 0x7d && --depth == 0) {
+        return i + 1;
+      }
+    }
+    return -1;
   }
 
   /// Os presets de um tipo, na ordem em que foram criados.

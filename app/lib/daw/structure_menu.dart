@@ -143,17 +143,40 @@ class DurationLabel extends StatelessWidget {
   }
 }
 
+/// Pergunta antes de uma troca de saída por entrar ou sair de uma pasta, listando [lines]; o texto
+/// é o das pastas (não o do barramento). Vale para "Tirar da pasta", "Mover para a pasta",
+/// "Agrupar" e a saída do mixer. Devolve se o usuário confirmou.
+Future<bool> confirmGroupRoute(BuildContext context, {required String title, required List<String> lines, required String action, String? intro}) =>
+    confirmAction(
+      context,
+      title: title,
+      message:
+          '${intro ?? 'A pasta é um barramento: a faixa que entra ou sai dela troca de saída. Isto muda:'}\n'
+          '${lines.map((b) => '• $b').join('\n')}\n\n${withMod('Desfazer (Ctrl+Z)')} traz de volta.',
+      action: action,
+      destructive: true,
+    );
+
 /// Move a faixa [from] para [to]. Se o movimento desfaria rotas entre barramentos (a ordem das
-/// faixas é a ordem do sinal), pergunta antes, listando o que sai; desfazer traz tudo de volta.
+/// faixas é a ordem do sinal), ou trocaria a saída da faixa por entrar ou sair de uma pasta,
+/// pergunta antes, listando o que muda; desfazer traz tudo de volta. O texto acompanha o motivo:
+/// só o de barramento, só o de pasta ou os dois.
 Future<void> moveTrackAsking(BuildContext context, DawController c, int from, int to) async {
-  final broken = c.routesBrokenByMove(from, to);
-  if (broken.isNotEmpty) {
+  final broken = c.routesBrokenByMove(from, to, groups: false);
+  final folder = c.groupNotesForMove(from, to);
+  if (broken.isNotEmpty || folder.isNotEmpty) {
+    final parts = [
+      if (broken.isNotEmpty)
+        'Barramento só manda sinal para um barramento que vem depois dele na lista. Mover a faixa para lá desfaz:\n'
+            '${broken.map((b) => '• $b').join('\n')}',
+      if (folder.isNotEmpty)
+        '${broken.isEmpty ? 'A pasta é um barramento: a faixa que entra ou sai dela troca de saída. Isto muda' : 'Entrar ou sair de uma pasta também troca a saída. Muda'}:\n'
+            '${folder.map((b) => '• $b').join('\n')}',
+    ];
     final ok = await confirmAction(
       context,
       title: 'Mover a faixa?',
-      message:
-          'Barramento só manda sinal para um barramento que vem depois dele na lista. Mover a faixa para lá desfaz:\n'
-          '${broken.map((b) => '• $b').join('\n')}\n\n${withMod('Desfazer (Ctrl+Z)')} traz de volta.',
+      message: '${parts.join('\n\n')}\n\n${withMod('Desfazer (Ctrl+Z)')} traz de volta.',
       action: 'Mover mesmo assim',
       destructive: true,
     );

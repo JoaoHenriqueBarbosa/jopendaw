@@ -153,12 +153,12 @@ void main() {
       expect(top.fadeIn, 0.0); // automático: volta
     });
 
-    test('comando do menu: aplica nos clipes que já se sobrepõem, em um passo de desfazer', () {
+    test('comando do menu: aplica nas sobreposições do clipe clicado, em um passo de desfazer', () {
       final c = newController();
       // a: 0..2 s; b: 3..5 s (a batida 6); c: 5,5..7,5 s... a/b e b/c se cruzam por 1 s
       final t = c.doc.tracks[0]..clips.addAll([audio('a', 0, 4), audio('b', 6, 4), audio('c', 12, 4)]);
       final before = jsonEncode(c.doc.toJson());
-      expect(c.crossfadeOverlaps('a'), 2);
+      expect(c.crossfadeOverlaps('b'), 2, reason: 'b cruza a e c (o comando vale para o clipe clicado)');
       final a = t.clips[0], b = t.clips[1], cc = t.clips[2];
       expect((a.fadeOut, b.fadeIn, b.fadeOut, cc.fadeIn), (1.0, 1.0, 1.0, 1.0));
       expect(b.fadeOutShape, FadeShape.equalPower);

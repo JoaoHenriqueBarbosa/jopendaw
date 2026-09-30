@@ -240,7 +240,7 @@ void main() {
       expect(f.isGroup, isFalse);
       expect(f.kind, TrackKind.bus);
       expect(f.effects, hasLength(1));
-      expect(track(c, 'a1').output, isNull);
+      expect(track(c, 'a1').output, f.id, reason: 'as filhas seguem no barramento: o efeito da pasta não fica sem entrada');
       expect(c.doc.hasGroups, isFalse);
     });
 

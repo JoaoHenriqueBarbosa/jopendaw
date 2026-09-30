@@ -15,7 +15,7 @@ import 'controller.dart';
 import 'instruments.dart' show TrackKind;
 import 'meter.dart';
 import 'model.dart';
-import 'structure_menu.dart' show moveTrackAsking;
+import 'structure_menu.dart' show confirmGroupRoute, moveTrackAsking;
 import 'timeline.dart' show ToggleChip;
 import 'track_groups.dart';
 
@@ -65,7 +65,11 @@ class _GroupDialogState extends State<_GroupDialog> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    // faixa que já saía para outro barramento passa a sair na pasta: avisa antes de trocar
+    final notes = c.groupNotes(_picked);
+    if (notes.isNotEmpty && !await confirmGroupRoute(context, title: 'Agrupar as faixas?', lines: notes, action: 'Agrupar')) return;
+    if (!mounted) return;
     final r = c.groupTracks(_picked, name: _name.text);
     if (r.error != null) {
       setState(() => _error = r.error);
@@ -165,13 +169,34 @@ Future<void> confirmUngroup(BuildContext context, DawController c, String folder
   final ok = await confirmAction(
     context,
     title: 'Desagrupar "${t.name}"?',
-    message:
-        '${plural(n, 'faixa')} da pasta continuam no projeto e voltam a sair direto no Master. O barramento da pasta some; '
-        'se ele tiver efeitos, automação ou receber de outras faixas, fica como um barramento comum. Dá para desfazer.',
+    message: c.ungroupKeepsRoutes(t)
+        ? '${plural(n, 'faixa')} da pasta continuam no projeto. Como a pasta tem efeitos, automação ou envios, ela fica como um barramento comum e '
+              'as faixas seguem saindo nele (mandá-las ao Master deixaria o efeito sem entrada). Dá para desfazer.'
+        : '${plural(n, 'faixa')} da pasta continuam no projeto e voltam a sair direto no Master. O barramento da pasta some; '
+              'se ele receber de outras faixas, fica como um barramento comum. Dá para desfazer.',
     action: 'Desagrupar',
     destructive: true,
   );
   if (ok) c.ungroup(folderId);
+}
+
+/// "Apagar a pasta (as faixas ficam)": some o barramento da pasta com o que há nele (efeitos,
+/// automação, envios); as faixas dela continuam, soltas, saindo no Master.
+Future<void> confirmDeleteGroup(BuildContext context, DawController c, String folderId) async {
+  final i = c.doc.tracks.indexWhere((t) => t.isGroup && t.id == folderId);
+  if (i < 0) return;
+  final t = c.doc.tracks[i];
+  final n = c.doc.groupSize(i);
+  final ok = await confirmAction(
+    context,
+    title: 'Apagar a pasta "${t.name}"?',
+    message:
+        '${plural(n, 'faixa')} da pasta ficam no projeto, soltas e saindo no Master. O barramento da pasta, com os efeitos, a automação e '
+        'os envios dele, é apagado (e o que outras faixas mandavam para ele). Dá para desfazer.',
+    action: 'Apagar a pasta',
+    destructive: true,
+  );
+  if (ok) c.removeTrack(c.doc.tracks.indexWhere((x) => x.id == folderId));
 }
 
 /// Itens do menu da faixa para pastas (agrupar, tirar da pasta, mover para outra pasta). Vazio para
@@ -207,6 +232,8 @@ Future<void> onGroupMenu(BuildContext context, DawController c, int index, Strin
       }
       if (context.mounted) await showGroupDialog(context, c, preselect: t.id);
     case 'grp:leave':
+      final notes = c.leaveGroupNotes(t.id);
+      if (notes.isNotEmpty && !await confirmGroupRoute(context, title: 'Tirar "${t.name}" da pasta?', lines: notes, action: 'Tirar da pasta')) return;
       c.leaveGroup(t.id);
     default:
       if (value.startsWith('grp:join:')) {
@@ -215,7 +242,14 @@ Future<void> onGroupMenu(BuildContext context, DawController c, int index, Strin
           await _notice(context, 'Não dá para agrupar', why);
           return;
         }
-        c.joinGroup(t.id, value.substring('grp:join:'.length));
+        final folderId = value.substring('grp:join:'.length);
+        final notes = c.joinGroupNotes(t.id, folderId);
+        final fname = c.doc.tracks.where((x) => x.id == folderId).firstOrNull?.name ?? '';
+        if (notes.isNotEmpty &&
+            !await confirmGroupRoute(context, title: 'Mover "${t.name}" para a pasta "$fname"?', lines: notes, action: 'Mover para a pasta')) {
+          return;
+        }
+        c.joinGroup(t.id, folderId);
       }
   }
 }
@@ -443,6 +477,8 @@ class _GroupMenu extends StatelessWidget {
             await moveTrackAsking(context, c, index, index + 1);
           case 'ungroup':
             await confirmUngroup(context, c, t.id);
+          case 'delete':
+            await confirmDeleteGroup(context, c, t.id);
         }
       },
       itemBuilder: (_) {
@@ -457,6 +493,7 @@ class _GroupMenu extends StatelessWidget {
           PopupMenuItem(value: 'up', enabled: index > 0, child: const Text('Mover para cima')),
           PopupMenuItem(value: 'down', enabled: index < c.doc.tracks.length - 1, child: const Text('Mover para baixo')),
           const PopupMenuItem(value: 'ungroup', child: Text('Desagrupar…')),
+          const PopupMenuItem(value: 'delete', child: Text('Apagar a pasta (as faixas ficam)…')),
         ];
       },
     ),

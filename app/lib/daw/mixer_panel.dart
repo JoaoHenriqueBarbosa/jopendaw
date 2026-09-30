@@ -21,6 +21,7 @@ import 'meter.dart';
 import 'midi_learn_ui.dart';
 import 'model.dart';
 import 'timeline.dart' show ToggleChip;
+import 'structure_menu.dart' show confirmGroupRoute;
 import 'track_groups.dart';
 import 'track_groups_ui.dart';
 
@@ -1577,9 +1578,26 @@ class _OutputButton extends StatelessWidget {
   /// Valor do item "Novo barramento" (ids de faixa são só letras e números).
   static const _newBus = '+';
 
-  void _choose(String v) {
+  Future<void> _choose(BuildContext context, String v) async {
+    final target = v == _newBus || v.isEmpty ? null : v;
+    // uma filha de pasta que sai para outro destino deixa a pasta (ela não passaria mais por ela)
+    final left = c.folderLeftByOutput(track, target);
+    if (left != null) {
+      final name = c.doc.tracks[track].name;
+      final to = v == _newBus ? 'um barramento novo' : (target == null ? 'o Master' : '"${c.doc.tracks.firstWhere((t) => t.id == target).name}"');
+      final ok = await confirmGroupRoute(
+        context,
+        title: 'Tirar "$name" da pasta?',
+        intro:
+            'A pasta "${left.name}" só afeta o que sai nela. Com outra saída, "$name" deixa de passar pelo volume e pelos efeitos da pasta, '
+            'então sai da pasta (desce para logo depois dela). Isto muda:',
+        lines: ['a saída de "$name" para a pasta "${left.name}" (passa a ir para $to)'],
+        action: 'Tirar da pasta',
+      );
+      if (!ok || track >= c.doc.tracks.length) return;
+    }
     if (v != _newBus) {
-      c.setOutput(track, v.isEmpty ? null : v);
+      c.setOutput(track, target);
       return;
     }
     // barramento novo como grupo: cria e já liga a saída nele (a faixa pode ter mudado de lugar)
@@ -1603,7 +1621,7 @@ class _OutputButton extends StatelessWidget {
       tooltip: 'Saída: $label',
       padding: EdgeInsets.zero,
       position: PopupMenuPosition.under,
-      onSelected: _choose,
+      onSelected: (v) => unawaited(_choose(context, v)),
       itemBuilder: (_) => [
         _item('', 'Master', icon: Icons.speaker_outlined, checked: current == null),
         for (final b in targets) _item(b.id, b.name, icon: TrackKind.bus.icon, checked: current?.id == b.id, color: trackColorAt(b.color)),

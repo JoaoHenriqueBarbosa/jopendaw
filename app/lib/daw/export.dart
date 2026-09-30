@@ -554,7 +554,7 @@ class _ExportProgressDialogState extends State<ExportProgressDialog> {
         ],
       );
     } else if (_done) {
-      final format = _wavSaved > 0 ? 'WAV' : widget.options.format.label;
+      final format = _wavSaved > 0 ? 'WAV' : widget.options.format.shortLabel;
       final secs = math.max(1, (_elapsed.elapsedMilliseconds / 1000).ceil());
       final warning = _warning;
       final report = widget.options.normalizesLoudness ? widget.c.exportReport : null;

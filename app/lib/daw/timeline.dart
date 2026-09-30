@@ -22,6 +22,7 @@ import '../widgets/theme.dart';
 import 'automation_lane.dart';
 import 'clip_gain_dialog.dart';
 import 'controller.dart';
+import 'fade_length_dialog.dart';
 import 'instruments.dart';
 import 'marker.dart';
 import 'meter.dart';
@@ -2398,15 +2399,28 @@ PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {Stri
   ),
 );
 
-/// Item de menu com marca no valor atual (as curvas de fade).
-PopupMenuItem<String> _checkItem(String value, String label, bool checked) => PopupMenuItem(
+/// Explica a curva do fade no tooltip do item do menu.
+String fadeShapeHint(FadeShape shape) => switch (shape) {
+  FadeShape.linear =>
+    'Suave (x²): a curva de sempre, que os projetos antigos usam. Num crossfade o nível afunda uns 6 dB no meio; '
+        'para manter o nível, use "Potência constante" ou "S".',
+  FadeShape.equalPower => 'Mantém a potência no crossfade: o nível não afunda no meio.',
+  FadeShape.exponential => 'Na saída cai depressa e some suave; na entrada sobe devagar e acelera.',
+  FadeShape.sCurve => 'Suave nas duas pontas e mantém o nível no crossfade.',
+};
+
+/// Item das curvas de fade: marca no valor atual e, no tooltip, o que a curva faz.
+PopupMenuItem<String> _shapeItem(String value, String prefix, FadeShape shape, bool checked) => PopupMenuItem(
   value: value,
-  child: Row(
-    children: [
-      SizedBox(width: 18, child: checked ? const Icon(Icons.check, size: 18) : null),
-      const SizedBox(width: 12),
-      Expanded(child: Text(label)),
-    ],
+  child: Tooltip(
+    message: fadeShapeHint(shape),
+    child: Row(
+      children: [
+        SizedBox(width: 18, child: checked ? const Icon(Icons.check, size: 18) : null),
+        const SizedBox(width: 12),
+        Expanded(child: Text('$prefix: ${shape.label}')),
+      ],
+    ),
   ),
 );
 
@@ -2537,9 +2551,12 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
       const PopupMenuDivider(),
-      for (final shape in FadeShape.values) _checkItem('fin:${shape.index}', 'Fade de entrada: ${shape.label}', widget.clip.fadeInShape == shape),
-      for (final shape in FadeShape.values) _checkItem('fout:${shape.index}', 'Fade de saída: ${shape.label}', widget.clip.fadeOutShape == shape),
-      _menuItem('crossfade', Icons.compare_arrows, 'Crossfade nas sobreposições'),
+      _menuItem('fadein_len', Icons.trending_up, 'Fade de entrada…'),
+      _menuItem('fadeout_len', Icons.trending_down, 'Fade de saída…'),
+      for (final shape in FadeShape.values) _shapeItem('fin:${shape.index}', 'Fade de entrada', shape, widget.clip.fadeInShape == shape),
+      for (final shape in FadeShape.values) _shapeItem('fout:${shape.index}', 'Fade de saída', shape, widget.clip.fadeOutShape == shape),
+      _menuItem('crossfade', Icons.compare_arrows, 'Crossfade neste clipe'),
+      _menuItem('crossfade_all', Icons.compare_arrows, 'Crossfade em toda a faixa'),
       const PopupMenuDivider(),
       _menuItem('to_midi', Icons.piano, 'Converter em notas (MIDI)'),
       _menuItem('delete', Icons.delete_outline, 'Apagar', shortcut: 'Delete'),
@@ -2560,8 +2577,14 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         await showClipGainDialog(context, c, widget.clip.id);
       case 'to_midi':
         await showConvertToMidi(context, c, widget.clip.id);
+      case 'fadein_len':
+        await showFadeLengthDialog(context, c, widget.clip.id, fadeIn: true);
+      case 'fadeout_len':
+        await showFadeLengthDialog(context, c, widget.clip.id, fadeIn: false);
       case 'crossfade':
         c.crossfadeOverlaps(widget.clip.id);
+      case 'crossfade_all':
+        c.crossfadeOverlaps(widget.clip.id, wholeTrack: true);
       case 'duplicate':
         c.duplicateSelected();
       case 'split':

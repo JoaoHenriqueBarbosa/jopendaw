@@ -558,7 +558,15 @@ class _EffectsPanelState extends State<EffectsPanel> {
       },
       itemBuilder: (_) => [
         // "Meus presets" e salvar/importar no topo, acima dos de fábrica
-        ...userPresetEntries(presets: userList, current: userCurrent, color: color, checkWidth: 30, problem: _userPresets.problem),
+        ...userPresetEntries(
+          presets: userList,
+          current: userCurrent,
+          color: color,
+          checkWidth: 30,
+          problem: _userPresets.problem,
+          notice: _userPresets.infoNotice,
+          hasBackup: _userPresets.hasBackup,
+        ),
         if (presets.isNotEmpty) ...[
           PopupMenuItem<Object>(
             enabled: false,

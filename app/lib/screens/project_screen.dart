@@ -241,6 +241,11 @@ class _DawStudioState extends State<DawStudio> {
                   padding: const EdgeInsets.all(8),
                   child: InlineNotice(c.error!, onClose: c.clearError),
                 ),
+              if (c.notice != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: InlineNotice(c.notice!, error: false, onClose: c.clearNotice),
+                ),
               if (_actionError != null)
                 Padding(
                   padding: const EdgeInsets.all(8),

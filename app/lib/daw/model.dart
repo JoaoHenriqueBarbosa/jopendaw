@@ -16,8 +16,10 @@ import 'tempo_map.dart';
 /// Curvas de fade de um clipe de áudio (o código vai ao motor por `clip_fade_shape`). A ordem é a
 /// do motor (`FADE_*` em `engine/src/lib.rs`): tipo novo só entra no fim.
 enum FadeShape {
-  /// O envelope histórico (`x²`): o de todo projeto que nunca escolheu curva.
-  linear('Linear'),
+  /// O envelope histórico (`x²`): o de todo projeto que nunca escolheu curva. O código (0) e a
+  /// curva ficam como sempre foram (senão os projetos antigos mudariam de som); só o rótulo é novo,
+  /// porque "Linear" enganava: é suave (x²) e, num crossfade, afunda uns 6 dB no meio.
+  linear('Suave (padrão)'),
 
   /// Potência constante (`sin`): a do crossfade, dois clipes sem correlação somam potência 1.
   equalPower('Potência constante'),

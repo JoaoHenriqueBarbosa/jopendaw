@@ -44,7 +44,7 @@ import 'model.dart';
 import 'sync.dart';
 import 'tempo_map.dart';
 import 'templates.dart';
-import 'track_groups.dart' show planTrackMove;
+import 'track_groups.dart' show DawGroupsController, planTrackMove;
 import 'warp.dart';
 import 'wav.dart';
 
@@ -554,6 +554,10 @@ class DawController extends ChangeNotifier {
   late DawDoc doc;
   bool ready = false;
   String? error;
+
+  /// Aviso informativo de uma ação que terminou (não é erro): "2 crossfades aplicados". A tela o
+  /// mostra em destaque até ser dispensado ([clearNotice]).
+  String? notice;
 
   /// Mensagem de trabalho em andamento (importação), na barra do transporte.
   String? status;
@@ -2567,7 +2571,11 @@ class DawController extends ChangeNotifier {
     final a = selection;
     final m = midiSelection;
     if (a != null) {
-      edit((_) => a.$1.clips.remove(a.$2));
+      edit((_) {
+        a.$1.clips.remove(a.$2);
+        // o outro clipe de um crossfade perde o par: o fade automático dele volta ao de antes
+        reconcileAutoFades();
+      });
     } else if (m != null) {
       edit((_) => m.$1.midi.remove(m.$2));
     }
@@ -2603,11 +2611,14 @@ class DawController extends ChangeNotifier {
               ..start = e
               ..offset = o.offset + cut
               ..length = o.length - cut
-              ..fadeIn = 0,
+              ..fadeIn = 0
+              // o fade zerado não é mais o do crossfade: sem a marca, o reconcile não o "devolve"
+              ..autoFadeIn = null,
           );
           o
             ..length = d.sourceSeconds(o, o.start, s)
-            ..fadeOut = 0;
+            ..fadeOut = 0
+            ..autoFadeOut = null;
         } else if (o.start < s) {
           final keep = d.sourceSeconds(o, o.start, s);
           o
@@ -2619,7 +2630,8 @@ class DawController extends ChangeNotifier {
             ..start = e
             ..offset = o.offset + cut
             ..length = o.length - cut
-            ..fadeIn = 0;
+            ..fadeIn = 0
+            ..autoFadeIn = null;
         }
       }
       reconcileAutoFades();
@@ -2749,21 +2761,30 @@ class DawController extends ChangeNotifier {
     }
   }
 
-  /// Crossfade nas sobreposições da faixa do clipe [id] (o comando do menu, para clipes que já se
-  /// sobrepõem): cada travessia de borda ganha fade de saída no anterior e de entrada no posterior,
-  /// com o tamanho da sobreposição e potência constante, em um passo de desfazer. Devolve quantas
-  /// sobreposições viraram crossfade.
-  int crossfadeOverlaps(String id) {
+  /// Crossfade nas sobreposições do clipe [id] (o comando do menu, para clipes que já se
+  /// sobrepõem): cada travessia de borda dele com outro clipe da faixa ganha fade de saída no
+  /// anterior e de entrada no posterior, com o tamanho da sobreposição e potência constante, em um
+  /// passo de desfazer. Com [wholeTrack], vale para todos os pares da faixa do clipe. Devolve
+  /// quantas sobreposições viraram crossfade e diz o resultado em [notice] (também quando não há
+  /// nada a fazer).
+  int crossfadeOverlaps(String id, {bool wholeTrack = false}) {
     final a = _findClip(id);
     if (a == null) return 0;
-    final t = a.$1;
+    final (t, clicked) = a;
     final pairs = <(AudioClip, AudioClip)>[];
     for (final x in t.clips) {
       for (final y in t.clips) {
-        if (!identical(x, y) && _crossing(x, y) != null) pairs.add((x, y));
+        if (identical(x, y) || _crossing(x, y) == null) continue;
+        if (wholeTrack || identical(x, clicked) || identical(y, clicked)) pairs.add((x, y));
       }
     }
-    if (pairs.isEmpty) return 0;
+    if (pairs.isEmpty) {
+      notice = wholeTrack
+          ? 'Nenhum clipe desta faixa cruza a borda de outro: não há crossfade a aplicar.'
+          : 'Este clipe não cruza a borda de outro clipe da faixa: não há crossfade a aplicar.';
+      notifyListeners();
+      return 0;
+    }
     var done = 0;
     checkpoint();
     mutate((d) {
@@ -2771,7 +2792,33 @@ class DawController extends ChangeNotifier {
         if (_tryCrossfade(early, late, oEnd: d.clipEnd(early), topEnd: d.clipEnd(late), force: true)) done++;
       }
     });
+    final skipped = pairs.length - done;
+    notice = '${done == 1 ? '1 crossfade aplicado' : '$done crossfades aplicados'}${skipped > 0 ? ' ($skipped não coube nos fades dos clipes)' : ''}.';
+    notifyListeners();
     return done;
+  }
+
+  /// Tamanho, em segundos do áudio, dos fades do clipe [id] (nulo deixa o lado como está);
+  /// desfazível. Cada lado cabe no que sobra do clipe depois do outro fade (o valor é limitado a
+  /// isso). Digitar o tamanho é decisão do usuário: o fade deixa de ser automático.
+  void setFadeLength(String id, {double? fadeIn, double? fadeOut}) {
+    final f = _findClip(id);
+    if (f == null) return;
+    final c = f.$2;
+    double fit(double v, double other) => (v.isFinite ? v : 0.0).clamp(0.0, math.max(0.0, c.length - other)).toDouble();
+    final newIn = fadeIn == null ? c.fadeIn : fit(fadeIn, c.fadeOut);
+    final newOut = fadeOut == null ? c.fadeOut : fit(fadeOut, newIn);
+    if ((newIn - c.fadeIn).abs() < 1e-9 && (newOut - c.fadeOut).abs() < 1e-9) return;
+    edit((_) {
+      if (fadeIn != null) {
+        c.fadeIn = newIn;
+        c.autoFadeIn = null;
+      }
+      if (fadeOut != null) {
+        c.fadeOut = newOut;
+        c.autoFadeOut = null;
+      }
+    });
   }
 
   /// Curva dos fades do clipe [id] (nulo deixa o lado como está); desfazível. Escolher a curva é
@@ -2846,10 +2893,12 @@ class DawController extends ChangeNotifier {
           ..start = at
           ..offset = c.offset + secs
           ..length = c.length - secs
-          ..fadeIn = 0;
+          ..fadeIn = 0
+          ..autoFadeIn = null;
         c
           ..length = secs
-          ..fadeOut = 0;
+          ..fadeOut = 0
+          ..autoFadeOut = null;
         t.clips.add(right);
       }
       for (final (t, c) in midiCuts) {
@@ -3065,6 +3114,11 @@ class DawController extends ChangeNotifier {
 
   void clearError() {
     error = null;
+    notifyListeners();
+  }
+
+  void clearNotice() {
+    notice = null;
     notifyListeners();
   }
 
@@ -3715,12 +3769,20 @@ class DawController extends ChangeNotifier {
 
   /// Saída da faixa: um barramento (id) ou null para o master. Recusa (false) ciclo e destino que
   /// não é barramento; desfazível.
+  ///
+  /// Uma filha de pasta que passa a sair para outro destino que não a pasta deixa de passar por ela:
+  /// sai da pasta junto (desce para depois do bloco), senão ficaria recuada e contada na pasta sem
+  /// ser afetada por ela. A interface avisa antes ([DawGroupsController.folderLeftByOutput]).
   bool setOutput(int track, String? busId) {
     if (track < 0 || track >= doc.tracks.length) return false;
     if (busId != null && !busTargets(track).any((b) => b.id == busId)) return false;
     final t = doc.tracks[track];
-    if (t.output == busId) return true;
-    edit((_) => t.output = busId);
+    if (t.output == busId && folderLeftByOutput(track, busId) == null) return true;
+    final folder = folderLeftByOutput(track, busId);
+    edit((_) {
+      if (folder != null) takeOutOfFolder(t, folder);
+      t.output = busId;
+    });
     return true;
   }
 
@@ -4378,7 +4440,12 @@ class DawController extends ChangeNotifier {
       notifyListeners();
       // a entrada chega atrasada: o transporte (e a captura, que só junta com ele andando) segue o
       // tanto da latência, para o arquivo ter o que se tocou até o stop
-      if (r.audio && r.latency > 0) await Future<void>.delayed(Duration(milliseconds: (r.latency * 1000).ceil() + 20));
+      if (r.audio && r.latency > 0) {
+        // o pedal, o bend e a roda voltam ao repouso já: o parar foi pedido, e sem isso o que se
+        // tocar ao vivo nesses ms seguiria valendo (o transporte ainda anda até a espera acabar)
+        _engine.calls(_releaseControls());
+        await Future<void>.delayed(Duration(milliseconds: (r.latency * 1000).ceil() + 20));
+      }
       // a tela fechou no meio: o dispose já parou tudo
       if (_disposed) return;
       stopTransport();
@@ -5066,6 +5133,9 @@ class DawController extends ChangeNotifier {
           mute: src.mute,
           solo: src.solo,
           output: src.output,
+          // logo abaixo da original: numa pasta, a cópia entra nela (o bloco segue contíguo); o
+          // "recolhida" é da pasta, não da faixa
+          groupId: src.groupId,
           sends: [for (final s in src.sends) Send(target: s.target, level: s.level, pre: s.pre)],
           lanes: [
             for (final l in src.lanes)
@@ -5476,8 +5546,9 @@ class DawController extends ChangeNotifier {
 
   /// O que [moveTrack] desfaria em silêncio ao mover a faixa [from] para [to]: envios e saídas de
   /// barramento para barramento que passariam a apontar para trás (e a automação desses envios).
-  /// Uma frase por rota; vazio se o movimento não quebra nada.
-  List<String> routesBrokenByMove(int from, int to) {
+  /// Uma frase por rota; vazio se o movimento não quebra nada. Com [groups] (o padrão), vêm também
+  /// as trocas de saída por entrar ou sair de uma pasta ([groupNotesForMove]).
+  List<String> routesBrokenByMove(int from, int to, {bool groups = true}) {
     final plan = planTrackMove(doc.tracks, from, to);
     if (plan == null) return const [];
     final order = plan.order;
@@ -5495,10 +5566,17 @@ class DawController extends ChangeNotifier {
       final o = t.output == null ? null : index[t.output];
       if (o != null && o <= i && order[o].kind == TrackKind.bus) out.add('a saída de "${t.name}" para "${order[o].name}" (volta ao master)');
     }
-    // entrar ou sair de uma pasta troca a saída da faixa
-    for (final c in plan.changes) {
-      if (c.warning != null) out.add(c.warning!);
-    }
+    if (groups) out.addAll(groupNotesForMove(from, to));
     return out;
+  }
+
+  /// O que mover a faixa [from] para [to] muda na saída dela por entrar ou sair de uma pasta.
+  List<String> groupNotesForMove(int from, int to) {
+    final plan = planTrackMove(doc.tracks, from, to);
+    if (plan == null) return const [];
+    return [
+      for (final c in plan.changes)
+        if (c.warning != null) c.warning!,
+    ];
   }
 }
