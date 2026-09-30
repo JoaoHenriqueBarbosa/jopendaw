@@ -1136,6 +1136,14 @@ mod tests {
                 |e| e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.25, length: 0.5, gain: 0.8, fade_in: 0.01, fade_out: 0.02 }),
                 Changes,
             ),
+            // polaridade invertida do clipe: o ganho chega negativo e o motor não o limita a zero
+            case(
+                playing,
+                "clip_add",
+                &[0.0, 1.0, 0.0, 0.25, 0.5, -0.8, 0.0, 0.0],
+                |e| e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.25, length: 0.5, gain: -0.8, fade_in: 0.0, fade_out: 0.0 }),
+                Changes,
+            ),
             case(faded, "clip_fade_shape", &[1.0, 3.0], |e| e.set_clip_fade_shape(1, 3), Changes),
             case(playing, "track_kind", &[1.0, 3.0], |e| e.set_track_kind(1, kind::SAMPLER), Changes),
             case(playing, "param", &[1.0, 13.0, 300.0], |e| e.set_param(1, synth_param::CUTOFF, 300.0), Changes),

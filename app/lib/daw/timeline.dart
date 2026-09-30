@@ -2560,6 +2560,20 @@ PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {Stri
   ),
 );
 
+/// Item de ligar/desligar do menu do clipe: a marca mostra o estado atual.
+PopupMenuItem<String> _checkItem(String value, IconData icon, String label, bool on, {String? shortcut}) => PopupMenuItem(
+  value: value,
+  child: Row(
+    children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 12),
+      Expanded(child: Text(label)),
+      if (shortcut != null && shortcut.isNotEmpty) ...[const SizedBox(width: 12), Text(shortcut, style: const TextStyle(fontSize: 12, color: Colors.white54))],
+      SizedBox(width: 22, child: on ? const Icon(Icons.check, size: 16) : null),
+    ],
+  ),
+);
+
 /// Explica a curva do fade no tooltip do item do menu.
 String fadeShapeHint(FadeShape shape) => switch (shape) {
   FadeShape.linear =>
@@ -2653,7 +2667,10 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         var start = _snapDrag(c, _orig.start + dBeats);
         // não passa do começo do áudio nem do fim do clipe
         final minStart = math.max(0.0, _orig.start - _orig.offset * tb / 60);
-        final maxStart = math.max(minStart, c.doc.clipEnd(_orig) - minLen * tb / 60);
+        var maxStart = math.max(minStart, c.doc.clipEnd(_orig) - minLen * tb / 60);
+        // com loop a apara não passa do trecho que repete (ele encolhe junto)
+        final cell = _orig.loopLength;
+        if (cell != null) maxStart = math.min(maxStart, math.max(minStart, _orig.start + (cell - minLen) * tb / 60));
         start = start.clamp(minStart, maxStart);
         final secs = (start - _orig.start) * 60 / tb;
         if (start != clip.start) {
@@ -2661,11 +2678,14 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
             clip.start = start;
             clip.offset = _orig.offset + secs;
             clip.length = _orig.length - secs;
+            if (cell != null) clip.loopLength = cell - secs;
           });
         }
       case _Grab.right:
         final end = _snapDrag(c, c.doc.clipEnd(_orig) + dBeats);
-        final len = ((end - _orig.start) * 60 / tb).clamp(minLen, math.max<double>(minLen, dur - _orig.offset));
+        // com loop a borda vai além do áudio: o trecho se repete (teto de uma hora)
+        final maxLen = _orig.loopLength != null ? 3600.0 : dur - _orig.offset;
+        final len = ((end - _orig.start) * 60 / tb).clamp(minLen, math.max<double>(minLen, maxLen));
         if (len != clip.length) change(() => clip.length = len);
       case _Grab.fadeIn:
         final f = (_orig.fadeIn + total.dx / c.pxPerBeat * 60 / tb).clamp(0.0, math.max<double>(0.0, clip.length - clip.fadeOut));
@@ -2711,6 +2731,9 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
       _menuItem('split', Icons.content_cut, 'Cortar no cursor', shortcut: shortcutLabel('edit.split')),
       _menuItem('warp', Icons.graphic_eq, 'Warp e altura…'),
       _menuItem('gain', Icons.volume_up_outlined, 'Ganho do clipe…'),
+      _checkItem('mute', Icons.volume_off_outlined, 'Silenciar o clipe', widget.clip.muted, shortcut: shortcutLabel('edit.mute')),
+      _checkItem('invert', Icons.flip, 'Inverter a fase (polaridade)', widget.clip.invert),
+      _checkItem('loop', Icons.repeat, 'Repetir em loop (estique a borda direita)', widget.clip.loopLength != null),
       PopupMenuItem<String>(
         value: 'edit_audio',
         child: Row(
@@ -2747,6 +2770,12 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
         c.setFadeShapes(widget.clip.id, fadeOut: FadeShape.values[int.parse(f.substring(5))]);
       case 'gain':
         await showClipGainDialog(context, c, widget.clip.id);
+      case 'mute':
+        c.setClipMuted(widget.clip.id, !widget.clip.muted);
+      case 'invert':
+        c.setClipInvert(widget.clip.id, !widget.clip.invert);
+      case 'loop':
+        c.setClipLoop(widget.clip.id, widget.clip.loopLength == null);
       case 'edit_audio':
         await showEditAudioMenu(context, c, widget.clip.id, at);
       case 'to_midi':
@@ -2812,6 +2841,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
     final pxPerSec = c.pxPerBeat * c.doc.sourceTempoAt(clip, clip.start) / 60;
     final width = c.doc.clipBeats(clip) * c.pxPerBeat;
     final takes = clip.takes;
+    final marked = clip.muted || clip.invert || clip.loopLength != null;
     return _ClipGestures(
       hit: _hit,
       onSelect: () => c.selectClip(clip.id),
@@ -2839,9 +2869,10 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
                           offset: clip.offset,
                           length: clip.length,
                           pxPerSec: pxPerSec,
-                          gain: clip.gain,
-                          color: color,
+                          gain: clip.invert ? -clip.gain : clip.gain,
+                          color: clip.muted ? Colors.white38 : color,
                           visible: _visibleRange(c, clip.start),
+                          cell: clip.looping ? clip.loopLength : null,
                         ),
                       ),
               ),
@@ -2870,7 +2901,7 @@ class _ClipViewState extends State<_ClipView> with _DragEdit {
                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
                     ),
-                    if (clip.processed && width >= 40) ...[
+                    if ((clip.processed || marked) && width >= 40) ...[
                       const SizedBox(width: 4),
                       _WarpBadge(clip: clip, pending: c.warpPending(clip), failed: c.warpFailure(clip) != null),
                     ],
@@ -2902,10 +2933,12 @@ class _WarpBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts = [if (clip.stretches) 'W', if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st', if (clip.reverse) 'R'];
+    final parts = [if (clip.muted) 'M', if (clip.invert) 'Ø', if (clip.loopLength != null) 'L', if (clip.stretches) 'W', if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st', if (clip.reverse) 'R'];
     final label = pending ? 'processando…' : parts.join(' ');
     return Tooltip(
-      message: failed ? 'O warp não ficou pronto: o clipe toca o original' : (pending ? 'Processando o warp…' : 'Warp e altura'),
+      message: failed
+          ? 'O warp não ficou pronto: o clipe toca o original'
+          : (pending ? 'Processando o warp…' : 'M mudo, Ø fase invertida, L loop, W warp, R invertido no tempo'),
       child: Container(
         height: 14,
         padding: const EdgeInsets.symmetric(horizontal: 5),
@@ -3211,6 +3244,9 @@ class _WavePainter extends CustomPainter {
   final double offset, length, pxPerSec, gain;
   final Color color;
   final (double, double) visible;
+
+  /// Duração (s) do trecho que repete, se o clipe está em loop: a onda recomeça a cada [cell].
+  final double? cell;
   _WavePainter({
     required this.wave,
     required this.offset,
@@ -3219,6 +3255,7 @@ class _WavePainter extends CustomPainter {
     required this.gain,
     required this.color,
     required this.visible,
+    this.cell,
   });
 
   @override
@@ -3234,14 +3271,32 @@ class _WavePainter extends CustomPainter {
       ..strokeWidth = 1;
     final bucketsPerPx = w.perSecond / pxPerSec;
     final first = offset * w.perSecond;
+    final cellPx = cell == null ? 0.0 : cell! * pxPerSec;
     final n = w.mins.length;
     // só as colunas dentro da janela das raias
     final x0 = math.max(0, visible.$1.floor());
     final x1 = math.min(size.width, visible.$2.ceil().toDouble()).toInt();
+    if (cellPx > 1) {
+      // o loop: uma linha tracejada em cada emenda
+      final seam = Paint()
+        ..color = Colors.white54
+        ..strokeWidth = 1;
+      for (var sx = cellPx; sx < size.width; sx += cellPx) {
+        if (sx < x0 || sx > x1) continue;
+        for (var y = 0.0; y < size.height; y += 6) {
+          canvas.drawLine(Offset(sx, y), Offset(sx, math.min(size.height, y + 3)), seam);
+        }
+      }
+    }
     for (var x = x0; x < x1; x++) {
-      final a = (first + x * bucketsPerPx).floor();
-      final b = math.max(a + 1, (first + (x + 1) * bucketsPerPx).floor());
-      if (a >= n) break;
+      // dentro do loop a posição volta ao começo do trecho a cada emenda
+      final px = cellPx > 1 ? x % cellPx : x.toDouble();
+      final a = (first + px * bucketsPerPx).floor();
+      final b = math.max(a + 1, (first + (px + 1) * bucketsPerPx).floor());
+      if (a >= n) {
+        if (cellPx > 1) continue;
+        break;
+      }
       var lo = 0.0, hi = 0.0;
       for (var i = a; i < b && i < n; i++) {
         if (w.mins[i] < lo) lo = w.mins[i];
@@ -3253,7 +3308,7 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter o) =>
-      o.wave != wave || o.offset != offset || o.length != length || o.pxPerSec != pxPerSec || o.gain != gain || o.color != color || o.visible != visible;
+      o.wave != wave || o.offset != offset || o.length != length || o.pxPerSec != pxPerSec || o.gain != gain || o.color != color || o.visible != visible || o.cell != cell;
 }
 
 class _FadePainter extends CustomPainter {

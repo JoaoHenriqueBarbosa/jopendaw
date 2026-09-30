@@ -92,6 +92,17 @@ class AudioClip {
   /// Toca o áudio de trás para a frente.
   bool reverse;
 
+  /// Mudo por clipe: o clipe continua no arranjo mas não soa (nem na exportação).
+  bool muted;
+
+  /// Polaridade invertida: o sinal do clipe troca de sinal (vale 180° de fase, sem atraso).
+  bool invert;
+
+  /// Loop: quando não nulo, o conteúdo que repete é o trecho de [offset] com esta duração (segundos
+  /// da origem) e [length] pode passar dele: o clipe repete o trecho até preencher a duração.
+  /// Nulo = sem loop (o padrão, e o que um documento antigo tem).
+  double? loopLength;
+
   AudioClip({
     required this.id,
     required this.sample,
@@ -110,6 +121,9 @@ class AudioClip {
     this.sourceBpm,
     this.pitch = 0,
     this.reverse = false,
+    this.muted = false,
+    this.invert = false,
+    this.loopLength,
   }) : takes = takes ?? [];
 
   AudioClip.fromJson(Map<String, dynamic> j)
@@ -129,7 +143,15 @@ class AudioClip {
       warp = j['warp'] as bool? ?? false,
       sourceBpm = (j['source_bpm'] as num?)?.toDouble(),
       pitch = (j['pitch'] as num? ?? 0).toDouble(),
-      reverse = j['reverse'] as bool? ?? false;
+      reverse = j['reverse'] as bool? ?? false,
+      muted = j['muted'] as bool? ?? false,
+      invert = j['invert'] as bool? ?? false,
+      loopLength = _loopOf(j['loop_length']);
+
+  static double? _loopOf(Object? v) {
+    final d = (v as num?)?.toDouble();
+    return d != null && d.isFinite && d > 0 ? d : null;
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -151,7 +173,17 @@ class AudioClip {
     if (sourceBpm != null) 'source_bpm': sourceBpm,
     if (pitch != 0) 'pitch': pitch,
     if (reverse) 'reverse': true,
+    if (muted) 'muted': true,
+    if (invert) 'invert': true,
+    if (loopLength != null) 'loop_length': loopLength,
   };
+
+  /// O clipe está em loop de fato: liga e com duração maior que o trecho que repete.
+  bool get looping => loopLength != null && length > loopLength! + 1e-9;
+
+  /// Ganho que o motor recebe: a polaridade invertida é o ganho com o sinal trocado (o motor
+  /// multiplica a amostra por ele, então o som sai espelhado, sem mais nada).
+  double get engineGain => invert ? -gain : gain;
 
   /// O warp está de fato esticando (ligado e com o andamento original conhecido).
   bool get stretches => warp && (sourceBpm ?? 0) > 0;
@@ -173,6 +205,22 @@ class AudioClip {
   /// clipe esticado não muda de velocidade no meio do caminho, ver `DawDoc.tempo`).
   double seconds(double bpm0) => stretches ? length * sourceBpm! / bpm0 : length;
   double end(double bpm) => start + beats(bpm);
+
+  /// As repetições do loop: a duração (segundos da origem) de cada pedaço tocado, do trecho
+  /// inteiro até o resto final. Sem loop, um pedaço só, o clipe todo.
+  List<double> loopPieces() {
+    final cell = loopLength;
+    if (cell == null || cell <= 0 || length <= cell + 1e-9) return [length];
+    final out = <double>[];
+    var left = length;
+    // teto de segurança: um trecho minúsculo numa duração enorme não explode a lista
+    while (left > 1e-9 && out.length < 4096) {
+      final d = math.min(cell, left);
+      out.add(d);
+      left -= d;
+    }
+    return out;
+  }
 }
 
 /// Uma nota num clipe MIDI. Início e duração em batidas, contados do início do clipe.
@@ -945,6 +993,23 @@ class DawDoc {
     if (t.isSingle) return (to - from) * 60 / c.tempoFor(bpm);
     final real = t.secondsAt(to) - t.secondsAt(from);
     return c.stretches ? real * bpm / c.sourceBpm! : real;
+  }
+
+  /// Onde cada repetição do loop do clipe começa, em batidas, com a duração dela em segundos da
+  /// origem (o mesmo tamanho de [AudioClip.loopPieces]). Segue o mapa de andamento: cada
+  /// repetição ocupa segundos reais constantes (como o clipe inteiro, ver [clipEnd]).
+  List<(double, double)> loopPlacement(AudioClip c) {
+    final pieces = c.loopPieces();
+    final t = tempo;
+    final base = t.isSingle ? 0.0 : t.secondsAt(c.start);
+    final out = <(double, double)>[];
+    var src = 0.0;
+    for (final d in pieces) {
+      final real = c.stretches ? src * c.sourceBpm! / bpm : src;
+      out.add((t.isSingle ? c.start + real * bpm / 60 : t.beatAt(base + real), d));
+      src += d;
+    }
+    return out;
   }
 
   /// Fim do último clipe, em batidas.

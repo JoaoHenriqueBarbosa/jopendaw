@@ -1296,17 +1296,20 @@ class DawController extends ChangeNotifier {
   /// O som que o motor toca para o clipe e onde ele corta: o derivado do warp quando está pronto
   /// (offset, duração e fades passam dos segundos da origem para os do derivado), senão o
   /// original. Null se o áudio não está neste aparelho.
-  ({int id, double offset, double length, double fadeIn, double fadeOut})? _clipSound(AudioClip c, double bpm) {
+  ///
+  /// [length] (segundos da origem) troca a duração do clipe: o loop pede o som de um pedaço só.
+  ({int id, double offset, double length, double fadeIn, double fadeOut})? _clipSound(AudioClip c, double bpm, {double? length}) {
     final orig = _sampleIds[c.sample];
     if (orig == null) return null;
+    final len = length ?? c.length;
     final spec = WarpSpec.of(c, bpm);
     final id = spec == null ? null : _warp.idOf(spec);
-    if (spec == null || id == null) return (id: orig, offset: c.offset, length: c.length, fadeIn: c.fadeIn, fadeOut: c.fadeOut);
+    if (spec == null || id == null) return (id: orig, offset: c.offset, length: len, fadeIn: c.fadeIn, fadeOut: c.fadeOut);
     final k = spec.ratio;
     // invertido, o que era o fim do trecho passa a ser o começo
-    final total = _decoded[orig]?.duration ?? (c.offset + c.length);
-    final offset = spec.reverse ? math.max(0.0, total - c.offset - c.length) : c.offset;
-    return (id: id, offset: offset * k, length: c.length * k, fadeIn: c.fadeIn * k, fadeOut: c.fadeOut * k);
+    final total = _decoded[orig]?.duration ?? (c.offset + len);
+    final offset = spec.reverse ? math.max(0.0, total - c.offset - len) : c.offset;
+    return (id: id, offset: offset * k, length: len * k, fadeIn: c.fadeIn * k, fadeOut: c.fadeOut * k);
   }
 
   /// O clipe de áudio pelo id (null se sumiu).
@@ -1345,6 +1348,46 @@ class DawController extends ChangeNotifier {
       if (pitch != null) c.pitch = pitch.clamp(-24.0, 24.0);
       if (reverse != null) c.reverse = reverse;
     });
+  }
+
+  /// Liga ou desliga o mudo do clipe (uma edição desfazível). Mudo não apaga nada: o clipe fica no
+  /// arranjo e só deixa de soar.
+  void setClipMuted(String clipId, bool muted) {
+    final f = _findClip(clipId);
+    if (f == null || f.$2.muted == muted) return;
+    editAs(muted ? 'Silenciar clipe' : 'Reativar clipe', (_) => f.$2.muted = muted);
+  }
+
+  /// Inverte a polaridade do clipe (troca o sinal do áudio; soma com o original e cancela).
+  void setClipInvert(String clipId, bool invert) {
+    final f = _findClip(clipId);
+    if (f == null || f.$2.invert == invert) return;
+    editAs('Inverter a fase do clipe', (_) => f.$2.invert = invert);
+  }
+
+  /// Liga ou desliga o loop do clipe. Ligar toma a duração atual como o trecho que repete (esticar
+  /// a borda direita depois repete o conteúdo); desligar mantém uma repetição só, o trecho.
+  void setClipLoop(String clipId, bool on) {
+    final f = _findClip(clipId);
+    if (f == null || _blockedByRecording('mudar o loop do clipe')) return;
+    final c = f.$2;
+    if (on == (c.loopLength != null)) return;
+    editAs(on ? 'Loop do clipe' : 'Desligar o loop do clipe', (_) {
+      if (on) {
+        c.loopLength = c.length;
+      } else {
+        c.length = math.min(c.length, c.loopLength!);
+        c.loopLength = null;
+      }
+    });
+  }
+
+  /// Alterna o mudo do clipe de áudio selecionado (o atalho); devolve se havia clipe.
+  bool toggleMuteSelectedClip() {
+    final a = selection;
+    if (a == null) return false;
+    setClipMuted(a.$2.id, !a.$2.muted);
+    return true;
   }
 
   /// Ganho do clipe de áudio (linear, 0..[maxClipGain]). Sem [undoable] é um passo de arraste: quem
@@ -1409,9 +1452,26 @@ class DawController extends ChangeNotifier {
       calls.add(['track', i, t.gain, t.pan, t.mute, t.solo]);
       if (t.kind != TrackKind.audio) continue;
       for (final c in t.clips) {
+        // clipe mudo não vai ao motor: ao vivo e no render (as mesmas chamadas) ele não soa
+        if (c.muted) continue;
+        if (c.looping) {
+          // loop: cada repetição é um clipe do motor com o trecho do loop; o fade de entrada fica
+          // na primeira e o de saída na última, as curvas idem
+          final place = d.loopPlacement(c);
+          for (var k = 0; k < place.length; k++) {
+            final (at, len) = place[k];
+            final r = _clipSound(c, d.bpm, length: len);
+            if (r == null) break;
+            final first = k == 0, last = k == place.length - 1;
+            calls.add(['clip_add', i, r.id, at, r.offset, r.length, c.engineGain, first ? r.fadeIn : 0.0, last ? r.fadeOut : 0.0]);
+            final si = first ? c.fadeInShape : FadeShape.linear, so = last ? c.fadeOutShape : FadeShape.linear;
+            if (si != FadeShape.linear || so != FadeShape.linear) calls.add(['clip_fade_shape', si.index, so.index]);
+          }
+          continue;
+        }
         final r = _clipSound(c, d.bpm);
         if (r == null) continue;
-        calls.add(['clip_add', i, r.id, c.start, r.offset, r.length, c.gain, r.fadeIn, r.fadeOut]);
+        calls.add(['clip_add', i, r.id, c.start, r.offset, r.length, c.engineGain, r.fadeIn, r.fadeOut]);
         // as curvas dos fades valem para o último `clip_add`; só as que fogem do padrão (motor sem a chamada ignora)
         if (c.fadeInShape != FadeShape.linear || c.fadeOutShape != FadeShape.linear) {
           calls.add(['clip_fade_shape', c.fadeInShape.index, c.fadeOutShape.index]);
@@ -3220,6 +3280,14 @@ class DawController extends ChangeNotifier {
     });
   }
 
+  /// A batida em que termina [src] segundos da origem de [c] contados de [from] (segue o mapa de
+  /// andamento: o clipe ocupa segundos reais constantes).
+  static double _afterSourceSeconds(DawDoc d, AudioClip c, double from, double src) {
+    final real = c.stretches ? src * c.sourceBpm! / d.bpm : src;
+    final t = d.tempo;
+    return t.isSingle ? from + real * d.bpm / 60 : t.beatAt(t.secondsAt(from) + real);
+  }
+
   /// Corta no cursor de reprodução: o clipe selecionado, ou tudo o que ele cruza na faixa atual.
   void splitAtPlayhead() {
     final at = beat.value;
@@ -3241,18 +3309,42 @@ class DawController extends ChangeNotifier {
     editAs('Cortar clipe', (d) {
       for (final (t, c) in audioCuts) {
         final secs = d.sourceSeconds(c, c.start, at);
+        final cell = c.looping ? c.loopLength! : null;
+        // corte no meio de uma repetição do loop: a direita começa no meio do trecho, então o que
+        // sobra dessa repetição é um clipe sem loop e o loop recomeça do trecho inteiro depois dele
+        final phase = cell == null ? 0.0 : secs % cell;
+        final mid = cell != null && phase > 1e-6 && cell - phase > 1e-6;
+        final rest = c.length - secs;
         final right = AudioClip.fromJson(c.toJson())
           ..id = newId()
           ..start = at
-          ..offset = c.offset + secs
-          ..length = c.length - secs
+          ..offset = c.offset + (mid ? phase : (cell == null ? secs : 0.0))
+          ..length = mid ? math.min(cell - phase, rest) : rest
           ..fadeIn = 0
           ..autoFadeIn = null;
+        AudioClip? tail;
+        if (mid && rest > cell - phase + 1e-6) {
+          tail = AudioClip.fromJson(c.toJson())
+            ..id = newId()
+            ..start = _afterSourceSeconds(d, c, at, cell - phase)
+            ..length = rest - (cell - phase)
+            ..fadeIn = 0
+            ..autoFadeIn = null;
+          right
+            ..loopLength = null
+            ..fadeOut = 0
+            ..autoFadeOut = null
+            ..fadeOutShape = FadeShape.linear;
+        } else if (mid) {
+          right.loopLength = null;
+        }
+        // depois do corte a esquerda não sobra com loop se não passa mais do trecho
         c
           ..length = secs
           ..fadeOut = 0
           ..autoFadeOut = null;
         t.clips.add(right);
+        if (tail != null) t.clips.add(tail);
       }
       for (final (t, c) in midiCuts) {
         final right = splitMidiClip(c, at);

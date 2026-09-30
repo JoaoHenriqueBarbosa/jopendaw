@@ -159,6 +159,8 @@ class _DawStudioState extends State<DawStudio> {
         return () => toggleMidiLearn(c);
       case 'edit.split':
         return () => splitClipsAtPlayhead(c);
+      case 'edit.mute':
+        return c.toggleMuteSelectedClip;
       case 'loop.clip':
         // sem clipe selecionado cai na seção do cursor; sem nenhuma das duas, nada acontece
         return () {

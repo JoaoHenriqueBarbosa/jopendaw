@@ -2475,6 +2475,85 @@ mod tests {
         (l, r)
     }
 
+    /// Um clipe de rampa (0 a 1 em 0,5 s) com o ganho dado, tocado por 0,5 s (canal esquerdo).
+    fn render_ramp_gain(gain: f32) -> Vec<f32> {
+        let mut e = engine();
+        e.set_tempo(120.0, 4);
+        e.set_track_count(1);
+        e.track_mut(0).unwrap().pan = 0.0;
+        let ramp: Vec<f32> = (0..24_000).map(|i| i as f32 / 24_000.0).collect();
+        e.load_sample(1, Sample::new(vec![ramp], RATE));
+        e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 0.5, gain, fade_in: 0.0, fade_out: 0.0 });
+        e.play();
+        run(&mut e, 24_000).0
+    }
+
+    #[test]
+    fn ganho_negativo_do_clipe_inverte_a_polaridade_sem_mais_nada() {
+        let pos = render_ramp_gain(0.7);
+        let neg = render_ramp_gain(-0.7);
+        assert!(pos.iter().any(|v| v.abs() > 0.1), "o clipe soa");
+        for (i, (p, n)) in pos.iter().zip(&neg).enumerate() {
+            assert_eq!(*n, -*p, "amostra {i}: espelho exato");
+        }
+    }
+
+    #[test]
+    fn clipe_invertido_soma_zero_com_o_original_na_mesma_faixa() {
+        let mut e = engine();
+        e.set_tempo(120.0, 4);
+        e.set_track_count(1);
+        e.track_mut(0).unwrap().pan = 0.0;
+        let ramp: Vec<f32> = (0..24_000).map(|i| (i as f32 * 0.01).sin()).collect();
+        e.load_sample(1, Sample::new(vec![ramp], RATE));
+        for gain in [0.6, -0.6] {
+            e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 0.5, gain, fade_in: 0.0, fade_out: 0.0 });
+        }
+        e.play();
+        let (l, r) = run(&mut e, 24_000);
+        assert!(l.iter().chain(&r).all(|v| v.abs() < 1e-6), "cancela");
+    }
+
+    #[test]
+    fn ganho_negativo_com_fade_e_no_render_offline_soa_como_ao_vivo() {
+        // o fade multiplica o ganho com sinal: o espelho vale com fades também
+        let render = |gain: f32| {
+            let mut e = engine();
+            e.set_tempo(120.0, 4);
+            e.set_track_count(1);
+            e.track_mut(0).unwrap().pan = 0.0;
+            e.load_sample(1, Sample::new(vec![vec![0.5; 24_000]], RATE));
+            e.add_clip(Clip { track: 0, sample: 1, start: 0.0, offset: 0.0, length: 0.5, gain, fade_in: 0.1, fade_out: 0.1 });
+            e.set_clip_fade_shape(1, 3);
+            e.play();
+            run(&mut e, 24_000).0
+        };
+        let (pos, neg) = (render(0.9), render(-0.9));
+        assert!(pos.iter().any(|v| *v > 0.1));
+        assert!(pos.iter().zip(&neg).all(|(p, n)| *n == -*p));
+    }
+
+    #[test]
+    fn repeticoes_emendadas_de_um_loop_repetem_o_trecho_sem_buraco_nem_salto() {
+        // o que o app manda para um clipe em loop: o mesmo trecho em clipes colados, cada um na
+        // batida em que o anterior termina (0,5 s a 120 bpm = 1 batida)
+        let mut e = engine();
+        e.set_tempo(120.0, 4);
+        e.set_track_count(1);
+        e.track_mut(0).unwrap().pan = 0.0;
+        let ramp: Vec<f32> = (0..24_000).map(|i| 0.1 + 0.8 * i as f32 / 24_000.0).collect();
+        e.load_sample(1, Sample::new(vec![ramp], RATE));
+        for k in 0..3 {
+            e.add_clip(Clip { track: 0, sample: 1, start: k as f64, offset: 0.0, length: 0.5, gain: 1.0, fade_in: 0.0, fade_out: 0.0 });
+        }
+        e.play();
+        let (l, _) = run(&mut e, 72_000);
+        for i in 0..24_000 {
+            assert!((l[i] - l[i + 24_000]).abs() < 1e-6 && (l[i] - l[i + 48_000]).abs() < 1e-6, "quadro {i}");
+            assert!(l[i] > 0.05, "sem buraco no quadro {i}");
+        }
+    }
+
     #[test]
     fn curvas_de_fade_nos_quartos_e_nas_pontas() {
         let xs = [0.0, 0.25, 0.5, 0.75, 1.0];

@@ -60,6 +60,8 @@ String? legacyGlobal(
   // da fase 17 (punch e tap tempo): teclas que antes não faziam nada
   // da fase 18 (histórico): tecla que antes não fazia nada
   if (mod && shift && k == LogicalKeyboardKey.keyH) return 'history.open';
+  // da fase 20 (mudo por clipe): tecla que antes não fazia nada
+  if (!mod && k == LogicalKeyboardKey.digit0) return 'edit.mute';
   if (!mod && k == LogicalKeyboardKey.keyP) return 'transport.punch';
   if (!mod && k == LogicalKeyboardKey.keyT) return 'transport.tap';
   if (!mod && k == LogicalKeyboardKey.keyX) return 'panel.mixer';
