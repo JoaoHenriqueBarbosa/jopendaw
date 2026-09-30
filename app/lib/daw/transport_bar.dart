@@ -14,7 +14,6 @@ import 'dock.dart';
 import 'export.dart';
 import 'mixer_panel.dart' show recordColor;
 import 'model.dart';
-import 'project_file_ui.dart';
 import 'shortcuts_dialog.dart';
 import 'settings_dialog.dart';
 import 'structure_menu.dart';
@@ -187,12 +186,6 @@ class TransportBar extends StatelessWidget {
         // uma gravação (uma faixa nova no meio mudaria o lugar das armadas)
         final idle = c.status == null && !recording;
         void export() => showExportDialog(context, c);
-        void exportProject() => showExportProjectDialog(context, name: c.project.name, loadDoc: () async => c.doc, loadSample: loadSampleLocalOrServer);
-        final projectButton = IconButton.filledTonal(
-          tooltip: recording ? 'Pare a gravação para exportar' : 'Exportar o projeto inteiro (.jopendaw): backup e para levar a outra conta',
-          onPressed: idle ? exportProject : null,
-          icon: const Icon(Icons.inventory_2_outlined),
-        );
         // só o ícone no celular e em tela estreita: a barra rola na horizontal, mas o texto
         // empurraria as configurações para fora da vista num notebook comum
         List<Widget> files(bool labels) => !labels
@@ -204,8 +197,6 @@ class TransportBar extends StatelessWidget {
                   onPressed: idle ? export : null,
                   icon: const Icon(Icons.save_alt),
                 ),
-                const SizedBox(width: 4),
-                projectButton,
               ]
             : [
                 FilledButton.tonalIcon(onPressed: idle ? c.importAudio : null, icon: const Icon(Icons.file_open_outlined), label: const Text('Importar')),
@@ -214,8 +205,6 @@ class TransportBar extends StatelessWidget {
                   message: recording ? 'Pare a gravação para exportar' : 'Exportar a música (e as faixas separadas) em WAV',
                   child: FilledButton.tonalIcon(onPressed: idle ? export : null, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),
                 ),
-                const SizedBox(width: 4),
-                projectButton,
               ];
         // largura toda: dentro da coluna da tela a barra encolhia até o conteúdo e ficava centralizada
         return LayoutBuilder(

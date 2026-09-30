@@ -363,7 +363,7 @@ class LoudnessReport {
       return 'A mixagem $moved e ficou em $after, abaixo dos ${formatLufs(targetLufs)} LUFS pedidos: o teto de ${formatDbtp(ceilingDb)} '
           'não deixou subir mais sem estourar.';
     }
-    return 'A mixagem $moved até o alvo e mediu $after.';
+    return appliedDb.abs() < 0.05 ? 'A mixagem já estava no alvo e mediu $after.' : 'A mixagem $moved até o alvo e mediu $after.';
   }
 }
 

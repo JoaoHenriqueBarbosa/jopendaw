@@ -15,6 +15,7 @@ import 'export_options.dart';
 import 'loudness.dart';
 import 'loudness_panel.dart';
 import 'model.dart';
+import 'project_file_ui.dart';
 import 'transport_bar.dart' show describeActionError;
 
 /// As últimas opções usadas, para a próxima exportação da sessão começar de onde a pessoa parou
@@ -35,10 +36,15 @@ Future<void> showExportDialog(BuildContext context, DawController c) async {
   var options = _lastOptions ?? const ExportOptions();
   while (true) {
     if (!context.mounted) return;
+    var wholeProject = false;
     final chosen = await showDialog<ExportOptions>(
       context: context,
-      builder: (_) => ExportDialog(c: c, initial: options),
+      builder: (_) => ExportDialog(c: c, initial: options, onWholeProject: () => wholeProject = true),
     );
+    if (wholeProject && context.mounted) {
+      await showExportProjectDialog(context, name: c.project.name, loadDoc: () async => c.doc, loadSample: loadSampleLocalOrServer);
+      return;
+    }
     if (chosen == null || !context.mounted) return;
     options = _lastOptions = chosen;
     final retry = await showDialog<bool>(
@@ -73,7 +79,10 @@ String _formatHint(ExportFormat f) => switch (f) {
 class ExportDialog extends StatefulWidget {
   final DawController c;
   final ExportOptions initial;
-  const ExportDialog({super.key, required this.c, this.initial = const ExportOptions()});
+
+  /// Chamado quando a pessoa prefere levar o projeto inteiro (.jopendaw) em vez da música em WAV.
+  final VoidCallback? onWholeProject;
+  const ExportDialog({super.key, required this.c, this.initial = const ExportOptions(), this.onWholeProject});
 
   @override
   State<ExportDialog> createState() => _ExportDialogState();
@@ -255,6 +264,15 @@ class _ExportDialogState extends State<ExportDialog> {
         ),
       ),
       actions: [
+        if (widget.onWholeProject != null)
+          TextButton.icon(
+            onPressed: () {
+              widget.onWholeProject!();
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.inventory_2_outlined, size: 18),
+            label: const Text('Projeto inteiro (.jopendaw)…'),
+          ),
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
         FilledButton.icon(onPressed: _empty ? null : _submit, icon: const Icon(Icons.save_alt), label: const Text('Exportar')),
       ],
