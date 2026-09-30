@@ -1292,7 +1292,19 @@ extension _Input on _PianoRollState {
     }
     final dRow = math.max(-r0, math.min(rows.length - 1 - r1, -up));
     if (dRow == 0) return;
-    final next = {for (final n in _sel) n: rows.pitchAt((rows.rowOf(n.pitch) ?? 0) + dRow)!};
+    var next = {for (final n in _sel) n: rows.pitchAt((rows.rowOf(n.pitch) ?? 0) + dRow)!};
+    if (_snapping && _Prefs.snapEdits && !_dims.drums) {
+      // a seta anda de nota da escala em nota da escala, no sentido em que vai
+      final scale = _scale!;
+      next = {
+        for (final e in next.entries)
+          e.key: () {
+            final p = scale.snap(e.value, preferUp: up > 0);
+            return rows.rowOf(p) != null ? p : e.value;
+          }(),
+      };
+      if (next.entries.every((e) => e.key.pitch == e.value)) return;
+    }
     void apply(DawDoc _) {
       for (final e in next.entries) {
         e.key.pitch = e.value;

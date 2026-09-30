@@ -15,6 +15,23 @@ extension _Tools on _PianoRollState {
     return _rows?.rowOf(s) != null ? s : pitch;
   }
 
+  /// Encaixa [notes] na escala do clipe (as que já estão nela, ou sem linha no editor, ficam).
+  List<MidiNote> _snapToScale(List<MidiNote> notes, {bool preferUp = false}) {
+    final s = _scale;
+    if (s == null || _dims.drums) return notes;
+    return [
+      for (final n in notes)
+        () {
+          final p = s.snap(n.pitch, preferUp: preferUp);
+          return n.copy()..pitch = _rows?.rowOf(p) != null ? p : n.pitch;
+        }(),
+    ];
+  }
+
+  /// Nas operações que mudam a altura, o encaixe continua valendo se "Prender na escala" e
+  /// "Manter o encaixe ao mudar a altura" estão ligados.
+  List<MidiNote> _keepSnap(List<MidiNote> notes, {bool preferUp = false}) => _snapping && _Prefs.snapEdits ? _snapToScale(notes, preferUp: preferUp) : notes;
+
   /// A seleção na ordem do clipe, ou todas as notas quando nada está selecionado.
   List<MidiNote> get _targets {
     final notes = _clip!.notes;
@@ -29,7 +46,13 @@ extension _Tools on _PianoRollState {
     final clip = _clip;
     if (clip == null || before.isEmpty || (sameNotes(before, after) && controls == null)) return;
     final old = before.toSet();
+    // nota além do fim do clipe fica muda: se a transformação empurrou o fim das notas para depois
+    // do que já passava, o clipe cresce até o compasso que o contém (como colar e duplicar fazem)
+    final endBefore = before.map((n) => n.end).reduce(math.max), endAfter = after.isEmpty ? 0.0 : after.map((n) => n.end).reduce(math.max);
+    final bar = c.doc.beatsPerBar.toDouble();
+    final grown = endAfter > math.max(clip.length, endBefore) + 1e-9 ? _tidy((endAfter / bar - 1e-9).ceil() * bar) : null;
     c.edit((_) {
+      if (grown != null && grown > clip.length) clip.length = grown;
       // os eventos de controle do clipe (bend, modulação, pedal) andam junto das ferramentas de tempo
       if (controls != null) clip.controls = controls(clip.controls);
       final at = clip.notes.indexWhere(old.contains);
@@ -104,7 +127,7 @@ extension _Tools on _PianoRollState {
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('Prender na escala'),
-          subtitle: const Text('Notas desenhadas, movidas e coladas encaixam na nota mais próxima da escala'),
+          subtitle: const Text('Notas desenhadas, movidas e coladas encaixam na nota mais próxima da escala (transpor, inverter e acordes: opção no menu)'),
           value: snap,
           onChanged: (v) => set(() => snap = v),
         ),
@@ -169,7 +192,7 @@ extension _Tools on _PianoRollState {
   void _insertChord(String type, int inversion) {
     if (_sel.isEmpty || _dims.drums) return;
     final before = _targets, scale = _scale;
-    final after = <MidiNote>[for (final n in before) ...chordNotes(n, chordPitches(n.pitch, type, inversion: inversion, scale: scale))];
+    final after = _keepSnap(<MidiNote>[for (final n in before) ...chordNotes(n, chordPitches(n.pitch, type, inversion: inversion, scale: scale))]);
     _replace(before, after);
     _blip([for (final n in _sel.take(6)) n.pitch], _sel.first.velocity);
   }
@@ -401,6 +424,19 @@ extension _Tools on _PianoRollState {
                     },
               checked: _Prefs.snapScale,
             ),
+          if (melodic)
+            item(
+              Icons.lock_outline,
+              'Manter o encaixe ao mudar a altura',
+              _scale == null
+                  ? null
+                  : () {
+                      _Prefs.snapEdits = !_Prefs.snapEdits;
+                      _refresh();
+                    },
+              checked: _Prefs.snapEdits,
+            ),
+          if (melodic) item(Icons.rule, 'Prender seleção na escala', _scale != null && has ? () => _transform(_snapToScale) : null),
           if (melodic) item(Icons.library_music, 'Inserir acorde…', _chordDialog),
           if (melodic)
             item(
@@ -423,7 +459,7 @@ extension _Tools on _PianoRollState {
           item(Icons.link, 'Legato', has ? () => _transform(legato) : null, hint: 'Shift+L'),
           item(Icons.more_horiz, 'Staccato…', has ? _staccatoDialog : null),
           item(Icons.flip, 'Inverter no tempo', has ? () => _transform(mirrorTime, controls: _mirrorCc()) : null),
-          item(Icons.swap_vert, 'Inverter na altura', has && melodic ? () => _transform(mirrorPitch) : null),
+          item(Icons.swap_vert, 'Inverter na altura', has && melodic ? () => _transform((n) => _keepSnap(mirrorPitch(n))) : null),
           item(Icons.history, 'Reverter a ordem das notas', has ? () => _transform(reverseOrder) : null),
           item(Icons.looks_3, 'Colcheias em tercinas', has ? () => _transform(tripletize) : null),
         ]),

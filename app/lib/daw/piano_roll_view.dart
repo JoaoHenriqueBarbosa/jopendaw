@@ -53,6 +53,9 @@ abstract final class _Prefs {
   /// Prender na escala do clipe (notas desenhadas, movidas e coladas).
   static var snapScale = false;
 
+  /// Com a escala presa, transpor, inverter na altura e inserir acorde também encaixam.
+  static var snapEdits = false;
+
   /// Fantasmas: notas dos outros clipes da faixa e das outras faixas de instrumento, em cinza.
   static var ghostSame = true;
   static var ghostOthers = false;

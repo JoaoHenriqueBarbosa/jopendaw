@@ -381,4 +381,77 @@ void main() {
     await open(t, ['Escala e acordes', 'Prender na escala']);
     await settle(t);
   });
+
+  mac('escalar o tempo estica o clipe até o compasso onde as notas acabam; desfazer volta tudo', (t) async {
+    await sized(t);
+    final c = TestDaw(clipLength: 4, notes: [MidiNote(pitch: 60, start: 0, length: 1), MidiNote(pitch: 62, start: 2, length: 1)]);
+    await t.pumpWidget(host(c, height: 500));
+    await t.pump();
+    await open(t, ['Escalar o tempo', '×2 (dobro)']);
+    // a segunda nota agora vai de 4 a 6: sem esticar o clipe (4) ela ficaria muda
+    expect([for (final n in c.clip.notes) n.start], [0, 4]);
+    expect(c.clip.length, 8);
+    c.undo();
+    await t.pump();
+    expect(c.clip.length, 4);
+    expect([for (final n in c.clip.notes) n.start], [0, 2]);
+    // encurtar de volta não encolhe o clipe
+    await open(t, ['Escalar o tempo', '×2 (dobro)']);
+    await open(t, ['Escalar o tempo', '×0,5 (metade)']);
+    expect(c.clip.length, 8);
+    await settle(t);
+  });
+
+  mac('legato estica o clipe quando a nota já passava do fim', (t) async {
+    await sized(t);
+    // duas notas começam dentro do clipe (4); a última já passa do fim e o legato não pode encolher nada
+    final c = TestDaw(clipLength: 4, notes: [MidiNote(pitch: 60, start: 0, length: 1), MidiNote(pitch: 62, start: 3.5, length: 1)]);
+    await t.pumpWidget(host(c, height: 500));
+    await t.pump();
+    await open(t, ['Seleção', 'Legato']);
+    expect(c.clip.notes[0].length, 3.5);
+    expect(c.clip.length, 4); // nada passou do que já passava: o clipe fica como está
+    await settle(t);
+  });
+
+  mac('prender na escala como ação sobre a seleção', (t) async {
+    await sized(t);
+    final c = TestDaw(notes: [MidiNote(pitch: 61, start: 0, length: 1), MidiNote(pitch: 63, start: 1, length: 1), MidiNote(pitch: 64, start: 2, length: 1)]);
+    c.clip.scale = '0:major';
+    await t.pumpWidget(host(c, height: 500));
+    await t.pump();
+    await open(t, ['Escala e acordes', 'Prender seleção na escala']);
+    // todas as notas (nada selecionado): 61 e 63 saem da escala de C maior
+    for (final n in c.clip.notes) {
+      expect(const {0, 2, 4, 5, 7, 9, 11}, contains(n.pitch % 12), reason: '${n.pitch}');
+    }
+    expect(c.clip.notes[2].pitch, 64);
+    c.undo();
+    await t.pump();
+    expect([for (final n in c.clip.notes) n.pitch], [61, 63, 64]);
+    await settle(t);
+  });
+
+  mac('encaixe ativo também ao transpor com as setas', (t) async {
+    await sized(t);
+    final c = TestDaw(notes: [MidiNote(pitch: 60, start: 0, length: 1)]);
+    c.clip.scale = '0:major';
+    await t.pumpWidget(host(c, height: 500));
+    await t.pump();
+    final g = geoFor(c, height: 500);
+    await open(t, ['Escala e acordes', 'Prender na escala']);
+    await click(t, g.at(.5, 60));
+    // só "prender na escala" ligado: a seta ainda anda de semitom em semitom
+    await key(t, LogicalKeyboardKey.arrowUp);
+    expect(c.clip.notes[0].pitch, 61);
+    await open(t, ['Escala e acordes', 'Manter o encaixe ao mudar a altura']);
+    await key(t, LogicalKeyboardKey.arrowUp);
+    expect(c.clip.notes[0].pitch, 62);
+    await key(t, LogicalKeyboardKey.arrowDown);
+    expect(c.clip.notes[0].pitch, 60);
+    // limpa as preferências da sessão
+    await open(t, ['Escala e acordes', 'Manter o encaixe ao mudar a altura']);
+    await open(t, ['Escala e acordes', 'Prender na escala']);
+    await settle(t);
+  });
 }
