@@ -93,6 +93,7 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [10 App Flutter](dev/10-app-flutter.md) | Modelo do documento (JSON), controlador, como adicionar recursos |
 | [11 Servidor](dev/11-servidor.md) | Rotas, banco, armazenamento, jobs |
 | [12 Sincronização](dev/12-sincronizacao.md) | Protocolo e máquina de estados |
+| [13 Publicação na VPS](dev/13-deploy-na-vps.md) | Dokploy: aplicações, variáveis, schema, build das imagens amd64, pendências |
 | [20 Processo e histórico](dev/20-processo-e-historico.md) | O ciclo de levas (achados, agentes em worktree, cherry-pick, teste de uso, aviso à documentação), as regras do dono, a cronologia das fases 1 a 26, defeitos achados e lacunas |
 
 ## Manutenção
