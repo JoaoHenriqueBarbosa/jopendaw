@@ -1,0 +1,5 @@
+# Os testes de rota do servidor disputam as 2 vagas do worker de tarefas (as exportações FLAC e MP3 rodam
+# uma de cada vez): com todos os núcleos em paralelo alguns esperam mais do que o teste tolera. Quatro
+# fios bastam e ficam estáveis.
+[env]
+RUST_TEST_THREADS = "4"

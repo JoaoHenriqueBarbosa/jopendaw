@@ -2875,11 +2875,7 @@ class _WarpBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts = [
-      if (clip.stretches) 'W',
-      if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st',
-      if (clip.reverse) 'R',
-    ];
+    final parts = [if (clip.stretches) 'W', if (clip.pitch != 0) '${clip.pitch > 0 ? '+' : ''}${formatPitch(clip.pitch)}st', if (clip.reverse) 'R'];
     final label = pending ? 'processando…' : parts.join(' ');
     return Tooltip(
       message: failed ? 'O warp não ficou pronto: o clipe toca o original' : (pending ? 'Processando o warp…' : 'Warp e altura'),
