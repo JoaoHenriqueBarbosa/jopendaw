@@ -23,10 +23,24 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
   StorageUsage? _usage;
 
   @override
+  void initState() {
+    super.initState();
+    _loadUsage();
+  }
+
+  /// O uso do armazenamento é um extra da tela: se falhar, o resto da conta continua valendo (sem
+  /// erro na frente da pessoa) e o cartão simplesmente não aparece.
+  Future<void> _loadUsage() async {
+    try {
+      final u = await _api.storageUsage();
+      if (mounted) setState(() => _usage = u);
+    } catch (_) {}
+  }
+
+  @override
   Future<void> reload() async {
     await _session.refreshMe();
-    // o uso do armazenamento é um extra da tela: se falhar, o resto da conta continua valendo
-    await fetch(_api.storageUsage(), (u) => _usage = u);
+    await _loadUsage();
   }
 
   Future<void> _cleanup() async {
