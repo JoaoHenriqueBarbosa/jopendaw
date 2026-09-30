@@ -13,7 +13,6 @@ use chrono::{DateTime, Utc};
 use sea_orm::EntityTrait;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sqlx::PgPool;
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -59,25 +58,15 @@ pub async fn put(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>, bo
         return Err(err(StatusCode::BAD_REQUEST, "doc precisa ser um objeto"));
     }
 
-    // a troca de versão e o updated_at do projeto andam juntos: ou os dois, ou nenhum
+    // a troca de versão e o updated_at do projeto andam juntos: ou os dois, ou nenhum. Tudo abaixo (ler o documento
+    // gravado, conferir os áudios, gravar) usa esta única conexão, que segura as travas: pedir outra ao pool enquanto
+    // se segura uma esgotaria o pool (10 conexões) com ~10 chamadas simultâneas
     let mut tx = s.pool.begin().await?;
     // áudios que este documento passa a citar: a trava por hash (a mesma do apagar e do criar tarefa) vale até o
     // commit, então um apagar concorrente ou espera este documento (e o vê ao conferir os usos) ou já terminou,
     // e aí a conferência abaixo pega o áudio que sumiu
-    let newly = newly_cited(&s.pool, auth.user_id, id, &b.doc).await?;
+    let newly = newly_cited(&mut tx, auth.user_id, id, &b.doc).await?;
     storage::lock_hashes(&mut tx, &newly).await?;
-    if !newly.is_empty() {
-        let alive: Vec<(String,)> =
-            sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1 AND hash = ANY($2)").bind(auth.user_id).bind(&newly).fetch_all(&mut *tx).await?;
-        let alive: HashSet<String> = alive.into_iter().map(|r| r.0).collect();
-        let gone: Vec<&String> = newly.iter().filter(|h| !alive.contains(*h)).collect();
-        if !gone.is_empty() {
-            tx.rollback().await?;
-            let body =
-                json!({"error": "um áudio citado pelo projeto foi apagado neste instante; envie o áudio de novo e tente salvar outra vez", "missing": gone});
-            return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response());
-        }
-    }
     let doc = sqlx::types::Json(&b.doc);
     let written: Option<(i64, DateTime<Utc>)> = if b.base_version == 0 {
         // primeira gravação: se outra chegou antes, a linha já existe e o INSERT não retorna nada
@@ -99,28 +88,44 @@ pub async fn put(State(s): State<AppState>, auth: Auth, Path(id): Path<Uuid>, bo
         .await?
     };
 
+    // a versão velha vem primeiro (409 com o documento vencedor): quem está desatualizado precisa antes do documento
+    // do servidor, e só depois de reenviar áudio faz sentido falar em áudio sumido
     let Some((version, updated_at)) = written else {
+        let cur: Option<(i64, Option<sqlx::types::Json<Value>>)> =
+            sqlx::query_as("SELECT version, doc FROM project_docs WHERE project_id = $1").bind(id).fetch_optional(&mut *tx).await?;
         tx.rollback().await?;
-        let cur = ProjectDoc::find_by_id(id).one(&s.db).await?;
-        let (version, doc) = cur.map(|d| (d.version, d.doc)).unwrap_or((0, None));
+        let (version, doc) = cur.map(|(v, d)| (v, d.map(|d| d.0))).unwrap_or((0, None));
         let body = json!({"error": "o projeto foi alterado em outro lugar; recarregue a versão do servidor", "version": version, "doc": doc});
         return Ok((StatusCode::CONFLICT, Json(body)).into_response());
     };
+    if !newly.is_empty() {
+        let alive: Vec<(String,)> =
+            sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1 AND hash = ANY($2)").bind(auth.user_id).bind(&newly).fetch_all(&mut *tx).await?;
+        let alive: HashSet<String> = alive.into_iter().map(|r| r.0).collect();
+        let gone: Vec<&String> = newly.iter().filter(|h| !alive.contains(*h)).collect();
+        if !gone.is_empty() {
+            // a gravação acima volta junto: a versão não anda
+            tx.rollback().await?;
+            let body =
+                json!({"error": "um áudio citado pelo projeto foi apagado neste instante; envie o áudio de novo e tente salvar outra vez", "missing": gone});
+            return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response());
+        }
+    }
     sqlx::query("UPDATE projects SET updated_at = $2 WHERE id = $1").bind(id).bind(updated_at).execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(Json(json!({"version": version, "updated_at": updated_at})).into_response())
 }
 
 /// Os áudios da conta que `doc` cita e a versão gravada do projeto ainda não citava (só esses precisam de trava:
-/// os que já eram citados continuam protegidos pela própria citação).
-async fn newly_cited(pool: &PgPool, owner: Uuid, project: Uuid, doc: &Value) -> Result<Vec<String>, sqlx::Error> {
+/// os que já eram citados continuam protegidos pela própria citação). Lê pela conexão da transação `tx`.
+async fn newly_cited(tx: &mut sqlx::Transaction<'static, sqlx::Postgres>, owner: Uuid, project: Uuid, doc: &Value) -> Result<Vec<String>, sqlx::Error> {
     let mut cited = HashSet::new();
     collect_hashes(doc, &mut cited);
     if cited.is_empty() {
         return Ok(Vec::new());
     }
     let old: Option<(sqlx::types::Json<Value>,)> =
-        sqlx::query_as("SELECT doc FROM project_docs WHERE project_id = $1 AND doc IS NOT NULL").bind(project).fetch_optional(pool).await?;
+        sqlx::query_as("SELECT doc FROM project_docs WHERE project_id = $1 AND doc IS NOT NULL").bind(project).fetch_optional(&mut **tx).await?;
     if let Some((old,)) = old {
         let mut before = HashSet::new();
         collect_hashes(&old.0, &mut before);
@@ -128,7 +133,7 @@ async fn newly_cited(pool: &PgPool, owner: Uuid, project: Uuid, doc: &Value) -> 
     }
     let cited: Vec<String> = cited.into_iter().collect();
     let owned: Vec<(String,)> =
-        sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1 AND hash = ANY($2)").bind(owner).bind(&cited).fetch_all(pool).await?;
+        sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1 AND hash = ANY($2)").bind(owner).bind(&cited).fetch_all(&mut **tx).await?;
     Ok(owned.into_iter().map(|r| r.0).collect())
 }
 

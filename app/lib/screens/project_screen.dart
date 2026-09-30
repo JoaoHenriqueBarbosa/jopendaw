@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import '../api/client.dart';
 import '../daw/sync_ui.dart';
 import '../daw/controller.dart';
-import '../daw/warp_dialog.dart' show formatBpm;
+import '../daw/tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
 import '../daw/shortcuts_dialog.dart';
 import '../daw/dock.dart';
 import '../daw/marker.dart';
@@ -89,7 +89,7 @@ class _ProjectScreenState extends State<ProjectScreen> with ApiState {
 /// enquanto ele não abriu.
 String projectSubtitle(Project p, DawDoc? doc) {
   final bpm = doc?.bpm ?? p.bpm.toDouble();
-  return '${formatBpm(bpm)} BPM · ${doc?.beatsPerBar ?? p.beatsPerBar}/${p.beatUnit}';
+  return '${formatBpm(bpm)} BPM · ${doc == null ? formatMeter(p.beatsPerBar, p.beatUnit) : formatDocMeter(doc)}';
 }
 
 /// Transporte, arranjo e o painel de baixo quando aberto. No celular o transporte fica embaixo,

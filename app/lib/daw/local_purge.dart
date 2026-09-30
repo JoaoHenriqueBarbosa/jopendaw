@@ -13,8 +13,8 @@ import 'model.dart';
 /// guardado listar. Nunca lança: o que não deu para
 /// apagar sobra como lixo inofensivo. Devolve quantos áudios foram apagados.
 ///
-/// Os sons derivados do warp (`warp:<chave>`) não entram: o guardado não lista chaves, e eles se
-/// refazem a partir do original.
+/// Os sons derivados do warp (`warp:<hash>|<parâmetros>`, ver `WarpSpec.key`) dos áudios apagados saem junto: o guardado
+/// lista as chaves por prefixo e a chave começa pelo hash da origem.
 Future<int> purgeLocalProject(LocalStore store, String projectId, Iterable<String> otherProjectIds) async {
   var removed = 0;
   try {
@@ -36,10 +36,24 @@ Future<int> purgeLocalProject(LocalStore store, String projectId, Iterable<Strin
         await store.delete(key);
       } catch (_) {}
     }
-    for (final h in hashes.difference(kept)) {
+    final gone = hashes.difference(kept);
+    for (final h in gone) {
       try {
         await store.delete('sample:$h');
         removed++;
+      } catch (_) {}
+    }
+    if (gone.isNotEmpty) {
+      try {
+        for (final k in await store.keys('warp:')) {
+          // "warp:<hash>|…": só os derivados de áudios que saíram
+          final bar = k.indexOf('|');
+          if (bar > 5 && gone.contains(k.substring(5, bar))) {
+            try {
+              await store.delete(k);
+            } catch (_) {}
+          }
+        }
       } catch (_) {}
     }
   } catch (_) {

@@ -12,6 +12,7 @@ import 'controller.dart';
 import 'instruments.dart' show TrackKind;
 import 'midi_file.dart';
 import 'model.dart';
+import 'tempo_format.dart' show formatBpm, formatDocMeter, formatMeter;
 
 /// Extensões do MIDI no seletor de arquivos.
 const midiExtensions = ['mid', 'midi'];
@@ -134,10 +135,10 @@ Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController
     if (meter != null)
       'compasso ${meter.numerator}/${meter.denominator}${meterChanges > 0 ? ' e $meterChanges mudança${meterChanges == 1 ? '' : 's'} de compasso' : ''}'
     else if (d.beatsPerBar != null)
-      'compasso ${d.beatsPerBar}/4',
+      'compasso ${formatMeter(d.beatsPerBar!, 4)}',
   ];
   final nc = c.doc.tempoMap.length - 1;
-  final now = '${_bpmText(c.doc.bpm)} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${c.doc.beatsPerBar}/4';
+  final now = '${_bpmText(c.doc.bpm)} BPM${nc > 0 ? ' e $nc mudança${nc == 1 ? '' : 's'} de andamento' : ''}, ${formatDocMeter(c.doc)}';
   final r = await showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(
@@ -152,10 +153,7 @@ Future<bool> askUseFileTempo(BuildContext context, MidiFileData d, DawController
   return r ?? false;
 }
 
-String _bpmText(double bpm) {
-  final r = bpm.round();
-  return (bpm - r).abs() < 0.05 ? '$r' : bpm.toStringAsFixed(1).replaceAll('.', ',');
-}
+String _bpmText(double bpm) => formatBpm(bpm);
 
 /// O texto de "salvo" com o que ficou de fora: notas e pontos de controle fora do trecho do clipe e
 /// faixas mudas.

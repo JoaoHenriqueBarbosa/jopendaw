@@ -23,7 +23,8 @@ import 'settings_dialog.dart';
 import 'structure_menu.dart';
 import 'tempo_lane.dart' show showMeterChangeDialog;
 import 'tempo_map.dart';
-import 'warp_dialog.dart' show formatBpm, parseBpm;
+import 'tempo_format.dart' show formatBpm, formatDocMeter;
+import 'warp_dialog.dart' show parseBpm;
 import 'timeline.dart' show deleteSelectedClip, duplicateSelectedClip, splitClipsAtPlayhead;
 
 /// Para onde as ações do transporte (botões e atalhos) mandam uma falha que o controlador não
@@ -300,7 +301,7 @@ class _TempoButton extends StatelessWidget {
     if (d.tempo.isSingle && d.meter.isSingle) {
       return TextButton(
         onPressed: onPressed,
-        child: Text('${formatBpm(d.bpm)} BPM · ${d.beatsPerBar}/4', style: style),
+        child: Text('${formatBpm(d.bpm)} BPM · ${formatDocMeter(d)}', style: style),
       );
     }
     return ValueListenableBuilder<double>(

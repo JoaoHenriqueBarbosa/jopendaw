@@ -12,14 +12,21 @@ import '../widgets/page.dart';
 /// O aviso depois da limpeza de áudios sem uso, com o plural e o verbo concordando ("1 áudio apagado", "3 áudios apagados").
 @visibleForTesting
 String cleanupSummary(CleanupResult r) {
-  if (r.removed == 0 && r.skippedRecent == 0) return 'Nada para apagar.';
-  final n = r.skippedRecent;
+  final skipped = r.skippedRecent + r.skippedInUse + r.skippedJob;
+  if (r.removed == 0 && skipped == 0) return 'Nada para apagar.';
+  String verb(int n, String one, String many) => n == 1 ? one : many;
   return [
     if (r.removed == 0)
       'Nada para apagar.'
     else
       'Liberei ${fmtBytes(r.freedBytes)} (${plural(r.removed, 'áudio')} ${r.removed == 1 ? 'apagado' : 'apagados'}).',
-    if (n > 0) '${plural(n, 'áudio')} enviado${n == 1 ? '' : 's'} na última hora ${n == 1 ? 'ficou' : 'ficaram'} de fora.',
+    if (r.skippedRecent > 0)
+      '${plural(r.skippedRecent, 'áudio')} enviado${verb(r.skippedRecent, '', 's')} na última hora ${verb(r.skippedRecent, 'ficou', 'ficaram')} de fora.',
+    if (r.skippedInUse > 0)
+      '${plural(r.skippedInUse, 'áudio')} ${verb(r.skippedInUse, 'passou', 'passaram')} a ser usado${verb(r.skippedInUse, '', 's')} por um projeto e '
+          '${verb(r.skippedInUse, 'ficou', 'ficaram')} de fora.',
+    if (r.skippedJob > 0)
+      '${plural(r.skippedJob, 'áudio')} com tarefa em andamento ${verb(r.skippedJob, 'ficou', 'ficaram')} de fora; limpe de novo quando ${verb(r.skippedJob, 'ela terminar', 'elas terminarem')}.',
   ].join(' ');
 }
 
@@ -56,8 +63,8 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
     } catch (_) {}
   }
 
-  /// Roda depois de uma ação que deu certo. Se atualizar a tela falha, a ação NÃO falhou: o `run` não pode mostrar
-  /// isso como erro dela, então a falha vira só um aviso (ver [_finish]).
+  /// Roda depois de toda ação que deu certo (`run`). Se atualizar a tela falha, a ação NÃO falhou: o `run` não pode
+  /// mostrar isso como erro dela, então a falha vira só um aviso, junto do que a ação já disse ("Nome salvo.", etc.).
   @override
   Future<void> reload() async {
     _reloadFailed = false;
@@ -67,15 +74,15 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
       if (mounted) setState(() => _usage = u);
     } catch (_) {
       _reloadFailed = true;
+      if (mounted && info?.contains(_reloadWarning) != true) setState(() => info = [?info, _reloadWarning].join(' '));
     }
   }
 
-  /// O aviso final de uma ação que deu certo: o texto do que foi feito e, se a tela não atualizou, o aviso disso.
+  /// O aviso final de uma ação que devolve o próprio texto (limpeza, apagar): ele passa a valer no lugar do `info` e
+  /// leva, se a tela não atualizou, o aviso disso.
   void _finish(String? result) {
-    if (!mounted) return;
-    final done = result ?? info;
-    final text = [?done, if (_reloadFailed) _reloadWarning].join(' ');
-    setState(() => info = text.isEmpty ? null : text);
+    if (!mounted || result == null) return;
+    setState(() => info = [result, if (_reloadFailed) _reloadWarning].join(' '));
   }
 
   Future<void> _cleanup() async {
@@ -105,7 +112,8 @@ class _AccountScreenState extends State<AccountScreen> with ApiState {
         title: force ? 'Áudio enviado há pouco' : 'Apagar este áudio?',
         message: force
             ? '${smp.name ?? 'Este áudio'} (${fmtBytes(smp.size)}) foi enviado na última hora e o projeto que o usa pode ainda não ter '
-                  'sincronizado. Se ele estiver em uso, o projeto perde o som. Apagar mesmo assim? Não tem volta.'
+                  'sincronizado. O servidor recusa apagar se um projeto já sincronizado o usa; se o projeto que o usa ainda não sincronizou, ele perde o som '
+                  'quando sincronizar. Apagar mesmo assim? Não tem volta.'
             : '${smp.name ?? 'Áudio sem nome'} (${fmtBytes(smp.size)}) some do servidor. Não tem volta.',
         action: force ? 'Apagar mesmo assim' : 'Apagar',
         destructive: true,

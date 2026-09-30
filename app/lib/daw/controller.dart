@@ -9,7 +9,7 @@ import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart' show GestureBinding, PointerCancelEvent, PointerDownEvent, PointerEvent, PointerUpEvent;
+import 'package:flutter/gestures.dart' show GestureBinding, PointerCancelEvent, PointerDownEvent, PointerEvent, PointerMoveEvent, PointerUpEvent;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show EditableText, FocusManager;
 
@@ -485,7 +485,7 @@ class _SyncBridge implements SyncHost {
   Future<void> fetchMissing() => c._fetchMissing();
 
   @override
-  bool get busyEditing => c.recording || c.playing.value || c._pointersDown > 0;
+  bool get busyEditing => c.recording || c.playing.value || c._gestureInProgress;
 }
 
 class DawController extends ChangeNotifier {
@@ -719,6 +719,7 @@ class DawController extends ChangeNotifier {
       final started = sync.start(localExisted: saved is String || _templated);
       if (waitServer) {
         _lastSaved = jsonEncode(doc.toJson());
+        _blankJson = _lastSaved;
         try {
           await started.timeout(const Duration(seconds: 25));
         } catch (_) {
@@ -752,6 +753,10 @@ class DawController extends ChangeNotifier {
   /// dispensa com [clearRemoteNotice]).
   String? remoteNotice;
 
+  /// O documento vazio de um projeto aberto sem cópia local (aparelho novo): o que vem do servidor por cima dele não é
+  /// "atualização de outro aparelho", então não leva o [remoteNotice].
+  String? _blankJson;
+
   void clearRemoteNotice() {
     if (remoteNotice == null) return;
     remoteNotice = null;
@@ -764,12 +769,40 @@ class DawController extends ChangeNotifier {
   bool _pointerRouted = false;
   final _pointerIds = <int>{};
 
+  /// Quando o último ponteiro apertado se mexeu (ou apertou). Um ponteiro que nunca recebe PointerUp/PointerCancel
+  /// (a janela perdeu o foco no meio do gesto, por exemplo) deixaria [_pointersDown] acima de 0 para sempre e o pull
+  /// da sincronização esperando: passado [pointerStaleAfter] sem movimento, o contador é ignorado.
+  DateTime _pointerActiveAt = DateTime.now();
+
+  /// Depois de quanto tempo parado um gesto "em andamento" deixa de contar (ver [_pointerActiveAt]).
+  @visibleForTesting
+  Duration pointerStaleAfter = const Duration(seconds: 30);
+
+  /// Há um gesto (arraste) em andamento que valha esperar: ponteiro apertado e mexendo há menos que [pointerStaleAfter].
+  bool get _gestureInProgress {
+    if (_pointerIds.isEmpty) return false;
+    if (DateTime.now().difference(_pointerActiveAt) <= pointerStaleAfter) return true;
+    _pointerIds.clear();
+    _pointersDown = 0;
+    return false;
+  }
+
+  /// O app perdeu ou voltou o foco: nenhum PointerUp que ainda não chegou vale esperar.
+  void _dropPointers() {
+    _pointerIds.clear();
+    _pointersDown = 0;
+  }
+
+  @visibleForTesting
+  void debugPointer(PointerEvent e) => _onPointer(e);
+
   void _onPointer(PointerEvent e) {
     if (e is PointerDownEvent) {
       _pointerIds.add(e.pointer);
     } else if (e is PointerUpEvent || e is PointerCancelEvent) {
       _pointerIds.remove(e.pointer);
     }
+    if (e is PointerDownEvent || e is PointerMoveEvent) _pointerActiveAt = DateTime.now();
     _pointersDown = _pointerIds.length;
     // o último dedo levantou: o Toque acaba, o controle volta ao valor automatizado
     if (_pointersDown == 0 && e is! PointerDownEvent) autoRec.releaseAll();
@@ -849,6 +882,7 @@ class DawController extends ChangeNotifier {
   /// entrada.
   void _onAppLeave() {
     if (_disposed) return;
+    _dropPointers();
     _pauseForSystem();
     // Gravando, o `_finishRecording` (já em andamento) ainda espera a latência da entrada e recolhe o
     // que ela tem: fechar a entrada agora cortaria o fim da gravação. Ele fecha depois.
@@ -873,6 +907,7 @@ class DawController extends ChangeNotifier {
   /// Voltou para a tela: garante a saída tocando (reabre se o Android a derrubou) e reabre a
   /// entrada se alguma faixa de áudio ficou armada ou monitorando, como o `open`.
   void _onAppReturn() {
+    _dropPointers();
     if (_disposed || !ready) return;
     _closeInputAfterRecording = false;
     unawaited(_engine.resume());
@@ -2117,6 +2152,8 @@ class DawController extends ChangeNotifier {
     if (!canSwap() || _saveTimer?.isActive == true) return false;
     if (recording) throw StateError('gravando: o projeto novo entra depois');
     final old = doc;
+    final wasBlank = _blankJson != null && jsonEncode(old.toJson()) == _blankJson;
+    _blankJson = null;
     next
       ..metronome = old.metronome
       ..countIn = old.countIn
@@ -2134,7 +2171,7 @@ class DawController extends ChangeNotifier {
     doc = next;
     _undo.clear();
     _redo.clear();
-    remoteNotice = 'Projeto atualizado de outro aparelho. Desfazer não disponível para o que veio de lá.';
+    if (!wasBlank) remoteNotice = 'Projeto atualizado de outro aparelho. Desfazer não disponível para o que veio de lá.';
     if (selectedTrack >= doc.tracks.length) selectedTrack = math.max(0, doc.tracks.length - 1);
     _prune();
     _sync();

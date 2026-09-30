@@ -8,7 +8,10 @@ import 'package:flutter/material.dart';
 
 import '../widgets/feedback.dart';
 import 'controller.dart';
+import 'tempo_format.dart' show formatBpm;
 import 'transport_bar.dart' show describeActionError;
+
+export 'tempo_format.dart' show formatBpm;
 
 Future<void> showWarpDialog(BuildContext context, DawController c, String clipId) => showDialog<void>(
   context: context,
@@ -21,8 +24,6 @@ double? parseBpm(String text) {
   if (v == null || !v.isFinite || v < 20 || v > 999) return null;
   return v;
 }
-
-String formatBpm(double v) => (v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1)).replaceAll('.', ',');
 
 class _WarpDialog extends StatefulWidget {
   final DawController c;

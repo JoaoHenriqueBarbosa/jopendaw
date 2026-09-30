@@ -371,22 +371,21 @@ impl From<sqlx::Error> for RegisterError {
     }
 }
 
-/// Registra que a conta tem o blob, respeitando a cota. O advisory lock por conta serializa
-/// uploads simultâneos: sem ele, dois de 3 GB conferem "cabe" ao mesmo tempo e passam de 4 GB.
-/// Já registrado não conta duas vezes.
-pub async fn register(pool: &PgPool, owner: Uuid, hash: &str, size: i64) -> Result<(), RegisterError> {
-    let mut tx = pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(owner.to_string()).execute(&mut *tx).await?;
+/// Registra que a conta tem o blob, respeitando a cota, na transação `tx` (a da trava do hash: quem já segura uma
+/// conexão não pode pedir outra ao mesmo pool, senão ~10 chamadas simultâneas esgotam o pool esperando umas pelas
+/// outras). O advisory lock por conta serializa uploads simultâneos: sem ele, dois de 3 GB conferem "cabe" ao mesmo
+/// tempo e passam de 4 GB; ele vale até o commit de `tx`. Já registrado não conta duas vezes.
+pub async fn register(tx: &mut sqlx::Transaction<'static, sqlx::Postgres>, owner: Uuid, hash: &str, size: i64) -> Result<(), RegisterError> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(owner.to_string()).execute(&mut **tx).await?;
     let has: Option<(i64,)> =
-        sqlx::query_as("SELECT size FROM samples WHERE owner_id = $1 AND hash = $2").bind(owner).bind(hash).fetch_optional(&mut *tx).await?;
+        sqlx::query_as("SELECT size FROM samples WHERE owner_id = $1 AND hash = $2").bind(owner).bind(hash).fetch_optional(&mut **tx).await?;
     if has.is_none() {
-        let (used,): (i64,) = sqlx::query_as("SELECT COALESCE(sum(size), 0)::bigint FROM samples WHERE owner_id = $1").bind(owner).fetch_one(&mut *tx).await?;
+        let (used,): (i64,) = sqlx::query_as("SELECT COALESCE(sum(size), 0)::bigint FROM samples WHERE owner_id = $1").bind(owner).fetch_one(&mut **tx).await?;
         if used + size > QUOTA_BYTES {
             return Err(RegisterError::Quota);
         }
-        sqlx::query("INSERT INTO samples (owner_id, hash, size) VALUES ($1, $2, $3)").bind(owner).bind(hash).bind(size).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO samples (owner_id, hash, size) VALUES ($1, $2, $3)").bind(owner).bind(hash).bind(size).execute(&mut **tx).await?;
     }
-    tx.commit().await?;
     Ok(())
 }
 

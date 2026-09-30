@@ -114,11 +114,12 @@ pub async fn upload(State(s): State<AppState>, auth: Auth, Path(hash): Path<Stri
     }
     // gravar e registrar sob a trava do hash: um DELETE de outra conta com o mesmo conteúdo não pode
     // apagar o blob entre um passo e outro
-    let lock = storage::lock_hash(&s.pool, &hash).await?;
+    let mut lock = storage::lock_hash(&s.pool, &hash).await?;
     // no S3 isto faz o HEAD (já existe: pula) e o PUT; em disco, o rename. Consome o temporário
     s.store.commit_tmp(&tmp, &hash).await.map_err(ApiError::internal)?;
     guard.keep();
-    match storage::register(&s.pool, auth.user_id, &hash, size as i64).await {
+    // na mesma conexão da trava (uma segunda do pool travaria com muitos envios ao mesmo tempo)
+    match storage::register(&mut lock, auth.user_id, &hash, size as i64).await {
         Ok(()) => {
             lock.commit().await?;
             Ok(StatusCode::NO_CONTENT)
@@ -243,15 +244,16 @@ pub async fn list(State(s): State<AppState>, auth: Auth) -> ApiResult<Value> {
 }
 
 /// Quem cita um único áudio: o mesmo cálculo de [`references`], mas só nos documentos que contêm o texto do
-/// hash (filtro no banco, que não lê os outros), para conferir um hash por vez sem varrer a conta toda.
-async fn projects_citing(pool: &PgPool, owner: Uuid, hash: &str) -> Result<BTreeMap<Uuid, String>, sqlx::Error> {
+/// hash (filtro no banco, que não lê os outros), para conferir um hash por vez sem varrer a conta toda. Roda na
+/// conexão que já segura a trava do hash (`conn`): pedir outra ao pool esgotaria o pool com muitas chamadas juntas.
+async fn projects_citing(conn: &mut sqlx::PgConnection, owner: Uuid, hash: &str) -> Result<BTreeMap<Uuid, String>, sqlx::Error> {
     let mut out = BTreeMap::new();
     let mut rows = sqlx::query_as::<_, (Uuid, String, Option<sqlx::types::Json<Value>>)>(
         "SELECT p.id, p.name, d.doc FROM projects p JOIN project_docs d ON d.project_id = p.id WHERE p.owner_id = $1 AND position($2 in d.doc::text) > 0",
     )
     .bind(owner)
     .bind(hash)
-    .fetch(pool);
+    .fetch(conn);
     while let Some(row) = rows.next().await {
         let (id, name, doc) = row?;
         let Some(doc) = doc else { continue };
@@ -288,8 +290,8 @@ async fn remove_if_unused(s: &AppState, owner: Uuid, hash: &str, grace: bool) ->
     let row: Option<(DateTime<Utc>,)> =
         sqlx::query_as("SELECT created_at FROM samples WHERE owner_id = $1 AND hash = $2").bind(owner).bind(hash).fetch_optional(&mut *lock).await?;
     let Some((created_at,)) = row else { return Ok(Removal::Gone) };
-    // a leitura dos documentos vai por outra conexão: vê tudo o que já foi confirmado antes de a trava chegar a esta
-    let citing = projects_citing(&s.pool, owner, hash).await?;
+    // a leitura dos documentos vai pela mesma conexão da trava: vê tudo o que já foi confirmado antes de a trava chegar
+    let citing = projects_citing(&mut lock, owner, hash).await?;
     if !citing.is_empty() {
         return Ok(Removal::InUse(citing));
     }
@@ -352,7 +354,7 @@ pub async fn delete(State(s): State<AppState>, auth: Auth, Path(hash): Path<Stri
 pub async fn cleanup(State(s): State<AppState>, auth: Auth) -> ApiResult<Value> {
     let rows: Vec<(String,)> = sqlx::query_as("SELECT hash FROM samples WHERE owner_id = $1").bind(auth.user_id).fetch_all(&s.pool).await?;
     let refs = references(&s.pool, auth.user_id).await?;
-    let (mut removed, mut freed, mut recent) = (0u32, 0i64, 0u32);
+    let (mut removed, mut freed, mut recent, mut in_use, mut job) = (0u32, 0i64, 0u32, 0u32, 0u32);
     for (hash,) in rows {
         if refs.projects.contains_key(&hash) {
             continue;
@@ -363,8 +365,11 @@ pub async fn cleanup(State(s): State<AppState>, auth: Auth) -> ApiResult<Value> 
                 freed += size;
             }
             Removal::Recent => recent += 1,
-            Removal::Gone | Removal::InUse(_) | Removal::Job => {}
+            // ganharam uso ou tarefa entre a lista e a conferência sob a trava
+            Removal::InUse(_) => in_use += 1,
+            Removal::Job => job += 1,
+            Removal::Gone => {}
         }
     }
-    Ok(Json(json!({"removed": removed, "freed_bytes": freed, "skipped_recent": recent})))
+    Ok(Json(json!({"removed": removed, "freed_bytes": freed, "skipped_recent": recent, "skipped_in_use": in_use, "skipped_job": job})))
 }

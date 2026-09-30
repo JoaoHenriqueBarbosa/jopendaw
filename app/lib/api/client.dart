@@ -238,6 +238,12 @@ class ApiClient implements SyncApi {
       final j = _decode(r) as Map<String, dynamic>;
       throw DocConflict(ServerDoc(j['version'] as int, (j['doc'] as Map?)?.cast<String, dynamic>()));
     }
+    if (r.statusCode == 422) {
+      final j = _decode(r);
+      if (j is Map && j['missing'] is List) {
+        throw DocSamplesMissing({for (final h in j['missing'] as List) h as String}, j['error'] as String? ?? 'um áudio citado pelo projeto sumiu do servidor');
+      }
+    }
     if (r.statusCode >= 400) throw _error(r);
     return (_decode(r) as Map<String, dynamic>)['version'] as int;
   }

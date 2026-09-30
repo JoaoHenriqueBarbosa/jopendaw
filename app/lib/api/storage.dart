@@ -47,11 +47,18 @@ class StorageUsage {
   );
 }
 
-/// O que a limpeza de áudios sem uso fez.
+/// O que a limpeza de áudios sem uso fez. Além dos apagados: os poupados por terem sido enviados na última hora
+/// ([skippedRecent]), os que ganharam uso num projeto entre a lista e a conferência ([skippedInUse]) e os com tarefa em
+/// andamento ([skippedJob]).
 class CleanupResult {
-  final int removed, freedBytes, skippedRecent;
-  const CleanupResult(this.removed, this.freedBytes, this.skippedRecent);
+  final int removed, freedBytes, skippedRecent, skippedInUse, skippedJob;
+  const CleanupResult(this.removed, this.freedBytes, this.skippedRecent, [this.skippedInUse = 0, this.skippedJob = 0]);
 
-  factory CleanupResult.fromJson(Map<String, dynamic> j) =>
-      CleanupResult((j['removed'] as num).toInt(), (j['freed_bytes'] as num).toInt(), (j['skipped_recent'] as num? ?? 0).toInt());
+  factory CleanupResult.fromJson(Map<String, dynamic> j) => CleanupResult(
+    (j['removed'] as num).toInt(),
+    (j['freed_bytes'] as num).toInt(),
+    (j['skipped_recent'] as num? ?? 0).toInt(),
+    (j['skipped_in_use'] as num? ?? 0).toInt(),
+    (j['skipped_job'] as num? ?? 0).toInt(),
+  );
 }

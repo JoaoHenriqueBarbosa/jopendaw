@@ -152,8 +152,40 @@ pub fn decode_audio(bytes: &[u8]) -> Result<Pcm, String> {
 
 /// Ogg com fluxo Opus: o symphonia (sem o codec) o recusa de um jeito genérico, então o container é
 /// reconhecido antes para dar a mensagem certa.
+///
+/// Anda pelas páginas de início de fluxo (BOS) do Ogg e olha o começo do primeiro pacote de cada uma, então acha o
+/// `OpusHead` em qualquer posição (um fluxo Vorbis ou de vídeo multiplexado antes dele não o empurra para fora de uma
+/// janela fixa de bytes).
 fn is_ogg_opus(bytes: &[u8]) -> bool {
-    bytes.starts_with(b"OggS") && bytes[..bytes.len().min(512)].windows(8).any(|w| w == b"OpusHead")
+    let mut pos = 0usize;
+    while bytes.len() >= pos + 27 && &bytes[pos..pos + 4] == b"OggS" {
+        let (flags, segments) = (bytes[pos + 5], bytes[pos + 26] as usize);
+        // depois das páginas de início de fluxo vêm as de dados: o cabeçalho de todo fluxo já passou
+        if flags & 0x02 == 0 {
+            return false;
+        }
+        let Some(table) = bytes.get(pos + 27..pos + 27 + segments) else { return false };
+        let payload = pos + 27 + segments;
+        if bytes[payload.min(bytes.len())..].starts_with(b"OpusHead") {
+            return true;
+        }
+        pos = payload + table.iter().map(|&n| n as usize).sum::<usize>();
+    }
+    false
+}
+
+/// Uma página Ogg mínima (sem CRC, que a detecção não confere) com um único pacote: para os testes.
+#[cfg(test)]
+pub fn ogg_page(flags: u8, payload: &[u8]) -> Vec<u8> {
+    let mut lacing = vec![255u8; payload.len() / 255];
+    lacing.push((payload.len() % 255) as u8);
+    let mut out = b"OggS\x00".to_vec();
+    out.push(flags);
+    out.extend_from_slice(&[0; 20]);
+    out.push(lacing.len() as u8);
+    out.extend_from_slice(&lacing);
+    out.extend_from_slice(payload);
+    out
 }
 
 pub const OPUS_UNSUPPORTED: &str = "áudio Opus não é suportado; converta para WAV, FLAC, MP3, OGG Vorbis ou AAC/M4A";
@@ -711,10 +743,17 @@ mod tests {
         assert_eq!(decode_audio(b"isto nao e audio").unwrap_err(), UNSUPPORTED);
         assert_eq!(decode_audio(&[]).unwrap_err(), UNSUPPORTED);
         // Opus dentro de Ogg é reconhecido e recebe a mensagem própria (o symphonia não o abre)
-        let mut opus = b"OggS\x00\x02".to_vec();
-        opus.extend_from_slice(&[0; 20]);
-        opus.extend_from_slice(b"OpusHead\x01\x02");
+        let opus = ogg_page(0x02, b"OpusHead\x01\x02");
         assert_eq!(decode_audio(&opus).unwrap_err(), OPUS_UNSUPPORTED);
+        // com outro fluxo na frente (uma página de mais de 512 bytes), o OpusHead segue reconhecido
+        let mut multiplexed = ogg_page(0x02, &[1; 700]);
+        multiplexed.extend(ogg_page(0x02, b"OpusHead\x01\x02"));
+        assert!(is_ogg_opus(&multiplexed));
+        assert_eq!(decode_audio(&multiplexed).unwrap_err(), OPUS_UNSUPPORTED);
+        // página de dados (sem BOS) e página cortada não são fluxo Opus
+        assert!(!is_ogg_opus(&ogg_page(0x00, b"OpusHead\x01\x02")));
+        assert!(!is_ogg_opus(&opus[..20]));
+        assert!(!is_ogg_opus(b"OggS"));
         assert!(!is_ogg_opus(&fixture("seno440.ogg")), "Vorbis não é Opus");
         // MP3 cortado no meio ainda decodifica o que deu; cortado antes do primeiro quadro é erro
         let mp3 = fixture("seno440.mp3");

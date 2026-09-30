@@ -22,6 +22,9 @@ class FakeSyncApi implements SyncApi {
   /// O próximo PUT do documento responde 409 com esta versão do servidor.
   ServerDoc? conflictNext;
 
+  /// O próximo PUT do documento responde 422 citando estes áudios (e o servidor os perde), como um apagar no meio.
+  Set<String>? missingNext;
+
   /// Os jobs: `createJob` devolve o primeiro, cada `job` devolve o seguinte (o último se repete).
   List<SyncJob> script = [];
   final jobsCreated = <(String, String)>[];
@@ -49,6 +52,12 @@ class FakeSyncApi implements SyncApi {
     if (c != null) {
       conflictNext = null;
       throw DocConflict(c);
+    }
+    final m = missingNext;
+    if (m != null) {
+      missingNext = null;
+      samples.removeWhere((h, _) => m.contains(h));
+      throw DocSamplesMissing(m, 'um áudio citado pelo projeto foi apagado neste instante');
     }
     if (baseVersion != version) throw DocConflict(ServerDoc(version, doc));
     doc = d;

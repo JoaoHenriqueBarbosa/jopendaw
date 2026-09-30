@@ -98,6 +98,12 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
   static const debounce = Duration(seconds: 3);
   static const maxBackoff = Duration(minutes: 2);
 
+  /// Quanto espera para tentar trazer o documento de novo quando o projeto está ocupado (gravando, tocando, gesto).
+  static const busyRetry = Duration(seconds: 2);
+
+  /// Quantas vezes o envio reenvia áudios e tenta de novo depois de um 422 (áudio citado apagado no meio).
+  static const maxMissingRetries = 3;
+
   /// De quanto em quanto tempo traz, sem nada pendente aqui, o que outro aparelho mudou.
   static const pullEvery = Duration(seconds: 30);
 
@@ -252,7 +258,8 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
       if (!_pulled) {
         _set(SyncPhase.syncing);
         await _pull();
-        if (conflict != null) return;
+        // não trouxe ainda (o projeto estava ocupado com gravação ou gesto): a rodada volta sozinha
+        if (conflict != null || !_pulled) return;
       }
       if (_dirty) {
         await _push();
@@ -309,8 +316,15 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
         return;
       } else {
         final gen = _gen;
-        final applied = await host.applyRemote(s.doc!, progress: _progress, canSwap: () => gen == _gen);
+        final applied = await host.applyRemote(s.doc!, progress: _progress, canSwap: () => gen == _gen && !host.busyEditing);
         if (!applied) {
+          if (gen == _gen && !_dirty) {
+            // gravando, tocando ou com um gesto em andamento (e nada editado): não é conflito, só não dá para trocar
+            // o documento agora. Não marca como trazido; tenta de novo daqui a pouco
+            _timer?.cancel();
+            _timer = Timer(busyRetry * timeScale, () => unawaited(syncNow()));
+            return;
+          }
           // o usuário editou enquanto os áudios desciam: agora há os dois lados
           conflict = s;
           _set(SyncPhase.conflict);
@@ -355,15 +369,22 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
     filesDone = filesTotal = 0;
     final gen = _gen;
     final json = host.docJson();
-    String? sampleError;
-    try {
-      await uploadSamples(host.sampleHashes());
-    } on ApiException catch (e) {
-      // cota ou tamanho: o documento segue mesmo assim (o outro aparelho vê o áudio como faltando)
-      if (e.status >= 500 || e.status == 408 || e.status == 429) rethrow;
-      sampleError = 'Alguns áudios não foram enviados: ${e.message}';
+    final hashes = host.sampleHashes();
+    String? sampleError = await _uploadForPush(hashes);
+    // 422: um áudio citado foi apagado no servidor no instante do envio. Reenvia os citados em `missing` (a lista do que o
+    // servidor já tinha vale menos que a resposta dele) e tenta de novo, com limite
+    for (var attempt = 0; ; attempt++) {
+      try {
+        _version = await api.putProjectDoc(projectId, _version, json);
+        break;
+      } on DocSamplesMissing catch (e) {
+        _serverHas.removeAll(e.hashes);
+        if (attempt >= maxMissingRetries) {
+          throw SyncFailure('${e.message}. Não consegui reenviar o áudio; abra o projeto no aparelho que o tem e tente de novo.');
+        }
+        sampleError = await _uploadForPush(e.hashes) ?? sampleError;
+      }
     }
-    _version = await api.putProjectDoc(projectId, _version, json);
     if (gen == _gen) {
       _dirty = false;
     } else {
@@ -376,6 +397,18 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       _set(_dirty ? SyncPhase.syncing : SyncPhase.synced);
     }
+  }
+
+  /// Sobe os áudios do envio. Erro que repetir não resolve (cota, tamanho) vira o texto do aviso e o documento segue
+  /// mesmo assim (o outro aparelho vê o áudio como faltando); erro de rede ou 5xx sobe.
+  Future<String?> _uploadForPush(Iterable<String> hashes) async {
+    try {
+      await uploadSamples(hashes);
+    } on ApiException catch (e) {
+      if (e.status >= 500 || e.status == 408 || e.status == 429) rethrow;
+      return 'Alguns áudios não foram enviados: ${e.message}';
+    }
+    return null;
   }
 
   /// Garante no servidor os áudios dados que ele não tem, um por vez, a partir do guardado local
@@ -428,10 +461,15 @@ class SyncService extends ChangeNotifier with WidgetsBindingObserver {
         for (var i = 0; i < 4 && !applied; i++) {
           if (i > 0) await Future<void>.delayed(const Duration(milliseconds: 450));
           if (_disposed) return;
-          applied = await host.applyRemote(doc, progress: _progress, canSwap: () => true);
+          applied = await host.applyRemote(doc, progress: _progress, canSwap: () => !host.busyEditing);
         }
         if (!applied) {
-          _set(SyncPhase.conflict, 'Você editou agora há pouco e o projeto não pôde ser trocado. Tente de novo.');
+          _set(
+            SyncPhase.conflict,
+            host.busyEditing
+                ? 'Há uma gravação, a reprodução ou um gesto em andamento e o projeto não pôde ser trocado. Termine e tente de novo.'
+                : 'Você editou agora há pouco e o projeto não pôde ser trocado. Tente de novo.',
+          );
           return;
         }
       } catch (e) {

@@ -549,6 +549,15 @@ async fn job_validacoes_dono_e_limite() {
     assert_eq!(new_job(&e, &a, "audio_to_midi", &hash, Some(json!({"min_note_ms": -1}))).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(new_job(&e, &a, "audio_to_midi", &hash, Some(json!({"rms_floor_db": 5}))).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(new_job(&e, &a, "audio_to_midi", &hash, Some(json!("x"))).await.status, StatusCode::BAD_REQUEST);
+    // params que não é objeto vale para os dois tipos, o FLAC inclusive
+    for p in [json!("x"), json!([1]), json!(3)] {
+        assert_eq!(new_job(&e, &a, "flac", &hash, Some(p)).await.status, StatusCode::BAD_REQUEST);
+    }
+    // `start` sem `end` é recusado na criação (senão só falharia na decodificação); `start` 0 sem `end` é o arquivo inteiro
+    let r = new_job(&e, &a, "audio_to_midi", &hash, Some(json!({"start": 5}))).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST);
+    assert!(r.json()["error"].as_str().unwrap().contains("end"), "{}", r.json());
+    assert_eq!(new_job(&e, &a, "audio_to_midi", &hash, Some(json!({"start": 0}))).await.status, StatusCode::ACCEPTED);
     // áudio que a conta não tem: 404 (inclusive o que é de outra conta)
     assert_eq!(new_job(&e, &a, "flac", &storage::hex_sha256(b"nada"), None).await.status, StatusCode::NOT_FOUND);
     assert_eq!(new_job(&e, &b, "flac", &hash, None).await.status, StatusCode::NOT_FOUND);
@@ -797,7 +806,7 @@ async fn samples_limpar_sem_uso() {
 
     let r = post_empty(&e, "/api/samples/cleanup", Some(&a.token)).await;
     assert_eq!(r.status, StatusCode::OK);
-    assert_eq!(r.json(), json!({"removed": 1, "freed_bytes": 16, "skipped_recent": 1}));
+    assert_eq!(r.json(), json!({"removed": 1, "freed_bytes": 16, "skipped_recent": 1, "skipped_in_use": 0, "skipped_job": 1}));
     assert!(!e.state.store.exists(&old).await.unwrap());
     for h in [&kept, &fresh, &busy] {
         assert!(e.state.store.exists(h).await.unwrap(), "{h} deveria ter ficado");
@@ -874,6 +883,7 @@ async fn limpar_revalida_documento_que_chegou_depois_da_lista() {
     lock.commit().await.unwrap();
     let r = task.await.unwrap();
     assert_eq!(r.json()["removed"], 0, "{}", r.json());
+    assert_eq!(r.json()["skipped_in_use"], 1, "{}", r.json());
     assert!(e.state.store.exists(&h).await.unwrap());
     assert_eq!(get(&e, &format!("/api/samples/{h}"), &a).await.status, StatusCode::OK);
 }
@@ -895,7 +905,8 @@ async fn limpar_nao_apaga_o_que_ganhou_tarefa_no_meio() {
         .await
         .unwrap();
     lock.commit().await.unwrap();
-    assert_eq!(task.await.unwrap().json()["removed"], 0);
+    let r = task.await.unwrap().json();
+    assert_eq!((r["removed"].clone(), r["skipped_job"].clone()), (json!(0), json!(1)), "{r}");
     assert!(e.state.store.exists(&h).await.unwrap());
 }
 
@@ -979,9 +990,9 @@ async fn job_de_cota_estourada_diz_onde_liberar() {
 async fn job_opus_tem_mensagem_propria() {
     let e = env_or_skip!();
     let a = user(&e).await;
-    let mut opus = b"OggS\x00\x02".to_vec();
-    opus.extend_from_slice(&[0; 20]);
-    opus.extend_from_slice(b"OpusHead\x01\x02");
+    // com um fluxo de 700 bytes multiplexado antes: o OpusHead fica além dos 512 primeiros bytes
+    let mut opus = crate::audio::ogg_page(0x02, &[1; 700]);
+    opus.extend(crate::audio::ogg_page(0x02, b"OpusHead\x01\x02"));
     let (h, _) = upload(&e, &a, &opus).await;
     let j = wait_job(&e, &a, new_job(&e, &a, "audio_to_midi", &h, None).await.json()["id"].as_str().unwrap()).await;
     assert_eq!(j["status"], "failed");
@@ -1028,4 +1039,62 @@ async fn job_trecho_de_arquivo_longo() {
     // trecho fora do áudio: falha clara
     let j = wait_job(&e, &a, new_job(&e, &a, "audio_to_midi", &h, Some(json!({"start": 700, "end": 701}))).await.json()["id"].as_str().unwrap()).await;
     assert!(j["error"].as_str().unwrap().contains("fora do áudio"), "{j}");
+}
+
+#[tokio::test]
+async fn put_com_versao_velha_e_audio_sumido_recebe_409_e_nao_422() {
+    let e = env_or_skip!();
+    let a = user(&e).await;
+    let (h, _) = upload(&e, &a, &rand_bytes()).await;
+    let p = project(&e, &a).await;
+    assert_eq!(put_doc(&e, &a, &p, 0, json!({"tracks": []})).await.status, StatusCode::OK);
+    assert_eq!(put_doc(&e, &a, &p, 1, json!({"tracks": [{"n": 2}]})).await.status, StatusCode::OK);
+    // base 1 já é velha (o servidor está na 2) e o documento cita um áudio que a conta não tem mais: 409, com o documento vencedor
+    assert_eq!(del_force(&e, &h, &a).await.status, StatusCode::OK);
+    let r = put_doc(&e, &a, &p, 1, json!({"tracks": [{"audio": [{"sample": h}]}]})).await;
+    assert_eq!(r.status, StatusCode::CONFLICT, "{}", r.json());
+    assert_eq!(r.json()["version"], 2);
+    assert_eq!(r.json()["doc"], json!({"tracks": [{"n": 2}]}));
+    // (o 422 só existe na corrida com um apagar, coberta por `put_do_documento_espera_a_trava_do_hash_e_recusa_audio_que_sumiu`;
+    // versão velha + apagar no meio dá 409 também, porque a versão é conferida antes)
+    assert_eq!(get(&e, &format!("/api/projects/{p}/doc"), &a).await.json()["version"], 2);
+}
+
+/// Muitas chamadas que seguram a trava do hash ao mesmo tempo (o pool do teste tem 8 conexões): nenhuma pode pedir uma
+/// segunda conexão enquanto segura a primeira, senão todas ficam esperando o pool e o teste estoura o tempo.
+#[tokio::test]
+async fn muitas_chamadas_simultaneas_com_a_trava_nao_esgotam_o_pool() {
+    let e = Arc::new(env_or_skip!());
+    let a = Arc::new(user(&e).await);
+    const N: usize = 40;
+    let mut hashes = Vec::new();
+    for _ in 0..N {
+        hashes.push(upload(&e, &a, &rand_bytes()).await.0);
+    }
+    let mut projects = Vec::new();
+    for _ in 0..N {
+        projects.push(project(&e, &a).await);
+    }
+    let work = async {
+        let mut tasks = Vec::new();
+        for i in 0..N {
+            let (e2, a2, h, p) = (e.clone(), a.clone(), hashes[i].clone(), projects[i].clone());
+            // PUT do documento que cita o áudio (toma a trava e confere)
+            tasks.push(tokio::spawn(async move { put_doc(&e2, &a2, &p, 0, json!({"tracks": [{"audio": [{"sample": h}]}]})).await.status }));
+            // apagar de outro áudio (remove_if_unused: trava + leitura dos documentos)
+            let (e3, a3, h2) = (e.clone(), a.clone(), hashes[(i + 1) % N].clone());
+            tasks.push(tokio::spawn(async move { del(&e3, &format!("/api/samples/{h2}?force=true"), &a3).await.status }));
+            // envio novo (trava + registro)
+            let (e4, a4) = (e.clone(), a.clone());
+            tasks.push(tokio::spawn(async move { upload(&e4, &a4, &rand_bytes()).await.1.status }));
+        }
+        let mut out = Vec::new();
+        for t in tasks {
+            out.push(t.await.unwrap());
+        }
+        out
+    };
+    let out = tokio::time::timeout(Duration::from_secs(60), work).await.expect("chamadas simultâneas travaram (pool esgotado)");
+    // o que não pode aparecer é 5xx (timeout de conexão do pool vira 500)
+    assert!(out.iter().all(|s| !s.is_server_error()), "{out:?}");
 }

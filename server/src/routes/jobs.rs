@@ -74,6 +74,11 @@ fn check_params(kind: &str, params: Option<Value>) -> Result<Option<Value>, ApiE
         }
     };
     let (start, end) = (seconds("start")?, seconds("end")?);
+    // sem `end` o trecho vai até o fim do arquivo, e o servidor não sabe a duração aqui: com `start` isso só falharia
+    // na decodificação (tarefa `failed`); melhor recusar já
+    if start.is_some_and(|s| s > 0.0) && end.is_none() {
+        return Err(bad("end: obrigatório quando há start (o trecho tem no máximo 10 minutos)"));
+    }
     if let Some(e) = end {
         if e <= start.unwrap_or(0.0) {
             return Err(bad("end: precisa ser maior que start"));
@@ -302,9 +307,9 @@ async fn save_flac(s: &AppState, owner: Uuid, bytes: Vec<u8>) -> Result<Value, S
         "erro interno ao gravar o arquivo".to_string()
     };
     // a trava do hash cobre gravar e registrar: apagar o mesmo conteúdo de outra conta não pode cair no meio
-    let lock = storage::lock_hash(&s.pool, &hash).await.map_err(|e| internal("travar", &e))?;
+    let mut lock = storage::lock_hash(&s.pool, &hash).await.map_err(|e| internal("travar", &e))?;
     s.store.store_bytes(&hash, &bytes).await.map_err(|e| internal("gravar", &e))?;
-    let registered = storage::register(&s.pool, owner, &hash, bytes.len() as i64).await;
+    let registered = storage::register(&mut lock, owner, &hash, bytes.len() as i64).await;
     if registered.is_ok() {
         lock.commit().await.map_err(|e| internal("liberar a trava do", &e))?;
     }

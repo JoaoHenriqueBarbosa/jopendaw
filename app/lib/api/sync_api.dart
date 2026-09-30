@@ -20,6 +20,16 @@ class DocConflict implements Exception {
   String toString() => 'o projeto mudou em outro aparelho';
 }
 
+/// O servidor recusou o envio (422) porque um áudio que o documento passou a citar foi apagado no instante: reenviar
+/// os áudios de [hashes] e tentar de novo resolve.
+class DocSamplesMissing implements Exception {
+  final Set<String> hashes;
+  final String message;
+  DocSamplesMissing(this.hashes, this.message);
+  @override
+  String toString() => message;
+}
+
 enum JobStatus {
   queued,
   running,
@@ -59,7 +69,8 @@ class SyncJob {
 abstract class SyncApi {
   Future<ServerDoc> projectDoc(String projectId);
 
-  /// Devolve a nova versão. Lança [DocConflict] se [baseVersion] não é a atual.
+  /// Devolve a nova versão. Lança [DocConflict] se [baseVersion] não é a atual e [DocSamplesMissing] se um áudio citado
+  /// sumiu do servidor no meio do envio.
   Future<int> putProjectDoc(String projectId, int baseVersion, Map<String, dynamic> doc);
 
   /// Dos hashes dados, os que o servidor não tem.
