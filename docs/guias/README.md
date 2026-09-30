@@ -11,7 +11,7 @@
 - **Links.** `../manual/...` são capítulos; os nomes sem pasta são guias desta mesma pasta. Rótulos em `crase` são os do app.
 - **Deduções.** Quando uma célula junta dois fatos dos capítulos sem que haja receita testada, ela diz `(dedução)`.
 
-Guias desta pasta, por ordem de uso comum: [Primeira batida do zero](primeira-batida-do-zero.md) · [Gravar uma banda e mixar](gravar-uma-banda-e-mixar.md) · [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md) · [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [Sampler multi-zona e fatiar loops](sampler-multi-zona-e-fatiar-loops.md) · [Expressão MIDI na prática](expressao-midi-na-pratica.md) · [Efeitos em combinação](efeitos-em-combinacao.md) · [Mixagem e automação](mixagem-e-automacao.md) · [Organizar um projeto com pastas](organizar-um-projeto-com-pastas.md) · [Loudness e master](loudness-e-master.md) · [Remix com warp e altura](remix-com-warp-e-altura.md) · [Fades e crossfades na prática](fades-e-crossfades.md) · [Trabalhar em dois aparelhos](trabalhar-em-dois-aparelhos.md) · [Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) · [Mapa de andamento e compasso](mapa-de-andamento-e-compasso.md) · [MIDI de e para outros programas](midi-de-e-para-outros-programas.md) · [Presets do usuário](presets-do-usuario.md) · [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md) · [Controlador MIDI e MIDI learn](controlador-midi-e-midi-learn.md).
+Guias desta pasta, por ordem de uso comum: [Primeira batida do zero](primeira-batida-do-zero.md) · [Gravar uma banda e mixar](gravar-uma-banda-e-mixar.md) · [Melodia e harmonia com as ferramentas](melodia-e-harmonia-com-as-ferramentas.md) · [FM e wavetable na prática](fm-e-wavetable-na-pratica.md) · [Sampler multi-zona e fatiar loops](sampler-multi-zona-e-fatiar-loops.md) · [Expressão MIDI na prática](expressao-midi-na-pratica.md) · [Efeitos em combinação](efeitos-em-combinacao.md) · [Mixagem e automação](mixagem-e-automacao.md) · [Organizar um projeto com pastas](organizar-um-projeto-com-pastas.md) · [Loudness e master](loudness-e-master.md) · [Exportar para compartilhar e arquivar](exportar-para-compartilhar.md) · [Remix com warp e altura](remix-com-warp-e-altura.md) · [Fades e crossfades na prática](fades-e-crossfades.md) · [Trabalhar em dois aparelhos](trabalhar-em-dois-aparelhos.md) · [Backup e levar o projeto para outro aparelho](backup-e-levar-projeto-para-outro-aparelho.md) · [Mapa de andamento e compasso](mapa-de-andamento-e-compasso.md) · [MIDI de e para outros programas](midi-de-e-para-outros-programas.md) · [Presets do usuário](presets-do-usuario.md) · [Atalhos e fluxo rápido](atalhos-e-fluxo-rapido.md) · [Controlador MIDI e MIDI learn](controlador-midi-e-midi-learn.md).
 
 ---
 
@@ -54,6 +54,9 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Fazer ecos presos ao andamento (ping-pong, pontilhado) | [Efeitos em combinação, receita 4](efeitos-em-combinacao.md#receita-4-delay-em-ping-pong-sincronizado-ao-andamento) · [06d Delay](../manual/06d-efeitos-referencia.md#7-delay) |
 | Fazer um pad largo sem embolar os graves | [Efeitos em combinação, receita 5](efeitos-em-combinacao.md#receita-5-pad-largo-com-chorus-e-reverb) · [04a Sintetizador](../manual/04a-sintetizador.md) |
 | Fazer um baixo com dentes e mordida | [Efeitos em combinação, receita 6](efeitos-em-combinacao.md#receita-6-distorção-de-baixo-com-filtro-e-eq) · [06d Distorção](../manual/06d-efeitos-referencia.md#11-distorção-sobreamostragem) |
+| Dar cola ao master banda por banda | [Efeitos em combinação, receita 7](efeitos-em-combinacao.md#receita-7-master-suave-com-multibanda) · [06d Multibanda](../manual/06d-efeitos-referencia.md#13-multibanda) |
+| Domar o "s" de uma voz | [Efeitos em combinação, receita 8](efeitos-em-combinacao.md#receita-8-voz-com-de-esser-antes-do-compressor) · [06d De-esser](../manual/06d-efeitos-referencia.md#14-de-esser) |
+| Abrir o estéreo sem perder os graves no centro | [Efeitos em combinação, receita 9](efeitos-em-combinacao.md#receita-9-graves-em-mono-com-imagem-estéreo) · [06d Imagem estéreo](../manual/06d-efeitos-referencia.md#15-imagem-estéreo) |
 | Agrupar faixas num barramento (bateria, vozes) | [06 Mixer, saída](../manual/06-mixer.md#saída-e-nome) · [Mixagem e automação, variações](mixagem-e-automacao.md#variações) |
 | Reunir faixas numa pasta com volume, mudo, solo e efeitos do grupo, e recolhê-las na timeline | [Organizar um projeto com pastas](organizar-um-projeto-com-pastas.md) · [02c Pastas de faixa](../manual/02c-pastas-de-faixa.md) |
 | Ouvir só uma faixa com o reverb dela | [06 Mixer, solo e mudo](../manual/06-mixer.md#solo-e-mudo) |
@@ -95,6 +98,9 @@ Cada linha é um objetivo real de produção. A coluna "Leia" começa pelo guia 
 | Medir o volume percebido (LUFS) e o true peak | [06b Medidor de loudness](../manual/06b-analisador-e-medidores.md#medidor-de-loudness-do-master-m-s-i-tp) · [Loudness e master, passo 2](loudness-e-master.md#2-medir-o-ponto-de-partida) |
 | Entregar para podcast (−16) ou rádio e TV (−23) | [Loudness e master, variações](loudness-e-master.md#variações) · [08 Exportação](../manual/08-exportacao.md) |
 | Exportar stems para outro programa | [08 Exportação, Stems](../manual/08-exportacao.md#stems) · [Gravar uma banda e mixar, passo 9](gravar-uma-banda-e-mixar.md#9-exportar-a-mixagem-e-os-stems) |
+| Mandar uma prévia leve em MP3 por mensagem | [Exportar para compartilhar, cenário 1](exportar-para-compartilhar.md#cenário-1-uma-prévia-em-mp3-para-mandar-por-mensagem) · [08 Exportação, FLAC e MP3 pelo servidor](../manual/08-exportacao.md#flac-e-mp3-pelo-servidor) |
+| Guardar o som sem perda ocupando menos espaço (FLAC) | [Exportar para compartilhar, cenário 2](exportar-para-compartilhar.md#cenário-2-arquivar-em-flac) |
+| Entregar o master final em WAV 24 bits e MP3 320 | [Exportar para compartilhar, cenário 3](exportar-para-compartilhar.md#cenário-3-o-master-final-em-wav-24-bits-e-mp3-320) · [Loudness e master](loudness-e-master.md) |
 | Exportar só um trecho para testar | [08 Exportação, passo a passo](../manual/08-exportacao.md#passo-a-passo) |
 | Aliviar um sintetizador pesado (congelar em áudio) | [08 Exportação, congelar uma faixa](../manual/08-exportacao.md#congelar-uma-faixa) |
 
@@ -121,7 +127,7 @@ Cada célula tem uma frase do resultado, os parâmetros de partida e o link. Cé
 
 ### 2.1 Instrumentos × efeitos
 
-As linhas são os cinco instrumentos; as colunas, os doze efeitos, repartidos em quatro tabelas de três. Um efeito de faixa processa **a faixa inteira**: numa faixa `Bateria` as 12 peças passam juntas, e numa faixa `Sampler` todas as zonas.
+As linhas são os cinco instrumentos; as colunas, os quinze efeitos, repartidos em cinco tabelas de três. Um efeito de faixa processa **a faixa inteira**: numa faixa `Bateria` as 12 peças passam juntas, e numa faixa `Sampler` todas as zonas.
 
 **Timbre e dinâmica: `EQ`, `Compressor`, `Gate`**
 
@@ -163,6 +169,16 @@ As linhas são os cinco instrumentos; as colunas, os doze efeitos, repartidos em
 | **FM** | | | Som metálico: `Tipo` `Dobra`, `Mistura` 25% ([FM e wavetable](fm-e-wavetable-na-pratica.md#combinando-com-efeitos)) |
 | **Wavetable** | | | |
 
+**Dinâmica por banda, sibilância e estéreo: `Multibanda`, `De-esser`, `Imagem estéreo`**
+
+| Instrumento | `Multibanda` | `De-esser` | `Imagem estéreo` |
+|---|---|---|---|
+| **Sintetizador** | Baixo com graves soltos: `Controle de graves` (cruzamentos 180 Hz e 3 kHz; `BAIXA` −26 dB, 5:1), com o `Solo` na banda para achar o cruzamento ([06d Multibanda](../manual/06d-efeitos-referencia.md#13-multibanda)) `(dedução, sem receita testada)` | | Pad: `Largo` (larguras 60%, 140% e 170%, `Mono nos graves` abaixo de 100 Hz), conferindo a trilha `FASE` e o mono ([receita 9](efeitos-em-combinacao.md#receita-9-graves-em-mono-com-imagem-estéreo)). Baixo largo demais: `Quase mono` ([06d Imagem estéreo](../manual/06d-efeitos-referencia.md#15-imagem-estéreo)) |
+| **Bateria** | Barramento ou pasta do grupo: `Bateria colada` (cruzamentos 120 Hz e 4 kHz; ataques de 30 ms nos graves e 20 ms nos médios deixam o golpe passar) ([06d Multibanda](../manual/06d-efeitos-referencia.md#13-multibanda)) | Pratos e chiado no barramento: `Banda larga` (7 kHz, 3:1) ([06d De-esser](../manual/06d-efeitos-referencia.md#14-de-esser)) `(dedução, sem receita testada)` | |
+| **Sampler** (zonas) | | | |
+| **FM** | | | |
+| **Wavetable** | | | |
+
 ### 2.2 Instrumentos × automação
 
 A raia de automação abre pelo botão `A` da faixa ([07 Automação](../manual/07-automacao.md)). Tocando, o knob segue a curva em laranja; parado, vale o valor fixo. Os knobs do instrumento e dos efeitos também **gravam** a automação com a música tocando, conforme o modo do botão `Automação` da barra (`Escrever`, `Toque`, `Trava`; em `Ler`, só mudam o valor fixo): [07, Gravar automação](../manual/07-automacao.md#gravar-automação).
@@ -177,7 +193,7 @@ A raia de automação abre pelo botão `A` da faixa ([07 Automação](../manual/
 
 ### 2.3 Efeitos × automação
 
-Todo parâmetro de efeito é automatizável, **menos** o `Sidechain` ([07 Automação](../manual/07-automacao.md)). Só há linha para os efeitos com uso registrado; os demais (`EQ`, `Compressor`, `Gate`, `Limitador`, `Utilitário`, `Delay`, `Phaser`, `Tremolo`, `Distorção`) não têm receita de automação nos capítulos.
+Todo parâmetro de efeito é automatizável, **menos** o `Sidechain` ([07 Automação](../manual/07-automacao.md)). Só há linha para os efeitos com uso registrado; os demais (`EQ`, `Compressor`, `Gate`, `Limitador`, `Utilitário`, `Delay`, `Phaser`, `Tremolo`, `Distorção`, `Multibanda`, `De-esser`) não têm receita de automação nos capítulos. Os parâmetros dos três efeitos da fase 15 (inclusive `Solo`, `Bypass`, `Modo` e `Mono nos graves`, que andam em degraus) aparecem no menu `A` da faixa ([07 Automação](../manual/07-automacao.md)).
 
 | Efeito | Parâmetro | Resultado e valores de partida |
 |---|---|---|
@@ -185,6 +201,7 @@ Todo parâmetro de efeito é automatizável, **menos** o `Sidechain` ([07 Automa
 | `Filtro` | `Ressonância` | De 20% no começo a 45% no fim: o assobio da subida |
 | `Chorus` | `Mistura` | De 0 a 40% na entrada do pad; de 0 a 50% no `Flanger jato` durante um build-up ([06d Chorus](../manual/06d-efeitos-referencia.md#8-chorus-chorus-e-flanger)) |
 | `Reverb` | `Mistura` | Mistura de reverb subindo ao longo da música ([06c](../manual/06c-painel-de-efeitos.md)); no retorno de barramento a `Mistura` fica em 100% e o que anda é o envio |
+| `Imagem estéreo` | `Aguda` (e `Média`) | Abrir o refrão: a `Largura` da banda aguda de 100% a 140% ao entrar o refrão; o alvo se chama `Imagem estéreo · Aguda` e a escala do controle é de 0 a 200% ([07 Automação](../manual/07-automacao.md)) `(dedução, sem receita testada)` |
 
 ### 2.4 Automação de volume, pan e envio × mixer, exportação e barramentos
 
@@ -251,6 +268,9 @@ Para esticar ou transpor **sem** mudar a duração use um clipe de áudio, não 
 | `Tremolo` | Autopan e picotado | | | |
 | `Distorção` | Baixo: `Válvula quente`, `Mistura` 55% | Cópia paralela: `Fita` com `Mistura` 100%, que atrasa 0,67 ms | Barramento de bateria: `Lo-fi 8 bits`, `Mistura` 40% | |
 | `Filtro` | Baixo: `Wobble 1/8` | | Subida na mistura inteira: o mesmo efeito no canal `Master` ([mixagem, variações](mixagem-e-automacao.md#variações)) | |
+| `Multibanda` | Baixo ou violão com graves soltos: `Controle de graves` `(dedução, sem receita testada)` | | Grupo de bateria: `Bateria colada`. Mistura ou grupo: `Mix de bus`. Master: `Master suave` antes do `Limitador` ([receita 7](efeitos-em-combinacao.md#receita-7-master-suave-com-multibanda)) | Não tem: detecta a própria entrada |
+| `De-esser` | Voz: `Voz suave` (6,5 kHz), `Voz feminina` (8 kHz) ou `Voz masculina` (5,5 kHz), depois do `EQ` e antes do `Compressor` ([receita 8](efeitos-em-combinacao.md#receita-8-voz-com-de-esser-antes-do-compressor)) | | Barramento de bateria: `Banda larga` para pratos e chiado `(dedução, sem receita testada)` | Não tem: detecta a própria entrada |
+| `Imagem estéreo` | Pad: `Largo`. Baixo largo demais: `Quase mono` ([receita 9](efeitos-em-combinacao.md#receita-9-graves-em-mono-com-imagem-estéreo)) | | Master ou mistura: `Graves em mono` (mono abaixo de 150 Hz) ou `Mix de bus`, antes do `Limitador` ([receita 9](efeitos-em-combinacao.md#receita-9-graves-em-mono-com-imagem-estéreo)) | Não tem |
 
 ### 2.9 Barramentos, envios e sidechain × exportação e congelar
 
@@ -304,7 +324,8 @@ O que evitar juntos, por quê, o que fazer no lugar e onde está registrado. Tud
 | Chave circular (A é chave de B e B de A) ou um barramento como chave | Numa chave circular uma delas usa o bloco anterior; um barramento como chave chega com 128 quadros de atraso (cerca de 2,7 ms a 48 kHz) | Faixa normal como chave | [06d, sidechain](../manual/06d-efeitos-referencia.md#o-sidechain-o-que-ele-exige) |
 | Esperar que preset, automação ou apagar faixa mantenham o sidechain | Não é automatizável, nenhum preset o altera, e a faixa-chave apagada vira `Faixa N (removida)` com o efeito voltando à própria entrada | Conferir o seletor `Sidechain` depois de mexer nas faixas | [06d](../manual/06d-efeitos-referencia.md#o-sidechain-o-que-ele-exige) · [06c](../manual/06c-painel-de-efeitos.md#limites-e-pegadinhas) |
 | Contar com o fader da faixa-chave para mudar o bombeio | Pelo código a chave é lida depois dos efeitos e **antes** do fader, do mudo e do solo; baixar o fader do bumbo não deveria mudar o bombeio `(não confirmado ouvindo)` | Ajustar `Limiar`, não o fader do bumbo | [receita 3](efeitos-em-combinacao.md#receita-3-sidechain-pumping-com-o-bumbo) |
-| Vários efeitos de dinâmica e esperar medir todos | O medidor de redução mede **um efeito de dinâmica por vez** (o último em que se tocou) | Tocar no cartão que se quer medir | [06b](../manual/06b-analisador-e-medidores.md) · [06c](../manual/06c-painel-de-efeitos.md) |
+| Vários efeitos de dinâmica e esperar medir todos | O medidor de redução mede **um efeito de dinâmica por vez** (o último em que se tocou); `Multibanda`, `De-esser` e `Imagem estéreo` (a trilha `FASE`) entram na mesma disputa | Tocar no cartão que se quer medir | [06b](../manual/06b-analisador-e-medidores.md) · [06c](../manual/06c-painel-de-efeitos.md) |
+| `Solo` ligado numa banda do `Multibanda`, ou `Ouvir banda` ligado no `De-esser`, ao exportar | Os dois mudam o som de verdade: as bandas fora do solo somem, ou a saída vira só a banda de detecção; vale também na exportação | Desligar antes de exportar; os presets do `De-esser` voltam `Ouvir banda` a `Não` | [06d Multibanda](../manual/06d-efeitos-referencia.md#13-multibanda) · [06d De-esser](../manual/06d-efeitos-referencia.md#14-de-esser) |
 | Ler o espectro do `EQ` como o ponto da cadeia | O analisador mostra a saída da faixa depois do fader e de todos os efeitos, não o ponto onde o EQ está | Comparar com o bypass do efeito | [06b, analisador](../manual/06b-analisador-e-medidores.md#analisador-de-espectro) |
 
 ### 3.3 Automação
@@ -392,6 +413,9 @@ O que evitar juntos, por quê, o que fazer no lugar e onde está registrado. Tud
 
 | Evite juntar | Por quê | Em vez disso | Ver |
 |---|---|---|---|
+| **MP3** ou **FLAC** sem conta, sem rede ou com trecho acima de 30 minutos | A conversão é feita no servidor: sem sessão ou sem rede cai para `Exportar em WAV mesmo assim`; acima de 30 minutos (trecho mais `Cauda`) `Exportar` fica desligado | Entrar na conta antes; `Região do loop` ou cauda menor; ou exportar em WAV | [08](../manual/08-exportacao.md#flac-e-mp3-pelo-servidor) |
+| **MP3** e uma taxa que não seja 44,1 ou 48 kHz | O MP3 só aceita essas duas; a janela passa a taxa para 44,1 kHz sozinha | Escolher `44,1 kHz` ou `48 kHz`; para 88,2 ou 96 kHz, FLAC ou WAV | [08](../manual/08-exportacao.md#formatos) |
+| **MP3** com `Normalizar o loudness` colado no teto (0 dBTP) | O loudness é medido no WAV, antes da conversão com perda: o pico do MP3 pode diferir do WAV `(não confirmado neste codificador)` | Teto de −1,5 dBTP ou menos para o MP3 | [exportar para compartilhar, cenário 3](exportar-para-compartilhar.md#cenário-3-o-master-final-em-wav-24-bits-e-mp3-320) |
 | **Normalizar o loudness** e o teto de true peak numa mixagem "espetada" | É só ganho: se subir até o alvo passaria do teto, o ganho para no teto e o arquivo sai **abaixo** do alvo, com aviso. Vale a regra `TP − I` de no máximo 13 dB (−14 LUFS), 15 dB (−16) ou 22 dB (−23). Baixar o teto só piora | `Limitador` no master antes (por exemplo `Master −1 dB` com `Teto` −1,5 dB e 2 a 4 dB de redução nos picos) | [08](../manual/08-exportacao.md#normalizar-o-loudness) · [loudness, passo 3](loudness-e-master.md#3-ganhar-volume-com-o-limitador-no-master-não-com-o-fader) |
 | Confiar no `Teto` do `Limitador` como true peak | O `Limitador` trabalha com o pico de amostra (o código não mostra detecção de pico verdadeiro `(não confirmado)`), então o `TP` pode ler perto de 0 dBTP com a barra em −0,3 | `Teto` cerca de 0,5 dB abaixo do desejado | [06d Limitador](../manual/06d-efeitos-referencia.md#4-limitador) · [06b](../manual/06b-analisador-e-medidores.md) |
 | `Normalizar` (pico) e `Normalizar o loudness` | São pedidos contrários: ligar um desliga o outro | Escolher um | [08](../manual/08-exportacao.md) |
@@ -447,6 +471,9 @@ Formato: "faça X → use Y com Z=valor". Os números são pontos de partida; o 
 | Eco curto de rockabilly | `Delay` preset `Slapback` (`Tempo` `Livre`, 110 ms, `Realimentação` 5%) | [06d Delay](../manual/06d-efeitos-referencia.md#7-delay) |
 | Pad largo sem embolar os graves | `Chorus` `Ensemble` com `Mistura` 40%, `EQ` banda 1 `Passa-alta` 150 Hz, `Reverb` `Salão` com `Cortar graves` 200 Hz | [receita 5](efeitos-em-combinacao.md#receita-5-pad-largo-com-chorus-e-reverb) |
 | Conferir se o pad ou o baixo somem em mono | `Utilitário` `Mono` `Sim` no fim da cadeia, escutar e tirar | [06d Utilitário](../manual/06d-efeitos-referencia.md#5-utilitário) |
+| Cola leve no master, banda por banda | `Multibanda` preset `Master suave` antes do `Limitador`; `Limiar` de cada banda até 1 a 2 dB de redução; `Solo` só para ouvir e depois desligar | [receita 7](efeitos-em-combinacao.md#receita-7-master-suave-com-multibanda) |
+| Tirar o "s" cortante da voz | `De-esser` preset `Voz suave` depois do `EQ` e antes do `Compressor`; `Ouvir banda` para achar a frequência; 3 a 6 dB de redução nos "s" | [receita 8](efeitos-em-combinacao.md#receita-8-voz-com-de-esser-antes-do-compressor) |
+| Graves em mono e topo mais aberto | `Imagem estéreo` preset `Graves em mono` (mono abaixo de 150 Hz) antes do `Limitador`; para abrir o topo, `Média` 110% e `Aguda` 125%; olhar a trilha `FASE` | [receita 9](efeitos-em-combinacao.md#receita-9-graves-em-mono-com-imagem-estéreo) |
 | Conferir se um efeito de latência desalinhou a mix | Duplicar a faixa e, na cópia, `Utilitário` com `Inverter esq.` e `Inverter dir.` em `Sim` e depois um `Limitador` (`Ganho` 0 dB, `Teto` 0 dB, `Lookahead` 3 ms); alinhado, as duas faixas se cancelam | [06e, conferir](../manual/06e-compensacao-de-latencia.md#conferir-se-a-mix-está-alinhada) |
 | Baixo com dentes sem perder o grave | `EQ` 40 Hz, `Compressor` `Baixo`, `Distorção` `Válvula quente` com `Drive` 18 dB e `Mistura` 55% | [receita 6](efeitos-em-combinacao.md#receita-6-distorção-de-baixo-com-filtro-e-eq) |
 | Wobble de baixo | `Filtro` preset `Wobble 1/8` (`Nota` `1/8`); no sintetizador, `LFO` `Taxa` 3 Hz com `Filtro` 3 oit e `Vozes` 1 | [04a, wobble à mão](../manual/04a-sintetizador.md) · [06d Filtro](../manual/06d-efeitos-referencia.md#12-filtro) |
@@ -554,6 +581,9 @@ Números calculados das fórmulas do app; nada foi conferido com um controlador 
 | Entregar para podcast ou rádio e TV | `Normalizar o loudness` com `Podcast −16,0` ou `Broadcast −23,0` (rádio e TV quase sempre só descem) | [loudness, variações](loudness-e-master.md#variações) |
 | Levar stems a outro programa com o balanço intacto | `Stems` ligado, `Normalizar` desligado, `WAV 32 bits float`, `Cauda` de 4 a 6 s | [gravar uma banda, passo 9](gravar-uma-banda-e-mixar.md#9-exportar-a-mixagem-e-os-stems) |
 | Stems no mesmo volume relativo do alvo | `Normalizar o loudness` com `Stems com o mesmo ganho` e WAV 32 bits float | [08](../manual/08-exportacao.md#stems) |
+| Mandar uma prévia leve por mensagem | `FORMATO` `MP3 (para compartilhar)`, `Qualidade do MP3` `192 kbps (CBR)` (ou `128 kbps (CBR)`); precisa de conta e de rede | [exportar para compartilhar, cenário 1](exportar-para-compartilhar.md#cenário-1-uma-prévia-em-mp3-para-mandar-por-mensagem) |
+| Arquivar o som sem perda | `FORMATO` `FLAC (sem perda, menor)`, chip `24 bits`, `Padrão`, `Normalizar` desligado | [exportar para compartilhar, cenário 2](exportar-para-compartilhar.md#cenário-2-arquivar-em-flac) |
+| Master final em dois arquivos | `WAV 24 bits` com `Normalizar o loudness` `Streaming −14,0` e teto −1,5 dBTP, depois `MP3 (para compartilhar)` `320 kbps (CBR)` com as mesmas opções | [exportar para compartilhar, cenário 3](exportar-para-compartilhar.md#cenário-3-o-master-final-em-wav-24-bits-e-mp3-320) |
 | Testar só um trecho | `Região do loop` (arrastar na régua) na janela `Exportar áudio` | [08](../manual/08-exportacao.md#passo-a-passo) |
 | Fixar um sintetizador pesado | `Opções da faixa` (três pontos), `Congelar em áudio`; `Ctrl+Z` desfaz | [08, congelar](../manual/08-exportacao.md#congelar-uma-faixa) |
 

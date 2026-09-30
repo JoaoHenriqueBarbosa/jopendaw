@@ -48,8 +48,11 @@ Os tipos vêm agrupados por família, com o nome e uma descrição de uma linha.
 | DINÂMICA E UTILIDADE | `Gate` | Fecha o som abaixo do limiar (ruído, vazamento) |
 | DINÂMICA E UTILIDADE | `Limitador` | Teto absoluto, com lookahead |
 | DINÂMICA E UTILIDADE | `Utilitário` | Ganho, pan, largura, mono e fase |
+| DINÂMICA E UTILIDADE | `Multibanda` | Compressor de 3 bandas com cruzamentos ajustáveis, solo e bypass por banda |
+| DINÂMICA E UTILIDADE | `De-esser` | Doma a sibilância (s, x, ch) numa banda de detecção ajustável |
 | ESPAÇO | `Reverb` | Ambiência e salas, do quarto à catedral |
 | ESPAÇO | `Delay` | Ecos livres ou no andamento, com ping-pong |
+| ESPAÇO | `Imagem estéreo` | Largura por 3 bandas, balanço, mono nos graves e medidor de fase |
 | MODULAÇÃO | `Chorus` | Chorus e flanger |
 | MODULAÇÃO | `Phaser` | Filtros passa-tudo em movimento |
 | MODULAÇÃO | `Tremolo` | Tremolo e autopan |
@@ -122,18 +125,19 @@ Cada tipo de efeito tem a sua lista de presets seus. Eles funcionam como os do i
 
 **Subtítulo do cartão.** Quando os valores do cartão batem com um preset seu, o subtítulo cinza mostra o nome dele e o menu o marca com um visto; se também batem com um de fábrica, vale o seu. Depois de aplicar e mexer, aparece `Nome (editado)` (só nesta sessão do painel); se você renomear o preset aplicado, o subtítulo mostra o nome novo, e se o apagar o `(editado)` some `(testado só por testes automáticos)`. Os cartões de efeito não têm rótulos `Inicial` nem `Personalizado`: sem correspondência e sem preset aplicado, o subtítulo fica vazio.
 
-**Ao importar.** Um arquivo `.jopreset` de outro tipo entra no tipo dele, não no do cartão onde você importou; a janela avisa `O preset é de outro tipo (Reverb): ele foi guardado, mas só aparece no menu desse tipo.` O nome do tipo nessa mensagem é o de tela (`EQ`, `Compressor`, `Gate`, `Limitador`, `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Distorção`, `Filtro`; de um instrumento, `Sintetizador` e afins); só um tipo que o app não conhece aparece com o nome interno `(testado só por testes automáticos)`.
+**Ao importar.** Um arquivo `.jopreset` de outro tipo entra no tipo dele, não no do cartão onde você importou; a janela avisa `O preset é de outro tipo (Reverb): ele foi guardado, mas só aparece no menu desse tipo.` O nome do tipo nessa mensagem é o de tela (`EQ`, `Compressor`, `Gate`, `Limitador`, `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Distorção`, `Filtro`, `Multibanda`, `De-esser`, `Imagem estéreo`; de um instrumento, `Sintetizador` e afins); só um tipo que o app não conhece aparece com o nome interno `(testado só por testes automáticos)`.
 
 **Onde ficam.** No aparelho (mesmo registro `userpresets` dos presets de instrumento), sem sincronizar com a conta e fora do `.jopendaw` do projeto; para levar a outro aparelho, `Exportar preset…` e `Importar preset…`. Se o app não conseguir guardar ou ler os presets, o menu do cartão mostra no topo, em vermelho, o mesmo aviso do painel de instrumento, e depois de salvar, renomear, apagar ou importar abre a janela `Presets não guardados`; textos, cópia `userpresets.bak` de um arquivo ilegível e o caso do arquivo de versão mais nova (só leitura) em [04 Painel de instrumento, Avisos do guardado](04-painel-de-instrumento.md#avisos-do-guardado). Um preset por cartão e por tipo: **não existe preset da cadeia inteira**, então uma cadeia favorita são vários presets (um por efeito) que você recoloca na ordem à mão.
 
 ### Os editores dos efeitos
 
-Três tipos de editor cobrem os 12 efeitos:
+Quatro tipos de editor cobrem os 15 efeitos:
 
 | Editor | Efeitos | O que se vê |
 |---|---|---|
 | Gráfico de resposta com bandas | `EQ` | Curva de resposta, nós arrastáveis por banda, espectro ao vivo por trás e a lista das 8 bandas. |
 | Curva de transferência com medidor | `Compressor`, `Gate`, `Limitador` | Gráfico entrada × saída em dB, medidor de redução de ganho e os controles. |
+| Gráfico ao vivo próprio | `Multibanda`, `De-esser`, `Imagem estéreo` | Eixo de frequência com as 3 bandas e a redução por banda (`Multibanda`), curva da banda de detecção mais o medidor de redução (`De-esser`) ou larguras por banda mais a trilha `FASE` (`Imagem estéreo`), e os controles. Ver [Gráficos do Multibanda, do De-esser e da Imagem estéreo](#gráficos-do-multibanda-do-de-esser-e-da-imagem-estéreo). |
 | Controles agrupados | `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Distorção`, `Filtro` | Só os controles, agrupados com título (ex.: `TIMBRE`, `LFO`, `SAÍDA`). Sem gráfico. |
 
 #### Controles individuais
@@ -196,6 +200,23 @@ O **medidor de redução de ganho** (coluna à direita do gráfico) mostra quant
 - Com o efeito ligado, o tooltip é `Redução de ganho agora (o traço segura o pico)`; com bypass, `Efeito desligado: nada a medir`.
 - O motor chama esse indicador de `fx_meter`, e o app de `fxMeter`. Ele só é pedido enquanto há um editor de dinâmica na tela.
 - A escala do medidor do gate e do compressor difere: no gate ela vai até 60 dB.
+- O `Multibanda`, o `De-esser` e a `Imagem estéreo` entram na mesma disputa: o indicador do motor é um só, então **um** desses cinco efeitos (com o `Compressor`, o `Gate` e o `Limitador`) é medido por vez. Tocar no gráfico ou num knob do efeito passa a medida para ele.
+
+#### Gráficos do Multibanda, do De-esser e da Imagem estéreo
+
+Os três têm um gráfico à esquerda (computador) ou em cima, com 150 px de altura (celular), e os knobs agrupados ao lado ou embaixo. Detalhes de cada um, com todos os parâmetros, em [06d, Multibanda](06d-efeitos-referencia.md#13-multibanda), [06d, De-esser](06d-efeitos-referencia.md#14-de-esser) e [06d, Imagem estéreo](06d-efeitos-referencia.md#15-imagem-estéreo).
+
+| Efeito | Gráfico | Como se mexe | Medidor |
+|---|---|---|---|
+| `Multibanda` | Eixo de 20 Hz a 20 kHz (log) em 3 faixas coloridas (`BAIXA`, `MÉDIA`, `AGUDA`), com os cruzamentos como linhas brancas e o `Limiar` de cada banda como uma linha horizontal. | Arrastar na **horizontal** move o cruzamento mais perto do ponto tocado (um passo do desfazer por arraste). | Redução ao vivo **de cada banda**, desenhada dentro da faixa: barra que desce do topo (escala de raiz até 24 dB) e o número (`−10.6`) embaixo. Sem medidor lateral. |
+| `De-esser` | Curva do passa-banda de detecção (1 kHz a 20 kHz, log), linha na `Frequência` e a legenda (`6.5k Hz  Q 1.5`). | Arrastar: horizontal = `Frequência` (4 kHz a 10 kHz), vertical = `Q` (`Shift` = fino). | Medidor de redução de ganho ao lado, igual ao das dinâmicas (marcas 1, 3, 6, 12 e 24 dB). |
+| `Imagem estéreo` | Três trilhas com a `Largura` de `BAIXA`, `MÉDIA` e `AGUDA` (meio = 100%, ponta = 200%) e a trilha `FASE` embaixo. | Só leitura: as larguras se mexem nos knobs. | Trilha `FASE`: correlação de fase da saída, de −1 a +1 (barra à direita = mono; à esquerda, na cor de alerta = fases opostas). |
+
+**Empacotamento do medidor por banda.** O motor manda as três reduções do `Multibanda` num único número (`fx_meter`): `redução da baixa + 256 × redução da média + 65536 × redução da aguda`, cada uma em décimos de dB (0 a 255, ou seja, até 25,5 dB por banda). O app separa os três. Quem usar `fx_meter` de fora (por exemplo pelo console) recebe esse número, não dB; ver [dev/01 Motor](../dev/01-motor.md#os-três-efeitos-da-fase-15-multibanda-de-esser-e-imagem-estéreo).
+
+- **Sem o efeito medido, o gráfico fica sem indicador.** Com o `Multibanda` ou a `Imagem estéreo` não medidos (ou em bypass) não há barras de redução nem barra de `FASE`; no `De-esser` o medidor mostra `—` e o tooltip `O medidor mostra um efeito por vez: toque neste para medir`. Com o `De-esser` medido, o tooltip é `Redução de ganho agora (o traço segura o pico)`. Diferente do gráfico de dinâmica, o `De-esser` em bypass mostra o tooltip de "um efeito por vez", não `Efeito desligado: nada a medir`.
+- **Apagados e ligados.** No `Multibanda`, uma banda em `Bypass` apaga os seis controles dela (menos `Solo` e `Bypass`) e fica cinza no gráfico. Na `Imagem estéreo`, `Abaixo de` fica apagado com `Mono nos graves` em `Não`.
+- Todos os controles gravam automação como os demais knobs (ver [07 Automação](07-automacao.md)).
 
 ## Passo a passo
 
@@ -242,7 +263,7 @@ A pasta ([02c](02c-pastas-de-faixa.md)) é um barramento: a cadeia dela processa
 
 ## Combina com
 
-- [06d Referência dos efeitos](06d-efeitos-referencia.md): cada parâmetro dos 12 efeitos, faixas, padrões e presets.
+- [06d Referência dos efeitos](06d-efeitos-referencia.md): cada parâmetro dos 15 efeitos, faixas, padrões e presets.
 - [02c Pastas de faixa](02c-pastas-de-faixa.md): a pasta tem rack próprio, com o mesmo painel; guia [organizar um projeto com pastas](../guias/organizar-um-projeto-com-pastas.md).
 - [06 Mixer](06-mixer.md): as linhas de insert de cada tira (com a luz que liga e desliga o efeito), os envios e barramentos onde `Reverb` e `Delay` costumam morar.
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): o que o motor faz quando um efeito atrasa o som.
@@ -258,6 +279,7 @@ A pasta ([02c](02c-pastas-de-faixa.md)) é um barramento: a cadeia dela processa
 - **Latência dos efeitos é compensada.** O `Limitador` atrasa o áudio pelo `Lookahead` (padrão 3 ms) e a `Distorção` por cerca de 0,67 ms (32 quadros a 48 kHz), fixo, e o motor atrasa as outras faixas, barramentos, envios (pré e pós-fader) e a chave do sidechain para tudo chegar alinhado ao master, com o efeito ligado ou em bypass (a luz do efeito não muda o alinhamento). A gravação do app soma essa latência à do aparelho (áudio e notas MIDI) e o clique do metrônomo é atrasado junto. Fica de fora a automação, que age alguns ms adiantada numa faixa com efeito de latência; a automação do `Lookahead` do `Limitador` refaz a conta com até 20 ms de atraso. Para tirar a latência de um `Limitador`, ponha o `Lookahead` em 0 ou remova o efeito. Capítulo [06e](06e-compensacao-de-latencia.md); tabela em [06d](06d-efeitos-referencia.md#latência-e-custo-de-cada-efeito) `(testado só por testes automáticos)`.
 - **Trocar a ordem, ligar, desligar, adicionar e remover** fazem crossfade de 10 ms: sem estalo. Mudar a ordem recria, no motor, os efeitos dos lugares que trocaram de tipo (pelo que o código de sincronização faz): o estado interno deles, como a cauda de um reverb ou os ecos de um delay, recomeça do zero. Trocar o **tipo** de efeito num slot não existe no painel: remova e adicione.
 - **Sidechain** só existe no `Compressor` e no `Gate`; não é automatizável; presets, de fábrica ou seus, não o alteram (o preset seu nem o guarda); a faixa apagada aparece como `Faixa N (removida)` e o efeito volta a usar a própria entrada.
+- **`Multibanda`, `De-esser` e `Imagem estéreo` não atrasam o som** (latência 0, sem entrar na compensação de [06e](06e-compensacao-de-latencia.md)) e não têm `Sidechain`. O motor antigo ignora esses três tipos: com um `engine.wasm` ou APK de antes da fase 15 o slot fica sem efeito.
 - **Cauda:** com a entrada calada a cadeia continua rodando enquanto o efeito tem o que devolver (eco do delay de até 4 s, cauda do reverb). Parar o transporte não corta a cauda de imediato.
 - O subtítulo `(editado)` e a escolha de qual dinâmica é medida **não são salvos** com o projeto. Efeitos, parâmetros, ordem e bypass são.
 - O medidor do gate satura em 60 dB de redução, mesmo que o `Alcance` chegue a −80 dB.

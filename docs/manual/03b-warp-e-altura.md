@@ -28,7 +28,7 @@ O que o diálogo faz fica guardado no clipe (não no arquivo): o áudio original
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |
 |---|---|---|---|
 | Botão `−` (tooltip `Um semitom abaixo`) | Baixa a altura em 1 semitom | −24 a +24 semitons; desligado em −24 | Cada clique é um passo no desfazer |
-| Leitura `+3 st` / `-5 st` / `0 st` | Mostra a transposição atual | Passos de 1 st pela interface | Valores fracionários existem no documento, mas a interface só anda de 1 em 1 |
+| Leitura `+3 st` / `-5 st` / `0 st` | Mostra a transposição atual, com até duas casas decimais, vírgula e sem zeros sobrando (`+2 st`, `-0,5 st`, `0,04 st`; menos de meio centésimo aparece como `0 st`) | Passos de 1 st pela interface | Valores fracionários existem no documento (por exemplo vindos de um arquivo ou de outra versão), mas a interface só anda de 1 em 1. Antes de `1d90812` a leitura tinha uma casa só e um `0,04 st` aparecia como `0 st`; o selo `+3st` no canto do clipe segue com uma casa e ponto (`+0.5st`) `(lido do código)` |
 | Botão `+` (tooltip `Um semitom acima`) | Sobe a altura em 1 semitom | Desligado em +24 | 12 semitons = 1 oitava |
 | `Zerar` | Volta a transposição para 0 | Desligado quando já está em 0 | |
 

@@ -99,8 +99,8 @@ jopendaw/
 │   │   ├── fm.rs          FM de 4 operadores, 8 algoritmos (tipo 5)
 │   │   ├── wavetable.rs   wavetable, 3 séries de 8 tabelas (tipo 6)
 │   │   ├── effect.rs      trait Effect, Chain (cadeia de inserts) e ids de parâmetros
-│   │   ├── fx/            12 efeitos: chorus, compressor, delay, distortion, eq, filter, gate,
-│   │   │                  limiter, phaser, reverb, tremolo, utility
+│   │   ├── fx/            15 efeitos: chorus, compressor, deesser, delay, distortion, eq, filter,
+│   │   │                  gate, imager, limiter, multiband, phaser, reverb, tremolo, utility
 │   │   ├── dsp.rs         blocos de DSP compartilhados
 │   │   ├── analyzer.rs    analisador de espectro (FFT sob demanda)
 │   │   ├── limiter.rs     limitador de segurança do master

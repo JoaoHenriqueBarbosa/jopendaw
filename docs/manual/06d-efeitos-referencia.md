@@ -1,6 +1,6 @@
 # Referência dos efeitos
 
-> Os 12 efeitos do jopendaw, na ordem do motor: para que serve cada um, todos os parâmetros com faixa e padrão, o que o editor mostra, os presets e dois usos típicos. Use para achar o que um botão faz ou que valor tentar; como montar e mexer no rack está em [06c Painel de efeitos](06c-painel-de-efeitos.md).
+> Os 15 efeitos do jopendaw, na ordem do motor: para que serve cada um, todos os parâmetros com faixa e padrão, o que o editor mostra, os presets e dois usos típicos. Use para achar o que um botão faz ou que valor tentar; como montar e mexer no rack está em [06c Painel de efeitos](06c-painel-de-efeitos.md).
 
 ## Onde fica
 
@@ -11,7 +11,7 @@ Cada efeito é um cartão no painel `Efeitos` (tecla `F`), na cadeia de uma faix
 - **Rótulo** é o texto que aparece embaixo do knob (ou na pílula, ou no seletor). **Grupo** é o título cinza em maiúsculas que agrupa os controles no cartão (`TIMBRE`, `SAÍDA`...).
 - **Escala**: `linear`, `log` (o knob gasta o mesmo curso por oitava, para frequências e tempos), `inteiro` (passos de 1) ou `opções` (menu ou pílula).
 - Porcentagens são mostradas de 0% a 100% (o motor guarda 0 a 1). Tempos abaixo de 1 s são mostrados em ms.
-- **Padrão** é o valor de um efeito recém-adicionado e o que `Reiniciar (valores padrão)` restaura. Os padrões do app (`app/lib/daw/effects.dart`) e os do motor (`engine/src/fx/`) foram conferidos e são os mesmos.
+- **Padrão** é o valor de um efeito recém-adicionado e o que `Reiniciar (valores padrão)` restaura. Os padrões do app (`app/lib/daw/effects.dart`) e os do motor (`engine/src/fx/`) foram conferidos e são os mesmos nos 12 primeiros efeitos e no `De-esser` e na `Imagem estéreo`. No `Multibanda` o motor nasce com outros valores por banda (limiar de −24 dB nas três, razão 4:1, ataque 10 ms, soltura 150 ms); isso não aparece no uso, porque o app manda todos os parâmetros do cartão ao motor assim que o efeito é criado, e vale a tabela do app.
 - **Presets** aplicam *todos* os parâmetros: o que a tabela do preset não cita vale o padrão. Nas tabelas de preset, um traço `·` significa "padrão".
 - Todo valor é guardado na unidade da tabela (dB, Hz, segundos) e limitado à faixa; digitar um valor fora dela o limita.
 - Cada parâmetro pode ser automatizado, menos o `Sidechain`.
@@ -34,6 +34,9 @@ Os knobs se mexem como descrito em [06c, Controles individuais](06c-painel-de-ef
 | 10 | `Tremolo` | Modulação | Controles | 0 |
 | 11 | `Distorção` | Saturação | Controles | 32 quadros (0,67 ms a 48 kHz) |
 | 12 | `Filtro` | Timbre | Controles | 0 |
+| 13 | `Multibanda` | Dinâmica e utilidade | Eixo de frequência com 3 bandas, redução ao vivo por banda + controles | 0 |
+| 14 | `De-esser` | Dinâmica e utilidade | Resposta da banda de detecção + medidor de redução + controles | 0 |
+| 15 | `Imagem estéreo` | Espaço | Larguras por banda + medidor de fase + controles | 0 |
 
 Detalhes das latências em [Latência e custo de cada efeito](#latência-e-custo-de-cada-efeito).
 
@@ -605,6 +608,206 @@ O corte efetivo é `Corte` + LFO × `Profundidade` + √(nível da entrada) × `
 
 ---
 
+## 13. Multibanda
+
+> Compressor de 3 bandas (baixa, média e aguda) com cruzamentos ajustáveis: cada banda tem o próprio limiar, razão, tempos, joelho e ganho, e pode ser ouvida sozinha (`Solo`) ou deixada de fora da compressão (`Bypass`). Serve para segurar só os graves, ou só os agudos, sem apertar o resto; no `Master`, para uma cola leve.
+
+### Como funciona
+
+- O som se divide nos dois cruzamentos por filtros Linkwitz-Riley de 4ª ordem (24 dB por oitava). Sem compressão, a soma das três bandas tem a mesma resposta em frequência do som original (só a fase gira, sem atraso no tempo); nos testes o ganho de cada frequência fica a menos de 0,05 dB de zero `(testado só por testes automáticos)`.
+- Cada banda tem o seu compressor: detector de **pico** que liga os dois canais (o mais forte manda e a imagem estéreo não desliza), com o mesmo cálculo de joelho e balística em dB do [`Compressor`](#2-compressor). Não há `Detector` `RMS`, `Mistura`, `Ganho automático` nem `Sidechain`.
+- O `Ganho` da banda soma **sempre**, com ou sem compressão: `+6 dB` na banda média sobe a banda média em 6 dB. Não é ganho automático.
+
+### Editor
+
+Gráfico de 20 Hz a 20 kHz (escala logarítmica) dividido em três faixas coloridas, com o nome `BAIXA`, `MÉDIA` ou `AGUDA` no canto de cada uma, e os knobs à direita (no celular, o gráfico em cima, com 150 px de altura, e os knobs embaixo).
+
+| O que se vê | Como se mexe | O que significa |
+|---|---|---|
+| Duas linhas verticais brancas | Arrastar **na horizontal** em qualquer ponto do gráfico move o cruzamento **mais perto de onde você tocou** (num passo só do desfazer por arraste). O cruzamento fica dentro da faixa do knob dele. | Frequência dos cruzamentos, escrita ao lado de cada linha embaixo (`150`, `3.0k`). |
+| Uma linha horizontal em cada faixa | Só se muda pelo knob `Limiar`. | O `Limiar` da banda: 0 dB no topo, −60 dB embaixo. |
+| Barra que desce do topo, com o número embaixo (`−10.6`) | Só leitura. | Redução de ganho ao vivo da banda, em escala de raiz até 24 dB. Só aparece com a banda comprimindo (mais de 0,05 dB) e com o efeito medido (ver [06c](06c-painel-de-efeitos.md#gráficos-do-multibanda-do-de-esser-e-da-imagem-estéreo)). |
+| Faixa com fundo mais forte e contorno | Ligar `Solo` na banda. | Banda em solo. |
+| Faixa cinza | Ligar `Bypass` na banda. | Banda fora da compressão. |
+
+O medidor deste efeito é o próprio gráfico: o motor manda as reduções das três bandas juntas, empacotadas num só número (décimos de dB, até 25,5 dB por banda), e o app as separa. Na primeira prova de uso no Chrome (sessão de código, com o preset no `Pad`), o número da banda baixa marcou 0,6 dB e o da média, 10,6 dB `(não repetido por quem escreveu esta documentação)`.
+
+### Parâmetros
+
+Os knobs se agrupam em `CRUZAMENTO`, `SAÍDA` e um grupo por banda (`BAIXA`, `MÉDIA`, `AGUDA`, cada um com os mesmos oito controles).
+
+| Controle (grupo) | O que faz | Valores / padrão |
+|---|---|---|
+| `Cruzamento baixo/médio` (`CRUZAMENTO`) | Frequência em que a banda baixa termina e a média começa. | 40 Hz a 800 Hz, log. Padrão 150 Hz. |
+| `Cruzamento médio/agudo` (`CRUZAMENTO`) | Frequência em que a banda média termina e a aguda começa. | 1 kHz a 12 kHz, log. Padrão 3 kHz. |
+| `Saída` (`SAÍDA`) | Ganho do efeito inteiro, depois de somar as bandas. | −24 a +24 dB, linear. Padrão 0 dB. |
+| `Limiar` (por banda) | Nível a partir do qual a banda começa a ser comprimida. | −60 a 0 dB, linear. Padrão: baixa −24 dB, média −22 dB, aguda −20 dB. |
+| `Razão` (por banda) | Quanto do excesso acima do limiar é cortado. | 1:1 a 20:1, log. Padrão 3,0:1 nas três. |
+| `Ataque` (por banda) | Tempo para o ganho descer quando a banda passa do limiar. | 0,1 ms a 250 ms, log. Padrão: baixa 20 ms, média 10 ms, aguda 4 ms. |
+| `Soltura` (por banda) | Tempo para o ganho voltar. | 5 ms a 3 s, log. Padrão: baixa 250 ms, média 150 ms, aguda 80 ms. |
+| `Ganho` (por banda) | Ganho fixo da banda, depois da compressão (compensação manual ou realce da banda). | −12 a +24 dB, linear. Padrão 0 dB. |
+| `Solo` (por banda) | Só as bandas em solo tocam; as outras somem da saída. Com mais de uma em solo, tocam as que estão em solo. | `Não`/`Sim`. Padrão `Não`. |
+| `Bypass` (por banda) | A banda passa sem compressão **e sem o `Ganho`** dela. | `Não`/`Sim`. Padrão `Não`. |
+| `Joelho` (por banda) | Largura da transição suave em volta do limiar; 0 = joelho duro. | 0 a 24 dB, linear. Padrão 6 dB. |
+
+Com `Bypass` ligado numa banda, os outros seis controles dela ficam apagados (continuam mexíveis); `Solo` e `Bypass` não se apagam. O cruzamento médio/agudo fica sempre pelo menos 1,5 vez acima do baixo: com o baixo em 800 Hz e o médio/agudo em 1 kHz, o motor usa 1,2 kHz (a tela continua mostrando 1 kHz) `(testado só por testes automáticos)`. Todos os controles são automatizáveis ([07 Automação](07-automacao.md)).
+
+### Presets
+
+Legenda das colunas de banda: `Limiar, Razão, Ataque, Soltura, Ganho, Joelho`. O que o preset não cita vale o padrão (`Solo` e `Bypass` em `Não`, `Saída` em 0 dB). O caráter vem dos valores, sem escuta `(não confirmado ao ouvido)`.
+
+| Preset | Cruzamentos | Saída | Baixa | Média | Aguda | Caráter |
+|---|---|---|---|---|---|---|
+| `Bateria colada` | 120 Hz e 4 kHz | 0 dB | −20 dB, 3:1, 30 ms, 200 ms, +1 dB, 6 dB | −18 dB, 2,5:1, 20 ms, 120 ms, 0 dB, 6 dB | −22 dB, 2:1, 5 ms, 80 ms, +1 dB, 6 dB | Ataques lentos nos graves e nos médios deixam o golpe passar; compressão média nas três bandas e +1 dB nos extremos para o conjunto ficar mais cheio. Barramento de bateria. |
+| `Mix de bus` | 150 Hz e 3,5 kHz | +1 dB | −16 dB, 2:1, 30 ms, 300 ms, 0 dB, 10 dB | −14 dB, 1,6:1, 20 ms, 200 ms, 0 dB, 10 dB | −18 dB, 1,8:1, 10 ms, 150 ms, 0 dB, 10 dB | Razões baixas, soltura longa e joelho largo: compressão leve e uniforme para uma mistura ou um grupo. |
+| `Master suave` | 100 Hz e 5 kHz | 0 dB | −14 dB, 1,8:1, 40 ms, 400 ms, 0 dB, 12 dB | −12 dB, 1,4:1, 30 ms, 250 ms, 0 dB, 12 dB | −16 dB, 1,5:1, 15 ms, 200 ms, 0 dB, 12 dB | O mais brando dos quatro: razões de 1,4:1 a 1,8:1, joelho de 12 dB e tempos lentos. Para o `Master`, com poucos dB de redução. |
+| `Controle de graves` | 180 Hz e 3 kHz | 0 dB | −26 dB, 5:1, 10 ms, 150 ms, 0 dB, 3 dB | −10 dB, 1,2:1, 10 ms, 150 ms, 0 dB, 6 dB | −30 dB, 3:1, 2 ms, 60 ms, 0 dB, 3 dB | Graves domados e agudos contidos, com o médio (onde mora a voz) quase intocado. |
+
+### Dois usos típicos
+
+1. **Cola leve no `Master`**: `Master suave` antes do `Limitador`; abaixe o `Limiar` das três bandas até o número embaixo de cada uma marcar de 1 a 2 dB de redução nos trechos fortes. Receita completa em [Efeitos em combinação, receita 7](../guias/efeitos-em-combinacao.md#receita-7-master-suave-com-multibanda).
+2. **Segurar os graves de um baixo ou violão sem escurecer o resto**: preset `Controle de graves`; ligue o `Solo` na banda `BAIXA` para ouvi-la sozinha, arraste o cruzamento no gráfico até a banda pegar só a região que incomoda, e desligue o `Solo`.
+
+### Cuidados
+
+- **`Solo` é o som, não só a escuta**: com um `Solo` ligado as outras bandas somem da saída (com uma transição de poucos ms), inclusive na exportação. Confira que nenhum ficou ligado antes de exportar.
+- Latência 0: não entra na compensação de latência ([06e](06e-compensacao-de-latencia.md)). Não tem `Sidechain`.
+- Sem `Mistura`: para compressão paralela, use um envio para um barramento ([Efeitos em combinação, receita 2](../guias/efeitos-em-combinacao.md#receita-2-bateria-com-compressor-paralelo-em-barramento)).
+- O medidor por banda só aparece no efeito que estiver sendo medido: um por vez, junto com o `Compressor`, o `Gate`, o `Limitador`, o `De-esser` e a `Imagem estéreo`. Toque no gráfico para passar a medida para ele.
+- `Saída` e `Ganho` positivos podem somar bastante nível: confira o medidor do canal.
+
+---
+
+## 14. De-esser
+
+> Doma a sibilância (o "s", o "x", o "ch") comprimindo só uma banda de detecção que você escolhe. Serve para uma voz que fica cortante depois do compressor e do EQ, ou para o chiado dos pratos; a `Frequência` se acha ouvindo a banda com `Ouvir banda`.
+
+### Como funciona
+
+- Um filtro passa-banda (`Frequência` e `Q`) separa a banda de detecção. O nível dela (pico dos dois canais) passa por um cálculo de compressão com `Limiar`, `Razão`, `Ataque` e `Soltura` e um joelho fixo de 2 dB.
+- `Modo` `Banda dividida` (padrão): o ganho age **só na banda**; o resto do espectro passa intacto, e sem redução a saída é exatamente a entrada. `Banda larga`: o ganho age no **sinal inteiro** (o efeito vira um compressor com chave filtrada; o grave também abaixa quando o "s" estoura).
+- `Ouvir banda` `Sim` troca a saída pela banda de detecção (sem a redução de ganho), para achar a frequência do "s" de quem canta. A troca é suavizada (5 ms), sem estalo.
+- Sem `Sidechain`: o detector escuta a própria entrada. Latência 0.
+
+### Editor
+
+Gráfico à esquerda, medidor de redução ao lado e os knobs à direita (no celular, o gráfico e o medidor em cima, com 150 px de altura, e os knobs embaixo).
+
+| O que | Como se mexe | Resultado |
+|---|---|---|
+| Curva da banda de detecção (eixo de 1 kHz a 20 kHz, log; 0 a −36 dB) | Arrastar (mouse ou dedo) em qualquer ponto: a posição **horizontal** vira a `Frequência` (o ponto tocado, limitado a 4 kHz a 10 kHz) e o movimento **vertical** muda o `Q` (para cima aumenta, para baixo diminui; `Shift` = fino). | A curva é o formato do passa-banda: `Q` maior = mais estreita. |
+| Linha vertical branca | Só leitura. | A `Frequência` atual. |
+| Legenda no canto superior direito | Só leitura. | Por exemplo `6.5k Hz  Q 1.5`. |
+| Marcas 2k, 5k e 10k embaixo | Só leitura. | Referência do eixo. |
+| Aviso `OUVINDO A BANDA` (canto superior esquerdo) | Aparece com `Ouvir banda` em `Sim`. | Lembrete de que a saída é só a banda. |
+| Medidor à direita (marcas 1, 3, 6, 12 e 24 dB) | Só leitura. | Redução de ganho em dB, com o traço de pico (1,2 s, depois cai a 12 dB/s), como no [`Compressor`](#2-compressor): número `0.0`, `−4.5` ou `—`. |
+
+O medidor é o mesmo das dinâmicas: um efeito por vez. Com este efeito medido o tooltip é `Redução de ganho agora (o traço segura o pico)`; senão, `O medidor mostra um efeito por vez: toque neste para medir` (também com o efeito em bypass).
+
+### Parâmetros
+
+| Controle (grupo) | O que faz | Valores / padrão |
+|---|---|---|
+| `Frequência` (`BANDA`) | Centro da banda de detecção. | 4 kHz a 10 kHz, log. Padrão 6,5 kHz. |
+| `Q` (`BANDA`) | Estreiteza da banda. Maior = mais estreita e mais seletiva. | 0,5 a 4, log. Padrão 1,5. |
+| `Limiar` (`COMPRESSÃO`) | Nível da banda a partir do qual a redução começa. | −60 a 0 dB, linear. Padrão −30 dB. |
+| `Razão` (`COMPRESSÃO`) | Quanto do excesso é cortado. | 1:1 a 20:1, log. Padrão 5,0:1. |
+| `Ataque` (`COMPRESSÃO`) | Tempo para o ganho descer. | 0,1 ms a 50 ms, log. Padrão 1 ms. |
+| `Soltura` (`COMPRESSÃO`) | Tempo para o ganho voltar. | 5 ms a 500 ms, log. Padrão 50 ms. |
+| `Modo` (`SAÍDA`) | Onde o ganho age. | `Banda dividida`, `Banda larga`. Padrão `Banda dividida`. |
+| `Ouvir banda` (`SAÍDA`) | Ouve só a banda de detecção. | `Não`/`Sim`. Padrão `Não`. |
+
+Todos são automatizáveis ([07 Automação](07-automacao.md)).
+
+### Presets
+
+Todos com `Ouvir banda` em `Não` e `Modo` `Banda dividida`, menos o `Banda larga`. O caráter vem dos valores, sem escuta `(não confirmado ao ouvido)`.
+
+| Preset | Frequência | Q | Limiar | Razão | Ataque | Soltura | Modo | Caráter |
+|---|---|---|---|---|---|---|---|---|
+| `Voz suave` | 6,5 kHz | 1,5 | −32 dB | 4:1 | 1 ms | 50 ms | `Banda dividida` | O ponto de partida geral: limiar baixo e razão moderada, para tirar só a ponta do "s". |
+| `Voz feminina` | 8 kHz | 1,8 | −30 dB | 5:1 | 1 ms | 40 ms | `Banda dividida` | Banda mais alta e mais estreita: a sibilância de vozes agudas mora acima. |
+| `Voz masculina` | 5,5 kHz | 1,3 | −30 dB | 5:1 | 1 ms | 60 ms | `Banda dividida` | Banda mais baixa e mais larga, com soltura um pouco maior. |
+| `Banda larga` | 7 kHz | 1 | −28 dB | 3:1 | 0,5 ms | 80 ms | `Banda larga` | Comprime o sinal todo quando o "s" estoura: pega pratos e chiado de uma vez, ao custo de abaixar o resto junto. |
+
+### Dois usos típicos
+
+1. **Voz sibilante**: no fim da cadeia vocal, antes do `Compressor` ([Efeitos em combinação, receita 8](../guias/efeitos-em-combinacao.md#receita-8-voz-com-de-esser-antes-do-compressor)): `Voz suave`; ligue `Ouvir banda`, ajuste a `Frequência` até ouvir só o chiado do "s", desligue, e abaixe o `Limiar` até o medidor marcar de 3 a 6 dB nas sibilantes.
+2. **Pratos e chiado num barramento de bateria**: preset `Banda larga` com `Limiar` mais alto (−20 dB) para agir só nos picos.
+
+### Cuidados
+
+- Excesso vira ceceio: se a voz soar "sem o s", suba o `Limiar` ou baixe a `Razão`.
+- `Ouvir banda` em `Sim` deixa a saída só com a banda, também na exportação; os presets o desligam.
+- O `Q` alto e a `Frequência` errada fazem o efeito agir em pouca coisa: confira com o medidor e com `Ouvir banda`.
+- Um `Limiar` acima do nível da banda não comprime nada; o efeito é então transparente (saída igual à entrada, no modo dividido).
+
+---
+
+## 15. Imagem estéreo
+
+> Largura estéreo por 3 bandas (baixa, média e aguda), balanço, mono nos graves e um medidor de correlação de fase. Serve para abrir o topo de uma mistura sem abrir os graves, fechar o estéreo de um grave e conferir se o resultado ainda soa em mono.
+
+### Como funciona
+
+- O efeito trabalha em mid/side: o **centro** (`M = (L + R) / 2`) passa intacto e só o **lado** (`S = (L − R) / 2`) é mexido, banda a banda. Com o `Balanço` no centro, a soma esquerda + direita (o que uma caixa mono ouve) nunca muda `(testado só por testes automáticos)`.
+- As bandas somam o lado exato: `100%` nas três é identidade (o som sai igual ao que entrou) e `0%` nas três dá esquerda = direita = centro (mono exato), sem o giro de fase de um divisor comum.
+- `Mono nos graves` tira do lado o que fica abaixo de `Abaixo de`, **depois** das larguras. O `Balanço` vem por último e só abaixa o canal oposto, como o `Pan` do [`Utilitário`](#5-utilitário).
+- Sem lado (som que já é mono: esquerda igual à direita) não há o que abrir: as larguras não mudam nada.
+
+### Editor
+
+Gráfico à esquerda e os knobs à direita (no celular, o gráfico em cima, com 150 px, e os knobs embaixo). O gráfico só mostra, não se arrasta (as larguras se mexem nos knobs).
+
+| O que se vê | O que significa |
+|---|---|
+| Três trilhas `BAIXA`, `MÉDIA` e `AGUDA`, cada uma com o valor em % à direita | A `Largura` da banda. A linha no meio da trilha é 100% e a ponta direita é 200%. |
+| Trilha `FASE` embaixo, com marca no meio | Correlação de fase da saída, de −1 a +1: barra para a direita (mono, +1) ou para a esquerda, na cor de alerta (vermelho-salmão; fases opostas, −1). Só aparece com o efeito medido (um por vez, ver [06c](06c-painel-de-efeitos.md#gráficos-do-multibanda-do-de-esser-e-da-imagem-estéreo)). |
+
+A correlação é `Σ L·R / √(Σ L² · Σ R²)` da saída, com média móvel de constante 0,3 s: `1` é mono, `0` é sem relação entre os canais e `−1` é oposição de fase (o som some em mono). Em silêncio marca 0.
+
+### Parâmetros
+
+Grupos `CRUZAMENTOS`, `LARGURA`, `SAÍDA` e `MONO`.
+
+| Controle (grupo) | O que faz | Valores / padrão |
+|---|---|---|
+| `Cruzamento baixo/médio` (`CRUZAMENTOS`) | Onde a banda baixa termina e a média começa. | 50 Hz a 1 kHz, log. Padrão 200 Hz. |
+| `Cruzamento médio/agudo` (`CRUZAMENTOS`) | Onde a média termina e a aguda começa. | 1 kHz a 12 kHz, log. Padrão 4 kHz. |
+| `Baixa` (`LARGURA`) | Largura do lado na banda baixa. 0% = mono, 100% = original, 200% = lado dobrado. | 0 a 200%, linear. Padrão 100%. |
+| `Média` (`LARGURA`) | Idem, na banda média. | 0 a 200%, linear. Padrão 100%. |
+| `Aguda` (`LARGURA`) | Idem, na banda aguda. | 0 a 200%, linear. Padrão 100%. |
+| `Balanço` (`SAÍDA`) | Só abaixa o canal oposto: negativo abaixa a direita, positivo abaixa a esquerda (em `+1`, a esquerda some). Mostrado como número. | −1 a +1, linear. Padrão 0. |
+| `Mono nos graves` (`MONO`) | Tira o lado abaixo da frequência de `Abaixo de`. | `Não`/`Sim`. Padrão `Não`. |
+| `Abaixo de` (`MONO`) | Frequência do mono nos graves. Apagado com `Mono nos graves` em `Não`. | 40 Hz a 500 Hz, log. Padrão 120 Hz. |
+
+O cruzamento médio/agudo fica sempre pelo menos 1,5 vez acima do baixo (com o baixo em 1 kHz e o outro em 1 kHz, o motor usa 1,5 kHz). Todos os controles são automatizáveis ([07 Automação](07-automacao.md)).
+
+### Presets
+
+O caráter vem dos valores, sem escuta `(não confirmado ao ouvido)`. `Balanço` fica em 0 em todos.
+
+| Preset | Cruzamentos | Baixa / Média / Aguda | Mono nos graves | Caráter |
+|---|---|---|---|---|
+| `Mix de bus` | 200 Hz e 4 kHz | 80% / 110% / 125% | `Sim`, abaixo de 120 Hz | Abre um pouco o topo, fecha um pouco os graves e deixa o subgrave em mono. Para uma mistura ou um grupo. |
+| `Graves em mono` | 150 Hz e 4 kHz | 0% / 100% / 100% | `Sim`, abaixo de 150 Hz | Só arruma os graves: mono abaixo de 150 Hz, o resto como entrou. |
+| `Largo` | 250 Hz e 3 kHz | 60% / 140% / 170% | `Sim`, abaixo de 100 Hz | Estéreo bem aberto nos médios e nos agudos, com os graves quase fechados. Confira em mono. |
+| `Quase mono` | 200 Hz e 4 kHz | 0% / 40% / 60% | `Não` (120 Hz apagado) | Fecha o estéreo: graves em mono e o resto com 40% e 60% do lado. |
+
+### Dois usos típicos
+
+1. **Graves em mono na mistura**: `Graves em mono` no `Master` ou num barramento; o subgrave fica no centro (bom para caixa mono e para vinil) e o resto não muda. Receita em [Efeitos em combinação, receita 9](../guias/efeitos-em-combinacao.md#receita-9-graves-em-mono-com-imagem-estéreo).
+2. **Abrir um pad sem embolar**: `Largo` no pad, com a `Aguda` em 150% a 170%; confira com o medidor `FASE` que a correlação não vai a valores negativos.
+
+### Cuidados
+
+- Larguras acima de 100% dobram o lado e podem tirar o som do centro em mono: olhe a trilha `FASE` (perto de −1 é perigo).
+- O `Balanço` muda a soma esquerda + direita: quando o `Balanço` não é 0, a garantia de mono do primeiro item não vale.
+- Sem latência ([06e](06e-compensacao-de-latencia.md)).
+- O medidor de fase é da **saída deste efeito**, não da mistura final.
+
+---
+
 ## Latência e custo de cada efeito
 
 Os efeitos processam bloco a bloco, sem alocar nem travar no meio do áudio. Alguns atrasam o som:
@@ -613,7 +816,7 @@ Os efeitos processam bloco a bloco, sem alocar nem travar no meio do áudio. Alg
 |---|---|---|
 | `Limitador` | Igual ao `Lookahead`: padrão 3 ms (144 quadros a 48 kHz), até 10 ms (480 quadros). Zero com `Lookahead` 0. | O motor alinha as faixas sozinho (compensação de latência, abaixo); o projeto inteiro sai esse tanto depois do cursor. |
 | `Distorção` | 32 quadros fixos: 0,67 ms a 48 kHz, cerca de 0,73 ms a 44,1 kHz. Nos seis tipos e nas três sobreamostragens. | Compensada como as demais: duplicar uma faixa e distorcer só uma não põe as duas fora de fase. |
-| Todos os outros | 0 (o pré-atraso do reverb, o atraso do delay e do chorus fazem parte do som, não são latência). | |
+| Todos os outros | 0 (o pré-atraso do reverb, o atraso do delay e do chorus fazem parte do som, não são latência). Inclui o `Multibanda`, o `De-esser` e a `Imagem estéreo`: os cruzamentos Linkwitz-Riley e os filtros deles não atrasam o som no tempo (só giram a fase), e o teste do motor confere `latency() == 0` `(testado só por testes automáticos)`. | Não entram na compensação de latência: [06e](06e-compensacao-de-latencia.md). |
 
 **Compensação de latência (PDC).** Capítulo próprio: [06e](06e-compensacao-de-latencia.md). O motor soma a latência de cada efeito nas faixas e nos barramentos e atrasa o resto para que tudo chegue junto ao master: uma faixa com `Limitador` não soa mais atrasada em relação às outras, e um envio para um barramento com efeito de latência não faz filtro de pente com a saída direta da mesma faixa. Vale também para o sidechain (a chave chega alinhada com o som). Ligar e desligar o bypass não muda o alinhamento nem estala, porque a latência do efeito conta ligado ou não.
 
@@ -642,6 +845,7 @@ O que o sidechain exige e como se comporta:
 7. **Faixa-chave apagada:** o seletor mostra `Faixa N (removida)` e o efeito passa a escutar a própria entrada. Reordenar ou apagar outras faixas atualiza o número sozinho.
 8. **Sem escuta da chave:** não há botão para ouvir o sinal do detector.
 9. **Faixa-chave calada:** com a chave em silêncio, o compressor não comprime e o gate fica fechado.
+10. **Só os dois têm sidechain.** O `Multibanda` e o `De-esser` detectam a própria entrada e não têm o seletor `Sidechain`.
 
 ## Inconsistências notadas ao ler o código
 
@@ -656,7 +860,7 @@ Estas não impedem o uso, mas você pode esbarrar nelas:
 - [06b Analisador e medidores](06b-analisador-e-medidores.md): ouvir com os olhos o que o EQ e a distorção fizeram.
 - [07 Automação](07-automacao.md): automatizar `Corte`, `Mistura`, `Limiar` e os demais parâmetros.
 - [06e Compensação de latência](06e-compensacao-de-latencia.md): como o motor alinha as faixas quando o `Limitador` ou a `Distorção` atrasam o som.
-- [Efeitos em combinação](../guias/efeitos-em-combinacao.md): receitas com valores concretos.
+- [Efeitos em combinação](../guias/efeitos-em-combinacao.md): receitas com valores concretos, incluindo o master suave com `Multibanda`, a voz com `De-esser` e os graves em mono com `Imagem estéreo`.
 
 ## Limites e pegadinhas
 
@@ -664,6 +868,7 @@ Estas não impedem o uso, mas você pode esbarrar nelas:
 - Os presets são pontos de partida (o código chama de "pontos de partida pensados para o uso comum, não receitas"): ajuste o `Limiar`, o `Corte` e a `Mistura` ao seu material.
 - Web e Android usam o mesmo motor Rust (WASM na web, nativo no Android): os efeitos soam iguais.
 - Tudo é salvo com o projeto (tipo, parâmetros, ordem, bypass). O nome de preset "editado" não.
+- **`Multibanda`, `De-esser` e `Imagem estéreo` pedem o motor e o app da fase 15.** Um `engine.wasm` (ou APK) antigo não conhece os tipos 13 a 15: o slot fica sem efeito e o som passa como se ele não existisse. Um app antigo que abre um projeto com esses efeitos descarta os slots ao abrir (o tipo salvo não existe naquela versão), e ao salvar de novo eles se perdem `(não confirmado: lido no código, sem teste)`.
 
 ## Atalhos
 

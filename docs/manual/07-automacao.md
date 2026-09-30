@@ -40,6 +40,16 @@ Cada item de alvo mostra à esquerda um `✓` (raia aberta) ou um olho riscado (
 
 O parâmetro `Sidechain` (compressor e gate) **não** aparece: é uma escolha de faixa, não um valor que anda.
 
+**Os três efeitos da fase 15 (`Multibanda`, `De-esser`, `Imagem estéreo`)** aparecem com todos os parâmetros, inclusive os de `Não`/`Sim` e de opções, que andam em degraus. No submenu do efeito os títulos de seção são os grupos da tabela; o nome da raia, depois de criada, junta o efeito e o parâmetro, e acrescenta o grupo entre parênteses quando o nome se repete no efeito:
+
+| Efeito | Seções do submenu | Nomes de raia (exemplos) |
+|---|---|---|
+| `Multibanda` | `CRUZAMENTO`, `SAÍDA`, `BAIXA`, `MÉDIA`, `AGUDA` | `Multibanda · Cruzamento baixo/médio`, `Multibanda · Saída`, `Multibanda · Limiar (Baixa)`, `Multibanda · Ganho (Média)`, `Multibanda · Solo (Aguda)`, `Multibanda · Bypass (Baixa)`. Cada banda tem `Limiar`, `Razão`, `Ataque`, `Soltura`, `Ganho`, `Solo`, `Bypass` e `Joelho`. |
+| `De-esser` | `BANDA`, `COMPRESSÃO`, `SAÍDA` | `De-esser · Frequência`, `De-esser · Q`, `De-esser · Limiar`, `De-esser · Razão`, `De-esser · Ataque`, `De-esser · Soltura`, `De-esser · Modo`, `De-esser · Ouvir banda`. |
+| `Imagem estéreo` | `CRUZAMENTOS`, `LARGURA`, `SAÍDA`, `MONO` | `Imagem estéreo · Cruzamento baixo/médio`, `Imagem estéreo · Cruzamento médio/agudo`, `Imagem estéreo · Baixa`, `Imagem estéreo · Média`, `Imagem estéreo · Aguda`, `Imagem estéreo · Balanço`, `Imagem estéreo · Mono nos graves`, `Imagem estéreo · Abaixo de`. |
+
+As raias de largura da `Imagem estéreo` (`Baixa`, `Média`, `Aguda`) andam de 0 a 200%, e o desenho segue a escala do controle: os parâmetros em Hz (`Cruzamento`, `Frequência`, `Abaixo de`) e em segundos são logarítmicos. Faixa e padrão de cada um estão em [06d](06d-efeitos-referencia.md#13-multibanda). O teste do app confere só a escala (0 a 2, padrão 1) da largura da banda média e a do limiar da banda média (−60 a 0 dB, padrão −22) `(testado só por testes automáticos)`; automatizar os três efeitos ao ouvido não foi repetido por quem escreveu esta documentação `(não confirmado)`.
+
 ### Cabeçalho da raia
 
 | Controle (rótulo exato) | O que faz | Valores / padrão | Dica |

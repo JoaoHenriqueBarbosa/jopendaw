@@ -19,7 +19,7 @@ Quatro coisas para saber antes:
 1. **A entrada MIDI tem de estar ligada.** Ícone de cabo da barra (o número ao lado é a quantidade de aparelhos). O botão `Aprender MIDI` só aparece na barra depois disso; `Shift+K` liga o modo e o MIDI de uma vez.
 2. **No modo, os controles só respondem a clique.** Arrastar, roda e duplo clique voltam quando você sai (`Esc`, `Sair` ou `Shift+K`).
 3. **A origem é canal + controle** (`Canal 1 · CC 21`), não o aparelho. Dois controladores mandando o mesmo CC no mesmo canal se misturam.
-4. **`Suave` está ligado por padrão.** O controle na tela não salta: só passa a seguir o botão quando o botão cruza o valor que ele já tem (ou chega a 2% do curso dele). Parece "não pegou" no primeiro giro: gire até o valor atual e ele assume.
+4. **`Suave` está ligado por padrão.** O controle na tela não salta: só passa a seguir o botão quando o botão cruza o valor que ele já tem, o que ele mostra na tela (ou chega a 2% do curso dele). Parece "não pegou" no primeiro giro: gire até o valor atual e ele assume.
 
 ## Passo a passo
 
@@ -33,7 +33,7 @@ Resultado: oito knobs (`CC 21` a `CC 28`, os padrões de muitos controladores) c
 4. Repita, em ordem: fader do `Baixo` (knob 2), fader do `Pad` (3), fader do `Reverb` (4); a linha de envio `Reverb` do canal `Pad` (5, o alvo se chama `Envio → Reverb`); o knob de pan do `Pad` (6); o fader do `Master` (7). Cada clique arma um controle, o giro seguinte o mapeia.
 5. Abra `Mapeamentos MIDI` (botão `Mapeamentos (7)` da faixa) e ajuste os faders de volume: curva `Logarítmica` e, com a ponta direita do seletor de faixa, `Máx` em **79%** (o 0 dB do fader fica a 79,4% do curso). Com isso o knob todo no máximo dá 0 dB e nunca +6 dB; no meio do giro (`CC 64`) o fader está em cerca de −7,9 dB, e a −29 dB no `CC 16`, em vez de −48 dB.
 6. Saia do modo (`Esc`). Gire os knobs: cada fader do mixer fica parado até o knob cruzar a posição dele e depois acompanha. Exemplo: o `Pad` do modelo está em ganho 0,55 (−5,2 dB), 65% do curso; com curva `Linear` e sem `Máx` o knob só assume perto do `CC 83`.
-7. Se quiser o mesmo ao criar projetos novos, `Salvar como padrão para novos projetos` na janela: leva os volumes, o pan e o `Master` (as faixas pela posição); **não** leva o envio de reverb.
+7. Se quiser o mesmo ao criar projetos novos, `Salvar como padrão para novos projetos` na janela: leva os volumes, o pan e o `Master` (as faixas pela posição); **não** leva o envio de reverb. Um mapeamento de knob de instrumento leva junto o tipo da faixa e só vale numa faixa do mesmo tipo do projeto novo.
 
 Variações:
 
@@ -65,7 +65,7 @@ Resultado: dois faders de um pad controller (`CC 41` e `CC 42`) gravam, com a m�
 1. No modelo `Batida eletrônica`, mapeie o fader do `Pad` no mixer ao `CC 41` e o `Corte` do `Filtro` (efeito da receita 2) ao `CC 42`, como nas receitas anteriores (mapear de novo o fader do `Pad` substitui o `CC 23` da receita 1 e o mapeamento novo nasce com curva `Linear` e `Mín`/`Máx` em 0% e 100%, que é o que os números abaixo supõem). Deixe `Suave` **ligado** na janela `Mapeamentos MIDI`: para gravar, ele é útil, porque o trecho só começa a valer quando o fader físico passa pelo valor do controle (sem salto no primeiro ponto).
 2. Saia do modo (`Esc`). No botão `Automação` da barra, escolha `Toque` (`Grava só enquanto você segura o controle; ao soltar, volta ao valor automatizado.`).
 3. Ligue o loop nos quatro compassos (`L`) e aperte `Espaço`. **Não** aperte `R`: com a gravação de áudio ou MIDI ligada, a automação não grava e a barra avisa `A automação não grava junto com a gravação de áudio ou MIDI.`
-4. Suba e desça o fader do `CC 41`. Ao passar pelo valor atual do fader do `Pad` na tela (ganho 0,55, −5,2 dB, cerca de `CC 83` com curva `Linear`), o fader do app passa a acompanhar e o movimento começa a ser gravado.
+4. Suba e desça o fader do `CC 41`. Ao passar pelo valor atual do fader do `Pad` na tela (ganho 0,55, −5,2 dB, cerca de `CC 83` com curva `Linear`), o fader do app passa a acompanhar e o movimento começa a ser gravado. Se a raia `Volume` já tem uma curva e o fader ainda está seguindo ela (antes de você pegar o controle), o valor comparado é o que o fader mostra naquele ponto da curva, não o valor fixo dele.
 5. Pare de mexer. Depois de **0,7 s sem mensagens** o app entende que você soltou (o controlador não tem "soltar"): o valor volta ao da automação numa rampa de 1/4 de batida (e o valor fixo do fader do app volta ao de antes de você mexer), e os pontos gravados aparecem na raia `Volume`. Com o loop ligado, se a volta acabar enquanto você ainda mexe, o `Toque` para na virada e só grava de novo quando o fader mexer outra vez `(testado só por testes automáticos; com MIDI vem da leitura do código)`. Mexa o `CC 42` na volta seguinte da mesma forma para gravar o `Corte`.
 6. Pare (`Espaço`). Confira as raias `Volume` do `Pad` e `Filtro · Corte`. `Ctrl+Z` desfaz a passada inteira de uma vez; refazer com `Ctrl+Shift+Z`.
 7. Para o fader ficar onde você o largou até o fim, troque `Toque` por `Trava` (o app mantém o último valor até parar). Com o loop ligado, a `Trava` só segue gravando na volta seguinte enquanto o controle ainda conta como seguro (menos de 0,7 s sem mensagens); depois disso ela para na virada do loop `(lido do código)`.

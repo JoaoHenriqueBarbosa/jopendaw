@@ -31,11 +31,11 @@ Comece por aqui, na ordem:
 | [06 Mixer](manual/06-mixer.md) | Faders, envios, barramentos, master |
 | [06b Analisador e medidores](manual/06b-analisador-e-medidores.md) | Espectro e níveis |
 | [06c Painel de efeitos](manual/06c-painel-de-efeitos.md) | Cadeia de efeitos |
-| [06d Referência dos efeitos](manual/06d-efeitos-referencia.md) | Os 12 efeitos, parâmetro por parâmetro |
+| [06d Referência dos efeitos](manual/06d-efeitos-referencia.md) | Os 15 efeitos, parâmetro por parâmetro |
 | [06e Compensação de latência](manual/06e-compensacao-de-latencia.md) | Como o motor alinha faixas e envios quando o `Limitador` e a `Distorção` atrasam o som |
 | [06f MIDI learn](manual/06f-midi-learn.md) | Ligar knobs, faders e pedais de um controlador MIDI a controles do app |
 | [07 Automação](manual/07-automacao.md) | Mover parâmetros no tempo |
-| [08 Exportação](manual/08-exportacao.md) | WAV, stems, congelar faixa |
+| [08 Exportação](manual/08-exportacao.md) | WAV, FLAC e MP3 (pelo servidor), stems, congelar faixa |
 | [09 Configurações, atalhos e Android](manual/09-configuracoes-atalhos-android.md) | Ajustes, teclas, diferenças de plataforma |
 
 ### Guias de combinações
@@ -54,6 +54,7 @@ Receitas que juntam vários recursos, com valores concretos (`guias/`). Para ach
 | [Mixagem e automação](guias/mixagem-e-automacao.md) | Mix do zero e automação de filtro e volume |
 | [Organizar um projeto com pastas](guias/organizar-um-projeto-com-pastas.md) | Bateria com compressor no grupo, coro com reverb no grupo, projeto grande recolhido |
 | [Loudness e master](guias/loudness-e-master.md) | Nível competitivo e seguro |
+| [Exportar para compartilhar e arquivar](guias/exportar-para-compartilhar.md) | Prévia em MP3 por mensagem, arquivo em FLAC e master final em WAV 24 bits e MP3 320 |
 | [Remix com warp e altura](guias/remix-com-warp-e-altura.md) | Esticar, transpor e sobrepor |
 | [Fades e crossfades na prática](guias/fades-e-crossfades.md) | Emendar tomadas de voz, loop sem clique, entrada suave de um pad, com a curva de cada caso |
 | [Trabalhar em dois aparelhos](guias/trabalhar-em-dois-aparelhos.md) | Nuvem, conflito, offline |

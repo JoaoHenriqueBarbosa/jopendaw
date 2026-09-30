@@ -1,6 +1,6 @@
 # Exportação e congelamento
 
-> Como transformar o projeto em arquivos WAV (a música inteira e, se quiser, uma faixa por arquivo), como levar a mixagem a um volume-alvo em LUFS (streaming, podcast, rádio e TV) e como congelar uma faixa em áudio para aliviar o projeto ou fixar um som.
+> Como transformar o projeto em arquivos WAV, FLAC ou MP3 (a música inteira e, se quiser, uma faixa por arquivo; FLAC e MP3 são convertidos no servidor), como levar a mixagem a um volume-alvo em LUFS (streaming, podcast, rádio e TV) e como congelar uma faixa em áudio para aliviar o projeto ou fixar um som.
 
 ![Diálogo Exportar áudio: intervalo, formato, taxa, Stems, Normalizar, Normalizar o loudness e Cauda; no pé, os botões Projeto inteiro (.jopendaw)…, Notas em MIDI (.mid)…, Cancelar e Exportar.](../img/exportar-audio.jpg)
 
@@ -12,7 +12,7 @@
 
 ## Onde fica
 
-- **Exportar:** botão **Exportar** (ícone de disquete com seta) na barra do transporte, à direita dos painéis e das entradas de notas. Tooltip: `Exportar a música (e as faixas separadas) em WAV`. Em barra estreita ou no celular mostra só o ícone. Não tem atalho de teclado. A mesma janela leva ao arquivo do projeto (`.jopendaw`): botão `Projeto inteiro (.jopendaw)…` no rodapé, descrito na tabela abaixo, e às notas em MIDI padrão: botão `Notas em MIDI (.mid)…`, descrito na seção [Notas em MIDI (.mid)](#notas-em-midi-mid).
+- **Exportar:** botão **Exportar** (ícone de disquete com seta) na barra do transporte, à direita dos painéis e das entradas de notas. Tooltip: `Exportar a música (e as faixas separadas) em WAV` (o texto continua dizendo WAV mesmo com FLAC e MP3 na janela). Em barra estreita ou no celular mostra só o ícone. Não tem atalho de teclado. A mesma janela leva ao arquivo do projeto (`.jopendaw`): botão `Projeto inteiro (.jopendaw)…` no rodapé, descrito na tabela abaixo, e às notas em MIDI padrão: botão `Notas em MIDI (.mid)…`, descrito na seção [Notas em MIDI (.mid)](#notas-em-midi-mid).
 - **Congelar:** menu de três pontos (**Opções da faixa**) no cabeçalho de cada faixa, item **Congelar em áudio**.
 - Os dois rodam **fora de tempo real**, em um motor separado e sem tocar: não é preciso reproduzir a música, e o render é mais rápido do que tocar (não há medida documentada de quanto, `(não confirmado)`).
 
@@ -27,8 +27,10 @@ Abre ao tocar em **Exportar**. Enquanto o projeto está gravando ou ocupado (imp
 | **INTERVALO** > **Música inteira** | Exporta do compasso 1 (batida 0) até o fim do último clipe (de áudio ou de notas), mais a cauda. | Padrão. | Começa sempre em 0, mesmo que o primeiro clipe entre depois (o silêncio inicial vai junto). |
 | **INTERVALO** > **Região do loop** | Exporta só a região marcada na régua. Funciona com o loop desligado, desde que a região exista (mais de 0,01 batida). Tooltip: os compassos da região, por exemplo `Compassos 5 a 8`; sem região, `Marque uma região arrastando na régua para exportar só ela` e a opção fica desligada. | | Se a região sumiu desde a última exportação, volta para **Música inteira**. |
 | Linha de resumo (texto pequeno) | Mostra `Compassos 1 a 8 · 0:16` (ou `Compasso 3`), com ` + 2 s de cauda` quando a cauda é maior que zero. Sem nada para exportar mostra `O projeto ainda não tem clipes.` ou `A região do loop está vazia.` | | |
-| **FORMATO** (lista) | Profundidade do WAV. Veja a tabela abaixo. | `WAV 24 bits` (padrão) | O texto embaixo da lista explica a escolha. |
-| **TAXA DE AMOSTRAGEM** (lista) | Taxa do arquivo. O render já é feito nessa taxa (não é reamostrado depois). | `A do aparelho (48 kHz)` (padrão; o número é a taxa real do aparelho), `44,1 kHz`, `48 kHz`, `88,2 kHz`, `96 kHz` (a que for igual à do aparelho não repete). | Taxa maior deixa o arquivo e o render proporcionalmente maiores. |
+| **FORMATO** (lista) | Formato do arquivo: WAV de três profundidades, FLAC ou MP3. Veja a tabela abaixo. | Cinco itens: `WAV 16 bits`, `WAV 24 bits` (padrão), `WAV 32 bits float`, `FLAC (sem perda, menor)`, `MP3 (para compartilhar)`. | O texto embaixo da lista explica a escolha. FLAC e MP3 dependem de conta e de rede. |
+| **Profundidade e compressão** (só com FLAC): dois chips `16 bits` e `24 bits` e uma lista | Profundidade do FLAC e quanto ele é comprimido. A lista não tem rótulo próprio: os itens são `Rápido`, `Padrão` e `Menor arquivo`. | `24 bits` e `Padrão` (padrão). `Rápido` = nível 2, `Padrão` = 5, `Menor arquivo` = 8 (de 0 a 8 no servidor). | Mais compressão dá arquivo menor e conversão mais lenta; o som é idêntico. |
+| **Qualidade do MP3** (só com MP3): lista | Taxa de bits do MP3. | `192 kbps (CBR)` (padrão). Itens: `128 kbps (CBR)`, `192 kbps (CBR)`, `256 kbps (CBR)`, `320 kbps (CBR)`, `V0 (VBR, ~245 kbps, a melhor)`, `V1 (VBR, ~225 kbps)`, `V2 (VBR, ~190 kbps)`, `V3 (VBR, ~175 kbps)`, `V4 (VBR, ~165 kbps)`. | Para o master final, `320 kbps (CBR)` ou `V0`. Ver [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
+| **TAXA DE AMOSTRAGEM** (lista) | Taxa do arquivo. O render já é feito nessa taxa (não é reamostrado depois). | `A do aparelho (48 kHz)` (padrão; o número é a taxa real do aparelho), `44,1 kHz`, `48 kHz`, `88,2 kHz`, `96 kHz` (a que for igual à do aparelho não repete). Com **MP3**, a lista só oferece `44,1 kHz` e `48 kHz` (e `A do aparelho`, se o aparelho já estiver numa dessas). | Taxa maior deixa o arquivo e o render proporcionalmente maiores. Escolher MP3 com uma taxa que ele não aceita passa a taxa para `44,1 kHz` sozinho. |
 | **Stems** (interruptor) | Além da mixagem, gera um arquivo por faixa. Legenda: `Um arquivo por faixa, além da mixagem` (ou `Um arquivo da faixa, além da mixagem` se só há uma faixa com clipes). | Desligado. | Ver a seção Stems. |
 | **Normalizar** (interruptor) | Leva o pico de cada arquivo a −1 dBFS. Legenda: `Sobe (ou desce) tudo até o pico ficar em −1 dBFS`. | Desligado. | Vale para cada arquivo separadamente. Ligar este desliga o `Normalizar o loudness` (e o contrário): são pedidos contrários. |
 | **Normalizar o loudness** (interruptor) | Leva a mixagem inteira ao volume percebido do alvo, em LUFS, sem passar do teto de true peak. Legenda: `Leva a mixagem inteira ao volume percebido do alvo (LUFS), sem passar do teto de pico`. Ao ligar, abrem as quatro linhas abaixo. | Desligado. | Ver a seção Normalizar o loudness. |
@@ -41,7 +43,8 @@ Abre ao tocar em **Exportar**. Enquanto o projeto está gravando ou ocupado (imp
 | **Projeto inteiro (.jopendaw)…** (botão de texto com ícone de caixa, no rodapé, à esquerda de **Cancelar**) | Troca o WAV pelo arquivo do projeto editável: fecha esta janela sem exportar áudio e abre a janela `Exportar projeto` (o documento como está na tela e os áudios, num zip). Ver [Projeto em arquivo](01-projetos-modelos-conta.md#projeto-em-arquivo-jopendaw). | | Não guarda as opções da tela como "últimas usadas": só o `Exportar` guarda. |
 | **Notas em MIDI (.mid)…** (botão de texto com ícone de piano, no rodapé, ao lado de **Projeto inteiro (.jopendaw)…**) | Troca o WAV pelas notas em arquivo MIDI padrão: fecha esta janela sem exportar áudio e abre a janela `Exportar MIDI (.mid)`. Ver [Notas em MIDI (.mid)](#notas-em-midi-mid). | | Também não guarda as opções da tela como "últimas usadas". Não depende do intervalo, do formato, da taxa nem da cauda desta janela. |
 | **Cancelar** | Fecha sem exportar. | | |
-| **Exportar** (com ícone) | Começa o render. Desligado com o intervalo vazio. | | |
+| Aviso `O servidor converte até 30 minutos por arquivo: escolha um trecho menor, diminua a cauda ou exporte em WAV.` | Aparece com FLAC ou MP3 quando o trecho mais a **Cauda** passam de 30 minutos (1800 s). | | Vale para cada arquivo; com stems, todos têm o mesmo tamanho. |
+| **Exportar** (com ícone) | Começa o render. Desligado com o intervalo vazio e, com FLAC ou MP3, quando o trecho mais a cauda passam de 30 minutos. | | |
 
 As últimas opções escolhidas (inclusive alvo, teto e stems com o mesmo ganho) ficam guardadas até você fechar ou recarregar o app: a próxima exportação da sessão já abre com elas.
 
@@ -52,12 +55,52 @@ As últimas opções escolhidas (inclusive alvo, teto e stems com o mesmo ganho)
 | **WAV 16 bits** | Inteiro de 16 bits, com dither TPDF (ruído triangular de ±1 LSB) | `Qualidade de CD, o menor arquivo. Para ouvir e publicar.` | 11,5 MB por minuto |
 | **WAV 24 bits** | Inteiro de 24 bits, com dither TPDF | `O padrão de estúdio: folga para masterizar depois.` | 17,3 MB por minuto |
 | **WAV 32 bits float** | Ponto flutuante de 32 bits (formato IEEE float, com o bloco `fact`), sem dither e sem teto | `Sem perda nenhuma, nem acima de 0 dB. Para levar a outro programa.` | 23,0 MB por minuto |
-| **FLAC (sem perda, menor)** | Compactado sem perda pelo servidor. Escolha **16 ou 24 bits** e a compressão (**Rápido**, **Padrão**, **Menor arquivo**) | `Sem perda, com bem menos espaço que o WAV. Convertido no servidor: precisa de conta e de rede.` | cerca de metade do WAV |
-| **MP3 (para compartilhar)** | Com perda, pelo servidor. Qualidade: **128, 192, 256 ou 320 kbps** (taxa constante) ou **V0 a V4** (taxa variável) | `Leve, para compartilhar e ouvir em qualquer lugar (com perda). Convertido no servidor: precisa de conta e de rede.` | 1,4 a 2,4 MB por minuto |
+| **FLAC (sem perda, menor)** | Compactado sem perda pelo servidor, em 16 ou 24 bits (chips `16 bits` e `24 bits`), sem mudar o som do WAV que o originou | `Sem perda, com bem menos espaço que o WAV. Convertido no servidor: precisa de conta e de rede.` | cerca de 50% a 70% do WAV da mesma profundidade (estimativa geral, varia com a música; não medido aqui) `(não confirmado)` |
+| **MP3 (para compartilhar)** | Com perda, pelo servidor, de 16 bits. Qualidade: `128`, `192`, `256` ou `320 kbps (CBR)` (taxa constante) ou `V0` a `V4` (taxa variável) | `Leve, para compartilhar e ouvir em qualquer lugar (com perda). Convertido no servidor: precisa de conta e de rede.` | 0,96 MB por minuto a 128 kbps, 1,44 a 192, 1,92 a 256, 2,40 a 320; VBR: de cerca de 1,2 MB (V4) a 1,8 MB (V0) por minuto (conta a partir da taxa média do rótulo) |
 
-**FLAC e MP3 passam pelo servidor.** O app renderiza o WAV no aparelho como sempre, sobe para a sua conta, espera a conversão (a janela mostra `Enviando ao servidor…`, `Na fila do servidor…`, `Compactando no servidor N%…` e `Baixando o arquivo…`), salva o `.flac` ou `.mp3` e apaga da conta o WAV temporário e o resultado (se não conseguir, ficam como áudio sem uso, que a limpeza da tela **Conta** apaga). Limites: até 30 minutos por arquivo (a janela avisa e desliga **Exportar**), MP3 só a 44,1 ou 48 kHz (a lista de taxas se limita a elas). Com **Stems**, cada arquivo é convertido em série. Os nomes ficam como no WAV, com a extensão trocada; o título (e o álbum, com o nome do projeto) vão como etiquetas no arquivo.
+Os tamanhos do MP3 CBR são a taxa dividida por 8 (não dependem da taxa de amostragem nem da música); o teste ao vivo de 10 s a 192 kbps gerou 240 830 bytes (192 000 / 8 × 10,01 s = 240 240, mais a tag ID3). Nos VBR o rótulo diz "~": o servidor trata V0 a V4 como taxa média alvo, não como o VBR do LAME.
 
-**Sem conta, sem rede ou com erro do servidor**, a janela mostra `Não deu para compactar` com o motivo e oferece **Exportar em WAV mesmo assim**, que salva o WAV que já estava renderizado, sem renderizar de novo. **Voltar às opções** refaz o render.
+### FLAC e MP3 pelo servidor
+
+FLAC e MP3 **não são gerados no aparelho**: o motor só escreve WAV. O app renderiza o WAV no aparelho como sempre e o servidor faz a conversão.
+
+**O que precisa:**
+
+| Requisito | Detalhe |
+|---|---|
+| Conta | Estar com a sessão aberta. Sem ela: `Entre na sua conta para exportar em MP3: a conversão é feita no servidor.` (ou `... em FLAC ...`). |
+| Rede | Para subir o WAV, esperar a conversão e baixar o arquivo. Sem rede: `Não consegui falar com o servidor (sem conexão?).` |
+| Espaço na cota | O WAV enviado e o arquivo convertido contam na cota de 4 GB da conta enquanto existem (ver [Nuvem e sincronização, Cotas e limites](01b-nuvem-e-sincronizacao.md#cotas-e-limites)). Cota cheia: `cota de armazenamento de 4 GB excedida; apague áudios sem uso na tela Conta`. |
+| Duração | Até **30 minutos por arquivo** (o trecho mais a cauda). Acima disso o aviso aparece na janela e **Exportar** fica desligado. |
+| Tamanho do WAV enviado | O servidor recusa arquivo acima de 512 MB no envio (`arquivo grande demais (máximo de 512 MB)`). Nas taxas altas isso limita antes dos 30 minutos: um WAV de 24 bits estéreo pesa cerca de 17,3 MB por minuto a 48 kHz (cabem os 30 minutos) e o dobro a 96 kHz (aí o limite fica perto de 15 minutos; conta feita a partir do tamanho do WAV, não testada) `(não confirmado)`. Com o FLAC de 16 bits o WAV enviado é de 16 bits, mais leve. |
+| Taxa do MP3 | Só 44,1 ou 48 kHz (a lista de taxas já se limita a elas). O FLAC aceita as quatro taxas da lista. |
+
+**Passo a passo do que acontece** (para cada arquivo: a mixagem e, com **Stems**, um por faixa, um de cada vez):
+
+1. O app renderiza o WAV no aparelho (com as mesmas opções de intervalo, taxa, cauda, normalização e stems). O WAV renderizado é de 16 bits para o MP3 e de 16 ou 24 bits, conforme o chip, para o FLAC (nos dois casos com o dither dos WAV 16 e 24 bits).
+2. A janela mostra `Enviando ao servidor (N MB)…` (ou `N KB`, com vírgula decimal). O app sobe o WAV para a sua conta (se um WAV idêntico já estava lá, não sobe de novo e não o apaga no fim).
+3. Cria a tarefa de conversão. A janela mostra `Na fila do servidor…` e, depois, `Compactando no servidor N%…`. A consulta ao servidor é a cada 0,8 s; três falhas de rede seguidas derrubam a espera, uma só não.
+4. Quando a tarefa termina, `Baixando o arquivo…` e `Salvando…`: o arquivo cai nos downloads do navegador ou abre a janela de salvar do Android, com o nome do WAV e a extensão trocada (`.flac` ou `.mp3`; ver [Nomes dos arquivos](#nomes-dos-arquivos)).
+5. O app apaga da conta o arquivo convertido, a tarefa e o WAV temporário. Se alguma dessas limpezas falhar, ela é silenciosa: o que sobrou fica como áudio sem uso na tela **Conta**, onde **Limpar áudios sem uso** o apaga (só depois de 1 hora de enviado).
+
+A espera pelo servidor tem teto de 20 minutos por arquivo; passando disso, o motivo mostrado é `O servidor demorou demais para responder.` Um pedido só (subir o WAV, por exemplo) também tem teto, de 120 s: numa conexão lenta um WAV grande pode estourar e cair nessa mesma mensagem (ver [App Flutter, `ApiClient`](../dev/10-app-flutter.md#apiclient-applibapiclientdart)).
+
+**Metadados no arquivo.** O app manda o nome do arquivo sem `.wav` como título e o nome do projeto como álbum (artista não é enviado). O servidor grava `TITLE` e `ALBUM` no FLAC (bloco de comentários Vorbis) e as etiquetas ID3v2.4 `TIT2` e `TALB` no MP3; o teste ao vivo confirmou que o MP3 começa com a tag ID3v2.4.
+
+**Sem conta, sem rede ou com erro do servidor:**
+
+1. A janela ganha o título `Não deu para compactar` e o aviso `Não deu para exportar em MP3: <motivo>.` (ou `... em FLAC: ...`). Motivos vistos no código: os de conta e rede da tabela acima, `Sua sessão terminou; entre de novo para exportar em MP3.`, `O servidor demorou demais para responder.`, o `error` do servidor (por exemplo a cota cheia, `MP3 exige 44,1 ou 48 kHz e o áudio tem N Hz; exporte o WAV nessa taxa ou use FLAC`, `áudio longo demais: o máximo é 30 minutos`) e `O servidor não devolveu o arquivo convertido.`
+2. Texto abaixo: `O arquivo já está renderizado em WAV: dá para salvar assim, sem renderizar de novo.` (com stems: `O áudio já está renderizado (N arquivos) em WAV: ...`; se parte dos arquivos já saiu compactada, `N arquivos foram salvos compactados. Os outros N já estão renderizados em WAV: ...`).
+3. Três botões: **Fechar** (descarta o WAV renderizado), **Voltar às opções** (reabre as opções e **refaz o render**) e **Exportar em WAV mesmo assim** (salva o WAV que já estava pronto, sem renderizar de novo). Ao terminar, o resultado diz `(WAV)`, sem a profundidade.
+4. Com **Stems**, depois da primeira falha os arquivos seguintes nem tentam o servidor: vão direto para essa lista de WAV.
+
+**Cancelar** durante a conversão larga a espera, não salva nada e tenta limpar o servidor. Uma conversão que já estava **rodando** no servidor não se interrompe lá: a tarefa acaba e o arquivo dela fica na conta como áudio sem uso (a limpeza da tela **Conta** o apaga depois de 1 hora).
+
+**Loudness, normalização e stems com FLAC e MP3.** A normalização (`Normalizar` de pico ou `Normalizar o loudness`) e a medição acontecem **no WAV renderizado, antes da conversão**, exatamente como no WAV. A frase do resultado (`A mixagem subiu ... e mediu −14,0 LUFS · −2,0 dBTP.`) descreve esse WAV, não o MP3 que sai da conversão. No FLAC o som decodificado é idêntico ao do WAV que foi enviado. No MP3, como em qualquer formato com perda, o arquivo decodificado não é idêntico: o pico e o loudness dele podem diferir um pouco do WAV, e o codificador do servidor não mede isso `(não confirmado com este codificador)`. Para um master de entrega que precise de um teto exato, deixe o **Teto de true peak** em −1,0 dBTP ou menos e exporte também o WAV. **Stems** funcionam com os dois formatos: um `.flac` ou `.mp3` por faixa, na mesma ordem e com as mesmas regras de pular a faixa muda (ver [Stems](#stems)), mas para levar stems a outro programa o WAV 32 bits float continua sendo o formato sem perda de nível.
+
+**Avisos do servidor.** O resultado da conversão traz uma lista `warnings` (por exemplo, `o áudio de 24 bits foi gravado com 16 bits no FLAC (arredondado, sem dither)`); a janela mostra cada aviso em uma caixa destacada. Como o app sempre manda um WAV de 16 ou 24 bits já na profundidade do FLAC pedido, esses avisos não aparecem no uso normal `(testado só por testes automáticos)`.
+
+**Inconsistência de texto:** a mensagem de conclusão põe o rótulo do formato entre parênteses, e o rótulo de FLAC e de MP3 já tem parênteses, então sai `A mixagem foi salva (MP3 (para compartilhar)) em 3 s. No navegador, o arquivo fica nos downloads.` (e `(FLAC (sem perda, menor))`).
 
 Nos formatos de 16 e 24 bits, o que passar de 0 dBFS é cortado (limitado a ±1). O tamanho dobra a 96 kHz. O WAV tem limite de 4 GB por arquivo: passando disso a exportação falha com `O arquivo passaria de 4 GB, o limite do WAV: exporte um trecho menor ou em 16 bits.`
 
@@ -69,11 +112,13 @@ Abre sozinha depois de **Exportar** e não fecha por fora (clicar fora ou o bot�
 |---|---|
 | Título **Exportando…** | Renderizando. |
 | Barra de progresso e texto | `Preparando…` até o primeiro aviso; depois `Renderizando N%`; no fim `Salvando o arquivo…`. O render ocupa até 95% da barra; o resto é converter para WAV e entregar o arquivo. Com **Normalizar o loudness**, dos 95% aos 99% o texto é `Medindo o loudness…` (a mixagem é medida, ganha o ganho e é medida de novo). |
+| Textos extras com FLAC ou MP3 | Enquanto o arquivo está no servidor, o texto do progresso troca por `Enviando ao servidor (N MB)…`, `Na fila do servidor…`, `Compactando no servidor N%…`, `Baixando o arquivo…` e `Salvando…`, e a barra passa a mostrar o andamento dos arquivos convertidos. Como o app renderiza um lote inteiro antes de converter, a barra pode voltar para trás quando a conversão começa `(lido do código)`. Ver [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
 | Texto fixo | `O render roda mais rápido que tocar, no próprio aparelho. Deixe esta aba aberta até terminar.` |
-| **Cancelar** | Interrompe o render e fecha. Vira `Cancelando…` e fica desligado depois de 100%. Não salva o lote que estava rodando (lotes anteriores já entregues ficam). |
-| Título **Exportação concluída** | `A mixagem foi salva (WAV 24 bits) em N s. No navegador, o arquivo fica nos downloads.` Com stems: `A mixagem e os stems foram salvos (...) em N s. ...`. Botão **Fechar**. |
+| **Cancelar** | Interrompe o render (e, com FLAC ou MP3, a espera pelo servidor) e fecha. Vira `Cancelando…` e fica desligado depois de 100%. Não salva o lote que estava rodando (lotes anteriores já entregues ficam). |
+| Título **Não deu para compactar** | Só com FLAC ou MP3 quando a conversão falhou: aviso com o motivo e os botões **Fechar**, **Voltar às opções** e **Exportar em WAV mesmo assim**. Detalhes em [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor). |
+| Título **Exportação concluída** | `A mixagem foi salva (WAV 24 bits) em N s. No navegador, o arquivo fica nos downloads.` Com stems: `A mixagem e os stems foram salvos (...) em N s. ...`. Botão **Fechar**. Com FLAC e MP3 o rótulo entra entre parênteses e sai duplo (`(MP3 (para compartilhar))`); depois de **Exportar em WAV mesmo assim** sai só `(WAV)`. |
 | Frase do loudness (só com **Normalizar o loudness**) | Logo abaixo da mensagem, diz o que a normalização fez e o que o arquivo mediu de verdade, por exemplo `A mixagem subiu 4,0 dB até o alvo e mediu −14,0 LUFS · −2,0 dBTP.` Se o ganho ficou abaixo de 0,05 dB (o arquivo já estava no alvo), a frase é `A mixagem já estava no alvo e mediu −14,0 LUFS · −1,6 dBTP.`, sem repetir a menção ao alvo. Quando o teto segurou o ganho, ou não deu para medir, a frase vem em aviso (caixa destacada). Detalhes na seção Normalizar o loudness. |
-| Aviso no resultado | Se algum áudio do projeto não está neste aparelho: `Exportado sem um áudio que não está neste aparelho.` (ou `N áudios que não estão`). O arquivo sai sem esses clipes. |
+| Aviso no resultado | Se algum áudio do projeto não está neste aparelho: `Exportado sem um áudio que não está neste aparelho.` (ou `N áudios que não estão`). O arquivo sai sem esses clipes. Com FLAC ou MP3, também aparecem aqui os avisos de perda que o servidor devolver. |
 | Título **A exportação falhou** | A mensagem do erro. Botões **Fechar** e **Voltar às opções** (reabre a janela de opções com as mesmas escolhas). |
 
 Erros de exportação que você pode ver: `O projeto está vazio: não há nada para exportar.`, `A região do loop está vazia: marque o loop antes de exportar.`, `Pare a gravação antes de exportar.`, `Espere o render em andamento terminar antes de exportar.`, `A exportação não terminou: ...` (com o motivo, por exemplo falta de memória) e o do limite de 4 GB.
@@ -147,6 +192,7 @@ Regra de bolso: chegar ao alvo com o teto de −1 dBTP exige que a diferença en
 | Mixagem | `<nome do projeto>.wav` |
 | Stem | `<nome do projeto> - <nome da faixa>.wav` |
 | Stem com nome repetido | `<nome do projeto> - <nome da faixa> (2).wav`, `(3)`, … (a comparação ignora maiúsculas) |
+| Com FLAC ou MP3 | O mesmo nome, com a extensão `.flac` ou `.mp3` no lugar de `.wav` (o app troca a extensão; o nome sugerido pelo servidor não é usado). Tipo de arquivo: `audio/flac` e `audio/mpeg`. |
 
 Os nomes são limpos para os sistemas de arquivos: `\ / : * ? " < > |` e caracteres de controle viram `_`, espaços seguidos viram um, pontos e espaços no fim saem, e cada parte é cortada em 80 caracteres. Projeto sem nome vira `jopendaw`; faixa sem nome vira `Faixa N` (N é a posição da faixa, contando de 1).
 
@@ -272,6 +318,12 @@ Limites e pegadinhas do `.mid`:
 3. Deixe **Música inteira**, **WAV 24 bits**, **A do aparelho**, **Cauda** em 2 s.
 4. **Exportar**, espere o `Renderizando N%` e abra o arquivo nos downloads (Android: escolha onde salvar).
 
+**Exportar em MP3 para compartilhar (ou em FLAC para arquivar)**
+1. Entre na sua conta (a conversão é feita no servidor) e confira que há rede.
+2. Em **Exportar**, escolha **MP3 (para compartilhar)** e, em **Qualidade do MP3**, `192 kbps (CBR)` para uma prévia leve ou `320 kbps (CBR)` para o melhor; para arquivar sem perda, **FLAC (sem perda, menor)**, `24 bits` e `Padrão`.
+3. **Exportar**. A janela passa por `Enviando ao servidor…`, `Compactando no servidor N%…` e `Baixando o arquivo…`; abra o arquivo nos downloads (Android: escolha onde salvar).
+4. Se aparecer `Não deu para compactar`, leia o motivo; **Exportar em WAV mesmo assim** salva o WAV já pronto. Receita completa: [Exportar para compartilhar e arquivar](../guias/exportar-para-compartilhar.md).
+
 **Exportar para streaming a −14 LUFS**
 1. Confira antes o `I` e o `TP` no mixer ([06b](06b-analisador-e-medidores.md)): quanto mais perto do alvo o mix já está, menos o ganho mexe.
 2. Em **Exportar**, ligue **Normalizar o loudness** (o **Normalizar** de pico desliga sozinho) e deixe o chip **Streaming −14,0** e o **Teto de true peak** em −1,0 dBTP.
@@ -312,12 +364,13 @@ Limites e pegadinhas do `.mid`:
 - [Áudio e clipes](03-audio-e-clipes.md#importar-um-arquivo-midi-mid): o caminho de volta, importar um `.mid` (o mesmo botão **Importar** do áudio).
 - [Editor de notas](05-piano-roll.md) e [Ferramentas MIDI](05b-ferramentas-midi.md): onde as notas exportadas são editadas.
 - [Guia: MIDI de e para outros programas](../guias/midi-de-e-para-outros-programas.md): melodia para outro DAW, pacote de acordes e backup das notas.
-- [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o áudio congelado é um áudio novo do projeto (`(não confirmado)` se conta na cota da nuvem).
+- [Nuvem e sincronização](01b-nuvem-e-sincronizacao.md): o áudio congelado é um áudio novo do projeto (`(não confirmado)` se conta na cota da nuvem); o WAV temporário do FLAC e do MP3 conta na cota enquanto está no servidor.
+- [Guia: exportar para compartilhar e arquivar](../guias/exportar-para-compartilhar.md): prévia em MP3 por mensagem, arquivo em FLAC e o master final (WAV 24 bits e MP3 320).
 - Receitas: pasta [`../guias/`](../guias/).
 
 ## Limites e pegadinhas
 
-- **Só WAV.** Não há MP3, FLAC nem AAC na exportação do app. Os outros arquivos que saem desta janela não são áudio: o do projeto (`Projeto inteiro (.jopendaw)…`) e o de notas (`Notas em MIDI (.mid)…`).
+- **WAV, FLAC e MP3; não há AAC nem OGG.** FLAC e MP3 dependem da conta e do servidor (ver [FLAC e MP3 pelo servidor](#flac-e-mp3-pelo-servidor)); sem elas, só o WAV sai. O MP3 sai estéreo, a partir de um WAV de 16 bits, a 44,1 ou 48 kHz, e leva só título e álbum como etiquetas. Cada arquivo tem no máximo 30 minutos e o WAV enviado, 512 MB. Cancelar não interrompe uma conversão que já está rodando no servidor. Os outros arquivos que saem desta janela não são áudio: o do projeto (`Projeto inteiro (.jopendaw)…`) e o de notas (`Notas em MIDI (.mid)…`).
 - **A mixagem tem teto de −0,3 dBFS** pelo limitador do master, em qualquer formato, quando não há normalização. O texto de ajuda do WAV 32 bits float (`nem acima de 0 dB`) vale para os stems, não para a mixagem. Com **Normalizar o loudness** o teto passa a ser o **Teto de true peak** escolhido (até 0 dBTP).
 - **Normalizar** mexe em cada arquivo à parte (mixagem e stems); uma mixagem que já bate no teto é abaixada em cerca de 0,7 dB.
 - **Normalizar o loudness é só ganho.** Não comprime nem limita: se o alvo pede mais volume do que o teto permite, o arquivo sai abaixo do alvo (com aviso), e o remédio é limitar no master antes de exportar.

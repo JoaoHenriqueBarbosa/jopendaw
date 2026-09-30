@@ -27,7 +27,7 @@ Sem compensação, uma faixa com `Limitador` soaria alguns milissegundos depois 
 | `Limitador` (efeito, em faixa, barramento ou master) | Igual ao `Lookahead`: 0 a 10 ms, padrão 3 ms. Em quadros inteiros: 3 ms são 144 quadros a 48 kHz e 132 a 44,1 kHz; 10 ms são 480 quadros a 48 kHz. Com `Lookahead` 0, nenhuma | Sim |
 | `Distorção` | 32 quadros fixos nos seis tipos e nas três sobreamostragens: 0,67 ms a 48 kHz, cerca de 0,73 ms a 44,1 kHz | Sim |
 | Limitador de segurança do `Master` (sempre ligado, sem controle na tela) | 1,5 ms (72 quadros a 48 kHz) | Não precisa: fica depois da soma, atrasa tudo por igual. Conta só na latência total do motor |
-| Os outros dez efeitos (`EQ`, `Compressor`, `Gate`, `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Filtro`) | 0. O pré-atraso do reverb e o tempo do delay fazem parte do som | Nada a compensar |
+| Os outros treze efeitos (`EQ`, `Compressor`, `Gate`, `Utilitário`, `Reverb`, `Delay`, `Chorus`, `Phaser`, `Tremolo`, `Filtro`, `Multibanda`, `De-esser`, `Imagem estéreo`) | 0. O pré-atraso do reverb e o tempo do delay fazem parte do som. Os três últimos (fase 15) dividem o som com filtros Linkwitz-Riley ou passa-banda que giram a fase mas não atrasam no tempo, e o teste do motor confere `latency() == 0` neles `(testado só por testes automáticos)` | Nada a compensar |
 
 Os quadros são o que o motor usa; para converter, divida pela taxa de amostragem (a taxa do aparelho, em geral 44,1 ou 48 kHz).
 
@@ -122,12 +122,12 @@ O app pergunta ao motor a latência dele (PDC das faixas e barramentos, cadeia d
 | Áudio (clipe do microfone) | Do começo do que a entrada mandou | Latência do motor + latência de saída do aparelho (`baseLatency` + `outputLatency` na web) + latência da entrada + `Compensação de latência` |
 | Notas e controles MIDI (bend, modulação, pedal) | Cada nota e cada ponto voltam para antes | Latência do motor + latência de saída do aparelho. A latência da entrada e a `Compensação de latência` **não** valem para o MIDI |
 
-1. Toque junto do que você ouve: o motor soa `latência do motor` depois do cursor, e as notas que você toca ouvindo esse som chegam atrasadas desse tanto (mais o da saída do aparelho); o app as devolve para a posição em que você as ouviu. As notas não recuam para antes do começo da gravação (com o loop ligado, do que vier primeiro entre o começo da gravação e o começo do loop).
+1. Toque junto do que você ouve: o motor soa `latência do motor` depois do cursor, e as notas que você toca ouvindo esse som chegam atrasadas desse tanto (mais o da saída do aparelho); o app as devolve para a posição em que você as ouviu. As notas e os pontos de bend, modulação e pedal não recuam para antes do começo da gravação (com o loop ligado, do que vier primeiro entre o começo da gravação e o começo do loop).
 2. O clique do metrônomo passa por um atraso da latência total (PDC mais a cadeia do `Master`) e soa junto das faixas; tocando junto dele, o clipe cai na grade. O clique do tempo 0 também sai com esse atraso. O limitador de segurança atrasa clique e faixas por igual, então não entra nessa conta.
 3. Se o clipe gravado ainda cair um pouco fora, ajuste `Compensação de latência`: positivo adianta o clipe gravado. Só vale para o áudio.
 4. A latência é lida **uma vez, ao começar a gravação**. Mudar o `Lookahead` ou o roteamento no meio da gravação não altera a compensação daquela tomada.
 
-`(testado só por testes automáticos; não confirmado ao ouvido nem no navegador ou no Android)`. O texto de ajuda da janela `Configurações` ("Quanto o áudio gravado chega atrasado, além do que o navegador já informa…") não cita a latência do motor, embora ela entre na conta.
+`(testado só por testes automáticos; não confirmado ao ouvido nem no navegador ou no Android)`. O texto de ajuda da janela `Configurações` ("Quanto o áudio gravado chega atrasado, além do que já é medido sozinho (a latência do motor, com os efeitos e o limitador, e a que o navegador informa para a entrada e a saída)…") cita a latência do motor, e a linha `Ida e volta do monitoramento: N ms`, logo abaixo, mostra o que quem toca ouve entre o gesto e o som.
 
 ### Mudar o Lookahead tocando
 
@@ -154,7 +154,7 @@ O app pergunta ao motor a latência dele (PDC das faixas e barramentos, cadeia d
 - **Reordenar efeitos e trocar o tipo** recria efeitos no motor ([06c](06c-painel-de-efeitos.md)); a latência é reavaliada, e a compensação segue.
 - **Automatizar `Lookahead`** é acompanhado com até 20 ms de atraso, mas faz o limitador abaixar a saída a cada valor novo (ver Controles).
 - **Trocar o tipo de um efeito que soava mantém o crossfade de 10 ms**, também nos efeitos bem audíveis (`Distorção`, `EQ`, `Filtro`): o teste automático mede que o degrau na troca não passa de 1,5 vez o degrau normal do próprio som (mais uma folga de 0,01).
-- **Nada disto foi ouvido no Chrome nem no Android.** Vale o que os testes automáticos do motor medem: impulsos alinhados em faixas, barramentos, envios, sidechain e master; clique do metrônomo alinhado; bypass e troca de efeito sem degrau; render offline igual ao tempo real; ausência de alocação no meio do áudio com os anéis já dimensionados. Os testes do app medem a compensação da gravação com um motor de mentira (`FakeEngine`), sem som real.
+- **Nada disto foi ouvido no Chrome nem no Android.** Vale o que os testes automáticos do motor medem: impulsos alinhados em faixas, barramentos, envios, sidechain e master; clique do metrônomo alinhado; bypass e troca de efeito sem degrau; render offline igual ao tempo real; ausência de alocação no meio do áudio, com os anéis já dimensionados ou com a folga que o comando da lane de `Lookahead` reserva. Os testes do app medem a compensação da gravação com um motor de mentira (`FakeEngine`), sem som real.
 - **Salvo com o projeto:** nada é salvo por causa da compensação; ela é recalculada a partir dos efeitos, envios e saídas que o projeto tem.
 
 ## Atalhos

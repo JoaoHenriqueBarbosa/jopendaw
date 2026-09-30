@@ -35,7 +35,7 @@ Quando há **pastas** (ver [02c Pastas de faixa](02c-pastas-de-faixa.md)), uma b
 | `Ligar` / `Desligar (bypass)` | O texto muda conforme o estado. Mesma ação da luz. | | |
 | `Mover para cima` / `Mover para baixo` | Sobe ou desce o efeito na cadeia. Só aparecem quando há para onde ir. | | Ordem importa: EQ antes ou depois do compressor soa diferente. |
 | `Remover` | Tira o efeito e apaga as automações que apontavam para ele. | Entra no desfazer. | |
-| Linha `Efeito` (com `+`) | Abre o menu de efeitos, agrupado por família (Timbre, Dinâmica e utilidade, Espaço, Modulação, Saturação); cada item mostra nome e descrição. | Tooltip: `Adicionar efeito`; no master, `Adicionar efeito no master`. Com a cadeia cheia (16 efeitos) a linha fica desabilitada e o tooltip vira `Limite de 16 efeitos por faixa` (testado só por testes automáticos). | O painel de efeitos tem mais opções: ver [06c](06c-painel-de-efeitos.md). Os 12 efeitos estão em [06d](06d-efeitos-referencia.md). |
+| Linha `Efeito` (com `+`) | Abre o menu de efeitos, agrupado por família (Timbre, Dinâmica e utilidade, Espaço, Modulação, Saturação); cada item mostra nome e descrição. | Tooltip: `Adicionar efeito`; no master, `Adicionar efeito no master`. Com a cadeia cheia (16 efeitos) a linha fica desabilitada e o tooltip vira `Limite de 16 efeitos por faixa` (testado só por testes automáticos). | O painel de efeitos tem mais opções: ver [06c](06c-painel-de-efeitos.md). Os 15 efeitos estão em [06d](06d-efeitos-referencia.md). |
 
 A altura da lista acompanha o painel de baixo (o painel maior mostra mais linhas, todas as faixas usam a mesma altura); passando do que cabe, um trilho fino à direita avisa que há mais e a lista rola.
 

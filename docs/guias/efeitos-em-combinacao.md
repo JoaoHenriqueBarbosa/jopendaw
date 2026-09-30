@@ -1,6 +1,6 @@
 # Efeitos em combinação
 
-> Seis receitas prontas de cadeia de efeitos com valores concretos (voz, bateria em paralelo, sidechain, delay em ping-pong no andamento, pad largo e baixo distorcido). Cada uma leva de 5 a 15 minutos para montar.
+> Nove receitas prontas de cadeia de efeitos com valores concretos (voz, bateria em paralelo, sidechain, delay em ping-pong no andamento, pad largo, baixo distorcido, master suave com multibanda, voz com de-esser e graves em mono). Cada uma leva de 5 a 15 minutos para montar.
 
 Todos os efeitos, parâmetros e presets citados existem no jopendaw e estão descritos em [06d Referência dos efeitos](../manual/06d-efeitos-referencia.md). Como abrir o rack, adicionar, ordenar e aplicar presets está em [06c Painel de efeitos](../manual/06c-painel-de-efeitos.md).
 
@@ -271,6 +271,127 @@ A cadeia, nesta ordem: `EQ` → `Compressor` → `Distorção` → `Filtro` → 
 - **O filtro não se mexe:** `Envelope` está em 0 ou o `Corte` já está alto demais para o efeito se notar; confira o `Corte` (600 Hz) e a `Ressonância`.
 - **Volume muito diferente com a cadeia ligada:** `Saída` da `Distorção` (−24 a +12 dB) para nivelar; a compensação automática de volume é calibrada para −12 dBFS de pico, e abaixo disso a distorção sobe o volume.
 - **Faltou o EQ:** dois `EQ` são possíveis na mesma cadeia (aparecem numerados nos alvos de automação).
+
+---
+
+## Receita 7: master suave com multibanda
+
+> Uma cola leve na mistura inteira, banda por banda, com o `Limitador` no fim: de 5 a 10 minutos.
+
+### Ingredientes
+
+- `Multibanda` (preset `Master suave`): [Multibanda](../manual/06d-efeitos-referencia.md#13-multibanda)
+- `Limitador` (preset `Master −1 dB`): [Limitador](../manual/06d-efeitos-referencia.md#4-limitador)
+- `EQ` (opcional, antes de tudo): [EQ](../manual/06d-efeitos-referencia.md#1-eq-8-bandas)
+- Medir e exportar: [Loudness e master](loudness-e-master.md)
+
+### Passo a passo
+
+1. Abra o rack do `Master` (tecla `F` e `Master` no seletor de faixa, ou o chip `FX` do cabeçalho `Master`) e adicione, nesta ordem: `EQ` (só se precisar), `Multibanda` e `Limitador`. Ele entra no lugar do `Compressor` que o guia de loudness sugere para o master.
+2. `Multibanda`: aplique `Master suave`. Os valores de partida: cruzamentos em 100 Hz e 5 kHz; `BAIXA` com `Limiar` −14 dB, `Razão` 1,8:1, `Ataque` 40 ms, `Soltura` 400 ms; `MÉDIA` com −12 dB, 1,4:1, 30 ms, 250 ms; `AGUDA` com −16 dB, 1,5:1, 15 ms, 200 ms; `Joelho` de 12 dB nas três; `Saída` 0 dB.
+3. Toque o gráfico do `Multibanda` (para ele ser o efeito medido) e toque a mistura no trecho mais forte. Olhe o número embaixo de cada banda (`−1.4`, por exemplo): o alvo é de **1 a 2 dB** de redução nos picos. Sem redução, baixe o `Limiar` da banda em passos de 2 dB (−14 para −16, −18...); acima de 3 dB, suba de novo.
+4. Se uma banda parecer pesada, ligue o `Solo` nela, ouça, ajuste e **desligue o `Solo`**: ele muda o som de verdade, também na exportação.
+5. `Limitador`: aplique `Master −1 dB` (`Ganho` +3 dB, `Teto` −1 dB) e siga o [passo 3 do guia de loudness](loudness-e-master.md#3-ganhar-volume-com-o-limitador-no-master-não-com-o-fader) para o volume final.
+6. Compare com o bypass do `Multibanda` (botão de energia do cartão) no mesmo trecho e nivele com o `Saída` dele: a versão comprimida não deve soar mais alta só por isso.
+
+### Variações
+
+- **Mix de grupo em vez do master:** o preset `Mix de bus` (cruzamentos 150 Hz e 3,5 kHz, `Saída` +1 dB) numa pasta ou barramento, com razões de 1,6:1 a 2:1.
+- **Graves soltos na mistura:** `Controle de graves` (180 Hz e 3 kHz; `BAIXA` −26 dB, 5:1) no lugar de `Master suave`, e depois suba o `Limiar` da `BAIXA` até a redução ficar em 2 a 3 dB.
+- **Só o topo controlado:** ponha `Bypass` `Sim` nas bandas `BAIXA` e `MÉDIA`; a `AGUDA` continua comprimindo sozinha.
+
+### Por que funciona
+
+- Um compressor de banda inteira abaixa tudo quando o bumbo passa do limiar; com três bandas, um grave forte só abaixa os graves e o topo continua no lugar. Por isso as razões podem ser baixas (1,4:1 a 1,8:1) e ainda controlar o equilíbrio.
+- Os ataques de 15 a 40 ms deixam os transientes passarem, e as solturas de 200 a 400 ms evitam o "bombeio" audível; o `Joelho` de 12 dB faz a compressão entrar sem degrau. O caráter vem dos valores, sem escuta `(não confirmado ao ouvido)`.
+- Sem compressão, as três bandas somam de volta ao original (resposta plana), então o efeito só age onde há redução ([06d, Multibanda](../manual/06d-efeitos-referencia.md#13-multibanda)).
+- Latência 0: não desalinha nada ([06e](../manual/06e-compensacao-de-latencia.md)).
+
+### Se der errado
+
+- **O medidor não mostra nada:** só um efeito é medido por vez (o `Limitador` do master pode ser o medido); toque no gráfico do `Multibanda`.
+- **Os graves "respiram":** aumente a `Soltura` da `BAIXA` para 600 ms ou baixe a `Razão` dela para 1,5:1.
+- **O topo ficou opaco:** suba o `Limiar` da `AGUDA` para −12 dB ou ponha a banda em `Bypass`.
+- **O som mudou de volume e de timbre de repente:** um `Solo` ficou ligado numa banda.
+
+---
+
+## Receita 8: voz com de-esser antes do compressor
+
+> Uma voz que segura o "s" sem perder o brilho, em cerca de 10 minutos. Continua a [receita 1](#receita-1-cadeia-vocal-gate-eq-compressor-reverb).
+
+### Ingredientes
+
+- A cadeia `Gate` → `EQ` da receita 1 (o `EQ` com `Voz presente` realça 3 kHz e 10 kHz, e é isso que deixa o "s" mais cortante)
+- `De-esser` (preset `Voz suave`, ou `Voz feminina` / `Voz masculina`): [De-esser](../manual/06d-efeitos-referencia.md#14-de-esser)
+- `Compressor` (preset `Voz`): [Compressor](../manual/06d-efeitos-referencia.md#2-compressor)
+
+### Passo a passo
+
+1. Na faixa da voz, deixe a ordem `Gate`, `EQ`, `De-esser`, `Compressor`: o `De-esser` entra **depois do `EQ`** (que realça o brilho) e **antes do `Compressor`**.
+2. `De-esser`: aplique `Voz suave` (`Frequência` 6,5 kHz, `Q` 1,5, `Limiar` −32 dB, `Razão` 4:1, `Ataque` 1 ms, `Soltura` 50 ms, `Modo` `Banda dividida`). Para voz aguda, `Voz feminina` (`Frequência` 8 kHz, `Q` 1,8, `Limiar` −30 dB, `Razão` 5:1, `Soltura` 40 ms); para grave, `Voz masculina` (5,5 kHz, `Q` 1,3, −30 dB, 5:1, `Soltura` 60 ms).
+3. Ache a frequência do "s": ponha `Ouvir banda` em `Sim`, toque uma frase e arraste no gráfico na horizontal (ou gire `Frequência`) até ouvir só o chiado dos "s" e dos "x"; então volte `Ouvir banda` para `Não`.
+4. Toque o gráfico do `De-esser` para ele ser o efeito medido e abaixe o `Limiar` até o medidor marcar de **3 a 6 dB** nos "s" e ficar em `0.0` nas vogais.
+5. `Compressor`: aplique `Voz` (`Limiar` −20 dB, `Razão` 3,5:1, `Ataque` 5 ms, `Soltura` 80 ms, `Ganho` +4 dB) e ajuste como no passo 4 da receita 1.
+6. Alterne o bypass do `De-esser` no mesmo trecho: só o "s" deve mudar, o resto da voz fica igual (modo dividido).
+
+### Variações
+
+- **Sibilância misturada com respiração e chiado:** `Modo` `Banda larga` (preset `Banda larga`: 7 kHz, `Q` 1, `Limiar` −28 dB, `Razão` 3:1, `Ataque` 0,5 ms, `Soltura` 80 ms). O sinal inteiro abaixa quando o "s" estoura, então o resto da voz também.
+- **"S" muito estreito:** `Q` 2,5 a 3 e `Frequência` no centro do chiado.
+- **Tirar só o excesso:** `Razão` 3:1 no lugar de 4:1, e suba o `Limiar` até o medidor marcar 2 a 3 dB nos "s" mais fortes.
+
+### Por que funciona
+
+- O `Compressor` reage aos picos mais fortes; um "s" alto os dispara, e o `Ganho` de +4 dB do preset o traz para a frente. Tirando o "s" **antes**, o compressor não trabalha por causa dele e a compensação não realça a sibilância.
+- Depois do `EQ` porque o realce de presença e de ar é justamente o que aumenta o "s": o `De-esser` corrige o que o `EQ` acentuou.
+- No modo `Banda dividida` só a banda de detecção é comprimida, o corpo da voz passa intacto; sem redução, a saída é igual à entrada ([06d, De-esser](../manual/06d-efeitos-referencia.md#14-de-esser)).
+- `Ataque` de 1 ms para pegar o início de cada "s"; `Soltura` de 40 a 60 ms para o ganho voltar antes da vogal seguinte.
+
+### Se der errado
+
+- **A voz fica com ceceio ("sem s"):** suba o `Limiar` para −26 dB ou baixe a `Razão` para 3:1.
+- **O "s" continua saltando:** a `Frequência` está fora do chiado (use `Ouvir banda` de novo) ou o `Q` está estreito demais; baixe o `Q` para 1,0.
+- **O medidor do compressor sumiu:** o medidor mostra um efeito por vez; toque no gráfico do efeito que quer medir.
+- **Ficou só a banda chiando, sem a voz:** `Ouvir banda` está em `Sim`.
+
+---
+
+## Receita 9: graves em mono com imagem estéreo
+
+> A mistura (ou o pad) mais aberta no topo e com o subgrave firme no centro, conferindo a fase: de 5 a 10 minutos.
+
+### Ingredientes
+
+- `Imagem estéreo` (presets `Graves em mono`, `Mix de bus` e `Largo`): [Imagem estéreo](../manual/06d-efeitos-referencia.md#15-imagem-estéreo)
+- `Utilitário` (opcional, para conferir o mono): [Utilitário](../manual/06d-efeitos-referencia.md#5-utilitário)
+
+### Passo a passo
+
+1. No rack do `Master` (ou de um barramento/pasta de grupo), adicione `Imagem estéreo` **antes** do `Limitador`.
+2. Aplique `Graves em mono`: cruzamentos em 150 Hz e 4 kHz, larguras `Baixa` 0%, `Média` 100%, `Aguda` 100%, `Mono nos graves` `Sim` abaixo de 150 Hz. Só o grave muda; o resto sai como entrou.
+3. Toque o `Imagem estéreo` para ele ser o efeito medido e olhe a trilha `FASE`: com música normal ela fica para a direita (positiva). Encostar na esquerda, na cor de alerta, é fase oposta: a mistura perde corpo em mono.
+4. Para abrir o topo, suba as larguras: `Média` 110% e `Aguda` 125% (é o `Mix de bus`, que também baixa a `Baixa` para 80% com `Mono nos graves` abaixo de 120 Hz). Vá de 5 em 5 pontos e olhe a `FASE`.
+5. Confira em mono: `Utilitário` com `Mono` `Sim` no fim da cadeia, escute e depois tire (como no passo 5 da [receita 5](#receita-5-pad-largo-com-chorus-e-reverb)). O nível e o timbre não devem mudar muito.
+
+### Variações
+
+- **Só o pad:** `Largo` numa faixa de pad (larguras 60%, 140% e 170%, cruzamentos 250 Hz e 3 kHz, `Mono nos graves` abaixo de 100 Hz); confira em mono.
+- **Fechar o estéreo de um baixo ou de um grave largo demais:** `Quase mono` (larguras 0%, 40% e 60%).
+- **Corrigir um lado forte:** `Balanço` (−1 a +1) só abaixa o canal oposto; use valores pequenos: −0,1 deixa o canal direito com 90% da amplitude (cerca de −0,9 dB).
+
+### Por que funciona
+
+- A soma esquerda + direita, o que uma caixa mono ouve, não muda com nenhuma largura (com o `Balanço` em 0): só o lado é mexido, então abrir o estéreo não tira o centro ([06d, Imagem estéreo](../manual/06d-efeitos-referencia.md#15-imagem-estéreo)).
+- Graves com diferença entre os lados enfraquecem ou somem em mono; tirar o lado abaixo de 120 a 150 Hz deixa o subgrave no centro. O caráter vem dos valores, sem escuta `(não confirmado ao ouvido)`.
+- O medidor `FASE` é a correlação de fase da saída: +1 mono, 0 sem relação, −1 fases opostas.
+
+### Se der errado
+
+- **A `FASE` vai a valores negativos:** baixe `Média` e `Aguda` para 100% ou menos, ou confira se o material já vem com um lado invertido (o `Utilitário` tem `Inverter esq.`).
+- **As larguras não mudam nada:** a fonte é mono (esquerda igual à direita); não há lado para abrir.
+- **A trilha `FASE` está vazia:** o medidor é de um efeito por vez; toque no gráfico da `Imagem estéreo`.
+- **`Abaixo de` está apagado:** `Mono nos graves` está em `Não`.
 
 ## Ver também
 

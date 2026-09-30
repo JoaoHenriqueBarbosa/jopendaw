@@ -58,7 +58,7 @@ O mesmo mapeamento se faz e se desfaz pelo menu, sem ligar o modo:
 
 | Onde | Como abrir | Itens |
 |---|---|---|
-| Knob de instrumento ou de efeito, fora do modo | Botão direito (toque longo no celular) | `Digitar o valor…`, uma linha divisória, `Aprender MIDI` e, se já mapeado, `Remover mapeamento (Canal 1 · CC 74)` (a origem vem entre parênteses) |
+| Knob de instrumento ou de efeito, fora do modo | Botão direito (toque longo no celular). O tooltip do knob já diz isso: `<nome>: arraste ou use a roda (Shift: ajuste fino)` / `Duplo clique: padrão (<valor>) · botão direito: menu (digitar o valor, Aprender MIDI)` (os knobs sem o menu, como os do mixer, dizem `botão direito: digitar o valor`) | `Digitar o valor…`, uma linha divisória, `Aprender MIDI` e, se já mapeado, `Remover mapeamento (Canal 1 · CC 74)` (a origem vem entre parênteses) |
 | Fader e pan do mixer, fora do modo | Botão direito do mouse (o toque longo só vale no modo) | `Aprender MIDI`, `Remover mapeamento (Canal 1 · CC 21)` (só se mapeado), `Mapeamentos MIDI…` |
 | Qualquer controle contornado, no modo | Botão direito ou toque longo | Os mesmos três itens do fader |
 | Nível de envio do mixer, fora do modo | Botão direito é o menu do envio (ver [Mixer](06-mixer.md#envios)), que **não** tem `Aprender MIDI`: para mapear o envio, ligue o modo | |
@@ -152,14 +152,14 @@ Regras que valem no código:
 - Se você mexe no controle por outro caminho (mouse, desfazer, preset) e ele se afasta mais de 2% do que o controlador pôs, o mapeamento solta o controle e ele só volta a seguir depois de cruzar de novo.
 - Mudar `Invertido`, a curva ou `Mín`/`Máx` de um mapeamento também o solta até o próximo cruzamento.
 - Com `Mín` e `Máx` estreitos, um controle que está fora do trecho é alcançado pela borda mais próxima (senão nunca seria pego).
-- Ao comparar, o app usa o **valor fixo** do controle; se ele está com automação tocando, a curva que você vê não é a comparada `(lido do código)`.
+- Ao comparar, o app usa o valor que o controle **mostra**: com o transporte tocando e o controle com automação em `Ler`, é o valor da curva naquele ponto; parado, ou com o controle já sendo gravado como automação (`Escrever`, `Toque` ou `Trava` com a mão nele), é o valor fixo. Para reconhecer que outra mão mexeu (a regra acima), o app olha o valor **fixo**, que é o que este mapeamento escreve: a curva da automação andando sozinha não solta o controle `(testado só por testes automáticos)`.
 - Desligado `Suave`, o controle salta direto para o valor do controlador na primeira mensagem.
 
 ### O que é salvo e o que fica no aparelho
 
 | Dado | Onde fica |
 |---|---|
-| Os mapeamentos (origem, alvo, faixa mín/máx, curva, invertido) e a opção `Suave` | No **projeto** (campo `midi_map` do documento): vão junto na sincronização com a nuvem, na cópia para outro aparelho e no arquivo `.jopendaw`. O campo é gravado quando há mapeamentos ou quando `Suave` está desligado |
+| Os mapeamentos (origem, alvo, faixa mín/máx, curva, invertido) e a opção `Suave` | No **projeto** (campo `midi_map` do documento): vão junto na sincronização com a nuvem, na cópia para outro aparelho e no arquivo `.jopendaw`. O campo é gravado quando há mapeamentos ou quando `Suave` está desligado (um `Suave` desligado, mesmo sem mapeamentos, é salvo e volta ao abrir); só o mapa vazio com `Suave` ligado, o padrão, fica de fora. Ao abrir, um mapeamento cuja faixa não é texto nem vazia (documento de outra versão) é descartado sem derrubar os outros |
 | O modo `Aprender MIDI` ligado e o controle armado | Só na tela; não são salvos |
 | O padrão para novos projetos | Só no **aparelho** (guardado local, chave `midimap:default`): não vai à nuvem nem ao projeto |
 | O desfazer | Mapear, remover e editar mapeamentos **não** entram no `Ctrl+Z`; desfazer uma nota ou um movimento de fader não desfaz o mapeamento |
@@ -168,13 +168,13 @@ Como o mapa é parte do projeto, um projeto puxado de outro aparelho traz o mapa
 
 ### Padrão para novos projetos
 
-`Salvar como padrão para novos projetos` guarda os mapeamentos deste projeto para os projetos que você criar depois neste aparelho. Ele leva `Volume`, `Pan` (do `Master` e das faixas) e parâmetros de instrumento, com a opção `Suave`. **Não leva** efeitos nem envios (dependem de ids que só existem no projeto onde foram criados). Os parâmetros de instrumento guardam também o **tipo da faixa** (o id 13 é o `Corte` no sintetizador e o `Ataque` do operador 2 no FM): o mapeamento só é aplicado numa faixa do mesmo tipo (padrões guardados antes disso, sem o tipo, seguem valendo como antes). As faixas vão pela **posição** (o mapeamento da terceira faixa vai para a terceira faixa do projeto novo); o que aponta para uma posição que não existe é descartado. O aviso que aparece:
+`Salvar como padrão para novos projetos` guarda os mapeamentos deste projeto para os projetos que você criar depois neste aparelho. Ele leva `Volume`, `Pan` (do `Master` e das faixas) e parâmetros de instrumento, com a opção `Suave`. **Não leva** efeitos nem envios (dependem de ids que só existem no projeto onde foram criados). Os parâmetros de instrumento guardam também o **tipo da faixa** (o id 13 é o `Corte` no sintetizador e o `Ataque` do operador 2 no FM): o mapeamento só é aplicado numa faixa do mesmo tipo, e numa faixa de outro tipo é descartado (padrões guardados antes disso, sem o tipo, seguem valendo como antes, com o risco de cair noutro parâmetro). As faixas vão pela **posição** (o mapeamento da terceira faixa vai para a terceira faixa do projeto novo); o que aponta para uma posição que não existe é descartado. O aviso que aparece:
 
 - ao guardar: `Guardado: os projetos novos começam com estes mapeamentos de volume, pan e instrumento (efeitos e envios ficam de fora).`
 - ao apagar (`Apagar o padrão`): `Padrão apagado: projetos novos começam sem mapeamentos.`
 - se a gravação local falhar: `Não deu para guardar o padrão: ...` ou `Não deu para apagar o padrão: ...`
 
-O padrão só é aplicado quando o projeto **nasce** (vazio ou de um modelo); um projeto que já tem documento não é tocado. Atenção com os modelos: como a faixa é pela posição e o id de parâmetro de instrumento se repete entre instrumentos (o id 13 é `Corte` no sintetizador, `Ataque` do operador 2 no FM e `Desafino` no wavetable), um mapeamento de instrumento pode cair num parâmetro de outro instrumento se a faixa da mesma posição for de outro tipo. `(lido do código; não testado em modelo)`
+O padrão só é aplicado quando o projeto **nasce** (vazio ou de um modelo); um projeto que já tem documento não é tocado. Nos modelos, como a faixa é pela posição, o mapeamento de instrumento só entra se a faixa da mesma posição tiver o mesmo tipo de instrumento (o id 13 é `Corte` no sintetizador, `Ataque` do operador 2 no FM e `Desafino` no wavetable, por isso o tipo é guardado). `(testado só por testes automáticos)`
 
 ### CC 1, pedal (CC 64) e pitch bend: expressão ou mapeamento
 
@@ -228,11 +228,11 @@ Sem mapeamento, o `CC 1` (roda de modulação), o `CC 64` (pedal de sustain) e o
 - **Sem o MIDI ligado nada acontece.** O botão só aparece com o MIDI ligado (ou mapeamentos no projeto); a faixa avisa `ligue a entrada MIDI (botão do cabo)`.
 - **No modo, os controles contornados não arrastam.** Só clique e menu; saia do modo (`Esc`, `Sair` ou `Shift+K`) para usar o mouse no controle.
 - **`Shift+K` conflita com a nota K.** Com o teclado do computador ligado (`Ctrl+K`), `Shift+K` vira nota e `Aprender MIDI liga/desliga (vira nota)` aparece na lista de atalhos suspensos. Use o botão da barra.
-- **A dica do teclado não cita o `Shift+K`.** O tooltip do ícone de teclado ligado lista `C L S X Z E F K J e Shift+H/L`, sem o `Shift+K`; a lista de atalhos suspensos (`?`) cita.
+- **A dica do teclado cita o `Shift+K`.** O tooltip do ícone de teclado ligado lista `C L S X Z E F K J e Shift+H/K/L` (a mesma lista da janela de atalhos suspensos, `?`).
 - **Pitch bend com mola.** A roda de bend volta ao meio sozinha (14 bits, valor 0,5): um controle mapeado ao bend acompanha a roda e, ao soltar, vai para o meio do curso dele.
 - **Um controle, uma origem; uma origem, vários controles.** Aprender de novo o mesmo controle substitui o mapeamento; o mesmo CC pode comandar vários controles.
 - **Alvo apagado não some da lista.** Faixa, efeito ou envio removidos deixam o mapeamento em vermelho (`Faixa removida`, `... · alvo removido`), inerte mas ainda consumindo a mensagem. Desfazer a remoção do alvo o reativa (o mapeamento aponta pelo id).
-- **Faixa duplicada ou importada.** O mapeamento aponta para o id da faixa; uma faixa duplicada não herda o mapeamento. Importar um `.jopendaw` refaz os ids de faixa que não são seguros ou se repetem, e o código de importação não reescreve o `midi_map`: nesses casos o mapeamento vira `Faixa removida` `(lido do código; não testado)`.
+- **Faixa duplicada ou importada.** O mapeamento aponta para o id da faixa; uma faixa duplicada não herda o mapeamento. Ao importar um `.jopendaw`, os ids de faixa, efeito e envio que não são seguros ou se repetem são refeitos, e o `midi_map` é reescrito junto: cada mapeamento passa a apontar para o novo id da faixa (e do efeito ou do envio, quando o alvo é um deles). O que apontava para uma faixa, efeito ou envio que não existe no arquivo é descartado na importação, em vez de virar `Faixa removida` `(testado só por testes automáticos)`.
 - **Automação não grava junto com a gravação de áudio ou MIDI.** Com `R` gravando (ou na contagem), mexer num controle mapeado muda o valor, mas mostra o aviso `A automação não grava junto com a gravação de áudio ou MIDI.` ao lado do botão `Automação` e não grava pontos.
 - **No `Toque`, a mão solta em 0,7 s.** O controlador não tem "soltar": o app entende que você soltou depois de 700 ms sem mensagens, e o valor volta à automação.
 - **O que não vale:** notas, pressão por nota, `CC 120` a `CC 127`, mensagens de sistema e de relógio; e controles que não são automatizáveis.
