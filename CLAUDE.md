@@ -232,6 +232,9 @@ A web é só estático: `flutter build web --release`, copiar `app/build/web` pa
 no Mac e `docker push`. No colima só há uma plataforma por tag: `docker rmi` a base arm64 antes de puxar a amd64.
 Depois: `POST /api/application.deploy` (API key na skill) para cada app e conferir `applicationStatus` + logs do container.
 
-Pendente do deploy: **registro A `jopendaw.johnenrique.tech → 72.60.137.244` no Hostinger** (manual; o navegador do Claude não
-está logado lá) para o certificado e o domínio valerem; `api/client.dart`/Android/`assetlinks.json` já apontam para esse domínio.
-Verificação sem DNS: `curl -sk --resolve jopendaw.johnenrique.tech:443:72.60.137.244 https://jopendaw.johnenrique.tech/api/me` (401 JSON = proxy ok).
+DNS e HTTPS: o registro A `jopendaw.johnenrique.tech → 72.60.137.244` foi criado em 2026-10-01 pelo MCP `hostinger-dns`
+(`dns_records_update` com `overwrite:false`, TTL 14400, como os demais; listar antes com `dns_records_list`). **Gotcha do certificado:**
+se o domínio é criado no Dokploy ANTES do DNS existir, o Traefik registra a falha do ACME e NÃO tenta de novo (nem com redeploy do app):
+crie o DNS primeiro; se já falhou, `domain.delete` + `domain.create` (novo roteador) dispara nova ordem e o certificado sai em ~1 min.
+`api/client.dart`/Android/`assetlinks.json` já apontam para esse domínio. Não testado em produção: login por magic link (jmail), upload ao S3, sync.
+Verificação: `curl -s https://jopendaw.johnenrique.tech/api/me` (401 JSON = proxy ok; sem DNS use `-k --resolve jopendaw.johnenrique.tech:443:72.60.137.244`).
